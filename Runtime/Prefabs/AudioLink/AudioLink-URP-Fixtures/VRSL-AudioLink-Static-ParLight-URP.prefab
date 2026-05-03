@@ -31,6 +31,7 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children:
   - {fileID: 4296290162261019124}
+  - {fileID: 3358520127695722449}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 190, y: 0, z: 0}
 --- !u!114 &8455022925270504735
@@ -56,17 +57,50 @@ MonoBehaviour:
   maxIntensity: 5
   spotAngle: 60
   range: 20
+  emitterDepth: 0.2
   isPointLight: 0
   goboIndex: -1
   goboSpinSpeed: 4
   finalIntensity: 1
-  globalIntensity: 1
+  globalIntensity: 0.25
   enablePanTilt: 0
   panTransform: {fileID: 0}
   tiltTransform: {fileID: 0}
   targetToFollow: {fileID: 0}
+  lensTransform: {fileID: 3358520127695722449}
   fixtureShellRenderers:
   - {fileID: 2021160172022021483}
+--- !u!1 &5342225895726308119
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3358520127695722449}
+  m_Layer: 24
+  m_Name: Lens
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3358520127695722449
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5342225895726308119}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0.06}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 4578369483360533202}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &6227510792656424175
 GameObject:
   m_ObjectHideFlags: 0

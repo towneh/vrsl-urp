@@ -4520,14 +4520,6 @@ PrefabInstance:
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7714854072841162277, guid: 9aa51ab9f0738edf41d2ab84a38c2784, type: 3}
-      propertyPath: emitterDepth
-      value: 0.18
-      objectReference: {fileID: 0}
-    - target: {fileID: 7714854072841162277, guid: 9aa51ab9f0738edf41d2ab84a38c2784, type: 3}
-      propertyPath: enablePanTilt
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 7714854072841162277, guid: 9aa51ab9f0738edf41d2ab84a38c2784, type: 3}
       propertyPath: emissionColor.b
       value: 2.7913604
       objectReference: {fileID: 0}
@@ -4542,10 +4534,6 @@ PrefabInstance:
     - target: {fileID: 7714854072841162277, guid: 9aa51ab9f0738edf41d2ab84a38c2784, type: 3}
       propertyPath: enableAudioLink
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 7714854072841162277, guid: 9aa51ab9f0738edf41d2ab84a38c2784, type: 3}
-      propertyPath: globalIntensity
-      value: 0.25
       objectReference: {fileID: 0}
     - target: {fileID: 8558686515597726911, guid: 9aa51ab9f0738edf41d2ab84a38c2784, type: 3}
       propertyPath: m_Name
@@ -4874,6 +4862,50 @@ Transform:
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1956074340}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1608508353
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1608508355}
+  - component: {fileID: 1608508354}
+  m_Layer: 0
+  m_Name: ALWatcher
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &1608508354
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1608508353}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbeffa8fc782eaa4baa2f46661ef1867, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: BasisAudioLinkIntegration::Basis.Scripts.AudioLinkIntegration.BasisAudioLinkIntegration
+--- !u!4 &1608508355
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1608508353}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1625496358
 GameObject:
@@ -5407,10 +5439,6 @@ PrefabInstance:
     - target: {fileID: 1000001, guid: aec925c96170c0d1cd5b9deb7f5f9056, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 1000002, guid: aec925c96170c0d1cd5b9deb7f5f9056, type: 3}
-      propertyPath: volumetricDensity
-      value: 0.2
       objectReference: {fileID: 0}
     - target: {fileID: 1000002, guid: aec925c96170c0d1cd5b9deb7f5f9056, type: 3}
       propertyPath: volumetricEnabled
@@ -6681,3 +6709,4 @@ SceneRoots:
   - {fileID: 1132254496}
   - {fileID: 1559865348}
   - {fileID: 1625496362}
+  - {fileID: 1608508355}

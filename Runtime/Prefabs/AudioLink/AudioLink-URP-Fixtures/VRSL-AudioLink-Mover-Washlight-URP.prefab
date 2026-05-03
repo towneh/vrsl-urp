@@ -412,7 +412,7 @@ MonoBehaviour:
   goboIndex: -1
   goboSpinSpeed: 0
   finalIntensity: 1
-  globalIntensity: 1
+  globalIntensity: 0.15
   enablePanTilt: 1
   panTransform: {fileID: 7042515004215238741}
   tiltTransform: {fileID: 6400019575164802419}
