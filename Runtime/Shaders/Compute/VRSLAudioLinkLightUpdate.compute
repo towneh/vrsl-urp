@@ -1,0 +1,200 @@
+#pragma kernel UpdateLights
+
+#include "../Shared/VRSLLightingLibrary.hlsl"
+
+// AudioLink texture — set globally each frame by the AudioLink system as _AudioTexture.
+// Accessed via Load() (integer coords) to guarantee point sampling; bilinear would
+// produce incorrect values since each texel encodes a distinct data channel/pixel.
+Texture2D<float4> _AudioTexture;
+
+// Scene-wide color sampling texture, bound per-dispatch by the compute pass
+// from VRSL_AudioLinkURPLightManager.samplingTexture (mirrors the legacy
+// AudioLink Static path's _SamplingTexture material slot). When the manager's
+// field is empty the pass binds an owned 1×1 black RenderTexture so the slot
+// always has a valid binding — Mode 6 (HSV-normalised) on a black sample
+// produces white light, Mode 7 (traditional) produces black. The
+// sampler_linear_clamp used to read the texture is declared in
+// VRSLLightingLibrary.hlsl alongside the gobo array sampler.
+Texture2D<float4> _VRSLALSamplingTexture;
+
+// ── AudioLink texture pixel coordinates (from AudioLink.cginc) ────────────────
+// Amplitude bands: x = delay (0..127, 0=most recent), y = band (0=bass..3=treble)
+#define AL_BAND_X_MAX 127
+#define AL_BAND_Y_MAX 3
+// Theme colors: x = color index (0..3), y = 23
+#define AL_THEME_ROW 23
+// Color chord strip: y = 25, x = 0..127 (use x=0 for a single representative color)
+#define AL_CCLIGHTS_ROW 25
+
+// ── Buffers ───────────────────────────────────────────────────────────────────
+StructuredBuffer<VRSLALFixtureConfig>  _ALFixtureConfigs;
+RWStructuredBuffer<VRSLLightData>      _LightData;
+uint                                    _FixtureCount;
+// Elapsed seconds since scene load — supplied from CPU each frame. Used to
+// integrate the gobo spin rate into a rotation phase, matching the volumetric
+// AudioLink shader's _Time.w · 10 · spinSpeed (degrees). fmod in the kernel
+// keeps the phase bounded to avoid float precision drift after long sessions.
+float                                   _VRSLTime;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+// Rodrigues rotation — used if the caller ever pre-rotates direction on the GPU.
+// Currently unused in the AudioLink path (direction is CPU-supplied per-frame),
+// kept here for parity with VRSLDMXLightUpdate.compute.
+float3 RotateAroundAxis(float3 v, float3 axis, float angleDeg)
+{
+    float rad = radians(angleDeg);
+    float c   = cos(rad);
+    float s   = sin(rad);
+    return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
+// AudioLink texture dimensions — used to convert [0,1] UV sampling coords to
+// integer pixel coords for Load(). AudioLink's _AudioTexture is currently
+// 128×64 across all known versions; this matches what the legacy AudioLink
+// fixture mesh shader assumes.
+#define AL_TEXTURE_WIDTH  128
+#define AL_TEXTURE_HEIGHT 64
+
+// RGB ↔ HSV helpers used by the "modern" ColorTexture sampling mode to
+// normalise the sampled atlas pixel to full brightness, matching the legacy
+// AudioLink fixture shader's GetTextureSampleColor() (RGB → HSV → V=1 → RGB).
+float3 RGB2HSV(float3 c)
+{
+    float4 K = float4(0.0, -1.0/3.0, 2.0/3.0, -1.0);
+    float4 p = lerp(float4(c.bg, K.wz), float4(c.gb, K.xy), step(c.b, c.g));
+    float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+    float d = q.x - min(q.w, q.y);
+    float e = 1.0e-10;
+    return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+float3 HSV2RGB(float3 c)
+{
+    float4 K = float4(1.0, 2.0/3.0, 1.0/3.0, 3.0);
+    float3 p = abs(frac(c.xxx + K.xyz) * 6.0 - K.www);
+    return c.z * lerp(K.xxx, saturate(p - K.xxx), c.y);
+}
+
+// Sample a color based on colorMode:
+//   0 = emission (handled by caller)
+//   1–4 = AudioLink theme colors 0–3 (row 23)
+//   5 = Color Chord representative pixel (row 25, x=0)
+//   6 = ColorTexture (modern): pixel sample at sampleUV, HSV-normalised so any
+//       non-black pixel emits at full brightness (preserves hue/saturation of
+//       dim regions). Black sample → white light because saturation collapses
+//       to zero and value is forced to 1.
+//   7 = ColorTexture (traditional): raw pixel sample at sampleUV, no
+//       brightness normalisation. Black sample → black light.
+//
+// Modes 6 and 7 sample _VRSLALSamplingTexture, the manager-supplied scene-wide
+// palette/atlas/RT (mirrors the legacy fixture-material's _SamplingTexture
+// slot). The compute pass guarantees the slot is bound, falling back to
+// Texture2D.blackTexture when the manager's field is empty.
+//
+// Single return point so DXC can prove the function always returns a value
+// across every branch.
+float3 SampleAudioLinkColor(int colorMode, float2 sampleUV)
+{
+    float3 result = float3(0, 0, 0);
+    if (colorMode >= 1 && colorMode <= 4)
+    {
+        result = _AudioTexture.Load(int3(colorMode - 1, AL_THEME_ROW, 0)).rgb;
+    }
+    else if (colorMode == 5)
+    {
+        result = _AudioTexture.Load(int3(0, AL_CCLIGHTS_ROW, 0)).rgb;
+    }
+    else if (colorMode >= 6)
+    {
+        float3 raw = _VRSLALSamplingTexture.SampleLevel(
+            sampler_linear_clamp, saturate(sampleUV), 0).rgb;
+        if (colorMode == 7)
+        {
+            result = raw;                                 // traditional
+        }
+        else
+        {
+            float3 h = RGB2HSV(raw);                       // modern: normalise V→1
+            h.z = 1.0;
+            result = HSV2RGB(h);
+        }
+    }
+    return result;
+}
+
+// ── Kernel: one thread per fixture ───────────────────────────────────────────
+[numthreads(64, 1, 1)]
+void UpdateLights(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _FixtureCount) return;
+
+    VRSLALFixtureConfig cfg = _ALFixtureConfigs[idx];
+
+    int   band         = (int)clamp(cfg.alParams.x, 0, AL_BAND_Y_MAX);
+    int   delay        = (int)clamp(cfg.alParams.y, 0, AL_BAND_X_MAX);
+    float bandMult     = cfg.alParams.z;
+    int   colorMode    = (int)round(cfg.alParams.w);
+
+    float maxIntensity   = cfg.intensityParams.x;
+    float finalIntensity = cfg.intensityParams.y;
+    bool  alActive       = cfg.intensityParams.z > 0.5;
+
+    // ── Amplitude ─────────────────────────────────────────────────────────────
+    // When AudioLink is active, sample the band amplitude from the texture.
+    // When disabled, use 1.0 so the light stays at full maxIntensity * finalIntensity.
+    float amplitude;
+    if (alActive)
+    {
+        amplitude = saturate(_AudioTexture.Load(int3(delay, band, 0)).r * bandMult);
+    }
+    else
+    {
+        amplitude = 1.0;
+    }
+
+    // ── Color ─────────────────────────────────────────────────────────────────
+    // reserved.zw = textureSamplingCoordinates (only meaningful when colorMode is 6 or 7).
+    float2 sampleUV = cfg.reserved.zw;
+    float3 color = (colorMode == 0)
+        ? cfg.emissionColor.rgb
+        : SampleAudioLinkColor(colorMode, sampleUV);
+
+    float combinedIntensity = amplitude * maxIntensity * finalIntensity;
+
+    // ── Direction ─────────────────────────────────────────────────────────────
+    // Supplied per-frame from CPU (read from tiltTransform.forward or light transform).
+    // No GPU-side rotation needed — the animation system already rotated the transforms.
+    float3 dir      = normalize(cfg.forwardAndType.xyz);
+    int    lightType = (int)round(cfg.forwardAndType.w);
+
+    // ── Spot cosines ──────────────────────────────────────────────────────────
+    // spotAngles.x = inner-to-outer ratio (0..1) — applied against the outer
+    // half-angle so the inner cone stays consistent if outer angle is ever
+    // animated. spotAngles.z = emitter depth (m) for virtual cone-apex pushback.
+    float outerHalf = cfg.spotAngles.y;
+    float innerHalf = outerHalf * cfg.spotAngles.x;
+    float innerCos  = cos(radians(innerHalf));
+    float outerCos  = cos(radians(outerHalf));
+
+    // ── Write output ──────────────────────────────────────────────────────────
+    VRSLLightData light;
+    light.positionAndRange  = float4(cfg.positionAndRange.xyz, cfg.positionAndRange.w);
+    light.directionAndType  = float4(dir, (float)lightType);
+    light.colorAndIntensity = float4(color, combinedIntensity);
+    light.spotCosines       = float4(innerCos, outerCos,
+                                     combinedIntensity > 0.001 ? 1.0 : 0.0,
+                                     cfg.spotAngles.z);
+    // Gobo spin phase (radians), integrated from the Static's spinSpeed.
+    // Scale factor π/9 (2× the projection shader's projected-gobo rate) is an
+    // empirical match to the volumetric cone's visible stripe-pattern rotation,
+    // which the GPU light's floor projection is usually compared against.
+    // Negative sign matches the volumetric's direction convention
+    // (spinSpeed *= -goboSpinSpeed in VRSL-StandardMover-VolumetricFrag.cginc).
+    // fmod to [-2π, 2π] bounds precision for long-running scenes.
+    float spinPhase = fmod(cfg.reserved.y * _VRSLTime * -0.34906585, 6.28318530718);
+    light.goboAndSpin       = float4(cfg.reserved.x,  // gobo slice index (-1 = none)
+                                     spinPhase,       // pre-integrated rotation in radians
+                                     0.0, 0.0);
+    _LightData[idx] = light;
+}

@@ -1,0 +1,73 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &9054079420100389393
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3708767908349085887}
+  - component: {fileID: 756984178575276282}
+  m_Layer: 0
+  m_Name: VRSL-DMX-URP-LightManager-Legacy
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3708767908349085887
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9054079420100389393}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &756984178575276282
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 9054079420100389393}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3f0f9df9a44e6da9dc2da2adb3d20b8c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: VRSL.URP::VRSL.VRSL_URPLightManager
+  dmxMainTexture: {fileID: 8600000, guid: 17f83f063191dbffbaae01943cc9c235, type: 2}
+  dmxMovementTexture: {fileID: 8600000, guid: 015583c6b281a3ff6b1af6d872ac4610, type: 2}
+  dmxStrobeTexture: {fileID: 8600000, guid: a928e074dadf56e05191a31cd701f480, type: 2}
+  dmxSpinTimerTexture: {fileID: 8600000, guid: a997187a06df0deca7f350bc32369b8f, type: 2}
+  computeShader: {fileID: 7200000, guid: 213d3149ed0cbc73835aee17d5180332, type: 3}
+  lightingShader: {fileID: 4800000, guid: d8c757279dc0dc7ff544149ea9f3e897, type: 3}
+  volumetricShader: {fileID: 4800000, guid: ee4b25e5a146ba8b36ed731b36047774, type: 3}
+  volumetricResolution: 0
+  volumetricStepCount: 32
+  volumetricDensity: 0.1
+  volumetricAnisotropy: 0.2
+  volumetricTint: {r: 1, g: 1, b: 1, a: 1}
+  volumetricIntensity: 8
+  coupleToSceneFog: 0
+  volumetricUseNoise: 1
+  volumetricNoiseScale: 0.3
+  volumetricNoiseScrollSpeed: 0.1
+  volumetricNoiseStrength: 0.7
+  goboTextures:
+  - {fileID: 2800000, guid: f7599b8713278f4c0b0bd11fcd836c6a, type: 3}
+  - {fileID: 2800000, guid: 6f40818edcd035ed4078ecc48e774ba5, type: 3}
+  - {fileID: 2800000, guid: b42afc20e67f0e89c44982e0d425e994, type: 3}
+  - {fileID: 2800000, guid: 9bd273a7a95d3815ed7a912cccbb70da, type: 3}
+  - {fileID: 2800000, guid: 222d7fbeec533e190da7b9e40e56e7da, type: 3}
+  - {fileID: 2800000, guid: c9ce909bb29e6898ea7808fd7d8196ff, type: 3}
+  - {fileID: 2800000, guid: de2e2f340b0b44b4946a9bd5f7e52697, type: 3}
+  - {fileID: 2800000, guid: f8f0801130c0a1d0e3862e4ad9106fe1, type: 3}

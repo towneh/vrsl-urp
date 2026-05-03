@@ -1,0 +1,16 @@
+{
+    "name": "Towneh.VRSL.URP.Profiling",
+    "rootNamespace": "VRSL.URP.Profiling",
+    "references": [
+        "Towneh.VRSL.URP"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

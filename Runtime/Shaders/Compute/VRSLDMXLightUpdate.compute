@@ -1,0 +1,207 @@
+#pragma kernel UpdateLights
+
+#include "../Shared/VRSLLightingLibrary.hlsl"
+
+// ── DMX source textures (set by VRSL_URPLightManager) ────────────────────────
+Texture2D<float4> _DMXMainTex;
+Texture2D<float4> _DMXMovementTex;
+Texture2D<float4> _DMXStrobeTex;
+Texture2D<float4> _DMXSpinTimerTex;  // SpinnerTimer CRT — accumulates phase as t += dt·rate
+// All three textures share the same resolution in VRSL's CRT pipeline
+float4 _VRSLDMXTexelSize;   // x=1/w, y=1/h, z=width, w=height
+
+// ── Buffers ───────────────────────────────────────────────────────────────────
+StructuredBuffer<VRSLFixtureConfig>   _FixtureConfigs;
+RWStructuredBuffer<VRSLLightData>     _LightData;
+uint                                   _FixtureCount;
+uint                                   _VRSLGoboCount;
+
+// Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
+SamplerState sampler_point_clamp;
+
+// ── DMX texture sampling ──────────────────────────────────────────────────────
+// Direct port of getValueAtCoords() from VRSL-DMXFunctions.cginc.
+// Supports IndustryRead (non-Legacy, non-NineUniverse) mode only.
+// Channel inputs are uint rather than int because DMX addresses are always
+// positive — this lets Metal/SPIR-V use the fast unsigned modulus path
+// instead of warning about slow signed modulus.
+float GetDMXValue(uint ch, Texture2D<float4> tex)
+{
+    uint x = ch % 13u;
+    if (x == 0u) x = 13u;
+
+    float y = (ch % 13u == 0u) ? (ch / 13.0) - 1.0 : (ch / 13.0);
+
+    // Correction table for channel 13 in specific ranges (matches CGINC exactly)
+    if (x == 13u)
+    {
+        if (ch >= 90u   && ch <= 101u)  y -= 1.0;
+        if (ch >= 160u  && ch <= 205u)  y -= 1.0;
+        if (ch >= 326u  && ch <= 404u)  y -= 1.0;
+        if (ch >= 676u  && ch <= 819u)  y -= 1.0;
+        if (ch >= 1339u)                y -= 1.0;
+    }
+
+    float resMultX = _VRSLDMXTexelSize.z / 13.0;
+    float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
+    float v = ((y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
+
+    float4 c = tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0);
+
+    // LinearRgbToLuminance — matches CGINC standard (non-NineUniverse) path
+    return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+}
+
+// Raw-channel variant — matches getValueAtCoordsRaw() in VRSL-DMXFunctions.cginc.
+// Needed for the SpinnerTimer, whose red channel stores accumulated phase (not a color).
+float GetDMXValueRaw(uint ch, Texture2D<float4> tex)
+{
+    uint x = ch % 13u;
+    if (x == 0u) x = 13u;
+
+    float y = (ch % 13u == 0u) ? (ch / 13.0) - 1.0 : (ch / 13.0);
+
+    if (x == 13u)
+    {
+        if (ch >= 90u   && ch <= 101u)  y -= 1.0;
+        if (ch >= 160u  && ch <= 205u)  y -= 1.0;
+        if (ch >= 326u  && ch <= 404u)  y -= 1.0;
+        if (ch >= 676u  && ch <= 819u)  y -= 1.0;
+        if (ch >= 1339u)                y -= 1.0;
+    }
+
+    float resMultX = _VRSLDMXTexelSize.z / 13.0;
+    float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
+    float v = ((y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
+
+    return tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0).r;
+}
+
+// ── Rodrigues rotation ────────────────────────────────────────────────────────
+float3 RotateAroundAxis(float3 v, float3 axis, float angleDeg)
+{
+    float rad = radians(angleDeg);
+    float c   = cos(rad);
+    float s   = sin(rad);
+    return v * c + cross(axis, v) * s + axis * dot(axis, v) * (1.0 - c);
+}
+
+// ── Kernel: one thread per fixture ───────────────────────────────────────────
+[numthreads(64, 1, 1)]
+void UpdateLights(uint3 id : SV_DispatchThreadID)
+{
+    uint idx = id.x;
+    if (idx >= _FixtureCount) return;
+
+    VRSLFixtureConfig cfg = _FixtureConfigs[idx];
+
+    uint absChannel      = (uint)cfg.dmxChannel.x;
+    bool enableStrobe    = cfg.dmxChannel.y > 0.5;
+    bool enablePanTilt   = cfg.dmxChannel.z > 0.5;
+    bool enableFine      = cfg.dmxChannel.w > 0.5;
+
+    // ── DMX channel decode ────────────────────────────────────────────────────
+    // Dimmer (ch+5)
+    float intensity = GetDMXValue(absChannel + 5, _DMXMainTex);
+    // Color  (ch+7/8/9)
+    float r = GetDMXValue(absChannel + 7, _DMXMainTex);
+    float g = GetDMXValue(absChannel + 8, _DMXMainTex);
+    float b = GetDMXValue(absChannel + 9, _DMXMainTex);
+    // Strobe (ch+6)
+    float strobe = 1.0;
+    if (enableStrobe)
+        strobe = GetDMXValue(absChannel + 6, _DMXStrobeTex);
+
+    float combinedIntensity =
+        intensity * cfg.spotAngles.z * cfg.rightAndMaxIntensity.w * strobe;
+
+    // ── Direction (pan/tilt for moving heads) ─────────────────────────────────
+    float3 baseForward = cfg.forwardAndType.xyz;
+    float3 finalDir    = baseForward;
+
+    if (enablePanTilt)
+    {
+        float maxMinPan  = cfg.panSettings.x;
+        float panOffset  = cfg.panSettings.y;
+        bool  invertPan  = cfg.panSettings.z > 0.5;
+
+        float maxMinTilt = cfg.tiltSettings.x;
+        float tiltOffset = cfg.tiltSettings.y;
+        bool  invertTilt = cfg.tiltSettings.z > 0.5;
+
+        // Pan — ch+0 coarse, ch+1 fine
+        // Formula matches GetPanValue() in VRSL-DMXFunctions.cginc:
+        // Static passes maxMinPan/2 as _MaxMinPanAngle → shader computes
+        // (maxMinPan/2 * 2 * raw) - maxMinPan/2 = maxMinPan * raw - maxMinPan/2.
+        float panRaw = GetDMXValue(absChannel, _DMXMovementTex);
+        if (enableFine) panRaw += GetDMXValue(absChannel + 1, _DMXMovementTex) / 256.0;
+        float panDeg = (maxMinPan * panRaw) - (maxMinPan / 2.0) + panOffset;
+        if (invertPan) panDeg = -panDeg;
+
+        // Tilt — ch+2 coarse, ch+3 fine (same derivation as pan)
+        float tiltRaw = GetDMXValue(absChannel + 2, _DMXMovementTex);
+        if (enableFine) tiltRaw += GetDMXValue(absChannel + 3, _DMXMovementTex) / 256.0;
+        float tiltDeg = (maxMinTilt * tiltRaw) - (maxMinTilt / 2.0) + tiltOffset;
+        if (invertTilt) tiltDeg = -tiltDeg;
+
+        // Matches the volumetric shader: tilt around the fixture's local +X in world
+        // space first, then pan around baseForward (object Z). Both axes are supplied
+        // from CPU because this kernel has no ObjectToWorld matrix; the supplied axis
+        // keeps yawed fixtures (whose local X does not align with world X) rotating
+        // about the correct pivot.
+        float3 baseRight     = cfg.rightAndMaxIntensity.xyz;
+        float3 tiltedForward = RotateAroundAxis(baseForward,   baseRight,   tiltDeg);
+        finalDir             = RotateAroundAxis(tiltedForward, baseForward, panDeg);
+    }
+
+    // ── Cone width — ch+4 (motor speed / zoom), matches getDMXConeWidth() ────
+    // spotAngles.x = inner-to-outer ratio (0..1), spotAngles.y = max outer half-angle,
+    // spotAngles.w = min outer half-angle. The inner cone tracks the dynamic outer
+    // angle so wash movers stay flat-bright across the cone even as ch+4 zooms it.
+    float coneRaw   = GetDMXValue(absChannel + 4, _DMXMainTex);
+    float outerHalf = lerp(cfg.spotAngles.w, cfg.spotAngles.y, coneRaw);
+    float innerHalf = outerHalf * cfg.spotAngles.x;
+
+    // ── Spot angle cosines ────────────────────────────────────────────────────
+    float innerCos = cos(radians(innerHalf));
+    float outerCos = cos(radians(outerHalf));
+
+    // ── Write output ──────────────────────────────────────────────────────────
+    VRSLLightData light;
+    light.positionAndRange  = float4(cfg.positionAndRange.xyz, cfg.positionAndRange.w);
+    light.directionAndType  = float4(normalize(finalDir), cfg.forwardAndType.w);
+    light.colorAndIntensity = float4(r, g, b, combinedIntensity);
+    // z = active flag: skip if intensity is negligible.
+    // w = emitter depth (m) — virtual cone-apex pushback for area-emitter fixtures.
+    light.spotCosines       = float4(innerCos, outerCos,
+                                     combinedIntensity > 0.001 ? 1.0 : 0.0,
+                                     cfg.extras.x);
+    // ── Gobo (ch+10 spin speed, ch+11 gobo select) ───────────────────────────
+    // Mirrors getDMXGoboSelection() in VRSL-DMXFunctions: round(raw*255/30), clamp 1..N
+    bool  enableGoboSpin = cfg.panSettings.w > 0.5;
+    bool  enableGobo     = cfg.tiltSettings.w > 0.5;
+    float spinStatus = GetDMXValue   (absChannel + 10, _DMXMainTex);      // luminance — picks direction
+    float spinPhase  = GetDMXValueRaw(absChannel + 10, _DMXSpinTimerTex); // accumulated phase from CRT
+    float goboRaw    = enableGobo ? GetDMXValue(absChannel + 11, _DMXMainTex) : 0.0;
+    // Mirrors getGoboSpinSpeed() in VRSL-DMXFunctions.cginc: direction is determined
+    // by the raw DMX value, magnitude is the integrated phase from SpinnerTimer CRT.
+    // The deferred pass uses this directly as radians, matching RotateUV(uv, degrees(·))
+    // (degrees/radians wrap cancels inside RotateUV). Wrapping to [-2π, 2π] via fmod
+    // bounds precision once the CRT's phase grows after hours of runtime.
+    float spinSpeed = 0.0;
+    if (enableGoboSpin)
+    {
+        float angle = (spinStatus > 0.5) ? -spinPhase * 4.0 : spinPhase * 4.0;
+        spinSpeed = fmod(angle, 6.28318530718);
+    }
+    int goboIdx = -1;
+    if (_VRSLGoboCount > 0)
+    {
+        int slot = (int)round(goboRaw * 255.0 / 30.0);
+        slot    = clamp(slot, 1, (int)_VRSLGoboCount);
+        goboIdx = slot - 1; // convert to 0-based array index
+    }
+
+    light.goboAndSpin = float4((float)goboIdx, spinSpeed, 0, 0);
+    _LightData[idx] = light;
+}

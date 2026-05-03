@@ -1,0 +1,18 @@
+# Unity scaffolding (this repo is the package, not a project)
+Library/
+Temp/
+Obj/
+Build/
+Builds/
+Logs/
+UserSettings/
+*.csproj
+*.sln
+*.user
+*.suo
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

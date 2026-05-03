@@ -1,0 +1,27 @@
+{
+    "name": "Towneh.VRSL.URP.Editor",
+    "references": [
+        "Towneh.VRSL.URP",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.Universal.Editor",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Core.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [
+        {
+            "name": "com.acchosen.vr-stage-lighting",
+            "expression": "",
+            "define": "VRSL_LEGACY_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}
