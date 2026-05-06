@@ -46,13 +46,14 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   computeShader: {fileID: 7200000, guid: b62eba04b10a6cc19700ff31693a9066, type: 3}
   lightingShader: {fileID: 4800000, guid: d8c757279dc0dc7ff544149ea9f3e897, type: 3}
+  albedoTintStrength: 0.5
   volumetricShader: {fileID: 4800000, guid: ee4b25e5a146ba8b36ed731b36047774, type: 3}
   volumetricResolution: 0
   volumetricStepCount: 32
   volumetricDensity: 0.1
   volumetricAnisotropy: 0.2
   volumetricTint: {r: 1, g: 1, b: 1, a: 1}
-  volumetricIntensity: 8
+  volumetricIntensity: 6
   coupleToSceneFog: 0
   volumetricUseNoise: 1
   volumetricNoiseScale: 0.3
