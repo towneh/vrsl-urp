@@ -6,6 +6,10 @@
 
 - `albedoTintStrength` slider on `VRSL_URPLightManager` and `VRSL_AudioLinkURPLightManager`. Modulates each light's surface contribution by a pre-light scene-colour snapshot as an albedo proxy: `0` is pure additive (the previously shipped behaviour — light added on top of the surface unmodulated, can read as washed-out under bright spots), `1` is fully multiplicative (light picks up the surface's hue and dark surfaces stay dark, closer to physical reflectance). Default is `0` so existing scenes are unchanged. When non-zero the lighting pass records an extra fullscreen blit that captures the active camera colour into a private RT (`_VRSLOpaqueTexture`); the cost (~0.1 ms desktop, more under SPSI VR) is skipped entirely at 0. URP's own `_CameraOpaqueTexture` isn't used because under URP 17 render graph mode `CopyColor` doesn't reliably run for this injection point.
 
+### Known issues
+
+- **Par, blinder, laser, and discoball fixture meshes do not render correctly under single-pass instanced VR.** The mesh body / projection geometry on these fixture types is missing or misplaced in one or both eyes. Moving heads (spots and washes) and the surface lighting and volumetric-cone passes are unaffected. A previous fix (`1746a30`) addressed the same class of issue for the moving-head body / volumetric meshes by routing their shaders through `#pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON` and making their `DepthOnly` / `DepthNormals` passes SPSI-aware; the par, blinder, laser, and discoball shaders still need the equivalent treatment.
+
 ## [0.1.0] — Initial release
 
 ### URP Realtime Lights — Unity 6 / URP 17+
