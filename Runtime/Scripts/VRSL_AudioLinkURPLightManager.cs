@@ -36,6 +36,19 @@ namespace VRSL.URP
         [Tooltip("Assign Hidden/VRSL-URP/DeferredLighting (the VRSLDeferredLighting shader asset).")]
         public Shader lightingShader;
 
+        [Range(0f, 1f)]
+        [Tooltip("Modulates each light's surface contribution by the pre-light scene colour, "
+               + "as an albedo proxy. 0 = pure additive (existing behaviour — light is added on "
+               + "top of the surface unmodulated, can read as washed-out under bright spots). "
+               + "1 = pure multiplicative against the pre-light frame (light picks up the "
+               + "surface's hue and dark surfaces stay dark — physically closer to reflectance, "
+               + "but loses contribution on near-black surfaces). Tune to taste; 0.4–0.6 is a "
+               + "reasonable starting point in ambient-dominated stage scenes. When > 0 the "
+               + "lighting pass adds an extra fullscreen blit that captures the pre-VRSL camera "
+               + "colour into a private RT (~0.1 ms on desktop, more under SPSI VR); skipped "
+               + "entirely at 0 so the cost is opt-in.")]
+        public float albedoTintStrength = 0f;
+
         [Header("Volumetric")]
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
                + "The volumetric raymarch pass runs whenever this is assigned — there is no "
@@ -516,7 +529,11 @@ namespace VRSL.URP
             // VRSLNormalsPrepass writes _VRSLNormalsTexture into a VRSL-owned
             // non-MSAA RT before opaque rendering; the lighting shader samples
             // that global. The lighting and volumetric passes only need depth
-            // from URP, so neither requests Normal here.
+            // from URP, so neither requests Normal here. The albedo-tint path
+            // captures its own opaque snapshot inside LightingPass rather than
+            // reading URP's _CameraOpaqueTexture, so Color isn't requested
+            // either — URP 17 render graph mode doesn't always honour
+            // ConfigureInput(Color) for our injection point.
             _lightingPass.ConfigureInput(ScriptableRenderPassInput.Depth);
             _volumetricPass.ConfigureInput(ScriptableRenderPassInput.Depth);
 

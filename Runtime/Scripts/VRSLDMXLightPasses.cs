@@ -127,8 +127,16 @@ namespace VRSL.URP
             {
                 public BufferHandle  lightDataBuffer;
                 public TextureHandle depthTexture;
+                public TextureHandle opaqueSnapshot;
                 public Material      material;
                 public int           lightCount;
+                public float         albedoTintStrength;
+            }
+
+            class CapturePassData
+            {
+                public TextureHandle source;
+                public Material      material;
             }
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
@@ -147,23 +155,73 @@ namespace VRSL.URP
                     return;
                 }
 
+                // Capture sub-pass — only when the albedo tint is active. URP 17's
+                // own _CameraOpaqueTexture isn't reliable for our injection point
+                // under render graph (CopyColor doesn't always run, even with
+                // Opaque Texture enabled on the URP asset and ConfigureInput(Color)
+                // requested), so the package captures its own snapshot of the
+                // pre-VRSL camera colour into a transient render-graph texture
+                // and binds it as _VRSLOpaqueTexture for the lighting sub-pass.
+                bool wantTint = mgr.albedoTintStrength > 0f;
+                TextureHandle opaqueSnapshot = TextureHandle.nullHandle;
+                if (wantTint)
+                {
+                    var camData = frame.Get<UniversalCameraData>();
+                    var camDesc = camData.cameraTargetDescriptor;
+                    int sliceCount = Mathf.Max(1, camDesc.volumeDepth);
+                    var snapDesc = new TextureDesc(camDesc.width, camDesc.height)
+                    {
+                        name        = "VRSL Opaque Snapshot",
+                        format      = camDesc.graphicsFormat,
+                        clearBuffer = false,
+                        filterMode  = FilterMode.Bilinear,
+                        dimension   = sliceCount > 1
+                                          ? TextureDimension.Tex2DArray
+                                          : TextureDimension.Tex2D,
+                        slices      = sliceCount,
+                    };
+                    opaqueSnapshot = rg.CreateTexture(snapDesc);
+
+                    using var capture = rg.AddRasterRenderPass<CapturePassData>(
+                        "VRSL Opaque Capture", out var cd);
+                    cd.source   = resources.activeColorTexture;
+                    cd.material = mgr.LightingMaterial;
+                    capture.SetRenderAttachment(opaqueSnapshot, 0, AccessFlags.Write);
+                    capture.UseTexture(cd.source, AccessFlags.Read);
+                    capture.AllowGlobalStateModification(true);
+                    capture.SetRenderFunc((CapturePassData p, RasterGraphContext ctx) =>
+                    {
+                        var cmd = ctx.cmd;
+                        cmd.SetGlobalTexture("_VRSLBlitSource", p.source);
+                        cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
+                            p.material, 0, 1);
+                    });
+                }
+
                 using var builder = rg.AddRasterRenderPass<PassData>("VRSL Lighting Pass", out var d);
 
-                d.lightDataBuffer = rg.ImportBuffer(mgr.LightDataBuffer);
-                d.depthTexture    = resources.cameraDepthTexture;
-                d.material        = mgr.LightingMaterial;
-                d.lightCount      = mgr.FixtureCount;
+                d.lightDataBuffer    = rg.ImportBuffer(mgr.LightDataBuffer);
+                d.depthTexture       = resources.cameraDepthTexture;
+                d.opaqueSnapshot     = opaqueSnapshot;
+                d.material           = mgr.LightingMaterial;
+                d.lightCount         = mgr.FixtureCount;
+                d.albedoTintStrength = wantTint ? mgr.albedoTintStrength : 0f;
 
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
                 builder.UseBuffer( d.lightDataBuffer, AccessFlags.Read);
                 builder.UseTexture(d.depthTexture,    AccessFlags.Read);
+                if (wantTint)
+                    builder.UseTexture(opaqueSnapshot, AccessFlags.Read);
                 builder.AllowGlobalStateModification(true);
 
                 builder.SetRenderFunc((PassData p, RasterGraphContext ctx) =>
                 {
                     var cmd = ctx.cmd;
-                    cmd.SetGlobalBuffer( "_VRSLLights",     p.lightDataBuffer);
-                    cmd.SetGlobalInteger("_VRSLLightCount", p.lightCount);
+                    cmd.SetGlobalBuffer( "_VRSLLights",      p.lightDataBuffer);
+                    cmd.SetGlobalInteger("_VRSLLightCount",  p.lightCount);
+                    cmd.SetGlobalFloat(  "_VRSLAlbedoTint",  p.albedoTintStrength);
+                    if (p.albedoTintStrength > 0f)
+                        cmd.SetGlobalTexture("_VRSLOpaqueTexture", p.opaqueSnapshot);
                     // Full-screen triangle: 3 vertices, no vertex buffer needed
                     // RenderingUtils.fullscreenMesh + cmd.DrawMesh is the URP-recommended
                     // pattern for fullscreen passes (cmd.DrawProcedural and cmd.Blit have

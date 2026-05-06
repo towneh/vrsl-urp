@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- `albedoTintStrength` slider on `VRSL_URPLightManager` and `VRSL_AudioLinkURPLightManager`. Modulates each light's surface contribution by a pre-light scene-colour snapshot as an albedo proxy: `0` is pure additive (the previously shipped behaviour — light added on top of the surface unmodulated, can read as washed-out under bright spots), `1` is fully multiplicative (light picks up the surface's hue and dark surfaces stay dark, closer to physical reflectance). Default is `0` so existing scenes are unchanged. When non-zero the lighting pass records an extra fullscreen blit that captures the active camera colour into a private RT (`_VRSLOpaqueTexture`); the cost (~0.1 ms desktop, more under SPSI VR) is skipped entirely at 0. URP's own `_CameraOpaqueTexture` isn't used because under URP 17 render graph mode `CopyColor` doesn't reliably run for this injection point.
+
 ## [0.1.0] — Initial release
 
 ### URP Realtime Lights — Unity 6 / URP 17+

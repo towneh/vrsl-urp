@@ -206,7 +206,15 @@ Gobo spin is integrated on the GPU each frame: `spinPhase = fmod(spinSpeed × _V
 - Surface normal sampled from `_VRSLNormalsTexture` (written by `VRSLNormalsPrepass` at `AfterRenderingPrePasses`). On pixels where the prepass wrote no normal — surfaces drawn by shaders without a URP `DepthNormals` pass — the shader falls back to `normalize(cross(ddy(posWS), ddx(posWS)))` so those surfaces still pick up VRSL light, just faceted to the underlying tessellation rather than smooth-shaded.
 - Per-pixel loop over `_VRSLLights[0..N-1]`, skipping inactive lights, accumulating `colour × intensity × distAtten × spotAtten × NdotL` plus the per-pixel gobo sample.
 
-`ConfigureInput(ScriptableRenderPassInput.Depth)` runs in the manager's per-camera callback before enqueue. The lighting pass declares only `_CameraDepthTexture` as a tracked Render Graph resource and samples `_VRSLNormalsTexture` through the global binding the prepass sets up via `SetGlobalTextureAfterPass`.
+`ConfigureInput(ScriptableRenderPassInput.Depth)` runs in the manager's per-camera callback before enqueue. The lighting pass declares `_CameraDepthTexture` as a tracked Render Graph resource and samples `_VRSLNormalsTexture` through the global binding the prepass sets up via `SetGlobalTextureAfterPass`.
+
+### Albedo tint
+
+`albedoTintStrength` on the manager (range 0–1, default 0) modulates the accumulated additive contribution by the pre-light scene colour as an albedo proxy: the shader applies `lighting *= lerp(1, sceneColor, _VRSLAlbedoTint)` immediately before the additive blend. At `0` the pass is purely additive and the scene-colour sample is skipped entirely. At `1` the surface response is fully multiplicative — light picks up the surface's hue and dark surfaces stay dark, which reads as physically more correct in ambient-dominated stage scenes but loses contribution on near-black surfaces. Intermediate values blend between the two.
+
+When the strength is non-zero, the lighting pass records an extra **opaque-capture** sub-pass first: a fullscreen blit (Pass 1 of `VRSLDeferredLighting.shader`) that copies the active camera colour into a transient render-graph texture sized to the camera target (Tex2DArray when SPSI VR is active, matching the camera's `volumeDepth`). The captured texture is bound globally as `_VRSLOpaqueTexture` and consumed by the lighting sub-pass. URP's own `_CameraOpaqueTexture` isn't used: under URP 17 render graph mode `CopyColor` doesn't reliably run for our injection point, even when "Opaque Texture" is enabled on the URP asset and `ConfigureInput(Color)` is requested, so the package captures its own snapshot. The capture sub-pass is skipped entirely when `albedoTintStrength == 0`, so the feature is genuinely opt-in cost-wise (~0.1 ms desktop, more under SPSI VR).
+
+True per-pixel albedo isn't available in this lightweight prepass (only normals are written); the camera-colour snapshot is the closest stand-in URP exposes universally. It includes any other lighting (URP realtime / baked / ambient) that has already affected the surface, so the proxy is most accurate when ambient dominates and least accurate in heavily realtime-lit scenes — tune to taste rather than expecting physical correctness.
 
 ---
 
