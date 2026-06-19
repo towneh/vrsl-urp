@@ -1275,15 +1275,19 @@ namespace VRSL.URP
 
         static string GetVersion()
         {
-            string path = Application.dataPath;
-            path = path.Replace("Assets","");
-            path += "Packages"  + "\\" + "net.towneh.vrsl-urp" + "\\";
-            path += "Runtime" + "\\"  + "VERSION.txt";
-
-            StreamReader reader = new StreamReader(path); 
-            string versionNum = reader.ReadToEnd();
-            string ver = "VR Stage Lighting ver:" + " <b><color=#b33cff>" + versionNum + "</color></b>";
-            return ver;
+            // Version ships in Runtime/VERSION.txt; fall back gracefully when it can't be
+            // read (e.g. a package-cache install where the dataPath-relative path misses)
+            // so a missing file never aborts the inspector before the fields draw.
+            string versionNum = "0.1.0";
+            try
+            {
+                string path = Application.dataPath.Replace("Assets", "")
+                            + "Packages/net.towneh.vrsl-urp/Runtime/VERSION.txt";
+                if (File.Exists(path))
+                    versionNum = File.ReadAllText(path).Trim();
+            }
+            catch { /* keep the fallback version */ }
+            return "VR Stage Lighting ver:" + " <b><color=#b33cff>" + versionNum + "</color></b>";
         }
 
         public void OnEnable() 
