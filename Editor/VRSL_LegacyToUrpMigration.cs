@@ -35,6 +35,7 @@ namespace VRSL.URP.EditorScripts
     public static class VRSL_LegacyToUrpMigration
     {
         const string MENU_PATH = "VRSL/URP/Migrate Scene Fixtures (Add URP Siblings)";
+        const string MENU_PATH_INPLACE = "VRSL/URP/Convert Custom Fixtures In-Place (Component + Material)";
 
         // Upstream prefab GUID -> URP prefab GUID. Keep the friendly name in-line so the
         // table stays self-documenting. Kind drives which field-translation path runs.
@@ -74,6 +75,14 @@ namespace VRSL.URP.EditorScripts
         const string UPSTREAM_AL_REALTIME  = "VRSL.VRStageLighting_AudioLink_RealtimeLight";
         const string UPSTREAM_DMX_STATIC   = "VRSL.VRStageLighting_DMX_Static";
         const string UPSTREAM_DMX_REALTIME = "VRSL.VRStageLighting_DMX_RealtimeLight";
+
+        // Upstream component FullName -> URP twin Type, for the in-place conversion path. Both
+        // twins keep the upstream field layout, so values copy across by name with no translation.
+        static readonly (string upstreamTypeName, Type urpType)[] IN_PLACE_TYPES = new[]
+        {
+            (UPSTREAM_DMX_STATIC, typeof(VRStageLighting_DMX_Static)),
+            (UPSTREAM_AL_STATIC,  typeof(VRStageLighting_AudioLink_Static)),
+        };
 
         // Fields on the modern upstream RealtimeLight components we should NOT copy via name-match
         // because their values are Transform/Renderer references that point inside the source
@@ -155,6 +164,91 @@ namespace VRSL.URP.EditorScripts
 
             Debug.Log("[VRSL Migration] " + summary.Replace("\n", "  "));
             EditorUtility.DisplayDialog("VRSL Migration", summary, "OK");
+        }
+
+        // ── In-place conversion (custom fixtures) ───────────────────────────────────
+
+        /// <summary>
+        /// Converts fixtures that carry an upstream VRSL component directly — e.g. a custom mesh
+        /// (an imported lighting rig) with VRStageLighting_DMX_Static added onto it — rather than
+        /// instances of a standard VRSL fixture prefab. The prefab-swap migration above can't help
+        /// those: there's no source-prefab GUID in its table and no URP prefab carrying the custom
+        /// geometry. This path keeps the geometry and retargets the driver: it adds the URP twin
+        /// component (same field layout), copies every field across, swaps the fixture's VRSL
+        /// materials to the matching URP shader, and removes the upstream component. Matching is by
+        /// component, so nesting, unpacking, and prefab GUIDs are all irrelevant.
+        ///
+        /// Idempotent: a fixture that already has the URP twin is skipped, and material swaps key
+        /// on the shader namespace (VRSL/… → VRSL-URP/…) so a second run is a no-op.
+        /// </summary>
+        [MenuItem(MENU_PATH_INPLACE)]
+        static void RunInPlace()
+        {
+            var scene = SceneManager.GetActiveScene();
+            if (!scene.IsValid() || !scene.isLoaded)
+            {
+                EditorUtility.DisplayDialog("VRSL In-Place Conversion", "No active loaded scene.", "OK");
+                return;
+            }
+
+            // Snapshot first: we add and remove components as we go, so walking live would be unsafe.
+            var candidates = new List<(GameObject go, Component upstream, Type urpType)>();
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var c in root.GetComponentsInChildren<Component>(includeInactive: true))
+                {
+                    if (c == null) continue;
+                    string typeName = c.GetType().FullName;
+                    foreach (var map in IN_PLACE_TYPES)
+                    {
+                        if (typeName == map.upstreamTypeName)
+                            candidates.Add((c.gameObject, c, map.urpType));
+                    }
+                }
+            }
+
+            int converted = 0, skipped = 0, errors = 0;
+            var seenMaterials = new HashSet<Material>();      // every material inspected once
+            var changedMaterials = new HashSet<Material>();   // subset actually reshaded -> SaveAssets
+
+            Undo.IncrementCurrentGroup();
+            Undo.SetCurrentGroupName("VRSL: Convert Custom Fixtures In-Place");
+            int undoGroup = Undo.GetCurrentGroup();
+
+            foreach (var (go, upstream, urpType) in candidates)
+            {
+                if (upstream == null) continue;               // already destroyed this run
+                if (go.GetComponent(urpType) != null)
+                {
+                    skipped++;
+                    continue;
+                }
+                try
+                {
+                    var urp = Undo.AddComponent(go, urpType);
+                    CopyAllFieldsByName(upstream, urp);
+                    SwapFixtureMaterials(go, seenMaterials, changedMaterials);
+                    Undo.DestroyObjectImmediate(upstream);
+                    converted++;
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"[VRSL In-Place] Failed on '{go.name}': {ex}");
+                    errors++;
+                }
+            }
+
+            if (changedMaterials.Count > 0)
+                AssetDatabase.SaveAssets();
+
+            Undo.CollapseUndoOperations(undoGroup);
+            EditorSceneManager.MarkSceneDirty(scene);
+
+            string summary =
+                $"Converted: {converted}\nSkipped (already URP): {skipped}\nErrors: {errors}\n" +
+                $"Materials reshaded: {changedMaterials.Count}";
+            Debug.Log("[VRSL In-Place] " + summary.Replace("\n", "  "));
+            EditorUtility.DisplayDialog("VRSL In-Place Conversion", summary, "OK");
         }
 
         // ── Detection ─────────────────────────────────────────────────────────────
@@ -429,6 +523,74 @@ namespace VRSL.URP.EditorScripts
                     continue;
 
                 CopyField(src, dst, df.Name);
+            }
+        }
+
+        // In-place twin copy: every serialized field by name, INCLUDING references into the
+        // fixture's own hierarchy (objRenderers, transforms). Unlike CopyAllNamedFields nothing is
+        // filtered — the URP twin lives on the same GameObject, so those references stay valid.
+        // Arrays are cloned so the two components don't share one backing array before the upstream
+        // component is removed.
+        static void CopyAllFieldsByName(Component src, Component dst)
+        {
+            const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            foreach (var df in dst.GetType().GetFields(FLAGS))
+            {
+                if (df.IsNotSerialized) continue;
+                var sf = src.GetType().GetField(df.Name, FLAGS);
+                if (sf == null) continue;
+
+                if (df.FieldType.IsAssignableFrom(sf.FieldType))
+                {
+                    object v = sf.GetValue(src);
+                    if (v is Array arr) v = arr.Clone();
+                    df.SetValue(dst, v);
+                }
+                else
+                {
+                    CopyField(src, dst, df.Name);   // enum / Convert fallback for differing types
+                }
+            }
+            EditorUtility.SetDirty(dst);
+        }
+
+        // Swap any VRSL/ material on the fixture (and its children) to the matching VRSL-URP/
+        // shader. The two shader sets share names apart from the namespace prefix, so the URP target
+        // is resolved by name rather than a GUID table. Only writable project materials are touched;
+        // package materials are left alone. Materials are deduped across the whole run.
+        static void SwapFixtureMaterials(GameObject fixture, HashSet<Material> seen, HashSet<Material> changed)
+        {
+            const string SRC_PREFIX = "VRSL/";
+            const string DST_PREFIX = "VRSL-URP/";
+            foreach (var r in fixture.GetComponentsInChildren<Renderer>(includeInactive: true))
+            {
+                foreach (var mat in r.sharedMaterials)
+                {
+                    if (mat == null || !seen.Add(mat)) continue;
+                    var shader = mat.shader;
+                    if (shader == null || !shader.name.StartsWith(SRC_PREFIX)) continue;
+
+                    string path = AssetDatabase.GetAssetPath(mat);
+                    if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/"))
+                    {
+                        Debug.LogWarning($"[VRSL In-Place] Skipped non-writable material '{mat.name}' ({path}).");
+                        continue;
+                    }
+
+                    string urpName = DST_PREFIX + shader.name.Substring(SRC_PREFIX.Length);
+                    var urpShader = Shader.Find(urpName);
+                    if (urpShader == null)
+                    {
+                        Debug.LogWarning($"[VRSL In-Place] No URP shader '{urpName}' for material '{mat.name}'; left on legacy shader.");
+                        continue;
+                    }
+                    if (urpShader == shader) continue;
+
+                    Undo.RecordObject(mat, "VRSL: Swap Material Shader");
+                    mat.shader = urpShader;
+                    EditorUtility.SetDirty(mat);
+                    changed.Add(mat);
+                }
             }
         }
 
