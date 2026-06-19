@@ -1,5 +1,6 @@
 // Fullscreen lighting shader for VRSL URP realtime lights. Runs after URP
 // opaque rendering and contains two passes:
+// (rev: NaN-safe light direction + degenerate-normal guard)
 //
 //   Pass 0 (VRSL_Lighting) — additive surface-lighting pass. Reconstructs
 //   world-space position from _CameraDepthTexture and reads the surface
@@ -28,8 +29,13 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
         {
             Name "VRSL_Lighting"
 
-            // Additive — output is added on top of the existing frame color
+            // Additive — output is added on top of the existing frame color.
+            // ColorMask RGB: never write alpha. The scene alpha is meaningful in some
+            // hosts (Basis mirrors / compositing), and an additive pass that disturbs it
+            // (even via MSAA resolve / HDR-format quirks) makes lit opaque surfaces read
+            // as see-through. We only ever contribute RGB light, so mask alpha out.
             Blend One One
+            ColorMask RGB
             ZWrite Off
             ZTest Off
             Cull Off
@@ -134,7 +140,17 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                 float3 normalWS = SAMPLE_TEXTURE2D_X(_VRSLNormalsTexture,
                     sampler_VRSLNormalsTexture, uv).xyz;
                 if (dot(normalWS, normalWS) < 0.01)
-                    normalWS = normalize(cross(ddy(posWS), ddx(posWS)));
+                {
+                    // Depth-derivative normal for surfaces that don't write the VRSL
+                    // normals prepass (shaders with no DepthNormals pass, e.g. LTCGI
+                    // Simple URP). Guard the normalize: on large flat surfaces at grazing
+                    // angles / depth discontinuities the cross product collapses to ~0,
+                    // and normalize(0) is NaN — which the additive blend then smears across
+                    // the frame as garbage ("see-through") pixels. Fall back to world-up.
+                    float3 dn  = cross(ddy(posWS), ddx(posWS));
+                    float  dl2 = dot(dn, dn);
+                    normalWS = dl2 > 1e-12 ? dn * rsqrt(dl2) : float3(0.0, 1.0, 0.0);
+                }
                 else
                     normalWS = normalize(normalWS);
 

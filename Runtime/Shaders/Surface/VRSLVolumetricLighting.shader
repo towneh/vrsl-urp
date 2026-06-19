@@ -299,6 +299,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
         {
             Name "VRSL_Vol_Upsample"
             Blend One One
+            ColorMask RGB   // additive light only — never disturb scene alpha
             ZWrite Off
             ZTest  Off
             Cull   Off
@@ -388,6 +389,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
         {
             Name "VRSL_Vol_RaymarchFullRes"
             Blend One One
+            ColorMask RGB   // additive light only — never disturb scene alpha
             ZWrite Off
             ZTest  Off
             Cull   Off

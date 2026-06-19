@@ -94,7 +94,11 @@ float3 VRSL_EvaluateLight(VRSLLightData light, float3 posWS, float3 normalWS)
             light.spotCosines.x, light.spotCosines.y,
             light.spotCosines.w);
 
-    float NdotL = max(0.0, dot(normalWS, normalize(toLight)));
+    // NaN-safe light direction: normalize(toLight) is NaN when a surface sits at the
+    // light position (toLight ≈ 0) — common now that point-light origins sit on the bar
+    // mesh right next to floor/ceiling. The rsqrt-with-floor form matches
+    // VRSL_EvaluateLightVolumetric and never divides by zero.
+    float NdotL = max(0.0, dot(normalWS, toLight * rsqrt(max(distSq, 0.0001))));
 
     return light.colorAndIntensity.xyz * light.colorAndIntensity.w
            * distAtten * spotAtten * NdotL;
