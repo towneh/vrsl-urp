@@ -26,6 +26,7 @@ namespace VRSL.URP
         SerializedProperty _maxIntensity;
         SerializedProperty _finalIntensity;
         SerializedProperty _globalIntensity;
+        SerializedProperty _curveMod;
         SerializedProperty _isPointLight;
         SerializedProperty _enableConeWidth;
         SerializedProperty _minSpotAngle;
@@ -84,6 +85,7 @@ namespace VRSL.URP
             _maxIntensity        = serializedObject.FindProperty("maxIntensity");
             _finalIntensity      = serializedObject.FindProperty("finalIntensity");
             _globalIntensity     = serializedObject.FindProperty("globalIntensity");
+            _curveMod            = serializedObject.FindProperty("curveMod");
             _isPointLight        = serializedObject.FindProperty("isPointLight");
             _enableConeWidth     = serializedObject.FindProperty("enableConeWidth");
             _minSpotAngle        = serializedObject.FindProperty("minSpotAngle");
@@ -158,6 +160,7 @@ namespace VRSL.URP
             EditorGUILayout.PropertyField(_maxIntensity);
             EditorGUILayout.PropertyField(_finalIntensity);
             EditorGUILayout.PropertyField(_globalIntensity);
+            EditorGUILayout.PropertyField(_curveMod);
             // StaticPointLight implies point emission (forced in the manager), so the
             // toggle is hidden — showing it would suggest the mode is optional here.
             if (!isStaticPoint)

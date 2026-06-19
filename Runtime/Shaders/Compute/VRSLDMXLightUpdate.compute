@@ -123,6 +123,16 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     float combinedIntensity =
         intensity * cfg.spotAngles.z * cfg.rightAndMaxIntensity.w * strobe;
 
+    // Match the body-glow surface's dimmer response. GetDMXEmission applies the dimmer
+    // twice (colour lerp + final lerp) plus the _CurveMod boost, so the bar emission is
+    // ∝ dimmer² × (1 + (curveMod-1)·dimmer). The point light is otherwise linear in the
+    // dimmer, which leaves the bar crushed to black at partial dimmer while the spill stays
+    // lit. extras.z carries _CurveMod (CPU-synced to the shell material so the two agree).
+    // Guard against an unset extras.z (0) — without the floor the factor collapses to
+    // intensity*(1-intensity), which is zero at full dimmer and would black the light out.
+    float curveMod = max(cfg.extras.z, 1.0);
+    combinedIntensity *= intensity * (1.0 + (curveMod - 1.0) * intensity);
+
     // ── Direction (pan/tilt for moving heads) ─────────────────────────────────
     float3 baseForward = cfg.forwardAndType.xyz;
     float3 finalDir    = baseForward;

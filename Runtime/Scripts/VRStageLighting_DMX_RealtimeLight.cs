@@ -73,6 +73,13 @@ namespace VRSL.URP
                + "scene-wide dimming without adjusting every fixture individually.")]
         public float globalIntensity = 1f;
 
+        [Tooltip("Dimmer-response curve, matched to the body-glow surface's _CurveMod. The "
+               + "surface emission scales as dimmer² × (1 + (curveMod-1)·dimmer); "
+               + "this value is pushed to the shell material and into the point-light compute so "
+               + "the cast light and the bar glow ramp together. 2 reproduces the stock surface; "
+               + "1 is the gentlest curve. Below 1 is not recommended.")]
+        public float curveMod = 2f;
+
         [Tooltip("Allow DMX strobe channel to gate this light on/off.")]
         public bool enableStrobe = true;
 
@@ -241,6 +248,7 @@ namespace VRSL.URP
             _shellProps.SetColor("_EmissionDMX",         shellEmissionTint);
             _shellProps.SetFloat("_GlobalIntensity",     globalIntensity);
             _shellProps.SetFloat("_FinalIntensity",      finalIntensity);
+            _shellProps.SetFloat("_CurveMod",            curveMod);
             _shellProps.SetFloat("_MaxMinPanAngle",      maxMinPan  / 2f);
             _shellProps.SetFloat("_MaxMinTiltAngle",     maxMinTilt / 2f);
 

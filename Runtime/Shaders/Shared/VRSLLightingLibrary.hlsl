@@ -21,7 +21,8 @@ struct VRSLFixtureConfig
                                 // z = invertPan (0/1), w = enableGoboSpin (0/1)
     float4 tiltSettings;        // x = maxMinTilt (deg), y = tiltOffset (deg),
                                 // z = invertTilt (0/1), w = enableGobo (0/1)
-    float4 extras;              // x = emitterDepth (m), yzw = reserved
+    float4 extras;              // x = emitterDepth (m), y = 5-channel mode flag,
+                                // z = curveMod (body-glow dimmer-response match), w = reserved
 };
 
 // Per-fixture light state computed by the compute shader every frame

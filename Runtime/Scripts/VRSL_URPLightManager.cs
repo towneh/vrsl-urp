@@ -428,7 +428,10 @@ namespace VRSL.URP
                     f.enableGobo ? 1f : 0f),
                 // extras.y carries the 5-channel-mode flag the compute uses to pick
                 // the compressed static DMX layout instead of the 13-channel layout.
-                extras       = new Vector4(f.emitterDepth, f.use5ChannelMode ? 1f : 0f, 0f, 0f),
+                // extras.z carries _CurveMod so the point light reproduces the body-glow
+                // surface's non-linear dimmer response (kept in sync via the shell MPB).
+                extras       = new Vector4(f.emitterDepth, f.use5ChannelMode ? 1f : 0f,
+                                           f.curveMod, 0f),
             };
         }
 
