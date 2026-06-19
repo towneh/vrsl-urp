@@ -43,6 +43,10 @@ namespace VRSL.URP
         public RenderTexture dmxMainTexture;
         public RenderTexture dmxMovementTexture;
         public RenderTexture dmxStrobeTexture;
+        [Tooltip("StrobeTimings CRT producing the strobe phase. Published as the "
+               + "_VRSLU_DMXGridStrobeTimer global, which the StrobeOutput CRT's decode shader "
+               + "samples to compute the strobe gate. Leave empty if strobe isn't used.")]
+        public RenderTexture dmxStrobeTimerTexture;
         [Tooltip("SpinnerTimer CRT (the CRT fed by DMXRTShader-SpinnerTimer). The URP path "
                + "samples its accumulated phase to drive gobo spin, matching the volumetric "
                + "shader's getGoboSpinSpeed() so rate changes don't cause visible jumps.")]
@@ -138,6 +142,12 @@ namespace VRSL.URP
         [Tooltip("Gobo textures available to all DMX fixtures. Packed into a shared Texture2DArray. "
                + "DMX channel +11 selects the slot (0 = open/no gobo). Order matches DMX value range.")]
         public Texture2D[] goboTextures;
+
+        [Header("Debug")]
+        [Tooltip("Log fixture collection and DMX global / CRT publishing to the Console on enable. "
+               + "Use to confirm the manager found your fixtures and is feeding the _VRSLU_* globals "
+               + "from the right CRTs.")]
+        public bool outputDebugLogs = false;
 
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }
@@ -293,6 +303,13 @@ namespace VRSL.URP
                 FindObjectsInactive.Exclude));
 
             FixtureCount = _fixtures.Count;
+            if (outputDebugLogs)
+            {
+                if (FixtureCount == 0)
+                    Debug.LogWarning("[VRSL URP] No VRStageLighting_DMX_RealtimeLight fixtures found in the scene.", this);
+                else
+                    Debug.Log($"[VRSL URP] Collected {FixtureCount} DMX realtime light fixture(s).", this);
+            }
             if (FixtureCount == 0) return;
 
             ReleaseBuffers();
@@ -336,12 +353,23 @@ namespace VRSL.URP
 
         VRSLFixtureConfig BuildConfig(VRStageLighting_DMX_RealtimeLight f)
         {
-            // Cone apex defaults to the fixture root, but a non-null lensTransform
-            // lets prefab authors anchor the cone at a child marker positioned at
-            // the lens — required when the prefab origin sits at the truss-clamp /
-            // chassis attachment point and the lens is offset deeper inside the
-            // moving head. Mirrors the AudioLink path's GetWorldPosition fallback.
-            Vector3 pos = f.lensTransform != null ? f.lensTransform.position : f.transform.position;
+            // Light origin priority:
+            //  1. lensTransform — explicit per-fixture anchor (truss-clamp prefabs etc.).
+            //  2. fixture-body mesh centre (fixtureShellRenderers[0].bounds.center) — the
+            //     geometry this light drives. Robust when the component transform sits away
+            //     from the lit mesh, e.g. every fixture parked at a shared root while the bar
+            //     sub-meshes are spread out (the renderer's transform is the root too, so its
+            //     bounds centre is the only reliable per-bar position).
+            //  3. the component's own transform.
+            Vector3 pos;
+            if (f.lensTransform != null)
+                pos = f.lensTransform.position;
+            else if (f.fixtureShellRenderers != null && f.fixtureShellRenderers.Length > 0
+                     && f.fixtureShellRenderers[0] != null)
+                pos = f.fixtureShellRenderers[0].bounds.center;
+            else
+                pos = f.transform.position;
+            pos += f.lightOriginOffset;
 
             // Use the fixture's declared local light axis (defaults to forward for moving heads).
             // Par cans and similar fixtures whose lens faces local +Y use Vector3.up here.
@@ -354,7 +382,9 @@ namespace VRSL.URP
             // same axis in world space since the compute shader has no ObjectToWorld matrix.
             Vector3 baseRight   = f.transform.right;
 
-            int   lightType    = f.isPointLight ? 1 : 0;
+            // StaticPointLight emits omnidirectionally regardless of the isPointLight
+            // toggle (which the inspector hides for that archetype).
+            int   lightType    = (f.isPointLight || f.fixtureType == DMXFixtureType.StaticPointLight) ? 1 : 0;
             float outerHalf    = f.maxSpotAngle * 0.5f;
             // When enableConeWidth is false, collapse minOuter == outerHalf so the compute
             // shader's lerp over DMX ch+4 is a no-op and the cone stays fixed at maxSpotAngle.
@@ -396,7 +426,9 @@ namespace VRSL.URP
                     f.tiltOffset - 90f,
                     f.invertTilt ? 1f : 0f,
                     f.enableGobo ? 1f : 0f),
-                extras       = new Vector4(f.emitterDepth, 0f, 0f, 0f),
+                // extras.y carries the 5-channel-mode flag the compute uses to pick
+                // the compressed static DMX layout instead of the 13-channel layout.
+                extras       = new Vector4(f.emitterDepth, f.use5ChannelMode ? 1f : 0f, 0f, 0f),
             };
         }
 
@@ -407,6 +439,80 @@ namespace VRSL.URP
             if (dmxMovementTexture  != null) DMXMovementHandle  = RTHandles.Alloc(dmxMovementTexture);
             if (dmxStrobeTexture    != null) DMXStrobeHandle    = RTHandles.Alloc(dmxStrobeTexture);
             if (dmxSpinTimerTexture != null) DMXSpinTimerHandle = RTHandles.Alloc(dmxSpinTimerTexture);
+            PublishDMXGlobals();
+        }
+
+        // The DMX grid CRTs are bound to the compute by the render passes, but fixture-body
+        // surface shaders sample them as _VRSLU_* globals instead. Publish them from the same
+        // references so the manager alone drives both the render-pass lights and the surface
+        // emissive — no control panel needed. Also force each CustomRenderTexture into Realtime
+        // update mode, the role VRSL_LocalUIControlPanel.EnableCRTS used to fill, so the decode
+        // chain keeps producing live data without the panel present.
+        static readonly int s_DMXGrid            = Shader.PropertyToID("_VRSLU_DMXGridRenderTexture");
+        static readonly int s_DMXGridMovement    = Shader.PropertyToID("_VRSLU_DMXGridRenderTextureMovement");
+        static readonly int s_DMXGridStrobe      = Shader.PropertyToID("_VRSLU_DMXGridStrobeOutput");
+        static readonly int s_DMXGridStrobeTimer = Shader.PropertyToID("_VRSLU_DMXGridStrobeTimer");
+        static readonly int s_DMXGridSpin        = Shader.PropertyToID("_VRSLU_DMXGridSpinTimer");
+
+        void PublishDMXGlobals()
+        {
+            PublishDMX("Color/Intensity", s_DMXGrid,            dmxMainTexture);
+            PublishDMX("Movement",        s_DMXGridMovement,    dmxMovementTexture);
+            PublishDMX("Strobe Output",   s_DMXGridStrobe,      dmxStrobeTexture);
+            PublishDMX("Strobe Timings",  s_DMXGridStrobeTimer, dmxStrobeTimerTexture);
+            PublishDMX("Spin Timer",      s_DMXGridSpin,        dmxSpinTimerTexture);
+        }
+
+        void PublishDMX(string label, int globalId, RenderTexture tex)
+        {
+            if (tex == null)
+            {
+                if (outputDebugLogs)
+                    Debug.LogWarning($"[VRSL URP] DMX {label}: no CRT assigned.", this);
+                return;
+            }
+            Shader.SetGlobalTexture(globalId, tex);
+            bool setRealtime = false;
+            if (tex is CustomRenderTexture crt && crt.updateMode != CustomRenderTextureUpdateMode.Realtime)
+            {
+                crt.updateMode = CustomRenderTextureUpdateMode.Realtime;
+                setRealtime = true;
+            }
+            if (outputDebugLogs)
+                Debug.Log($"[VRSL URP] DMX {label}: {tex.name}{(setRealtime ? " (set Realtime)" : "")}", this);
+        }
+
+        // Reads the compute's decoded per-fixture light data back to the CPU and logs it.
+        // Right-click the component (in Play mode) to run. intensity > 0 means the channel
+        // data reached the fixture and decoded — so a dark scene is a rendering problem.
+        // intensity 0 across fixtures means the patched channels decode to zero — a channel
+        // alignment / 5CH-layout / show-is-dark problem, not a rendering one.
+        [ContextMenu("Log Decoded Fixture Light Data")]
+        public void LogFixtureLightData()
+        {
+            if (LightDataBuffer == null || FixtureCount == 0)
+            {
+                Debug.LogWarning("[VRSL URP] No light buffer / fixtures — enter Play mode first.", this);
+                return;
+            }
+            var data = new VRSLLightData[FixtureCount];
+            LightDataBuffer.GetData(data);
+            int n = Mathf.Min(FixtureCount, 12);
+            for (int i = 0; i < n; i++)
+            {
+                var f = _fixtures[i];
+                Vector4 c = data[i].colorAndIntensity;
+                Vector4 p = data[i].positionAndRange;
+                bool lens = f.lensTransform != null;
+                Vector3 lp = lens ? f.lensTransform.position : f.transform.position;
+                var sr = (f.fixtureShellRenderers != null && f.fixtureShellRenderers.Length > 0)
+                         ? f.fixtureShellRenderers[0] : null;
+                Vector3 sp = sr != null ? sr.bounds.center : f.transform.position;
+                Debug.Log($"[VRSL URP] Fixture {i} (ch {f.ComputeAbsoluteChannel()}): intensity={c.w:F2} "
+                        + $"lightPos=({p.x:F1},{p.y:F1},{p.z:F1}) lensSet={lens} "
+                        + $"lensPos=({lp.x:F1},{lp.y:F1},{lp.z:F1}) shellCtr=({sp.x:F1},{sp.y:F1},{sp.z:F1})",
+                          f);
+            }
         }
 
         void ReleaseTextureHandles()

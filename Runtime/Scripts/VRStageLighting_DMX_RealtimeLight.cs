@@ -39,6 +39,13 @@ namespace VRSL.URP
         [Tooltip("Enable 16-bit fine-channel resolution for pan and tilt.")]
         public bool enableFineChannels = false;
 
+        [Tooltip("Read DMX using the compressed 5-channel static layout — intensity, "
+               + "Red, Green, Blue, Strobe packed into the fixture's base..base+4 "
+               + "channels — instead of the standard 13-channel layout (dimmer +5, "
+               + "RGB +7/8/9, strobe +6). Use for fixtures patched 5 channels apart. "
+               + "Match this to the channel mode of the fixture-body surface shader.")]
+        public bool use5ChannelMode = false;
+
         [Tooltip("Use legacy sector-based addressing instead of industry-standard channels.")]
         public bool useLegacySectorMode = false;
 
@@ -104,6 +111,12 @@ namespace VRSL.URP
                + "cone visually lines up with the bulb. Leave empty when the prefab origin "
                + "already coincides with the lens (typical for static fixtures).")]
         public Transform lensTransform;
+
+        [Tooltip("World-space offset added to the resolved light origin. Pushes the point "
+               + "source off the fixture geometry — e.g. (0, -0.5, 0) drops a ceiling strip's "
+               + "light below the fixture so the spill reads as coming from beneath it. "
+               + "Applied on top of the lensTransform / shell-mesh-centre / transform origin.")]
+        public Vector3 lightOriginOffset = Vector3.zero;
 
         [Tooltip("Emit as a point light instead of a spot.")]
         public bool isPointLight = false;
@@ -251,14 +264,17 @@ namespace VRSL.URP
 
     /// <summary>Fixture archetype for <see cref="VRStageLighting_DMX_RealtimeLight"/>.
     /// Drives inspector field visibility — movers expose pan/tilt, spotlights expose
-    /// gobo selection, static fixtures hide both. Custom keeps every section visible
-    /// for authoring novel fixtures that don't fit the four built-in shapes.</summary>
+    /// gobo selection, static fixtures hide both. StaticPointLight additionally emits
+    /// omnidirectionally — the manager forces point-light mode for it, so the inspector
+    /// hides the spot/cone/pan-tilt/gobo fields. Custom keeps every section visible for
+    /// authoring novel fixtures that don't fit the built-in shapes.</summary>
     public enum DMXFixtureType
     {
-        MoverSpotlight = 0,
-        MoverWashlight = 1,
-        StaticBlinder  = 2,
-        StaticParLight = 3,
-        Custom         = 4,
+        MoverSpotlight   = 0,
+        MoverWashlight   = 1,
+        StaticBlinder    = 2,
+        StaticParLight   = 3,
+        Custom           = 4,
+        StaticPointLight = 5,
     }
 }

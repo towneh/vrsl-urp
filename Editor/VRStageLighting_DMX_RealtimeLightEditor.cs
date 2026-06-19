@@ -16,6 +16,7 @@ namespace VRSL.URP
         // DMX Settings
         SerializedProperty _enableDMXChannels;
         SerializedProperty _enableFineChannels;
+        SerializedProperty _use5ChannelMode;
         SerializedProperty _useLegacySectorMode;
         SerializedProperty _sector;
         SerializedProperty _dmxChannel;
@@ -32,6 +33,7 @@ namespace VRSL.URP
         SerializedProperty _range;
         SerializedProperty _emitterDepth;
         SerializedProperty _lensTransform;
+        SerializedProperty _lightOriginOffset;
 
         // Movement Settings
         SerializedProperty _enablePanTilt;
@@ -73,6 +75,7 @@ namespace VRSL.URP
 
             _enableDMXChannels   = serializedObject.FindProperty("enableDMXChannels");
             _enableFineChannels  = serializedObject.FindProperty("enableFineChannels");
+            _use5ChannelMode     = serializedObject.FindProperty("use5ChannelMode");
             _useLegacySectorMode = serializedObject.FindProperty("useLegacySectorMode");
             _sector              = serializedObject.FindProperty("sector");
             _dmxChannel          = serializedObject.FindProperty("dmxChannel");
@@ -88,6 +91,7 @@ namespace VRSL.URP
             _range               = serializedObject.FindProperty("range");
             _emitterDepth        = serializedObject.FindProperty("emitterDepth");
             _lensTransform       = serializedObject.FindProperty("lensTransform");
+            _lightOriginOffset   = serializedObject.FindProperty("lightOriginOffset");
 
             _enablePanTilt       = serializedObject.FindProperty("enablePanTilt");
             _invertPan           = serializedObject.FindProperty("invertPan");
@@ -124,6 +128,8 @@ namespace VRSL.URP
             bool showMovement = isMover || type == DMXFixtureType.Custom;
             bool showGobo     = type == DMXFixtureType.MoverSpotlight
                              || type == DMXFixtureType.Custom;
+            // Static point light: omnidirectional archetype — no spot/cone/pan-tilt/gobo.
+            bool isStaticPoint = type == DMXFixtureType.StaticPointLight;
 
             EditorGUILayout.Space();
             EditorGUILayout.Space();
@@ -132,6 +138,7 @@ namespace VRSL.URP
             GUILayout.Label("DMX Settings", _sectionLabel);
             EditorGUILayout.PropertyField(_enableDMXChannels);
             EditorGUILayout.PropertyField(_enableFineChannels);
+            EditorGUILayout.PropertyField(_use5ChannelMode, new GUIContent("Use 5 Channel Mode", _use5ChannelMode.tooltip));
             EditorGUILayout.PropertyField(_useLegacySectorMode);
             if (_useLegacySectorMode.boolValue)
             {
@@ -151,7 +158,10 @@ namespace VRSL.URP
             EditorGUILayout.PropertyField(_maxIntensity);
             EditorGUILayout.PropertyField(_finalIntensity);
             EditorGUILayout.PropertyField(_globalIntensity);
-            EditorGUILayout.PropertyField(_isPointLight);
+            // StaticPointLight implies point emission (forced in the manager), so the
+            // toggle is hidden — showing it would suggest the mode is optional here.
+            if (!isStaticPoint)
+                EditorGUILayout.PropertyField(_isPointLight);
 
             // Cone-width controls. Spotlights (and Custom) have a zoom motor on
             // DMX channel +4, so they expose enableConeWidth + min/max angles.
@@ -171,16 +181,23 @@ namespace VRSL.URP
             {
                 if (_enableConeWidth.boolValue)
                     _enableConeWidth.boolValue = false;
-                EditorGUILayout.PropertyField(
-                    _maxSpotAngle,
-                    new GUIContent("Spot Angle", _maxSpotAngle.tooltip));
+                // A point light is omnidirectional — no cone angle to author.
+                if (!isStaticPoint)
+                    EditorGUILayout.PropertyField(
+                        _maxSpotAngle,
+                        new GUIContent("Spot Angle", _maxSpotAngle.tooltip));
             }
             EditorGUILayout.PropertyField(_range);
             // Emitter depth only meaningfully affects spot cones; hide for point lights
             // since the math collapses back to a point source regardless.
-            if (!_isPointLight.boolValue)
+            if (!_isPointLight.boolValue && !isStaticPoint)
                 EditorGUILayout.PropertyField(_emitterDepth);
-            EditorGUILayout.PropertyField(_lensTransform);
+            // lensTransform is a spot-cone anchor; for the omnidirectional StaticPointLight
+            // archetype the origin comes from the shell-mesh centre + lightOriginOffset, so
+            // hide the lens field for it. lightOriginOffset stays available for all types.
+            if (!isStaticPoint)
+                EditorGUILayout.PropertyField(_lensTransform);
+            EditorGUILayout.PropertyField(_lightOriginOffset);
 
             EditorGUILayout.Space();
             EditorGUILayout.Space();
@@ -230,11 +247,15 @@ namespace VRSL.URP
             }
 
             // ── Light Output Axis ─────────────────────────────────────────────
-            GUILayout.Label("Light Output Axis", _sectionLabel);
-            EditorGUILayout.PropertyField(_localLightDirection);
+            // Omnidirectional point lights ignore the output axis — hide it.
+            if (!isStaticPoint)
+            {
+                GUILayout.Label("Light Output Axis", _sectionLabel);
+                EditorGUILayout.PropertyField(_localLightDirection);
 
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
+                EditorGUILayout.Space();
+                EditorGUILayout.Space();
+            }
 
             // ── Fixture Shell ─────────────────────────────────────────────────
             GUILayout.Label("Fixture Shell", _sectionLabel);

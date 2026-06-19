@@ -41,11 +41,14 @@ The remainder of this document describes the per-fixture fields exposed in the i
 | `dmxMainTexture` | CRT producing `_VRSLU_DMXGridRenderTexture` |
 | `dmxMovementTexture` | CRT producing `_VRSLU_DMXGridRenderTextureMovement` |
 | `dmxStrobeTexture` | CRT producing `_VRSLU_DMXGridStrobeOutput` |
+| `dmxStrobeTimerTexture` | StrobeTimings CRT, published as `_VRSLU_DMXGridStrobeTimer`. The StrobeOutput CRT samples it to compute the strobe gate; leave empty if strobe is unused. |
 | `dmxSpinTimerTexture` | CRT producing `_VRSLU_DMXGridSpinTimer` |
 | `computeShader` | `VRSLDMXLightUpdate` |
 | `lightingShader` | `Hidden/VRSL-URP/DeferredLighting` |
 | `volumetricShader` | `Hidden/VRSL-URP/VolumetricLighting` |
 | `goboTextures` | Optional `Texture2D[]` packed into a shared `Texture2DArray`; DMX channel +11 selects the slot. |
+
+On enable the manager publishes its assigned DMX CRTs as the `_VRSLU_DMX*` shader globals that fixture-body surface shaders sample, so the manager alone drives both the render-pass lights and the fixture-body emissive — no separate control panel is needed to set those globals. It also forces each assigned `CustomRenderTexture` into Realtime update mode, so the decode chain keeps producing live data on its own.
 
 ### AudioLink — `VRSL_AudioLinkURPLightManager`
 
@@ -83,7 +86,7 @@ These fields appear on both `VRStageLighting_DMX_RealtimeLight` and `VRStageLigh
 
 | Field | Notes |
 |---|---|
-| `fixtureType` | `MoverSpotlight`, `MoverWashlight`, `StaticBlinder`, `StaticParLight`, `Custom`. Drives inspector field visibility and sets the wash-vs-spot inner-cone ratio (wash 0.65 = flat-bright with long feather; spot/static 0.5 = falloff over the outer half). |
+| `fixtureType` | `MoverSpotlight`, `MoverWashlight`, `StaticBlinder`, `StaticParLight`, `StaticPointLight`, `Custom`. Drives inspector field visibility and sets the wash-vs-spot inner-cone ratio (wash 0.65 = flat-bright with long feather; spot/static 0.5 = falloff over the outer half). `StaticPointLight` emits omnidirectionally — the manager forces point mode for it and the inspector hides the spot, cone, pan/tilt, and gobo fields. |
 | `maxIntensity` | Peak lux at full output. Tune relative to scene scale. |
 | `range` | Attenuation range in metres. |
 | `spotAngle` (AudioLink) / `minSpotAngle` & `maxSpotAngle` (DMX) | Outer cone angle in degrees. DMX channel +4 lerps between min and max. |
@@ -119,6 +122,7 @@ DMX movers get pan/tilt from the DMX channels and apply Rodrigues rotation on th
 | `dmxChannel` / `dmxUniverse` | Industry-standard channel and Artnet universe (1-based). |
 | `useLegacySectorMode` / `sector` | Legacy sector addressing for older patches. Sector 0 = channels 1–13, sector 1 = 14–26, etc. |
 | `enableFineChannels` | 16-bit pan/tilt via the +1 / +3 channels. |
+| `use5ChannelMode` | Read DMX using the compressed 5-channel static layout (intensity +0, RGB +1/2/3, strobe +4) instead of the standard 13-channel layout. For fixtures patched 5 channels apart. Match this to the channel mode of the fixture-body surface shader so surface and light read the same data. |
 | `enableStrobe` | Allow the DMX strobe channel to gate the light on/off. |
 | `enableConeWidth` | Allow ch+4 (motor speed / zoom) to modulate the cone between `minSpotAngle` and `maxSpotAngle`. Disable on par cans and blinders so unrelated traffic on ch+4 doesn't flicker their cone width. |
 | `enableGobo` | Allow ch+11 to select gobos. |
@@ -139,6 +143,8 @@ The full per-fixture channel layout (offsets relative to `dmxChannel`):
 | +7 / +8 / +9 | Red / Green / Blue |
 | +10 | Gobo spin speed |
 | +11 | Gobo selection |
+
+With `use5ChannelMode` enabled this collapses to the 5-channel static form — dimmer at +0, Red / Green / Blue at +1 / +2 / +3, strobe at +4 — and the motor, pan/tilt, and gobo channels are unused. Patch those fixtures 5 channels apart and set the fixture-body surface shader to its matching 5-channel mode.
 
 ---
 

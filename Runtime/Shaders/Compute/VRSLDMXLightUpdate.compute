@@ -101,16 +101,24 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     bool enableFine      = cfg.dmxChannel.w > 0.5;
 
     // ── DMX channel decode ────────────────────────────────────────────────────
-    // Dimmer (ch+5)
-    float intensity = GetDMXValue(absChannel + 5, _DMXMainTex);
-    // Color  (ch+7/8/9)
-    float r = GetDMXValue(absChannel + 7, _DMXMainTex);
-    float g = GetDMXValue(absChannel + 8, _DMXMainTex);
-    float b = GetDMXValue(absChannel + 9, _DMXMainTex);
-    // Strobe (ch+6)
+    // Two channel layouts, matching the surface shader's _13CH_MODE / _5CH_MODE:
+    //   13-channel: dimmer +5, RGB +7/8/9, strobe +6
+    //    5-channel: dimmer +0, RGB +1/2/3, strobe +4 (compressed static layout, for
+    //               fixtures patched 5 channels apart). extras.y carries the flag.
+    bool fiveCh   = cfg.extras.y > 0.5;
+    uint dimmerCh = fiveCh ? absChannel     : absChannel + 5;
+    uint rCh      = fiveCh ? absChannel + 1 : absChannel + 7;
+    uint gCh      = fiveCh ? absChannel + 2 : absChannel + 8;
+    uint bCh      = fiveCh ? absChannel + 3 : absChannel + 9;
+    uint strobeCh = fiveCh ? absChannel + 4 : absChannel + 6;
+
+    float intensity = GetDMXValue(dimmerCh, _DMXMainTex);
+    float r = GetDMXValue(rCh, _DMXMainTex);
+    float g = GetDMXValue(gCh, _DMXMainTex);
+    float b = GetDMXValue(bCh, _DMXMainTex);
     float strobe = 1.0;
     if (enableStrobe)
-        strobe = GetDMXValue(absChannel + 6, _DMXStrobeTex);
+        strobe = GetDMXValue(strobeCh, _DMXStrobeTex);
 
     float combinedIntensity =
         intensity * cfg.spotAngles.z * cfg.rightAndMaxIntensity.w * strobe;
@@ -178,8 +186,10 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
                                      cfg.extras.x);
     // ── Gobo (ch+10 spin speed, ch+11 gobo select) ───────────────────────────
     // Mirrors getDMXGoboSelection() in VRSL-DMXFunctions: round(raw*255/30), clamp 1..N
-    bool  enableGoboSpin = cfg.panSettings.w > 0.5;
-    bool  enableGobo     = cfg.tiltSettings.w > 0.5;
+    // 5-channel fixtures have no gobo/spin channels — those offsets (+10/+11) belong
+    // to the next fixture in a 5-apart patch, so suppress the reads in 5CH mode.
+    bool  enableGoboSpin = cfg.panSettings.w > 0.5 && !fiveCh;
+    bool  enableGobo     = cfg.tiltSettings.w > 0.5 && !fiveCh;
     float spinStatus = GetDMXValue   (absChannel + 10, _DMXMainTex);      // luminance — picks direction
     float spinPhase  = GetDMXValueRaw(absChannel + 10, _DMXSpinTimerTex); // accumulated phase from CRT
     float goboRaw    = enableGobo ? GetDMXValue(absChannel + 11, _DMXMainTex) : 0.0;
@@ -194,8 +204,13 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
         float angle = (spinStatus > 0.5) ? -spinPhase * 4.0 : spinPhase * 4.0;
         spinSpeed = fmod(angle, 6.28318530718);
     }
+    // Gobo projection is a spot-cone effect — SampleGobo masks everything outside the
+    // cone and behind the light axis. Point lights are omnidirectional, so leave goboIdx
+    // at -1 (the SampleGobo no-op) for them; otherwise their spill is masked down to a
+    // narrow gobo'd cone, and zeroed entirely when slot 0 is a patterned gobo.
+    // forwardAndType.w < 0.5 == spot.
     int goboIdx = -1;
-    if (_VRSLGoboCount > 0)
+    if (_VRSLGoboCount > 0 && cfg.forwardAndType.w < 0.5)
     {
         int slot = (int)round(goboRaw * 255.0 / 30.0);
         slot    = clamp(slot, 1, (int)_VRSLGoboCount);
