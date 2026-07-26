@@ -513,18 +513,20 @@ namespace VRSL.URP
             }
             var data = new VRSLLightData[FixtureCount];
             LightDataBuffer.GetData(data);
-            int n = Mathf.Min(FixtureCount, 12);
+            int n = FixtureCount;
             for (int i = 0; i < n; i++)
             {
                 var f = _fixtures[i];
                 Vector4 c = data[i].colorAndIntensity;
                 Vector4 p = data[i].positionAndRange;
+                float active = data[i].spotCosines.z;
                 bool lens = f.lensTransform != null;
                 Vector3 lp = lens ? f.lensTransform.position : f.transform.position;
                 var sr = (f.fixtureShellRenderers != null && f.fixtureShellRenderers.Length > 0)
                          ? f.fixtureShellRenderers[0] : null;
                 Vector3 sp = sr != null ? sr.bounds.center : f.transform.position;
-                Debug.Log($"[VRSL URP] Fixture {i} (ch {f.ComputeAbsoluteChannel()}): intensity={c.w:F2} "
+                Debug.Log($"[VRSL URP] Fixture {i} '{f.name}' (ch {f.ComputeAbsoluteChannel()}): intensity={c.w:F2} "
+                        + $"rgb=({c.x:F3},{c.y:F3},{c.z:F3}) active={active:F0} "
                         + $"lightPos=({p.x:F1},{p.y:F1},{p.z:F1}) lensSet={lens} "
                         + $"lensPos=({lp.x:F1},{lp.y:F1},{lp.z:F1}) shellCtr=({sp.x:F1},{sp.y:F1},{sp.z:F1})",
                           f);
