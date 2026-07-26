@@ -26,7 +26,7 @@
 
             #define VRSL_DMX
 
-       // #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/VRSLDMX.cginc"
+       // #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/VRSLDMX.cginc"
             Texture2D _VRSLU_DMXGridRenderTexture;
             Texture2D _VRSLU_DMXGridStrobeTimer;
             SamplerState VRSL_PointClampSampler;

@@ -52,7 +52,7 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
 
             // Set by the manager's LightingPass via SetGlobal* before DrawMesh
             StructuredBuffer<VRSLLightData> _VRSLLights;

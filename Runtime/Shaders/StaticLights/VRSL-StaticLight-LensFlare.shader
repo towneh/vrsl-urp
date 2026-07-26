@@ -131,7 +131,7 @@
 
 
             //sampler2D _CameraDepthTexture;
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             // sampler2D _MainTex;
             //            float4 _MainTex_ST;
             //half4 _Emission;
@@ -476,7 +476,7 @@
             #define COUNT 8 //you can edit to any number(e.g. 1~32), the lower the faster. Keeping this number a const can enable many compiler optimizations
 
             //sampler2D _CameraDepthTexture;
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
            // sampler2D _MainTex;
 //            float4 _MainTex_ST;
             //half4 _Emission;

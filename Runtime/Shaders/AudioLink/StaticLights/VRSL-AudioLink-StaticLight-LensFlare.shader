@@ -148,7 +148,7 @@
             float _FlickResultIntensityLowestPoint;
             //float _ShouldDoFlicker;
             half _RemoveTextureArtifact, _CurveMod;
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             #include "../Shared/VRSL-AudioLink-Functions.cginc"
 
             float4x4 GetWorldToViewMatrix()
@@ -462,7 +462,7 @@
             float _FlickResultIntensityLowestPoint;
             //float _ShouldDoFlicker;
              half _RemoveTextureArtifact, _CurveMod;
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             #include "../Shared/VRSL-AudioLink-Functions.cginc"
 
             float4x4 GetWorldToViewMatrix()

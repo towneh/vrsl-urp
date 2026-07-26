@@ -183,11 +183,11 @@
             };
 
             //#include "../Shared/VRSL-AudioLink-Defines.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             #include "../Shared/VRSL-AudioLink-Functions.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-LightingFunctions.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-StandardLighting.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-LightingFunctions.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-StandardLighting.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
             ENDCG
         }
         //UsePass "Legacy Shaders/VertexLit/SHADOWCASTER"

@@ -33,7 +33,7 @@ namespace VRSL.URP.Profiling.Editor
             StaticBlinder,
         }
 
-        const string PkgRoot         = "Packages/net.towneh.vrsl-urp/";
+        const string PkgRoot         = "Packages/town.mr.vrsl-urp/";
         const string URPManager      = PkgRoot + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-URP-LightManager-Horizontal.prefab";
         const string DepthLightPath  = PkgRoot + "Runtime/Prefabs/Directional Light (For Depth).prefab";
 

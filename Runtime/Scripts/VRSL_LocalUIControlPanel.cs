@@ -1282,7 +1282,7 @@ namespace VRSL.URP
             try
             {
                 string path = Application.dataPath.Replace("Assets", "")
-                            + "Packages/net.towneh.vrsl-urp/Runtime/VERSION.txt";
+                            + "Packages/town.mr.vrsl-urp/Runtime/VERSION.txt";
                 if (File.Exists(path))
                     versionNum = File.ReadAllText(path).Trim();
             }

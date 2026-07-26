@@ -166,7 +166,7 @@
             #define VRSL_AUDIOLINK
 
             #include "UnityCG.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc" //Property Defines are here
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc" //Property Defines are here
 
 
             struct appdata
@@ -204,9 +204,9 @@
             };
 
             #include "../Shared/VRSL-AudioLink-Functions.cginc" //Custom Functions
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-ProjectionFrag.cginc" //Fragment Shader is here
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-ProjectionFrag.cginc" //Fragment Shader is here
 
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc" //Vertex Shader is here
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc" //Vertex Shader is here
 
             ENDCG
         }
@@ -255,7 +255,7 @@
 			#define VRSL_AUDIOLINK
 
             #include "UnityCG.cginc"
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc" //Property Defines are here
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc" //Property Defines are here
 			
 
              struct appdata
@@ -291,8 +291,8 @@
 				 UNITY_VERTEX_OUTPUT_STEREO
              };
 			#include "../Shared/VRSL-AudioLink-Functions.cginc" //Custom Functions
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-ProjectionFrag.cginc" //Fragment Shader is here
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc" //Vertex Shader is here
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-ProjectionFrag.cginc" //Fragment Shader is here
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc" //Vertex Shader is here
 
 			 ENDCG
 

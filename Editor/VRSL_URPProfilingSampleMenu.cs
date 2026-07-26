@@ -15,7 +15,7 @@ namespace VRSL.URP.EditorScripts
     public static class VRSL_URPProfilingSampleMenu
     {
         const string MENU_PATH    = "VRSL/Profiling/Import Profiling Sample";
-        const string PACKAGE_NAME = "net.towneh.vrsl-urp";
+        const string PACKAGE_NAME = "town.mr.vrsl-urp";
         const string SAMPLE_NAME  = "Realtime Light Profiling";
 
         [MenuItem(MENU_PATH)]

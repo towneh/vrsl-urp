@@ -255,7 +255,7 @@
                  float4 outColor : TEXCOORD7;
                  UNITY_VERTEX_OUTPUT_STEREO 
              };
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             
             half _Multiplier;
 			#include "../Shared/VRSL-AudioLink-Functions.cginc"

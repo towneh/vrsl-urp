@@ -556,7 +556,7 @@ namespace VRSL.URP
         void LoadDefaultGoboWheel()
         {
             const string folder =
-                "Packages/net.towneh.vrsl-urp/Runtime/Textures/MoverLightTextures/GOBO/IndividualGobos";
+                "Packages/town.mr.vrsl-urp/Runtime/Textures/MoverLightTextures/GOBO/IndividualGobos";
 
             var guids = UnityEditor.AssetDatabase.FindAssets("t:Texture2D", new[] { folder });
             var list  = new List<Texture2D>();

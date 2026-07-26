@@ -1,5 +1,5 @@
 {
-  "name": "net.towneh.vrsl-urp",
+  "name": "town.mr.vrsl-urp",
   "displayName": "VR Stage Lighting URP",
   "version": "0.1.0",
   "description": "Standalone Unity 6 / URP 17+ realtime lighting and raymarched volumetric beams driven from DMX or AudioLink data. Render-pass injection at runtime, no URP Renderer Feature changes, no project-side renderer settings touched. Co-installable with com.acchosen.vr-stage-lighting (asset GUIDs, shader names, and runtime globals are namespaced to avoid collision); existing upstream scenes continue to work alongside.",

@@ -14,6 +14,7 @@
 
 ### Changed
 
+- Package identifier renamed from `net.towneh.vrsl-urp` to `town.mr.vrsl-urp`. All `Packages/net.towneh.vrsl-urp/...` shader include paths and editor/runtime asset-path constants follow the new name. Consuming projects need their manifest entry key updated to `town.mr.vrsl-urp`; local `file:` paths and asset GUIDs are unaffected.
 - The DMX screen-reader prefabs (horizontal and vertical) no longer carry a `MeshCollider` on the screen quad, and the quad no longer samples light probes. The control panel prefab has been stripped of the two leftover UdonSharp behaviours it inherited from upstream, along with the button events that targeted them.
 
 ### Fixed

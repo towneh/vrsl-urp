@@ -26,7 +26,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
         HLSLINCLUDE
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
 
             // Mesh-driven attributes — manager renders RenderingUtils.fullscreenMesh,
             // whose vertices are already in clip space (-1..1). Each pass below also

@@ -44,7 +44,7 @@ namespace VRSL.URP
         public static string GetVersionString()
         {
             string versionPath = Path.GetFullPath(
-                "Packages/net.towneh.vrsl-urp/Runtime/VERSION.txt");
+                "Packages/town.mr.vrsl-urp/Runtime/VERSION.txt");
 
             string version = "?.?.?";
             try

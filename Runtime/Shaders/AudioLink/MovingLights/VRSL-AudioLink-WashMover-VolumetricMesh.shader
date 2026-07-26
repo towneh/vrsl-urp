@@ -190,7 +190,7 @@
             #define VRSL_AUDIOLINK
 
             #include "UnityCG.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             #include "../Shared/VRSL-AudioLink-Functions.cginc" //Custom Functions
 
             struct appdata
@@ -230,9 +230,9 @@
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-VolumetricFrag.cginc" //Fragment Shader is here
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-VolumetricFrag.cginc" //Fragment Shader is here
 
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
             ENDCG
         }
         // Used for handling Depth Buffer (DBuffer) and Depth Priming
@@ -279,7 +279,7 @@
 			
 			
 			#include "UnityCG.cginc"
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
 			#include "../Shared/VRSL-AudioLink-Functions.cginc" //Custom Functions
 
 			struct appdata
@@ -318,8 +318,8 @@
 				UNITY_VERTEX_INPUT_INSTANCE_ID
 				UNITY_VERTEX_OUTPUT_STEREO
 			};
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-VolumetricFrag.cginc" //Fragment Shader is here
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-VolumetricFrag.cginc" //Fragment Shader is here
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
 
 			
 			ENDCG

@@ -178,9 +178,9 @@
                 UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
             #include "../Shared/VRSL-AudioLink-Functions.cginc"
-            #include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/StaticLights/VRSL-StaticLight-ProjectionFrag.cginc"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/StaticLights/VRSL-StaticLight-ProjectionFrag.cginc"
 
             #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
 
@@ -326,9 +326,9 @@
 				 UNITY_VERTEX_INPUT_INSTANCE_ID
 				 UNITY_VERTEX_OUTPUT_STEREO
              };
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
 			#include "../Shared/VRSL-AudioLink-Functions.cginc"
-			#include "Packages/net.towneh.vrsl-urp/Runtime/Shaders/StaticLights/VRSL-StaticLight-ProjectionFrag.cginc"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/StaticLights/VRSL-StaticLight-ProjectionFrag.cginc"
 
 	#define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
 
