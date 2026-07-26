@@ -189,10 +189,17 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     light.positionAndRange  = float4(cfg.positionAndRange.xyz, cfg.positionAndRange.w);
     light.directionAndType  = float4(normalize(finalDir), cfg.forwardAndType.w);
     light.colorAndIntensity = float4(r, g, b, combinedIntensity);
-    // z = active flag: skip if intensity is negligible.
+    // z = active flag: skip if the light emits nothing. Gating on combinedIntensity
+    // alone (dimmer-driven) leaves a fixture lit when its colour fades to black while
+    // the dimmer stays up — the residual near-black RGB is amplified by maxIntensity, and
+    // for point lights whose origin sits on the bar mesh by huge near-field attenuation.
+    // Require a non-negligible colour too: the 6/255 floor clears the fade residual even
+    // at high maxIntensity, at the cost of clipping colour dimmer than ~2.4%.
     // w = emitter depth (m) — virtual cone-apex pushback for area-emitter fixtures.
+    float colorMax = max(r, max(g, b));
+    bool  emitting = combinedIntensity > 0.001 && colorMax > 6.0 / 255.0;
     light.spotCosines       = float4(innerCos, outerCos,
-                                     combinedIntensity > 0.001 ? 1.0 : 0.0,
+                                     emitting ? 1.0 : 0.0,
                                      cfg.extras.x);
     // ── Gobo (ch+10 spin speed, ch+11 gobo select) ───────────────────────────
     // Mirrors getDMXGoboSelection() in VRSL-DMXFunctions: round(raw*255/30), clamp 1..N
