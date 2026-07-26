@@ -48,6 +48,17 @@ namespace VRSL.URP
                 public Vector4       texelSize;
             }
 
+            // Grid CRTs published to the fixture-body surface shaders from inside this pass
+            // (which runs BeforeRenderingOpaques) via SetGlobalTextureAfterPass — NOT via
+            // Shader.SetGlobalTexture on the manager. A global texture set outside RenderGraph
+            // binds to scene shaders as a 1x1 black fallback, so the surface decoded a black
+            // grid (every bar dark) while the compute, which binds the handle in-pass, read the
+            // real data. Global vectors (e.g. _VRSLDMXTexelSize) don't suffer the same fallback.
+            static readonly int s_DMXGrid         = Shader.PropertyToID("_VRSLU_DMXGridRenderTexture");
+            static readonly int s_DMXGridMovement = Shader.PropertyToID("_VRSLU_DMXGridRenderTextureMovement");
+            static readonly int s_DMXGridStrobe   = Shader.PropertyToID("_VRSLU_DMXGridStrobeOutput");
+            static readonly int s_DMXGridSpin     = Shader.PropertyToID("_VRSLU_DMXGridSpinTimer");
+
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
                 var mgr = VRSL_URPLightManager.Instance;
@@ -97,6 +108,15 @@ namespace VRSL.URP
                     builder.UseTexture(d.dmxStrobeTex,   AccessFlags.Read);
                 if (d.dmxSpinTimerTex.IsValid())
                     builder.UseTexture(d.dmxSpinTimerTex, AccessFlags.Read);
+
+                // Make the grid CRTs visible to the fixture-body surface shaders (opaque pass).
+                builder.SetGlobalTextureAfterPass(d.dmxMainTex, s_DMXGrid);
+                if (d.dmxMovementTex.IsValid())
+                    builder.SetGlobalTextureAfterPass(d.dmxMovementTex, s_DMXGridMovement);
+                if (d.dmxStrobeTex.IsValid())
+                    builder.SetGlobalTextureAfterPass(d.dmxStrobeTex,   s_DMXGridStrobe);
+                if (d.dmxSpinTimerTex.IsValid())
+                    builder.SetGlobalTextureAfterPass(d.dmxSpinTimerTex, s_DMXGridSpin);
 
                 builder.SetRenderFunc((PassData p, ComputeGraphContext ctx) =>
                 {

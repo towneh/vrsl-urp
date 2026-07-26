@@ -8,6 +8,21 @@
 
 #define IF(a, b, c) lerp(b, c, step((float) (a), 0.0))
 
+// Force point/clamp sampling for every DMX-grid read, regardless of the bound texture's
+// runtime filter mode. A CustomRenderTexture's runtime filterMode frequently defaults to
+// Bilinear even when the asset inspector shows Point, and the inline sampler_<Tex> picks
+// that up — which bleeds neighbouring channel cells (often black) into the decode and makes
+// the fixture-body surface read a different value than the render-pass light. The compute
+// path samples through an explicit sampler_point_clamp; matching it here keeps both paths
+// reading the exact same cell.
+SamplerState sampler_point_clamp;
+
+// Grid texel size, published by VRSL_URPLightManager as a global from the bound grid CRT's
+// dimensions. Used instead of the texture's auto _TexelSize, which Unity overwrites for a
+// SetGlobalTexture-bound texture — leaving the surface decode with a wrong size and the
+// highest-patched fixtures sampling the wrong (black) cell. xyz/w = (1/w, 1/h, w, h).
+float4 _VRSLDMXTexelSize;
+
 uint getDMXChannel()
 {
     return (uint) round(UNITY_ACCESS_INSTANCED_PROP(Props, _DMXChannel));  
@@ -55,11 +70,11 @@ float2 LegacyRead(int channel, int sector)
 
 float2 IndustryRead(int x, int y)
 {
-    float resMultiplierX = (_VRSLU_DMXGridRenderTexture_TexelSize.z / 13);
+    float resMultiplierX = (_VRSLDMXTexelSize.z / 13);
     float2 xyUV = float2(0.0,0.0);
     
-    xyUV.x = ((x * resMultiplierX) * _VRSLU_DMXGridRenderTexture_TexelSize.x);
-    xyUV.y = (y * resMultiplierX) * _VRSLU_DMXGridRenderTexture_TexelSize.y;
+    xyUV.x = ((x * resMultiplierX) * _VRSLDMXTexelSize.x);
+    xyUV.y = (y * resMultiplierX) * _VRSLDMXTexelSize.y;
     xyUV.y -= 0.001915;
     xyUV.x -= 0.015;
     return xyUV;
@@ -99,7 +114,7 @@ half getValueAtCoords(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
     float2 xyUV = _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
         
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0, 0);
-    half4 c = SAMPLE_TEXTURE2D_LOD(tex, samplerTex, xyUV, 0);
+    half4 c = SAMPLE_TEXTURE2D_LOD(tex, sampler_point_clamp, xyUV, 0);
     half value = 0.0;
     
     if(getNineUniverseMode() && _EnableCompatibilityMode != 1)
@@ -132,7 +147,7 @@ half getValueAtCoordsRaw(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
     float2 xyUV = _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
 
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
-    float4 c = SAMPLE_TEXTURE2D_LOD(tex, samplerTex, xyUV, 0);
+    float4 c = SAMPLE_TEXTURE2D_LOD(tex, sampler_point_clamp, xyUV, 0);
     half value = c.r;
     value = IF(targetColor > 0, c.g, value);
     value = IF(targetColor > 1, c.b, value);

@@ -456,6 +456,7 @@ namespace VRSL.URP
         static readonly int s_DMXGridStrobe      = Shader.PropertyToID("_VRSLU_DMXGridStrobeOutput");
         static readonly int s_DMXGridStrobeTimer = Shader.PropertyToID("_VRSLU_DMXGridStrobeTimer");
         static readonly int s_DMXGridSpin        = Shader.PropertyToID("_VRSLU_DMXGridSpinTimer");
+        static readonly int s_DMXGridTexelSize   = Shader.PropertyToID("_VRSLDMXTexelSize");
 
         void PublishDMXGlobals()
         {
@@ -464,6 +465,18 @@ namespace VRSL.URP
             PublishDMX("Strobe Output",   s_DMXGridStrobe,      dmxStrobeTexture);
             PublishDMX("Strobe Timings",  s_DMXGridStrobeTimer, dmxStrobeTimerTexture);
             PublishDMX("Spin Timer",      s_DMXGridSpin,        dmxSpinTimerTexture);
+
+            // The surface decode (IndustryRead in VRSL-DMXFunctions-URP.hlsl) maps a channel to a
+            // grid texel from a texel size. Publish it as our own global _VRSLDMXTexelSize — the
+            // same name and value VRSLDMXLightPasses feeds the compute — rather than relying on the
+            // texture's auto _TexelSize, which Unity manages/overwrites for a SetGlobalTexture-bound
+            // texture (often with a wrong size). Without a correct texel size the surface's row UV
+            // drifts with the texture aspect, worsening down the grid, so the highest-patched bars
+            // decode the wrong (often black) cell while the render-pass light stays correct.
+            if (dmxMainTexture != null)
+                Shader.SetGlobalVector(s_DMXGridTexelSize, new Vector4(
+                    1f / dmxMainTexture.width, 1f / dmxMainTexture.height,
+                    dmxMainTexture.width,      dmxMainTexture.height));
         }
 
         void PublishDMX(string label, int globalId, RenderTexture tex)
