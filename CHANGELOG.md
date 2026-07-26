@@ -12,6 +12,10 @@
 - `VRSL_URPLightManager` now publishes its assigned DMX grid CRTs as the `_VRSLU_DMX*` shader globals that fixture-body surface shaders sample, so the manager alone drives both the render-pass lights and the fixture-body emissive — `VRSL_LocalUIControlPanel` is no longer required to set those globals for the URP path. A new `dmxStrobeTimerTexture` slot supplies the StrobeTimings CRT (`_VRSLU_DMXGridStrobeTimer`) that the StrobeOutput CRT's decode shader needs to compute the strobe gate. The manager also forces its assigned CustomRenderTextures into Realtime update mode, so it fully replaces `VRSL_LocalUIControlPanel` for the URP path.
 - The DMX light manager now derives a fixture's light origin from the centre of the fixture-body mesh it drives (`fixtureShellRenderers[0].bounds.center`) when no `lensTransform` is assigned, before falling back to the component's own transform. This places the light at the lit geometry even when the fixture component sits away from it — e.g. fixtures parked at a shared root while their bar sub-meshes are spread across the scene (common in imported environments where the bars share one transform, so both the component transform and a `lensTransform` pointed at the bar resolve to the root).
 
+### Changed
+
+- The DMX screen-reader prefabs (horizontal and vertical) no longer carry a `MeshCollider` on the screen quad, and the quad no longer samples light probes. The control panel prefab has been stripped of the two leftover UdonSharp behaviours it inherited from upstream, along with the button events that targeted them.
+
 ### Fixed
 
 - A DMX fixture whose colour faded to black while its dimmer stayed up kept visibly emitting: the light's active flag was gated on decoded intensity alone, and the residual near-black RGB got amplified by `maxIntensity` — for point lights whose origin sits on the bar mesh, by strong near-field attenuation too. The flag now also requires a colour channel above `6/255`, which clears the fade residual even at high `maxIntensity`, at the cost of clipping colours dimmer than ~2.4%.
