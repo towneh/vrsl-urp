@@ -37,6 +37,9 @@ includes anything structural.
 Right-click either light manager in play mode → **VRSL Diagnostics**. Reports shader compile
 state, decoded light data, tile-cull statistics, prepass configuration and camera mode.
 
+**Play mode only.** Neither manager has `[ExecuteAlways]`, so nothing initialises in the
+editor — the report says so rather than presenting empty figures as findings.
+
 Run this first whenever something is dark. It separates causes that look identical on screen:
 
 | Report line | Means |
@@ -46,6 +49,8 @@ Run this first whenever something is dark. It separates causes that look identic
 | `Tile culling: INACTIVE` | Falling back to iterating every fixture. Correct, but unbounded in cost. |
 | `hit the 64-light cap` | Fixtures are being silently dropped in dense tiles. |
 | `Surface prepass: normals only` | Everything lights as neutral grey; albedo isn't reaching the BRDF. |
+| `NOT IN PLAY MODE` | Nothing is initialised. Enter play mode; shader assignment is still reported. |
+| `Fixtures: NONE FOUND` | The manager collected nothing on enable — wrong manager for the scene, or fixtures inactive/added since. |
 
 ---
 

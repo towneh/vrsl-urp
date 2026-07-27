@@ -569,7 +569,34 @@ namespace VRSL.URP
         {
             var sb = new System.Text.StringBuilder();
             sb.AppendLine($"[VRSL URP] Diagnostics — AudioLink");
-            sb.AppendLine($"  Fixtures: {FixtureCount} collected");
+
+            // Everything below is populated on enable, which for a MonoBehaviour
+            // without ExecuteAlways never happens in the editor. Reporting the
+            // resulting zeroes as findings would send anyone reading this after
+            // the wrong problem.
+            if (!Application.isPlaying)
+            {
+                sb.AppendLine("  NOT IN PLAY MODE — the manager initialises on enable, which "
+                            + "doesn't happen in the editor, so fixture, light-data and tile "
+                            + "figures would all read empty regardless. Shader assignment is "
+                            + "still meaningful:");
+                sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
+                sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
+                sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
+                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
+                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
+                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader, "ScatterFroxels"));
+                sb.AppendLine("  Enter play mode and run this again for the rest.");
+                Debug.Log(sb.ToString(), this);
+                return;
+            }
+
+            if (FixtureCount == 0)
+                sb.AppendLine("  Fixtures: NONE FOUND — the manager collects "
+                            + "VRStageLighting_AudioLink_RealtimeLight components on enable and skips "
+                            + "inactive ones. Fixtures added since then need RefreshFixtures().");
+            else
+                sb.AppendLine($"  Fixtures: {FixtureCount} collected");
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
             sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
