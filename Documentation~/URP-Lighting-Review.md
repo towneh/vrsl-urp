@@ -241,9 +241,15 @@ Still open, in the order they are worth doing:
   `Light` components for hero fixtures.
 - **Froxel volumetric integration** (section 2, fix 3) to decouple cost from resolution.
 - **Camera filtering and prepass deduplication** (fixes 5 and 6) — mirrors currently pay the
-  full stack, and the prepass runs twice when both managers are active.
+  full stack, and the prepass runs twice when both managers are active. Both matter more than
+  they did before, since the stack costs more per camera now.
+- **Shrink `VRSLLightData`** (fix 4). Tiling reduced how often the 80-byte fetch happens
+  without making it smaller.
+- **Keep the gobo wheel on the GPU** (fix 7).
 - **The single decode path** from section 4, which retires `curveMod` and the duplicated
   channel constants.
-- **The DMX linear-colour conversion** and a defined intensity unit, from section 1.
+- **The DMX linear-colour conversion** and a defined intensity unit, from section 1. The unit
+  matters more now that albedo has changed the useful range.
+- **Smoothness and metallic maps**, which the prepass doesn't sample — scalars only.
 - **Opt-in VRSL Lit materials** for surfaces the world author controls, layered on top of the
   prepass baseline.
