@@ -86,7 +86,9 @@ namespace VRSL.URP
 
         [Tooltip("Froxel volume dimensions per eye. Larger is sharper and costs more, but "
                + "unlike the raymarch modes the cost does not track screen resolution. "
-               + "Depth slices are spread exponentially, so most land near the camera.")]
+               + "Depth slices are spread exponentially, so most land near the camera. "
+               + "Clamped to 8-256 on X and Y and 8-128 on Z when consumed, since a zero "
+               + "or negative axis would produce an invalid volume.")]
         public Vector3Int froxelResolution = new Vector3Int(160, 90, 64);
 
         [Range(4f, 200f)]

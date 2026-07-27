@@ -69,7 +69,6 @@ namespace VRSL.URP
         const string NoiseKeyword = "_VRSL_VOLUMETRIC_NOISE";
 
         readonly IVRSLVolumetricSource _source;
-        readonly Matrix4x4[]           _invViewProj = new Matrix4x4[2];
 
         int _scatterKernel   = -1;
         int _integrateKernel = -1;
@@ -89,6 +88,10 @@ namespace VRSL.URP
         }
 
         public bool IsUsable => _scatterKernel >= 0 && _integrateKernel >= 0;
+
+        const int MinFroxelAxis   = 8;
+        const int MaxFroxelAxisXY = 256;
+        const int MaxFroxelAxisZ  = 128;
 
         class ScatterData
         {
@@ -111,6 +114,7 @@ namespace VRSL.URP
             public float         time;
             public Vector3Int    dims;
             public int           views;
+            public bool          useNoise;
         }
 
         class CompositeData
@@ -133,7 +137,16 @@ namespace VRSL.URP
             var resources = frame.Get<UniversalResourceData>();
             if (!resources.cameraDepthTexture.IsValid()) return;
 
-            var dims  = _source.FroxelResolution;
+            // Clamped here rather than on the field: [Range] can't apply
+            // per-component to a Vector3Int, and a zero or negative axis would
+            // produce an invalid TextureDesc and divide by zero in the compute's
+            // slice distribution. The upper bound keeps a mistyped value from
+            // trying to allocate an enormous volume.
+            var raw   = _source.FroxelResolution;
+            var dims  = new Vector3Int(
+                Mathf.Clamp(raw.x, MinFroxelAxis, MaxFroxelAxisXY),
+                Mathf.Clamp(raw.y, MinFroxelAxis, MaxFroxelAxisXY),
+                Mathf.Clamp(raw.z, MinFroxelAxis, MaxFroxelAxisZ));
             int views = Mathf.Clamp(camData.cameraTargetDescriptor.volumeDepth, 1, 2);
 
             var volumeDesc = new TextureDesc(dims.x * views, dims.y)
@@ -152,12 +165,14 @@ namespace VRSL.URP
             // Same convention as the tile cull and the fullscreen shaders, so the
             // volume lines up with the depth buffer the composite samples.
             bool renderIntoTexture = !resources.isActiveTargetBackBuffer;
+            // Allocated per record — see the matching note in VRSLTileCullPass.
+            var invViewProj = new Matrix4x4[2];
             for (int view = 0; view < 2; view++)
             {
                 int src = Mathf.Min(view, views - 1);
                 Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(
                     camData.GetProjectionMatrix(src), renderIntoTexture);
-                _invViewProj[view] =
+                invViewProj[view] =
                     Matrix4x4.Inverse(camData.GetViewMatrix(src)) * Matrix4x4.Inverse(gpuProj);
             }
 
@@ -188,10 +203,14 @@ namespace VRSL.URP
                 d.tileParams      = binding.TileParams;
                 d.stepParams      = _source.VolumetricStepParams;
                 d.densityParams   = _source.VolumetricDensityParams;
-                d.invViewProj     = _invViewProj;
+                d.invViewProj     = invViewProj;
                 d.time            = Time.timeSinceLevelLoad;
                 d.dims            = dims;
                 d.views           = views;
+                // Captured at record time like every other manager value here:
+                // the render func runs deferred and must not read mutable
+                // component state.
+                d.useNoise        = _source.VolumetricUseNoise;
 
                 builder.UseTexture(volume, AccessFlags.ReadWrite);
                 builder.UseBuffer(d.lightData, AccessFlags.Read);
@@ -207,8 +226,9 @@ namespace VRSL.URP
 
                     // The noise variant is a keyword on the compute, matching the
                     // raymarch path so both respond to the same manager toggle.
-                    if (_source.VolumetricUseNoise) cmd.EnableKeyword(p.cs, new LocalKeyword(p.cs, NoiseKeyword));
-                    else                            cmd.DisableKeyword(p.cs, new LocalKeyword(p.cs, NoiseKeyword));
+                    var noise = new LocalKeyword(p.cs, NoiseKeyword);
+                    if (p.useNoise) cmd.EnableKeyword(p.cs, noise);
+                    else            cmd.DisableKeyword(p.cs, noise);
 
                     cmd.SetComputeVectorParam(     p.cs, s_ParamsID,      p.froxelParams);
                     cmd.SetComputeVectorParam(     p.cs, s_ViewParamsID,  p.viewParams);

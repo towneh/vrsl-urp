@@ -67,11 +67,6 @@ namespace VRSL.URP
         readonly IVRSLLightSource _source;
         readonly int             _kernel;
 
-        // Reused rather than allocated per record: SetComputeMatrixArrayParam
-        // reads it when the graph executes, and URP records and executes one
-        // camera's graph before moving to the next, so there is no window where
-        // a second camera could overwrite it mid-flight.
-        readonly Matrix4x4[]     _invViewProj = new Matrix4x4[2];
 
         GraphicsBuffer _tileBuffer;
         int            _allocatedUints;
@@ -194,12 +189,18 @@ namespace VRSL.URP
             // this wrong would flip the tile grid against the sampling shaders,
             // so it is derived rather than assumed.
             bool renderIntoTexture = !resources.isActiveTargetBackBuffer;
+            // Allocated per record rather than reused. SetComputeMatrixArrayParam
+            // reads this when the graph executes, so a field shared across records
+            // would let one camera's dispatch pick up another camera's matrices if
+            // recording and execution ever interleave. 128 bytes a frame is not
+            // worth the coupling.
+            var invViewProj = new Matrix4x4[2];
             for (int view = 0; view < 2; view++)
             {
                 int src = Mathf.Min(view, slices - 1);
                 Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(
                     camData.GetProjectionMatrix(src), renderIntoTexture);
-                _invViewProj[view] =
+                invViewProj[view] =
                     Matrix4x4.Inverse(camData.GetViewMatrix(src)) * Matrix4x4.Inverse(gpuProj);
             }
 
@@ -219,7 +220,7 @@ namespace VRSL.URP
             d.tileIndices    = rg.ImportBuffer(_tileBuffer);
             d.lightCount     = _source.FixtureCount;
             d.cullTileParams = new Vector4(tilesX, tilesY, slices, 0f);
-            d.invViewProj    = _invViewProj;
+            d.invViewProj    = invViewProj;
             d.tilesX         = tilesX;
             d.tilesY         = tilesY;
             d.slices         = slices;
