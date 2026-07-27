@@ -301,6 +301,13 @@ namespace VRSL.URP
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;
+            // These two resolve their shader and kernels in their constructors, so
+            // they have to be rebuilt rather than reused — otherwise assigning a
+            // shader and re-enabling the component, which is what the froxel
+            // warning tells you to do, silently changes nothing.
+            _surfacePrepass = null;
+            _froxelPass     = null;
+            _warnedFroxelUnusable = false;
             ReleaseBuffers();
             ReleaseAudioLinkHandle();
             ReleaseSamplingTextureHandle();
@@ -570,10 +577,16 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
             sb.AppendLine("  " + VRSLDiagnostics.LightDataStatus(LightDataBuffer, FixtureCount));
             sb.AppendLine("  " + VRSLDiagnostics.TileStatus(TileCullPass, FixtureCount));
-            sb.AppendLine($"  Volumetric mode: {volumetricResolution}"
-                        + (volumetricResolution == VolumetricResolution.Froxel
-                              ? $" ({froxelResolution.x}x{froxelResolution.y}x{froxelResolution.z}, "
-                                + $"{froxelMaxDistance}m)" : ""));
+            sb.Append($"  Volumetric mode: {volumetricResolution}");
+            if (volumetricResolution == VolumetricResolution.Froxel)
+            {
+                var effective = VRSLFroxelPass.ClampResolution(froxelResolution);
+                sb.Append($" ({effective.x}x{effective.y}x{effective.z}, {froxelMaxDistance}m)");
+                if (effective != froxelResolution)
+                    sb.Append($" — CLAMPED from {froxelResolution.x}x{froxelResolution.y}"
+                            + $"x{froxelResolution.z}");
+            }
+            sb.AppendLine();
             if (volumetricResolution == VolumetricResolution.Froxel)
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader, "ScatterFroxels"));
             sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
@@ -659,19 +672,21 @@ namespace VRSL.URP
                 renderer.EnqueuePass(_surfacePrepass);
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
-            if (VolumetricUseFroxel && (_froxelPass == null || !_froxelPass.IsUsable)
-                && !_warnedFroxelUnusable)
-            {
-                _warnedFroxelUnusable = true;
-                Debug.LogWarning(
-                    "[VRSL] Volumetric resolution is set to Froxel but the froxel compute "
-                    + "isn't usable — assign froxelShader (VRSLFroxelVolumetric). Falling back "
-                    + "to the raymarch. The kernel is resolved when the manager enables, so "
-                    + "re-enable the component after assigning it.", this);
-            }
-
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
             {
+                // Inside the block so the message can't claim a fallback that
+                // isn't going to happen — with no volumetric shader, or on a
+                // secondary camera set to SurfaceOnly, neither pass runs.
+                if (VolumetricUseFroxel && !VolumetricFroxelActive && !_warnedFroxelUnusable)
+                {
+                    _warnedFroxelUnusable = true;
+                    Debug.LogWarning(
+                        "[VRSL] Volumetric resolution is set to Froxel but the froxel compute "
+                        + "isn't usable — assign froxelShader (VRSLFroxelVolumetric). Falling "
+                        + "back to the raymarch. The kernels resolve when the manager enables, "
+                        + "so disable and re-enable the component after assigning it.", this);
+                }
+
                 if (VolumetricFroxelActive)
                     renderer.EnqueuePass(_froxelPass);
                 else

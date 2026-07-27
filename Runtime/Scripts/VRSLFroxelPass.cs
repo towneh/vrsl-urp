@@ -93,6 +93,19 @@ namespace VRSL.URP
         const int MaxFroxelAxisXY = 256;
         const int MaxFroxelAxisZ  = 128;
 
+        /// <summary>
+        /// Bounds a requested volume size to what can actually be allocated.
+        /// [Range] can't apply per-component to a Vector3Int, and a zero or
+        /// negative axis produces an invalid TextureDesc and a divide by zero in
+        /// the compute's slice distribution. Public so diagnostics can report
+        /// what will really render rather than what was typed.
+        /// </summary>
+        public static Vector3Int ClampResolution(Vector3Int requested) =>
+            new Vector3Int(
+                Mathf.Clamp(requested.x, MinFroxelAxis, MaxFroxelAxisXY),
+                Mathf.Clamp(requested.y, MinFroxelAxis, MaxFroxelAxisXY),
+                Mathf.Clamp(requested.z, MinFroxelAxis, MaxFroxelAxisZ));
+
         class ScatterData
         {
             public ComputeShader cs;
@@ -137,16 +150,7 @@ namespace VRSL.URP
             var resources = frame.Get<UniversalResourceData>();
             if (!resources.cameraDepthTexture.IsValid()) return;
 
-            // Clamped here rather than on the field: [Range] can't apply
-            // per-component to a Vector3Int, and a zero or negative axis would
-            // produce an invalid TextureDesc and divide by zero in the compute's
-            // slice distribution. The upper bound keeps a mistyped value from
-            // trying to allocate an enormous volume.
-            var raw   = _source.FroxelResolution;
-            var dims  = new Vector3Int(
-                Mathf.Clamp(raw.x, MinFroxelAxis, MaxFroxelAxisXY),
-                Mathf.Clamp(raw.y, MinFroxelAxis, MaxFroxelAxisXY),
-                Mathf.Clamp(raw.z, MinFroxelAxis, MaxFroxelAxisZ));
+            var dims  = ClampResolution(_source.FroxelResolution);
             int views = Mathf.Clamp(camData.cameraTargetDescriptor.volumeDepth, 1, 2);
 
             var volumeDesc = new TextureDesc(dims.x * views, dims.y)
