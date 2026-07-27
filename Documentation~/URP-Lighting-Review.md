@@ -30,13 +30,17 @@ on either path. DMX config uploads only when a fixture is marked dirty; AudioLin
 `N × 112` bytes per frame as a single `SetData`. Latency is one frame behind the CRT
 chain, which is well inside what stage work needs.
 
-Three defects worth fixing:
+Two defects worth fixing, plus one apparent one that isn't:
 
-**Colour space is inconsistent between the two data sources.** The AudioLink manager
-converts emission with `Color.linear` before upload. The DMX path writes the decoded
-channel values straight into `colorAndIntensity.rgb` with no conversion. A DMX fixture
-and an AudioLink fixture set to the same nominal colour do not match, and the error is
-largest in the mid-tones.
+**Colour handling differs between the two data sources, and both are correct.** The AudioLink
+manager converts emission with `Color.linear` before upload; the DMX path writes decoded
+channel values straight into `colorAndIntensity.rgb`. That reads like an inconsistency but
+isn't. The grid render textures are `R8G8B8A8_UNorm` and `R32G32B32A32_SFloat` — both linear,
+so sampling applies no sRGB conversion and the decoded values are emitter drive levels, where
+0.5 already means half radiance. AudioLink's `emissionColor` is an author-picked sRGB colour,
+where `.linear` is the right conversion. Two different quantities, each handled correctly;
+converting either to match the other would break it. A desk level and a picked colour still
+won't visually match at the same nominal mid-tone, but that is a property of the inputs.
 
 **The channel decode rests on undocumented constants.** The `-0.015` and `-0.001915` UV
 offsets, and the 13th-channel correction table covering ranges 90–101, 160–205, 326–404,
@@ -248,8 +252,8 @@ Still open, in the order they are worth doing:
 - **Keep the gobo wheel on the GPU** (fix 7).
 - **The single decode path** from section 4, which retires `curveMod` and the duplicated
   channel constants.
-- **The DMX linear-colour conversion** and a defined intensity unit, from section 1. The unit
-  matters more now that albedo has changed the useful range.
+- **A defined intensity unit**, from section 1. It matters more now that albedo has changed
+  the useful range.
 - **Smoothness and metallic maps**, which the prepass doesn't sample — scalars only.
 - **Opt-in VRSL Lit materials** for surfaces the world author controls, layered on top of the
   prepass baseline.
