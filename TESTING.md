@@ -102,6 +102,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | V3 | — | `Froxel` | Same shape as Half. Beams vanishing or misplaced points at the depth-slice mapping or per-eye packing |
 | V4 | — | `Froxel` with `froxelMaxDistance` below the room depth | Scattering stops at that distance. **Expected** |
 | V5 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
+| V6 | — | Select `Froxel` with `froxelShader` unassigned | Falls back to the raymarch, cones still render, one Console warning. Silent loss of all volumetrics is the failure this guards |
 
 ### Cameras
 

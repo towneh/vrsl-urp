@@ -252,6 +252,13 @@ namespace VRSL.URP
         /// layering on top of it, so the raymarch pass sits out when it's on.</summary>
         public bool VolumetricUseFroxel  => volumetricResolution == VolumetricResolution.Froxel;
 
+        /// <summary>Froxel mode selected <i>and</i> able to run. The raymarch pass
+        /// stands down on this rather than on the mode alone: standing down on the
+        /// mode while the froxel pass declined to record would leave neither
+        /// running, which is silent — no cones, no error, nothing to search for.</summary>
+        public bool VolumetricFroxelActive =>
+            VolumetricUseFroxel && _froxelPass != null && _froxelPass.IsUsable;
+
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
         // 8 × float4 = 128 bytes
@@ -295,6 +302,7 @@ namespace VRSL.URP
         VRSLDMXLightPasses.LightingPass   _lightingPass;
         VRSLDMXLightPasses.VolumetricPass _volumetricPass;
         bool _injectionSubscribed;
+        bool _warnedFroxelUnusable;
 
         /// <summary>Per-tile light culling for the current camera. Null until the
         /// passes are allocated, and inert when <c>lightCullShader</c> is unassigned.</summary>
@@ -756,9 +764,20 @@ namespace VRSL.URP
             renderer.EnqueuePass(_surfacePrepass);
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
+            if (VolumetricUseFroxel && (_froxelPass == null || !_froxelPass.IsUsable)
+                && !_warnedFroxelUnusable)
+            {
+                _warnedFroxelUnusable = true;
+                Debug.LogWarning(
+                    "[VRSL] Volumetric resolution is set to Froxel but the froxel compute "
+                    + "isn't usable — assign froxelShader (VRSLFroxelVolumetric). Falling back "
+                    + "to the raymarch. The kernel is resolved when the manager enables, so "
+                    + "re-enable the component after assigning it.", this);
+            }
+
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
             {
-                if (VolumetricUseFroxel && _froxelPass.IsUsable)
+                if (VolumetricFroxelActive)
                     renderer.EnqueuePass(_froxelPass);
                 else
                     renderer.EnqueuePass(_volumetricPass);

@@ -265,8 +265,10 @@ namespace VRSL.URP
                     || mgr.LightDataBuffer == null) return;
 
                 // Froxel mode is a different integration of the same scattering,
-                // so the raymarch stands down rather than adding a second copy.
-                if (mgr.VolumetricUseFroxel) return;
+                // so the raymarch stands down rather than adding a second copy —
+                // but only once the froxel pass can actually run. Standing down on
+                // the mode alone would leave neither rendering.
+                if (mgr.VolumetricFroxelActive) return;
 
                 if (mgr.VolumetricUseNoise)
                     mgr.VolumetricMaterial.EnableKeyword("_VRSL_VOLUMETRIC_NOISE");
