@@ -235,4 +235,42 @@ struct VRSLALFixtureConfig
                               // zw = textureSamplingCoordinates UV (used when colorMode == 6 or 7)
 };
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Procedural density noise — shared by the raymarch and the froxel scatter pass
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Dave Hoskins-style 3D hash. ~6 ALU per call.
+float VRSL_Hash3D(float3 p)
+{
+    p = frac(p * float3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yzx + 33.33);
+    return frac((p.x + p.y) * p.z);
+}
+
+// Smoothed 3D value noise on a unit grid. 8 hash taps + trilinear smoothstep
+// interpolation — ~50 ALU per sample. Output range [0,1].
+float VRSL_ValueNoise3D(float3 p)
+{
+    float3 i = floor(p);
+    float3 f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    float n000 = VRSL_Hash3D(i);
+    float n100 = VRSL_Hash3D(i + float3(1, 0, 0));
+    float n010 = VRSL_Hash3D(i + float3(0, 1, 0));
+    float n110 = VRSL_Hash3D(i + float3(1, 1, 0));
+    float n001 = VRSL_Hash3D(i + float3(0, 0, 1));
+    float n101 = VRSL_Hash3D(i + float3(1, 0, 1));
+    float n011 = VRSL_Hash3D(i + float3(0, 1, 1));
+    float n111 = VRSL_Hash3D(i + float3(1, 1, 1));
+
+    float n00 = lerp(n000, n100, f.x);
+    float n10 = lerp(n010, n110, f.x);
+    float n01 = lerp(n001, n101, f.x);
+    float n11 = lerp(n011, n111, f.x);
+    float n0  = lerp(n00,  n10,  f.y);
+    float n1  = lerp(n01,  n11,  f.y);
+    return lerp(n0, n1, f.z);
+}
+
 #endif // VRSL_LIGHTING_LIBRARY_INCLUDED

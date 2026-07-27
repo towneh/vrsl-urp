@@ -1,0 +1,274 @@
+using UnityEngine;
+using UnityEngine.Experimental.Rendering;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.RenderGraphModule;
+using UnityEngine.Rendering.Universal;
+
+namespace VRSL.URP
+{
+    /// <summary>
+    /// The volumetric settings a manager exposes to the shared passes. Both
+    /// managers carry the same fields; this lets one pass class serve either.
+    /// </summary>
+    public interface IVRSLVolumetricSource : IVRSLLightSource
+    {
+        Material VolumetricMaterial { get; }
+        Vector4  VolumetricStepParams { get; }
+        Vector4  VolumetricDensityParams { get; }
+        Vector4  VolumetricFogTintParams { get; }
+        bool     VolumetricUseNoise { get; }
+        VRSLTileCullPass TileCullPass { get; }
+
+        /// <summary>Compute driving the froxel scatter and integrate kernels.</summary>
+        ComputeShader FroxelShader { get; }
+
+        /// <summary>Volume dimensions in froxels, per eye.</summary>
+        Vector3Int FroxelResolution { get; }
+
+        /// <summary>How far from the camera the volume reaches, in metres.</summary>
+        float FroxelMaxDistance { get; }
+    }
+
+    /// <summary>
+    /// Integrates volumetric scattering into a view-aligned 3D grid once per
+    /// camera, so the composite is a single texture fetch per pixel.
+    ///
+    /// The raymarch path re-integrates every view ray per screen pixel, running
+    /// the light loop once per step — its cost is tied to framebuffer resolution,
+    /// which is the wrong thing to scale with in VR. This does the same work
+    /// against a fixed grid instead, so cost tracks the volume's dimensions.
+    /// Trilinear sampling of the result also removes the raymarch's dependence on
+    /// per-pixel jitter to hide banding.
+    ///
+    /// Slices are distributed exponentially between the near plane and
+    /// <see cref="IVRSLVolumetricSource.FroxelMaxDistance"/>, concentrating
+    /// resolution near the camera. Scattering past that distance is not
+    /// represented — the volume is a near- and mid-field approximation, not a
+    /// replacement for the raymarch at every scale.
+    ///
+    /// Both eyes share one volume, packed along X, since a 3D texture cannot be
+    /// a texture array.
+    /// </summary>
+    public class VRSLFroxelPass : ScriptableRenderPass
+    {
+        static readonly int s_VolumeID      = Shader.PropertyToID("_VRSLFroxelVolume");
+        static readonly int s_ParamsID      = Shader.PropertyToID("_VRSLFroxelParams");
+        static readonly int s_ViewParamsID  = Shader.PropertyToID("_VRSLFroxelViewParams");
+        static readonly int s_CamPosID      = Shader.PropertyToID("_VRSLFroxelCamPos");
+        static readonly int s_CamFwdID      = Shader.PropertyToID("_VRSLFroxelCamFwd");
+        static readonly int s_InvViewProjID = Shader.PropertyToID("_VRSLFroxelInvViewProj");
+        static readonly int s_TimeID        = Shader.PropertyToID("_VRSLFroxelTime");
+        static readonly int s_LightsID      = Shader.PropertyToID("_VRSLLights");
+        static readonly int s_LightCountID  = Shader.PropertyToID("_VRSLLightCount");
+        static readonly int s_TileIndicesID = Shader.PropertyToID("_VRSLTileLightIndices");
+        static readonly int s_TileParamsID  = Shader.PropertyToID("_VRSLTileParams");
+        static readonly int s_StepParamsID  = Shader.PropertyToID("_VRSLVolStepCount");
+        static readonly int s_DensityID     = Shader.PropertyToID("_VRSLVolDensity");
+        static readonly int s_FogTintID     = Shader.PropertyToID("_VRSLVolFogTint");
+
+        const string NoiseKeyword = "_VRSL_VOLUMETRIC_NOISE";
+
+        readonly IVRSLVolumetricSource _source;
+        readonly Matrix4x4[]           _invViewProj = new Matrix4x4[2];
+
+        int _scatterKernel   = -1;
+        int _integrateKernel = -1;
+
+        public VRSLFroxelPass(IVRSLVolumetricSource source)
+        {
+            _source = source;
+
+            var cs = source?.FroxelShader;
+            if (cs != null)
+            {
+                if (cs.HasKernel("ScatterFroxels"))   _scatterKernel   = cs.FindKernel("ScatterFroxels");
+                if (cs.HasKernel("IntegrateFroxels")) _integrateKernel = cs.FindKernel("IntegrateFroxels");
+            }
+
+            renderPassEvent = (RenderPassEvent)((int)RenderPassEvent.AfterRenderingOpaques + 1);
+        }
+
+        public bool IsUsable => _scatterKernel >= 0 && _integrateKernel >= 0;
+
+        class ScatterData
+        {
+            public ComputeShader cs;
+            public int           scatterKernel;
+            public int           integrateKernel;
+            public TextureHandle volume;
+            public BufferHandle  lightData;
+            public BufferHandle  tileIndices;
+            public bool          bindTileBuffer;
+            public int           lightCount;
+            public Vector4       froxelParams;
+            public Vector4       viewParams;
+            public Vector4       camPos;
+            public Vector4       camFwd;
+            public Vector4       tileParams;
+            public Vector4       stepParams;
+            public Vector4       densityParams;
+            public Matrix4x4[]   invViewProj;
+            public float         time;
+            public Vector3Int    dims;
+            public int           views;
+        }
+
+        class CompositeData
+        {
+            public Material      material;
+            public TextureHandle volume;
+            public Vector4       froxelParams;
+            public Vector4       viewParams;
+            public Vector4       fogTintParams;
+        }
+
+        public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
+        {
+            if (!IsUsable) return;
+            if (_source == null || _source.FixtureCount == 0
+                || _source.LightDataBuffer  == null
+                || _source.VolumetricMaterial == null) return;
+
+            var camData   = frame.Get<UniversalCameraData>();
+            var resources = frame.Get<UniversalResourceData>();
+            if (!resources.cameraDepthTexture.IsValid()) return;
+
+            var dims  = _source.FroxelResolution;
+            int views = Mathf.Clamp(camData.cameraTargetDescriptor.volumeDepth, 1, 2);
+
+            var volumeDesc = new TextureDesc(dims.x * views, dims.y)
+            {
+                name        = "_VRSLFroxelVolume",
+                format      = GraphicsFormat.R16G16B16A16_SFloat,
+                dimension   = TextureDimension.Tex3D,
+                slices      = dims.z,
+                enableRandomWrite = true,
+                clearBuffer = false,
+                filterMode  = FilterMode.Bilinear,
+                wrapMode    = TextureWrapMode.Clamp,
+            };
+            TextureHandle volume = rg.CreateTexture(volumeDesc);
+
+            // Same convention as the tile cull and the fullscreen shaders, so the
+            // volume lines up with the depth buffer the composite samples.
+            bool renderIntoTexture = !resources.isActiveTargetBackBuffer;
+            for (int view = 0; view < 2; view++)
+            {
+                int src = Mathf.Min(view, views - 1);
+                Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(
+                    camData.GetProjectionMatrix(src), renderIntoTexture);
+                _invViewProj[view] =
+                    Matrix4x4.Inverse(camData.GetViewMatrix(src)) * Matrix4x4.Inverse(gpuProj);
+            }
+
+            var cull    = _source.TileCullPass;
+            var binding = cull != null ? cull.GetBinding() : default;
+
+            var froxelParams = new Vector4(dims.x, dims.y, dims.z, _source.FroxelMaxDistance);
+            var viewParams   = new Vector4(views, camData.camera.nearClipPlane, 0f, 0f);
+
+            // ── Scatter + integrate ──────────────────────────────────────────
+            using (var builder = rg.AddComputePass<ScatterData>("VRSL Froxel Scatter", out var d))
+            {
+                // Consumed through SetGlobalTexture in the composite rather than a
+                // tracked read, so the graph would see the writes as dead.
+                builder.AllowPassCulling(false);
+
+                d.cs              = _source.FroxelShader;
+                d.scatterKernel   = _scatterKernel;
+                d.integrateKernel = _integrateKernel;
+                d.volume          = volume;
+                d.lightData       = rg.ImportBuffer(_source.LightDataBuffer);
+                d.bindTileBuffer  = binding.Bind;
+                d.lightCount      = _source.FixtureCount;
+                d.froxelParams    = froxelParams;
+                d.viewParams      = viewParams;
+                d.camPos          = camData.camera.transform.position;
+                d.camFwd          = camData.camera.transform.forward;
+                d.tileParams      = binding.TileParams;
+                d.stepParams      = _source.VolumetricStepParams;
+                d.densityParams   = _source.VolumetricDensityParams;
+                d.invViewProj     = _invViewProj;
+                d.time            = Time.timeSinceLevelLoad;
+                d.dims            = dims;
+                d.views           = views;
+
+                builder.UseTexture(volume, AccessFlags.ReadWrite);
+                builder.UseBuffer(d.lightData, AccessFlags.Read);
+                if (d.bindTileBuffer)
+                {
+                    d.tileIndices = rg.ImportBuffer(cull.TileBuffer);
+                    builder.UseBuffer(d.tileIndices, AccessFlags.Read);
+                }
+
+                builder.SetRenderFunc((ScatterData p, ComputeGraphContext ctx) =>
+                {
+                    var cmd = ctx.cmd;
+
+                    // The noise variant is a keyword on the compute, matching the
+                    // raymarch path so both respond to the same manager toggle.
+                    if (_source.VolumetricUseNoise) cmd.EnableKeyword(p.cs, new LocalKeyword(p.cs, NoiseKeyword));
+                    else                            cmd.DisableKeyword(p.cs, new LocalKeyword(p.cs, NoiseKeyword));
+
+                    cmd.SetComputeVectorParam(     p.cs, s_ParamsID,      p.froxelParams);
+                    cmd.SetComputeVectorParam(     p.cs, s_ViewParamsID,  p.viewParams);
+                    cmd.SetComputeVectorParam(     p.cs, s_CamPosID,      p.camPos);
+                    cmd.SetComputeVectorParam(     p.cs, s_CamFwdID,      p.camFwd);
+                    cmd.SetComputeVectorParam(     p.cs, s_TileParamsID,  p.tileParams);
+                    cmd.SetComputeVectorParam(     p.cs, s_StepParamsID,  p.stepParams);
+                    cmd.SetComputeVectorParam(     p.cs, s_DensityID,     p.densityParams);
+                    cmd.SetComputeMatrixArrayParam(p.cs, s_InvViewProjID, p.invViewProj);
+                    cmd.SetComputeIntParam(        p.cs, s_LightCountID,  p.lightCount);
+                    cmd.SetComputeFloatParam(      p.cs, s_TimeID,        p.time);
+
+                    foreach (int kernel in new[] { p.scatterKernel, p.integrateKernel })
+                    {
+                        cmd.SetComputeTextureParam(p.cs, kernel, s_VolumeID,      p.volume);
+                        cmd.SetComputeBufferParam( p.cs, kernel, s_LightsID,      p.lightData);
+                        if (p.bindTileBuffer)
+                            cmd.SetComputeBufferParam(p.cs, kernel, s_TileIndicesID, p.tileIndices);
+                    }
+
+                    cmd.DispatchCompute(p.cs, p.scatterKernel,
+                        Mathf.CeilToInt(p.dims.x * p.views / 4f),
+                        Mathf.CeilToInt(p.dims.y / 4f),
+                        Mathf.CeilToInt(p.dims.z / 4f));
+
+                    // One thread per column; the kernel walks Z itself, because
+                    // the integration is a running sum along that axis.
+                    cmd.DispatchCompute(p.cs, p.integrateKernel,
+                        Mathf.CeilToInt(p.dims.x * p.views / 8f),
+                        Mathf.CeilToInt(p.dims.y / 8f),
+                        1);
+                });
+            }
+
+            // ── Composite ────────────────────────────────────────────────────
+            using (var builder = rg.AddRasterRenderPass<CompositeData>(
+                "VRSL Froxel Composite", out var d))
+            {
+                d.material      = _source.VolumetricMaterial;
+                d.volume        = volume;
+                d.froxelParams  = froxelParams;
+                d.viewParams    = viewParams;
+                d.fogTintParams = _source.VolumetricFogTintParams;
+
+                builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
+                builder.UseTexture(volume, AccessFlags.Read);
+                builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
+                builder.AllowGlobalStateModification(true);
+
+                builder.SetRenderFunc((CompositeData p, RasterGraphContext ctx) =>
+                {
+                    var cmd = ctx.cmd;
+                    cmd.SetGlobalTexture(s_VolumeID,     p.volume);
+                    cmd.SetGlobalVector( s_ParamsID,     p.froxelParams);
+                    cmd.SetGlobalVector( s_ViewParamsID, p.viewParams);
+                    cmd.SetGlobalVector( s_FogTintID,    p.fogTintParams);
+                    cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
+                        p.material, 0, 4);
+                });
+            }
+        }
+    }
+}

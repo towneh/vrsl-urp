@@ -16,6 +16,13 @@ namespace VRSL.URP
     {
         Half = 0,
         Full = 1,
+
+        /// <summary>Integrate scattering into a view-aligned 3D grid once, then
+        /// sample it per pixel. Cost tracks the volume's dimensions rather than
+        /// the framebuffer's, and the trilinear sample needs no jitter to hide
+        /// banding. Requires <c>froxelShader</c>. Scattering past
+        /// <c>froxelMaxDistance</c> is not represented.</summary>
+        Froxel = 2,
     }
 
     /// <summary>
@@ -34,7 +41,7 @@ namespace VRSL.URP
     /// CustomRenderTextures, and assign the VRSLDMXLightUpdate compute shader.
     /// </summary>
     [AddComponentMenu("VRSL/URP Light Manager")]
-    public class VRSL_URPLightManager : MonoBehaviour, IVRSLLightSource
+    public class VRSL_URPLightManager : MonoBehaviour, IVRSLVolumetricSource
     {
         public static VRSL_URPLightManager Instance { get; private set; }
 
@@ -72,6 +79,21 @@ namespace VRSL.URP
                + "extra opaque geometry pass. Leave empty to skip it, in which case every "
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
+
+        [Tooltip("Assign VRSLFroxelVolumetric. Required for the Froxel volumetric mode; "
+               + "ignored by the Half and Full raymarch modes.")]
+        public ComputeShader froxelShader;
+
+        [Tooltip("Froxel volume dimensions per eye. Larger is sharper and costs more, but "
+               + "unlike the raymarch modes the cost does not track screen resolution. "
+               + "Depth slices are spread exponentially, so most land near the camera.")]
+        public Vector3Int froxelResolution = new Vector3Int(160, 90, 64);
+
+        [Range(4f, 200f)]
+        [Tooltip("How far the froxel volume reaches, in metres. Scattering beyond this is not "
+               + "represented, so set it to roughly the depth of the space rather than the "
+               + "camera far plane — every slice spent past the back wall is wasted.")]
+        public float froxelMaxDistance = 64f;
 
         [Header("Contact Shadows")]
         [Range(0f, 1f)]
@@ -194,6 +216,11 @@ namespace VRSL.URP
             new Vector4(contactShadowStrength, contactShadowDistance,
                         contactShadowSteps, contactShadowThickness);
 
+        // IVRSLVolumetricSource — lets the shared froxel pass drive either manager.
+        ComputeShader IVRSLVolumetricSource.FroxelShader     => froxelShader;
+        Vector3Int    IVRSLVolumetricSource.FroxelResolution => froxelResolution;
+        float         IVRSLVolumetricSource.FroxelMaxDistance => froxelMaxDistance;
+
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }
         public GraphicsBuffer  LightDataBuffer     { get; private set; }
@@ -219,6 +246,9 @@ namespace VRSL.URP
             new Vector4(volumetricTint.r, volumetricTint.g, volumetricTint.b, volumetricIntensity);
         public bool VolumetricUseNoise => volumetricUseNoise;
         public bool VolumetricUseFullRes => volumetricResolution == VolumetricResolution.Full;
+        /// <summary>Froxel mode replaces the raymarch entirely rather than
+        /// layering on top of it, so the raymarch pass sits out when it's on.</summary>
+        public bool VolumetricUseFroxel  => volumetricResolution == VolumetricResolution.Froxel;
 
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
@@ -259,6 +289,7 @@ namespace VRSL.URP
         VRSLDMXLightPasses.ComputePass    _computePass;
         VRSLSurfacePrepass                _surfacePrepass;
         VRSLTileCullPass                  _tileCullPass;
+        VRSLFroxelPass                    _froxelPass;
         VRSLDMXLightPasses.LightingPass   _lightingPass;
         VRSLDMXLightPasses.VolumetricPass _volumetricPass;
         bool _injectionSubscribed;
@@ -641,6 +672,7 @@ namespace VRSL.URP
             };
             _surfacePrepass ??= new VRSLSurfacePrepass(surfacePropertiesShader);
             _tileCullPass   ??= new VRSLTileCullPass(lightCullShader, this);
+            _froxelPass     ??= new VRSLFroxelPass(this);
             _lightingPass   ??= new VRSLDMXLightPasses.LightingPass
             {
                 renderPassEvent = RenderPassEvent.AfterRenderingOpaques,
@@ -692,7 +724,12 @@ namespace VRSL.URP
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
-                renderer.EnqueuePass(_volumetricPass);
+            {
+                if (VolumetricUseFroxel && _froxelPass.IsUsable)
+                    renderer.EnqueuePass(_froxelPass);
+                else
+                    renderer.EnqueuePass(_volumetricPass);
+            }
         }
     }
 }

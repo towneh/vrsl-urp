@@ -343,6 +343,18 @@ The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile r
   - Pass 0: depth downsample. Min-depth filter on each 2×2 source quad keeps the half-res depth tight to silhouettes.
   - Pass 1: half-res jittered raymarch into an `R16G16B16A16_SFloat` half-res RT.
   - Pass 2: 9-tap Gaussian-weighted bilateral upsample, additive over the camera colour. The bilateral term `1 / (eps + |fullEye - halfEye|)` rejects taps across silhouettes.
+- **Froxel** — scattering is integrated once into a view-aligned 3D grid by
+  `VRSLFroxelVolumetric.compute`, and the composite is a single trilinear fetch per pixel.
+  Cost tracks the volume's dimensions rather than the framebuffer's, which is the point in
+  VR, and the filtered sample needs no jitter to hide banding. Requires `froxelShader`.
+  Two kernels: `ScatterFroxels` evaluates in-scattering at each froxel centre from the same
+  tile light list the other passes use, and `IntegrateFroxels` walks each column front to
+  back accumulating radiance against transmittance. Slices are spread exponentially between
+  the near plane and `froxelMaxDistance`, so resolution concentrates near the camera.
+  Scattering past that distance isn't represented, so set it to roughly the depth of the
+  space rather than the camera far plane. Both eyes share one volume packed along X, since
+  a 3D texture can't be a texture array. Selecting this mode stands the raymarch down
+  rather than layering on top of it.
 - **Full** — single pass at the camera target resolution; samples `_CameraDepthTexture` directly and additive-blends. ~4× per-pixel cost vs Half but no upsample artefacts.
 
 The half-res raymarch jitters the ray origin per pixel using an R2 (plastic-constant) low-discrepancy sequence with frame-indexed offset, so head and fixture motion average the residual pattern over time.

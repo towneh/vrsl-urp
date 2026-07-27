@@ -1,0 +1,166 @@
+#pragma kernel ScatterFroxels
+#pragma kernel IntegrateFroxels
+#pragma multi_compile _ _VRSL_VOLUMETRIC_NOISE
+
+// Froxel volumetric scattering.
+//
+// The raymarch path re-integrates every view ray per screen pixel, so its cost
+// is tied to resolution and it pays the full light loop once per step. This
+// integrates the same scattering once into a view-aligned 3D grid, then the
+// composite pass just samples it. Cost becomes a function of the volume's
+// dimensions rather than the framebuffer's, which is what makes it scale in VR,
+// and the trilinear sample gives smooth results without the raymarch's jitter.
+//
+//   ScatterFroxels   — one thread per froxel. Evaluates in-scattering from the
+//                      tile's lights at the froxel centre and writes
+//                      rgb = in-scattered radiance × density, a = density.
+//   IntegrateFroxels — one thread per froxel column. Marches Z front to back
+//                      accumulating in-scatter against transmittance, and
+//                      writes rgb = integrated radiance, a = transmittance.
+//
+// Slices are distributed exponentially between the near plane and
+// _VRSLFroxelParams.w, so near froxels are small where the eye notices and far
+// ones are coarse where it doesn't.
+//
+// Single-pass instanced VR packs both eyes along X: the volume is
+// (width × viewCount) wide and eye e occupies [e·width, (e+1)·width).
+
+#include "../Shared/VRSLLightingLibrary.hlsl"
+#include "../Shared/VRSLTileCulling.hlsl"
+
+RWTexture3D<float4> _VRSLFroxelVolume;
+
+StructuredBuffer<VRSLLightData> _VRSLLights;
+uint   _VRSLLightCount;
+
+// x = width, y = height, z = depth, w = max scatter distance (m)
+float4 _VRSLFroxelParams;
+// x = view count, y = camera near plane, zw = unused
+float4 _VRSLFroxelViewParams;
+// xyz = camera world position
+float4 _VRSLFroxelCamPos;
+// xyz = camera forward, normalised
+float4 _VRSLFroxelCamFwd;
+// Same convention the fullscreen shaders reconstruct with, per eye.
+float4x4 _VRSLFroxelInvViewProj[2];
+
+// Mirrors the raymarch's parameter packing.
+float4 _VRSLVolStepCount;   // w = HG anisotropy
+float4 _VRSLVolDensity;     // x = base density, y = noise scale, z = scroll, w = strength
+float  _VRSLFroxelTime;
+
+float3 VRSL_FroxelWorldFromUV(float2 uv, float deviceDepth, uint eye)
+{
+    float4 positionCS = float4(uv * 2.0 - 1.0, deviceDepth, 1.0);
+#if UNITY_UV_STARTS_AT_TOP
+    positionCS.y = -positionCS.y;
+#endif
+    float4 hpositionWS = mul(_VRSLFroxelInvViewProj[eye], positionCS);
+    return hpositionWS.xyz / hpositionWS.w;
+}
+
+// View-space depth at a slice boundary. slice runs [0, depth].
+float VRSL_FroxelSliceDepth(float slice)
+{
+    float nearZ = max(_VRSLFroxelViewParams.y, 0.01);
+    float maxZ  = max(_VRSLFroxelParams.w, nearZ * 2.0);
+    return nearZ * pow(maxZ / nearZ, slice / _VRSLFroxelParams.z);
+}
+
+[numthreads(4, 4, 4)]
+void ScatterFroxels(uint3 id : SV_DispatchThreadID)
+{
+    uint width  = (uint)_VRSLFroxelParams.x;
+    uint height = (uint)_VRSLFroxelParams.y;
+    uint depth  = (uint)_VRSLFroxelParams.z;
+    uint views  = max(1u, (uint)_VRSLFroxelViewParams.x);
+
+    uint eye = id.x / width;
+    uint fx  = id.x % width;
+    if (eye >= views || id.y >= height || id.z >= depth) return;
+
+    float2 uv = float2((fx + 0.5) / width, (id.y + 0.5) / height);
+
+    // Two depths give the ray direction without needing the far plane, which an
+    // infinite-far projection would send to infinity.
+#if UNITY_REVERSED_Z
+    float3 a = VRSL_FroxelWorldFromUV(uv, 1.0, eye);
+    float3 b = VRSL_FroxelWorldFromUV(uv, 0.5, eye);
+#else
+    float3 a = VRSL_FroxelWorldFromUV(uv, 0.0, eye);
+    float3 b = VRSL_FroxelWorldFromUV(uv, 0.5, eye);
+#endif
+    float3 rayDir = normalize(b - a);
+
+    // Slices are spaced by view depth, so step along the ray by the distance
+    // that reaches that depth rather than by the depth itself.
+    float cosToAxis = max(dot(rayDir, _VRSLFroxelCamFwd.xyz), 1e-4);
+    float centreZ   = VRSL_FroxelSliceDepth(id.z + 0.5);
+    float3 samplePos = _VRSLFroxelCamPos.xyz + rayDir * (centreZ / cosToAxis);
+
+    float3 toCamera   = -rayDir;
+    float  anisotropy = _VRSLVolStepCount.w;
+
+    uint tileIndex  = VRSL_TileIndex(uv, eye);
+    uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
+
+    float3 inscatter = 0;
+    for (uint slot = 0; slot < lightCount; slot++)
+    {
+        VRSLLightData light = _VRSLLights[VRSL_LightListIndex(tileIndex, slot)];
+
+        float3 contrib = VRSL_EvaluateLightVolumetric(
+            light, samplePos, toCamera, anisotropy);
+
+        if (any(contrib > 0.0))
+            contrib *= SampleGobo(VRSL_GoboIndex(light), light.spotParams.w,
+                                  samplePos,
+                                  light.positionAndRange.xyz,
+                                  light.directionAndType.xyz,
+                                  light.spotParams.y,
+                                  light.spotParams.z);
+
+        inscatter += contrib;
+    }
+
+    float density = _VRSLVolDensity.x;
+#ifdef _VRSL_VOLUMETRIC_NOISE
+    float3 noisePos = samplePos * _VRSLVolDensity.y;
+    noisePos.y -= _VRSLFroxelTime * _VRSLVolDensity.z;
+    density *= lerp(1.0, VRSL_ValueNoise3D(noisePos), _VRSLVolDensity.w);
+#endif
+
+    _VRSLFroxelVolume[id] = float4(inscatter * density, density);
+}
+
+[numthreads(8, 8, 1)]
+void IntegrateFroxels(uint3 id : SV_DispatchThreadID)
+{
+    uint width  = (uint)_VRSLFroxelParams.x;
+    uint height = (uint)_VRSLFroxelParams.y;
+    uint depth  = (uint)_VRSLFroxelParams.z;
+    uint views  = max(1u, (uint)_VRSLFroxelViewParams.x);
+
+    if (id.x >= width * views || id.y >= height) return;
+
+    float3 accumulated  = 0;
+    float  transmittance = 1.0;
+    float  previousEdge  = VRSL_FroxelSliceDepth(0);
+
+    for (uint z = 0; z < depth; z++)
+    {
+        uint3 coord = uint3(id.x, id.y, z);
+        float4 cell = _VRSLFroxelVolume[coord];
+
+        float farEdge   = VRSL_FroxelSliceDepth(z + 1);
+        float thickness = max(farEdge - previousEdge, 0.0);
+        previousEdge    = farEdge;
+
+        // cell.rgb is already radiance × density, matching the raymarch's
+        // inscatter × density × stepSize accumulation.
+        accumulated  += transmittance * cell.rgb * thickness;
+        transmittance *= exp(-cell.a * thickness);
+
+        _VRSLFroxelVolume[coord] = float4(accumulated, transmittance);
+    }
+}

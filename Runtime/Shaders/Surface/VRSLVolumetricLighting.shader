@@ -91,41 +91,6 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 return frac(p.x + p.y);
             }
 
-        #ifdef _VRSL_VOLUMETRIC_NOISE
-            // Dave Hoskins-style 3D hash. ~6 ALU per call.
-            float VRSL_Hash3D(float3 p)
-            {
-                p = frac(p * float3(0.1031, 0.1030, 0.0973));
-                p += dot(p, p.yzx + 33.33);
-                return frac((p.x + p.y) * p.z);
-            }
-
-            // Smoothed 3D value noise on a unit grid. 8 hash taps + trilinear
-            // smoothstep interpolation — ~50 ALU per sample. Output range [0,1].
-            float VRSL_ValueNoise3D(float3 p)
-            {
-                float3 i = floor(p);
-                float3 f = frac(p);
-                f = f * f * (3.0 - 2.0 * f);
-
-                float n000 = VRSL_Hash3D(i);
-                float n100 = VRSL_Hash3D(i + float3(1, 0, 0));
-                float n010 = VRSL_Hash3D(i + float3(0, 1, 0));
-                float n110 = VRSL_Hash3D(i + float3(1, 1, 0));
-                float n001 = VRSL_Hash3D(i + float3(0, 0, 1));
-                float n101 = VRSL_Hash3D(i + float3(1, 0, 1));
-                float n011 = VRSL_Hash3D(i + float3(0, 1, 1));
-                float n111 = VRSL_Hash3D(i + float3(1, 1, 1));
-
-                float n00 = lerp(n000, n100, f.x);
-                float n10 = lerp(n010, n110, f.x);
-                float n01 = lerp(n001, n101, f.x);
-                float n11 = lerp(n011, n111, f.x);
-                float n0  = lerp(n00,  n10,  f.y);
-                float n1  = lerp(n01,  n11,  f.y);
-                return lerp(n0, n1, f.z);
-            }
-        #endif
 
             // Shared raymarch — accumulate VRSL light in-scattering from the
             // camera through the pixel out to rawDepth. Returns RGB radiance
@@ -424,6 +389,69 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
 
                 float rawDepth = SampleSceneDepth(i.uv);
                 return VRSL_Raymarch(rawDepth, i.uv, i.positionCS.xy);
+            }
+            ENDHLSL
+        }
+
+        // ── Pass 4 ───────────────────────────────────────────────────────────
+        // Froxel composite. Samples the volume VRSLFroxelVolumetric.compute
+        // integrated and adds it to the camera colour. All the scattering work
+        // already happened in the compute, so this is one trilinear fetch per
+        // pixel — the reason the froxel path's cost doesn't track resolution.
+        Pass
+        {
+            Name "VRSL_Vol_FroxelComposite"
+            Blend One One
+            ColorMask RGB   // additive light only — never disturb scene alpha
+            ZWrite Off
+            ZTest  Off
+            Cull   Off
+
+            HLSLPROGRAM
+            #pragma vertex   vert
+            #pragma fragment frag
+            #pragma target   4.5
+            #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+
+            TEXTURE3D(_VRSLFroxelVolume);
+            SAMPLER(sampler_VRSLFroxelVolume);
+
+            // x = width, y = height, z = depth, w = max scatter distance (m)
+            float4 _VRSLFroxelParams;
+            // x = view count, y = camera near plane
+            float4 _VRSLFroxelViewParams;
+
+            float4 frag(Varyings i) : SV_Target
+            {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
+                float rawDepth = SampleSceneDepth(i.uv);
+                float eyeDepth = LinearEyeDepth(rawDepth, _ZBufferParams);
+
+                float nearZ = max(_VRSLFroxelViewParams.y, 0.01);
+                float maxZ  = max(_VRSLFroxelParams.w, nearZ * 2.0);
+
+                // Inverse of the compute's exponential slice distribution. Sky
+                // and anything past the volume clamp to the last slice, which
+                // holds the fully integrated column — correct, since that is all
+                // the scattering there is between the camera and that point.
+                float slice = log(max(eyeDepth, nearZ) / nearZ) / log(maxZ / nearZ);
+                slice = saturate(slice);
+
+                // Both eyes share one volume, packed along X.
+                float views = max(_VRSLFroxelViewParams.x, 1.0);
+                float eye   = (float)VRSL_EyeIndex();
+                float u     = (eye + saturate(i.uv.x)) / views;
+
+                // Half a slice inset so the trilinear filter doesn't reach past
+                // the volume at either end.
+                float w = (slice * (_VRSLFroxelParams.z - 1.0) + 0.5) / _VRSLFroxelParams.z;
+
+                float3 scattered = SAMPLE_TEXTURE3D_LOD(
+                    _VRSLFroxelVolume, sampler_VRSLFroxelVolume,
+                    float3(u, i.uv.y, w), 0).rgb;
+
+                return float4(scattered * _VRSLVolFogTint.xyz * _VRSLVolFogTint.w, 0);
             }
             ENDHLSL
         }
