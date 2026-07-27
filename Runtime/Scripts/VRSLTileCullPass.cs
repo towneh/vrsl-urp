@@ -88,6 +88,14 @@ namespace VRSL.URP
         /// </summary>
         public Vector4 TileParams { get; private set; }
 
+        /// <summary>Tiles the last record actually dispatched, across all eyes.
+        /// The buffer may be larger, since it only ever grows.</summary>
+        public int ActiveTileCount { get; private set; }
+
+        /// <summary>Entries per tile in <see cref="TileBuffer"/>: a count followed
+        /// by up to <see cref="MaxLightsPerTile"/> indices.</summary>
+        public static int Stride => TileStride;
+
         /// <summary>
         /// What a consuming pass needs to bind for tiling. Derived here rather
         /// than at each of the four call sites (DMX and AudioLink × lighting and
@@ -156,6 +164,7 @@ namespace VRSL.URP
             // Zero first: any early-out below has to leave the consumers reading
             // "tiling inactive" rather than a stale grid from another camera.
             TileParams = Vector4.zero;
+            ActiveTileCount = 0;
 
             // Keep a buffer allocated even when the cull can't run, so the
             // consuming passes always have something to bind to
@@ -194,7 +203,8 @@ namespace VRSL.URP
                     Matrix4x4.Inverse(camData.GetViewMatrix(src)) * Matrix4x4.Inverse(gpuProj);
             }
 
-            TileParams = new Vector4(tilesX, tilesY, TileSize, 0f);
+            TileParams      = new Vector4(tilesX, tilesY, TileSize, 0f);
+            ActiveTileCount = tilesX * tilesY * slices;
 
             using var builder = rg.AddComputePass<PassData>("VRSL Tile Light Cull", out var d);
 

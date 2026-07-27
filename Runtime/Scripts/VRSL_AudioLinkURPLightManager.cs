@@ -540,6 +540,37 @@ namespace VRSL.URP
             return _ownedSources;
         }
 
+
+        /// <summary>
+        /// Prints a health report to the Console. Right-click the component in
+        /// play mode. Answers, in order, the questions that "nothing is lit"
+        /// leaves open: did the shaders compile, did the decode produce data, is
+        /// culling keeping it, and is the prepass feeding the BRDF.
+        /// </summary>
+        [ContextMenu("VRSL Diagnostics")]
+        public void LogDiagnostics()
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"[VRSL URP] Diagnostics — AudioLink");
+            sb.AppendLine($"  Fixtures: {FixtureCount} collected");
+            sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
+            sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
+            sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
+            sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
+            sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
+            sb.AppendLine("  " + VRSLDiagnostics.LightDataStatus(LightDataBuffer, FixtureCount));
+            sb.AppendLine("  " + VRSLDiagnostics.TileStatus(TileCullPass, FixtureCount));
+            sb.AppendLine($"  Volumetric mode: {volumetricResolution}"
+                        + (volumetricResolution == VolumetricResolution.Froxel
+                              ? $" ({froxelResolution.x}x{froxelResolution.y}x{froxelResolution.z}, "
+                                + $"{froxelMaxDistance}m)" : ""));
+            if (volumetricResolution == VolumetricResolution.Froxel)
+                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader, "ScatterFroxels"));
+            sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
+            sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
+            Debug.Log(sb.ToString(), this);
+        }
+
         // ── Runtime pass injection ────────────────────────────────────────────
         // Drives the URP render passes via RenderPipelineManager.beginCameraRendering
         // so the package works without any ScriptableRendererFeature authoring on
