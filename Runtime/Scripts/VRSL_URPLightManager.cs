@@ -144,6 +144,16 @@ namespace VRSL.URP
                + "DMX channel +11 selects the slot (0 = open/no gobo). Order matches DMX value range.")]
         public Texture2D[] goboTextures;
 
+        [Header("Cameras")]
+        [Tooltip("How VRSL treats cameras that render into a texture rather than to the "
+               + "player's view — mirrors, portals, camera props. Full lights them like the "
+               + "main view, which is the default because beams in a mirror are a large part "
+               + "of a stage look. SurfaceOnly keeps surface lighting but drops the "
+               + "volumetric raymarch, the more expensive of the two. Skip runs nothing. "
+               + "Cameras feeding VRSL's own DMX readers are always skipped regardless of "
+               + "this setting.")]
+        public SecondaryCameraMode secondaryCameraMode = SecondaryCameraMode.Full;
+
         [Header("Debug")]
         [Tooltip("Log fixture collection and DMX global / CRT publishing to the Console on enable. "
                + "Use to confirm the manager found your fixtures and is feeding the _VRSLU_* globals "
@@ -587,6 +597,22 @@ namespace VRSL.URP
             if (GoboArray != null) { Object.Destroy(GoboArray); GoboArray = null; }
         }
 
+
+        // Textures this manager consumes. A camera rendering into any of them must
+        // never receive the lighting pass — see VRSLCameraFilter.
+        Texture[] _ownedSources;
+
+        Texture[] OwnedSources()
+        {
+            _ownedSources ??= new Texture[5];
+            _ownedSources[0] = dmxMainTexture;
+            _ownedSources[1] = dmxMovementTexture;
+            _ownedSources[2] = dmxStrobeTexture;
+            _ownedSources[3] = dmxStrobeTimerTexture;
+            _ownedSources[4] = dmxSpinTimerTexture;
+            return _ownedSources;
+        }
+
         // ── Runtime pass injection ────────────────────────────────────────────
         // Drives the URP render passes via RenderPipelineManager.beginCameraRendering
         // so the package works without any ScriptableRendererFeature authoring on
@@ -624,12 +650,8 @@ namespace VRSL.URP
 
         void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
         {
-            if (cam == null) return;
-            // Reflection probes and editor preview cameras render through the same
-            // pipeline event but don't want stage-light passes — would cost dispatch
-            // and pollute reflection captures.
-            if (cam.cameraType == CameraType.Reflection
-             || cam.cameraType == CameraType.Preview) return;
+            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, OwnedSources());
+            if (decision == VRSLCameraDecision.Skip) return;
 
             var camData = cam.GetUniversalAdditionalCameraData();
             if (camData == null) return;
@@ -653,7 +675,7 @@ namespace VRSL.URP
             renderer.EnqueuePass(_surfacePrepass);
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
-            if (VolumetricMaterial != null)
+            if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
                 renderer.EnqueuePass(_volumetricPass);
         }
     }

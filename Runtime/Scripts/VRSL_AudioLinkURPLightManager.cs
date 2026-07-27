@@ -482,6 +482,18 @@ namespace VRSL.URP
             if (GoboArray != null) { Object.Destroy(GoboArray); GoboArray = null; }
         }
 
+
+        // Textures this manager consumes. A camera rendering into any of them must
+        // never receive the lighting pass — see VRSLCameraFilter.
+        Texture[] _ownedSources;
+
+        Texture[] OwnedSources()
+        {
+            _ownedSources ??= new Texture[1];
+            _ownedSources[0] = samplingTexture;
+            return _ownedSources;
+        }
+
         // ── Runtime pass injection ────────────────────────────────────────────
         // Drives the URP render passes via RenderPipelineManager.beginCameraRendering
         // so the package works without any ScriptableRendererFeature authoring on
@@ -521,12 +533,8 @@ namespace VRSL.URP
 
         void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
         {
-            if (cam == null) return;
-            // Reflection probes and editor preview cameras render through the same
-            // pipeline event but don't want stage-light passes — would cost dispatch
-            // and pollute reflection captures.
-            if (cam.cameraType == CameraType.Reflection
-             || cam.cameraType == CameraType.Preview) return;
+            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, OwnedSources());
+            if (decision == VRSLCameraDecision.Skip) return;
 
             var camData = cam.GetUniversalAdditionalCameraData();
             if (camData == null) return;
@@ -552,7 +560,7 @@ namespace VRSL.URP
             renderer.EnqueuePass(_surfacePrepass);
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
-            if (VolumetricMaterial != null)
+            if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
                 renderer.EnqueuePass(_volumetricPass);
         }
 

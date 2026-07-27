@@ -347,6 +347,38 @@ No measured sweep is published with the package. The `RealtimeLightProfiling` sa
 
 ---
 
+## Camera Selection
+
+VRSL decides per camera whether to inject its passes, entirely from what the package
+already owns — no host cooperation and no assumptions about how the surrounding
+application configures its cameras.
+
+Always skipped, regardless of settings:
+
+- `CameraType.Reflection` and `CameraType.Preview`.
+- Cameras registered by `VRSL_CameraConfigurator`, i.e. VRSL's own DMX screen readers.
+- Cameras whose `targetTexture` is a render texture the manager consumes.
+
+The last two are correctness, not cost. The lighting pass blends `One One` onto the active
+colour target; on a DMX reader camera that target is the RAW-values texture feeding the CRT
+decode chain, so a fixture within range of the reader's screen quad would brighten the
+decoded channel values. The failure surfaces as nonsense DMX rather than as a rendering
+fault, which makes it expensive to trace.
+
+Everything else is governed by `secondaryCameraMode` on the manager, which covers cameras
+that render into a texture rather than to the player's view — mirrors, portals, camera props:
+
+| Mode | Behaviour |
+|---|---|
+| `Full` (default) | Lit exactly like the main view. Beams in a mirror are a large part of a stage look, so skipping them is a visual regression rather than a free saving. |
+| `SurfaceOnly` | Surface lighting runs, the volumetric raymarch doesn't. The raymarch is by far the more expensive of the two. |
+| `Skip` | No VRSL passes. |
+
+A camera with no `targetTexture` is always treated as the player's view, including under XR
+where the swapchain is handled outside the camera.
+
+---
+
 ## Known Limitations
 
 - **No shadow casting.** This pipeline bypasses Unity's `Light` component to avoid the per-light shadow atlas cost, so a fixture lights every surface within range regardless of what stands between them. Screen-space contact shadows off the depth buffer would cover the near field cheaply; a small pool of real `Light` components for hero fixtures would cover the rest.

@@ -139,6 +139,21 @@ namespace VRSL.EditorScripts
         {
             _TryGetCam();
         }
+
+        // Tell the light managers this camera feeds VRSL's own data path, so they
+        // never inject lighting passes into it. The lighting pass blends additively
+        // onto the camera colour target, which here is the RAW-values RT the CRT
+        // decode chain reads back — additive light on it corrupts every channel.
+        void OnEnable()
+        {
+            _TryGetCam();
+            VRSL.URP.VRSLCameraFilter.RegisterDataReader(camObj);
+        }
+
+        void OnDisable()
+        {
+            VRSL.URP.VRSLCameraFilter.UnregisterDataReader(camObj);
+        }
         public void _UpdateCameraPosition()
         {
 
