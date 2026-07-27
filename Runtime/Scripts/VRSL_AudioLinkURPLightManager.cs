@@ -178,12 +178,12 @@ namespace VRSL.URP
             public Vector4 reserved;
         }
 
-        // VRSLLightData stride mirror — 5 × float4 = 80 bytes.
+        // VRSLLightData stride mirror — 4 × float4 = 64 bytes.
         // Content is written by the compute shader; we only need the size here.
         [StructLayout(LayoutKind.Sequential)]
         struct LightDataStride
         {
-            Vector4 a, b, c, d, e;
+            Vector4 a, b, c, d;
         }
 
         List<VRStageLighting_AudioLink_RealtimeLight> _fixtures = new();

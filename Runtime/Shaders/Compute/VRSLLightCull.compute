@@ -151,7 +151,7 @@ void CullLights(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 
         // Fixtures the decode marked as emitting nothing never reach a pixel,
         // so keeping them out of the list is free saving on a dark cue.
-        if (light.spotCosines.z < 0.5) continue;
+        if (!VRSL_IsActive(light)) continue;
 
         float3 center = light.positionAndRange.xyz;
         float  radius = light.positionAndRange.w;

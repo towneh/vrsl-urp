@@ -180,11 +180,8 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // ── Write output ──────────────────────────────────────────────────────────
     VRSLLightData light;
     light.positionAndRange  = float4(cfg.positionAndRange.xyz, cfg.positionAndRange.w);
-    light.directionAndType  = float4(dir, (float)lightType);
-    light.colorAndIntensity = float4(color, combinedIntensity);
-    light.spotCosines       = float4(innerCos, outerCos,
-                                     combinedIntensity > 0.001 ? 1.0 : 0.0,
-                                     cfg.spotAngles.z);
+    // Intensity doubles as the active flag — see VRSLLightingLibrary.hlsl.
+    light.colorAndIntensity = float4(color, combinedIntensity > 0.001 ? combinedIntensity : 0.0);
     // Gobo spin phase (radians), integrated from the Static's spinSpeed.
     // Scale factor π/9 (2× the projection shader's projected-gobo rate) is an
     // empirical match to the volumetric cone's visible stripe-pattern rotation,
@@ -193,8 +190,8 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // (spinSpeed *= -goboSpinSpeed in VRSL-StandardMover-VolumetricFrag.cginc).
     // fmod to [-2π, 2π] bounds precision for long-running scenes.
     float spinPhase = fmod(cfg.reserved.y * _VRSLTime * -0.34906585, 6.28318530718);
-    light.goboAndSpin       = float4(cfg.reserved.x,  // gobo slice index (-1 = none)
-                                     spinPhase,       // pre-integrated rotation in radians
-                                     0.0, 0.0);
+    light.directionAndType  = float4(dir, VRSL_PackTypeAndGobo((float)lightType,
+                                                              (int)cfg.reserved.x));
+    light.spotParams        = float4(innerCos, outerCos, cfg.spotAngles.z, spinPhase);
     _LightData[idx] = light;
 }

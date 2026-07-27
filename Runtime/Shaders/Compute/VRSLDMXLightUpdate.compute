@@ -192,20 +192,16 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // ── Write output ──────────────────────────────────────────────────────────
     VRSLLightData light;
     light.positionAndRange  = float4(cfg.positionAndRange.xyz, cfg.positionAndRange.w);
-    light.directionAndType  = float4(normalize(finalDir), cfg.forwardAndType.w);
-    light.colorAndIntensity = float4(r, g, b, combinedIntensity);
-    // z = active flag: skip if the light emits nothing. Gating on combinedIntensity
-    // alone (dimmer-driven) leaves a fixture lit when its colour fades to black while
-    // the dimmer stays up — the residual near-black RGB is amplified by maxIntensity, and
-    // for point lights whose origin sits on the bar mesh by huge near-field attenuation.
-    // Require a non-negligible colour too: the 6/255 floor clears the fade residual even
-    // at high maxIntensity, at the cost of clipping colour dimmer than ~2.4%.
-    // w = emitter depth (m) — virtual cone-apex pushback for area-emitter fixtures.
+    // Intensity doubles as the active flag: a fixture that emits nothing is written
+    // with zero intensity and the readers skip it. Gating on the dimmer alone leaves a
+    // fixture lit when its colour fades to black while the dimmer stays up — the
+    // residual near-black RGB is amplified by maxIntensity, and for point lights whose
+    // origin sits on the bar mesh by huge near-field attenuation too. Require a
+    // non-negligible colour as well: the 6/255 floor clears the fade residual even at
+    // high maxIntensity, at the cost of clipping colour dimmer than ~2.4%.
     float colorMax = max(r, max(g, b));
     bool  emitting = combinedIntensity > 0.001 && colorMax > 6.0 / 255.0;
-    light.spotCosines       = float4(innerCos, outerCos,
-                                     emitting ? 1.0 : 0.0,
-                                     cfg.extras.x);
+    light.colorAndIntensity = float4(r, g, b, emitting ? combinedIntensity : 0.0);
     // ── Gobo (ch+10 spin speed, ch+11 gobo select) ───────────────────────────
     // Mirrors getDMXGoboSelection() in VRSL-DMXFunctions: round(raw*255/30), clamp 1..N
     // 5-channel fixtures have no gobo/spin channels — those offsets (+10/+11) belong
@@ -239,6 +235,8 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
         goboIdx = slot - 1; // convert to 0-based array index
     }
 
-    light.goboAndSpin = float4((float)goboIdx, spinSpeed, 0, 0);
+    light.directionAndType = float4(normalize(finalDir),
+                                    VRSL_PackTypeAndGobo(cfg.forwardAndType.w, goboIdx));
+    light.spotParams       = float4(innerCos, outerCos, cfg.extras.x, spinSpeed);
     _LightData[idx] = light;
 }

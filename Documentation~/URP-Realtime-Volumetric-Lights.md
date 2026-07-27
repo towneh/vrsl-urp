@@ -123,8 +123,21 @@ Compute pass output, surface and volumetric pass input.
 | `positionAndRange` | xyz = world position, w = range |
 | `directionAndType` | xyz = normalised direction, w = type |
 | `colorAndIntensity` | xyz = linear RGB, w = combined intensity |
-| `spotCosines` | x = cos(innerHalfAngle), y = cos(outerHalfAngle), z = active flag (0 = skip), w = emitterDepth (m) |
-| `goboAndSpin` | x = gobo array index (-1 = none, 0+ = `_VRSLGobos` slice), y = pre-integrated spin angle (radians, fmod 2π) |
+| `spotParams` | x = cos(innerHalfAngle), y = cos(outerHalfAngle), z = emitterDepth (m), w = pre-integrated gobo spin angle (radians, fmod 2π) |
+
+Two values ride in packed slots rather than taking rows of their own, so the struct fits
+four `float4` instead of five. Read them through the accessors in
+`VRSLLightingLibrary.hlsl` rather than by field:
+
+| Accessor | Source |
+|---|---|
+| `VRSL_LightType(light)` | `directionAndType.w`, low bit — 0 = spot, 1 = point |
+| `VRSL_GoboIndex(light)` | `directionAndType.w` above the low bit, biased by one so -1 (no gobo) survives |
+| `VRSL_IsActive(light)` | `colorAndIntensity.w > 0` — a fixture emitting nothing is written with zero intensity, so no separate flag is needed |
+
+Both packed values are small integers, which floats represent exactly, so the packing is
+lossless. Packing them as halves instead would have quantised the spin phase and stippled
+a slowly rotating gobo.
 
 ### colorMode values (AudioLink)
 
@@ -197,7 +210,7 @@ One thread per fixture, 64 threads/group. Per fixture:
 3. If `enablePanTilt`, decode pan and tilt (coarse + optional fine) and apply Rodrigues rotation: tilt around the fixture's world-space local +X axis first, then pan around the base forward.
 4. Cone width — `outerHalf = lerp(spotAngles.w, spotAngles.y, ch+4)`, `innerHalf = outerHalf × spotAngles.x` (the inner-to-outer ratio). Tracks dynamic cone-width zoom while preserving the inner cone's character.
 5. Sample the SpinnerTimer CRT for accumulated gobo spin phase.
-6. Write `VRSLLightData` with `spotCosines.w = emitterDepth` (from `extras.x`) and `colorAndIntensity.w` set to 0 if intensity is negligible (active flag tells the surface pass to skip).
+6. Write `VRSLLightData` with `spotParams.z = emitterDepth` (from `extras.x`), the light type and gobo slice packed into `directionAndType.w`, and `colorAndIntensity.w` set to 0 when the fixture emits nothing so the readers skip it.
 
 ### AudioLink — `VRSLAudioLinkLightUpdate.compute`
 
@@ -327,7 +340,7 @@ Screen-space only. The raymarch terminates at `_CameraDepthTexture` per pixel, s
 
 ### Per-fixture emitter depth
 
-`emitterDepth` pushes the conceptual cone apex back along `lightDir` by that distance. The cone arrives at the fixture lens with finite radius `emitterDepth × tan(halfAngle)` instead of converging to a point, matching the visible beam to wide-aperture fixtures (LED bars, par cans). Passes through to both surface and volumetric attenuation via `VRSLLightData.spotCosines.w`, and `SampleGobo` projects from the same virtual apex so the gobo mask follows the widened cone.
+`emitterDepth` pushes the conceptual cone apex back along `lightDir` by that distance. The cone arrives at the fixture lens with finite radius `emitterDepth × tan(halfAngle)` instead of converging to a point, matching the visible beam to wide-aperture fixtures (LED bars, par cans). Passes through to both surface and volumetric attenuation via `VRSLLightData.spotParams.z`, and `SampleGobo` projects from the same virtual apex so the gobo mask follows the widened cone.
 
 The inspector exposes the field with a `Range` of `[0, 1.0]`. `VRSL_SpotAttenuation` clamps contribution to the lens-forward hemisphere with a 5cm soft transition, so an apex pushback never lights surfaces behind the lens (including the inside of the fixture body).
 

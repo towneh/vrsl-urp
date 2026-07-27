@@ -203,12 +203,12 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                         // the light already contributes nothing at this sample.
                         if (any(contrib > 0.0))
                             contrib *= SampleGobo(
-                                light.goboAndSpin.x, light.goboAndSpin.y,
+                                VRSL_GoboIndex(light), light.spotParams.w,
                                 samplePos,
                                 light.positionAndRange.xyz,
                                 light.directionAndType.xyz,
-                                light.spotCosines.y,
-                                light.spotCosines.w);
+                                light.spotParams.y,
+                                light.spotParams.z);
 
                         inscatter += contrib;
                     }

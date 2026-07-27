@@ -157,12 +157,12 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                     // texture-array fetch — the most expensive part of the loop —
                     // is skipped wherever the light already reaches nothing.
                     if (any(contrib > 0.0))
-                        contrib *= SampleGobo(light.goboAndSpin.x, light.goboAndSpin.y,
+                        contrib *= SampleGobo(VRSL_GoboIndex(light), light.spotParams.w,
                                               posWS,
                                               light.positionAndRange.xyz,
                                               light.directionAndType.xyz,
-                                              light.spotCosines.y,
-                                              light.spotCosines.w);
+                                              light.spotParams.y,
+                                              light.spotParams.z);
 
                     lighting += contrib;
                 }

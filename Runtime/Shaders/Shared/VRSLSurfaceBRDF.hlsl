@@ -73,7 +73,7 @@ BRDFData VRSL_GetSurfaceBRDF(float2 uv)
 float3 VRSL_EvaluateLightPBR(VRSLLightData light, float3 posWS, float3 normalWS,
                              float3 viewDirWS, BRDFData brdfData)
 {
-    if (light.spotCosines.z < 0.5) return 0;
+    if (!VRSL_IsActive(light)) return 0;
 
     float3 toLight = light.positionAndRange.xyz - posWS;
     float  distSq  = dot(toLight, toLight);
@@ -83,11 +83,11 @@ float3 VRSL_EvaluateLightPBR(VRSLLightData light, float3 posWS, float3 normalWS,
     float distAtten = VRSL_DistanceAttenuation(distSq, range);
 
     float spotAtten = 1.0;
-    if (light.directionAndType.w < 0.5)
+    if (VRSL_LightType(light) < 0.5)
         spotAtten = VRSL_SpotAttenuation(
             light.directionAndType.xyz, toLight,
-            light.spotCosines.x, light.spotCosines.y,
-            light.spotCosines.w);
+            light.spotParams.x, light.spotParams.y,
+            light.spotParams.z);
 
     float atten = distAtten * spotAtten;
     if (atten < 1e-5) return 0;

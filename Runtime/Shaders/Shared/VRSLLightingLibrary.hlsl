@@ -25,19 +25,48 @@ struct VRSLFixtureConfig
                                 // z = curveMod (body-glow dimmer-response match), w = reserved
 };
 
-// Per-fixture light state computed by the compute shader every frame
+// Per-fixture light state computed by the compute shader every frame.
+// 64 bytes, 4 × float4. Read through the accessors below rather than by field,
+// so the two packed slots have one definition.
 struct VRSLLightData
 {
     float4 positionAndRange;    // xyz = world position, w = range
-    float4 directionAndType;    // xyz = normalised direction (spot), w = type (0=spot,1=point)
-    float4 colorAndIntensity;   // xyz = linear RGB, w = combined intensity
-    float4 spotCosines;         // x = cos(inner half-angle), y = cos(outer half-angle),
-                                // z = active flag (0 = skip this light),
-                                // w = emitterDepth (m) — virtual cone-apex pushback for area-emitter fixtures
-    float4 goboAndSpin;         // x = gobo array index (-1 = no gobo, 0+ = slice in _VRSLGobos),
-                                // y = gobo spin speed (bipolar: 0 = no spin, negative = CCW, positive = CW, ±10 max),
-                                // zw = unused
+    float4 directionAndType;    // xyz = normalised direction (spot),
+                                // w   = light type and gobo slice, packed (see below)
+    float4 colorAndIntensity;   // xyz = linear RGB, w = intensity (0 = inactive, skip)
+    float4 spotParams;          // x = cos(inner half-angle), y = cos(outer half-angle),
+                                // z = emitterDepth (m) — virtual cone-apex pushback,
+                                // w = gobo spin phase (radians, wrapped to ±2π)
 };
+
+// directionAndType.w carries two integers in one float: the light type in the
+// low bit and the gobo slice above it, biased by one so "no gobo" (-1) survives.
+// Both are small integers and floats represent those exactly, so this costs no
+// precision — unlike packing them as halves, which would quantise the spin phase
+// and stipple a slowly rotating gobo.
+float VRSL_PackTypeAndGobo(float lightType, int goboIndex)
+{
+    return lightType + (float)(goboIndex + 1) * 2.0;
+}
+
+// 0 = spot, 1 = point.
+float VRSL_LightType(VRSLLightData light)
+{
+    return fmod(light.directionAndType.w, 2.0);
+}
+
+// -1 = no gobo, 0+ = slice in _VRSLGobos.
+float VRSL_GoboIndex(VRSLLightData light)
+{
+    return floor(light.directionAndType.w * 0.5) - 1.0;
+}
+
+// An inactive fixture emits nothing, so intensity doubles as the active flag and
+// no separate slot is needed for it.
+bool VRSL_IsActive(VRSLLightData light)
+{
+    return light.colorAndIntensity.w > 0.0;
+}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Light evaluation (fragment shader use)
@@ -103,7 +132,7 @@ float VRSL_HenyeyGreenstein(float cosTheta, float g)
 float3 VRSL_EvaluateLightVolumetric(VRSLLightData light, float3 samplePos,
                                     float3 viewToCamera, float anisotropy)
 {
-    if (light.spotCosines.z < 0.5) return 0;
+    if (!VRSL_IsActive(light)) return 0;
 
     float3 toLight = light.positionAndRange.xyz - samplePos;
     float  distSq  = dot(toLight, toLight);
@@ -113,11 +142,11 @@ float3 VRSL_EvaluateLightVolumetric(VRSLLightData light, float3 samplePos,
     float distAtten = VRSL_DistanceAttenuation(distSq, range);
 
     float spotAtten = 1.0;
-    if (light.directionAndType.w < 0.5)
+    if (VRSL_LightType(light) < 0.5)
         spotAtten = VRSL_SpotAttenuation(
             light.directionAndType.xyz, toLight,
-            light.spotCosines.x, light.spotCosines.y,
-            light.spotCosines.w);
+            light.spotParams.x, light.spotParams.y,
+            light.spotParams.z);
     if (spotAtten < 0.0001) return 0;
 
     // Phase: angle between the view ray (toward camera) and the direction
@@ -135,7 +164,7 @@ float3 VRSL_EvaluateLightVolumetric(VRSLLightData light, float3 samplePos,
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Gobo texture array — one slice per unique gobo texture. Slice index lives in
-// VRSLLightData.goboAndSpin.x (-1 means no gobo).
+// VRSL_GoboIndex(light) (-1 means no gobo).
 Texture2DArray _VRSLGobos;
 SamplerState   sampler_linear_clamp;
 

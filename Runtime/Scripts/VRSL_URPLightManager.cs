@@ -204,15 +204,15 @@ namespace VRSL.URP
             public Vector4 extras;              // x=emitterDepth(m), yzw=reserved
         }
 
-        // 5 × float4 = 80 bytes
+        // 4 × float4 = 64 bytes — must match VRSLLightData in VRSLLightingLibrary.hlsl,
+        // including the two packed slots (see the accessors there).
         [StructLayout(LayoutKind.Sequential)]
         internal struct VRSLLightData
         {
             public Vector4 positionAndRange;
             public Vector4 directionAndType;
             public Vector4 colorAndIntensity;
-            public Vector4 spotCosines;
-            public Vector4 goboAndSpin;
+            public Vector4 spotParams;
         }
 
         List<VRStageLighting_DMX_RealtimeLight> _fixtures = new();
@@ -338,7 +338,7 @@ namespace VRSL.URP
             LightDataBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
-                Marshal.SizeOf<VRSLLightData>());       // 80 bytes
+                Marshal.SizeOf<VRSLLightData>());       // 64 bytes
 
             if (computeShader != null)
                 ComputeKernel = computeShader.FindKernel("UpdateLights");
@@ -536,7 +536,8 @@ namespace VRSL.URP
                 var f = _fixtures[i];
                 Vector4 c = data[i].colorAndIntensity;
                 Vector4 p = data[i].positionAndRange;
-                float active = data[i].spotCosines.z;
+                // Intensity doubles as the active flag in the packed layout.
+                float active = c.w > 0f ? 1f : 0f;
                 bool lens = f.lensTransform != null;
                 Vector3 lp = lens ? f.lensTransform.position : f.transform.position;
                 var sr = (f.fixtureShellRenderers != null && f.fixtureShellRenderers.Length > 0)
