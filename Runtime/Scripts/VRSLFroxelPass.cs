@@ -4,6 +4,20 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 
+// RenderingUtils.fullscreenMesh is deprecated in favour of Blitter, and the
+// warning is suppressed here rather than acted on. The DrawMesh path was chosen
+// deliberately: Blitter's replacement overloads all require a source texture,
+// which these passes don't have — they invoke a shader over a fullscreen
+// triangle reading globals and additive-blend onto the existing target — and
+// Blitter's own implementation falls back to DrawMesh on some platforms anyway.
+// Migrating would mean rewriting the vertex stage of every fullscreen pass to
+// generate positions from SV_VertexID, and the thing it would change is XR
+// correctness, which can only be verified in a headset.
+//
+// Scoped to this file. If another CS0618 appears here it will be hidden too, so
+// re-check on any obsolete-API sweep.
+#pragma warning disable 618
+
 namespace VRSL.URP
 {
     /// <summary>
@@ -127,7 +141,6 @@ namespace VRSL.URP
             public float         time;
             public Vector3Int    dims;
             public int           views;
-            public bool          useNoise;
         }
 
         class CompositeData
@@ -160,7 +173,13 @@ namespace VRSL.URP
                 dimension   = TextureDimension.Tex3D,
                 slices      = dims.z,
                 enableRandomWrite = true,
-                clearBuffer = false,
+                // Cleared even though the scatter writes every froxel: if that
+                // pass ever fails or is skipped, the composite would otherwise
+                // additively blend uninitialised memory, and a single NaN
+                // blackens the whole frame. A wasted clear is the cheaper
+                // failure mode.
+                clearBuffer = true,
+                clearColor  = Color.clear,
                 filterMode  = FilterMode.Bilinear,
                 wrapMode    = TextureWrapMode.Clamp,
             };
@@ -179,6 +198,15 @@ namespace VRSL.URP
                 invViewProj[view] =
                     Matrix4x4.Inverse(camData.GetViewMatrix(src)) * Matrix4x4.Inverse(gpuProj);
             }
+
+            // Set on the ComputeShader at record time rather than through the
+            // command buffer. Keyword changes count as global state, which a
+            // compute pass isn't allowed to make without opting in — and doing it
+            // per-dispatch is the wrong place for what is asset-level state
+            // anyway. The raymarch pass sets its material keyword the same way.
+            var froxelCompute = _source.FroxelShader;
+            if (_source.VolumetricUseNoise) froxelCompute.EnableKeyword(NoiseKeyword);
+            else                            froxelCompute.DisableKeyword(NoiseKeyword);
 
             var cull    = _source.TileCullPass;
             var binding = cull != null ? cull.GetBinding() : default;
@@ -211,10 +239,6 @@ namespace VRSL.URP
                 d.time            = Time.timeSinceLevelLoad;
                 d.dims            = dims;
                 d.views           = views;
-                // Captured at record time like every other manager value here:
-                // the render func runs deferred and must not read mutable
-                // component state.
-                d.useNoise        = _source.VolumetricUseNoise;
 
                 builder.UseTexture(volume, AccessFlags.ReadWrite);
                 builder.UseBuffer(d.lightData, AccessFlags.Read);
@@ -227,12 +251,6 @@ namespace VRSL.URP
                 builder.SetRenderFunc((ScatterData p, ComputeGraphContext ctx) =>
                 {
                     var cmd = ctx.cmd;
-
-                    // The noise variant is a keyword on the compute, matching the
-                    // raymarch path so both respond to the same manager toggle.
-                    var noise = new LocalKeyword(p.cs, NoiseKeyword);
-                    if (p.useNoise) cmd.EnableKeyword(p.cs, noise);
-                    else            cmd.DisableKeyword(p.cs, noise);
 
                     cmd.SetComputeVectorParam(     p.cs, s_ParamsID,      p.froxelParams);
                     cmd.SetComputeVectorParam(     p.cs, s_ViewParamsID,  p.viewParams);
@@ -296,3 +314,5 @@ namespace VRSL.URP
         }
     }
 }
+
+#pragma warning restore 618

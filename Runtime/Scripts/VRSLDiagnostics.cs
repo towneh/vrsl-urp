@@ -116,6 +116,10 @@ namespace VRSL.URP
 
             float average = tiles > 0 ? (float)total / tiles : 0f;
             var sb = new StringBuilder();
+            if (total == 0)
+                return $"Tile culling: active — {tiles} tiles, but no fixture reached any of "
+                     + "them. Expected when nothing is emitting; a tiling fault only if "
+                     + "fixtures are lit and on screen";
             sb.Append($"Tile culling: active — {tiles} tiles ({cull.TileParams.x}x{cull.TileParams.y} "
                     + $"@ {cull.TileParams.z}px), avg {average:F1} lights/tile, max {max}, "
                     + $"{empty} empty of {fixtureCount} fixture(s)");
@@ -147,10 +151,16 @@ namespace VRSL.URP
                 if (intensity > peak) peak = intensity;
             }
 
-            string verdict = emitting == 0
-                ? " — ALL DARK: the decode produced nothing, so this is a data problem, not a rendering one"
+            if (emitting == 0)
+                return $"Light data: 0/{fixtureCount} emitting — ALL DARK: the decode produced "
+                     + "nothing, so this is a data problem, not a rendering one";
+
+            // Enough precision to distinguish "barely lit" from "not lit": at F1 a
+            // fixture at 0.04 printed as 0.0 and contradicted the count beside it.
+            string faint = peak < 0.05f
+                ? " — - barely above zero, so the source is probably near-silent rather than off"
                 : "";
-            return $"Light data: {emitting}/{fixtureCount} emitting, peak intensity {peak:F1}{verdict}";
+            return $"Light data: {emitting}/{fixtureCount} emitting, peak intensity {peak:G4}{faint}";
         }
 
         public static string SurfacePrepassStatus(Shader surfacePropertiesShader)

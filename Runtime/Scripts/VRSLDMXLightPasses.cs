@@ -4,6 +4,20 @@ using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 using UnityEngine.Rendering.RenderGraphModule;
 
+// RenderingUtils.fullscreenMesh is deprecated in favour of Blitter, and the
+// warning is suppressed here rather than acted on. The DrawMesh path was chosen
+// deliberately: Blitter's replacement overloads all require a source texture,
+// which these passes don't have — they invoke a shader over a fullscreen
+// triangle reading globals and additive-blend onto the existing target — and
+// Blitter's own implementation falls back to DrawMesh on some platforms anyway.
+// Migrating would mean rewriting the vertex stage of every fullscreen pass to
+// generate positions from SV_VertexID, and the thing it would change is XR
+// correctness, which can only be verified in a headset.
+//
+// Scoped to this file. If another CS0618 appears here it will be hidden too, so
+// re-check on any obsolete-API sweep.
+#pragma warning disable 618
+
 namespace VRSL.URP
 {
     /// <summary>
@@ -466,3 +480,5 @@ namespace VRSL.URP
 
     }
 }
+
+#pragma warning restore 618
