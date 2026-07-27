@@ -104,7 +104,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 |---|---|---|---|
 | V1 | — | `Half` (default) | Cones visible, silhouetted correctly against geometry |
 | V2 | — | `Full` | Same shape, no upsample fringing, ~4× the per-pixel cost |
-| V3 | — | `Froxel` | Same shape as Half. Beams vanishing or misplaced points at the depth-slice mapping or per-eye packing |
+| V3 | — | `Froxel` | Beams in the same **place** as Half, but visibly softer — that is the mode's nature, not a fault. Beams vanishing, mirrored, or misplaced points at the depth-slice mapping, the clip-Y flip or the per-eye packing |
 | V4 | — | `Froxel` with `froxelMaxDistance` below the room depth | Scattering stops at that distance. **Expected** |
 | V5 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
 | V6 | — | Select `Froxel` with `froxelShader` unassigned | Falls back to the raymarch, cones still render, one Console warning. Silent loss of all volumetrics is the failure this guards |

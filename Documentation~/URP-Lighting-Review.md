@@ -243,7 +243,14 @@ Still open, in the order they are worth doing:
   for it.
 - **Occlusion.** Screen-space contact shadows for the near field, a small pool of real
   `Light` components for hero fixtures.
-- **Froxel volumetric integration** (section 2, fix 3) to decouple cost from resolution.
+- ~~**Froxel volumetric integration** (section 2, fix 3) to decouple cost from resolution.~~
+  Built, and the conclusion is negative: it decouples cost from resolution as designed, but a
+  view-aligned grid at any affordable resolution cannot hold the edges of hard-edged spotlight
+  cones, and at the resolution that could it costs what the raymarch costs. Shipped as an
+  option for high fixture counts and soft-haze looks; `Half` remains the default. See
+  *Choosing a volumetric mode* in the architecture document. This also weakens the case for
+  temporal reprojection on top of it, since accumulation cannot recover lateral resolution the
+  grid never had, and moving beams are its worst case.
 - **Camera filtering and prepass deduplication** (fixes 5 and 6) — mirrors currently pay the
   full stack, and the prepass runs twice when both managers are active. Both matter more than
   they did before, since the stack costs more per camera now.
