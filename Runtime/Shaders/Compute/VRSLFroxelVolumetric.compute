@@ -88,16 +88,28 @@ void ScatterFroxels(uint3 id : SV_DispatchThreadID)
 
     float2 uv = float2((fx + 0.5) / width, (id.y + 0.5) / height);
 
-    // Two depths give the ray direction without needing the far plane, which an
-    // infinite-far projection would send to infinity.
-#if UNITY_REVERSED_Z
-    float3 a = VRSL_FroxelWorldFromUV(uv, 1.0, eye);
-    float3 b = VRSL_FroxelWorldFromUV(uv, 0.5, eye);
-#else
-    float3 a = VRSL_FroxelWorldFromUV(uv, 0.0, eye);
-    float3 b = VRSL_FroxelWorldFromUV(uv, 0.5, eye);
-#endif
-    float3 rayDir = normalize(b - a);
+    // Two interior depths, neither of them a clip plane, so this holds under
+    // either depth convention and can't reach the far plane — which an infinite
+    // projection places at infinity, making the subtraction below non-finite.
+    // Relying on UNITY_REVERSED_Z here meant a wrong or absent define produced
+    // NaN sample positions, and NaN fails every range test silently rather than
+    // being rejected.
+    float3 p0 = VRSL_FroxelWorldFromUV(uv, 0.25, eye);
+    float3 p1 = VRSL_FroxelWorldFromUV(uv, 0.75, eye);
+
+    float3 dir = p1 - p0;
+    // Orient away from the camera rather than assuming which depth is nearer.
+    if (dot(dir, _VRSLFroxelCamFwd.xyz) < 0.0) dir = -dir;
+
+    float lenSq = dot(dir, dir);
+    if (lenSq < 1e-12)
+    {
+        // Degenerate reconstruction — write nothing rather than NaN, which would
+        // propagate through the integration and out into the frame.
+        _VRSLFroxelVolume[id] = float4(0, 0, 0, 0);
+        return;
+    }
+    float3 rayDir = dir * rsqrt(lenSq);
 
     // Slices are spaced by view depth, so step along the ray by the distance
     // that reaches that depth rather than by the depth itself.

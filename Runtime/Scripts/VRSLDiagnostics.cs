@@ -202,6 +202,10 @@ namespace VRSL.URP
             // "everything was written as zero", and those have nothing in common.
             float peak = 0f, peakAlpha = 0f;
             int firstLitSlice = -1, lastLitSlice = -1;
+            // Counted explicitly: every comparison against NaN is false, so a
+            // NaN-filled volume walks through a max-based scan looking exactly
+            // like an empty one. Those are opposite problems.
+            int nonFinite = 0;
             for (int z = 0; z < depth; z++)
             {
                 float slicePeak = 0f;
@@ -209,6 +213,12 @@ namespace VRSL.URP
                 for (int i = start; i < start + perSlice && i < data.Length; i++)
                 {
                     Vector4 v = data[i];
+                    if (float.IsNaN(v.x) || float.IsNaN(v.y) || float.IsNaN(v.z) ||
+                        float.IsInfinity(v.x) || float.IsInfinity(v.y) || float.IsInfinity(v.z))
+                    {
+                        nonFinite++;
+                        continue;
+                    }
                     float m = Mathf.Max(v.x, Mathf.Max(v.y, v.z));
                     if (m > slicePeak) slicePeak = m;
                     if (v.w > peakAlpha) peakAlpha = v.w;
@@ -222,6 +232,11 @@ namespace VRSL.URP
             }
 
             string size = $"{volume.width}x{volume.height}x{depth}";
+
+            if (nonFinite > 0)
+                return $"Froxel volume: {size} — {nonFinite} NaN/infinite froxel(s). The scatter "
+                     + "produced non-finite radiance, which the composite discards — suspect the "
+                     + "sample-position construction rather than the light evaluation";
 
             if (peak <= 1e-6f && peakAlpha <= 1e-6f)
                 return $"Froxel volume: {size} — NOTHING WRITTEN (colour and alpha both zero). "
