@@ -237,11 +237,13 @@ namespace VRSL.URP
             var froxelParams = new Vector4(dims.x, dims.y, dims.z, _source.FroxelMaxDistance);
             var viewParams   = new Vector4(views, camData.camera.nearClipPlane, 0f, 0f);
 
-            // ── Scatter + integrate ──────────────────────────────────────────
+            // ── Scatter ──────────────────────────────────────────────────────
+            // Split from the integrate below rather than issuing both dispatches
+            // from one pass: the graph can only insert a UAV barrier between them
+            // if it sees two passes touching the volume, and the integrate reads
+            // exactly what the scatter wrote.
             using (var builder = rg.AddComputePass<ScatterData>("VRSL Froxel Scatter", out var d))
             {
-                // Consumed through SetGlobalTexture in the composite rather than a
-                // tracked read, so the graph would see the writes as dead.
                 builder.AllowPassCulling(false);
 
                 d.cs              = _source.FroxelShader;
@@ -263,7 +265,7 @@ namespace VRSL.URP
                 d.dims            = dims;
                 d.views           = views;
 
-                builder.UseTexture(volume, AccessFlags.ReadWrite);
+                builder.UseTexture(volume, AccessFlags.Write);
                 builder.UseBuffer(d.lightData, AccessFlags.Read);
                 if (d.bindTileBuffer)
                 {
@@ -286,18 +288,47 @@ namespace VRSL.URP
                     cmd.SetComputeIntParam(        p.cs, s_LightCountID,  p.lightCount);
                     cmd.SetComputeFloatParam(      p.cs, s_TimeID,        p.time);
 
-                    foreach (int kernel in new[] { p.scatterKernel, p.integrateKernel })
-                    {
-                        cmd.SetComputeTextureParam(p.cs, kernel, s_VolumeID,      p.volume);
-                        cmd.SetComputeBufferParam( p.cs, kernel, s_LightsID,      p.lightData);
-                        if (p.bindTileBuffer)
-                            cmd.SetComputeBufferParam(p.cs, kernel, s_TileIndicesID, p.tileIndices);
-                    }
+                    cmd.SetComputeTextureParam(p.cs, p.scatterKernel, s_VolumeID,      p.volume);
+                    cmd.SetComputeBufferParam( p.cs, p.scatterKernel, s_LightsID,      p.lightData);
+                    if (p.bindTileBuffer)
+                        cmd.SetComputeBufferParam(p.cs, p.scatterKernel, s_TileIndicesID, p.tileIndices);
 
                     cmd.DispatchCompute(p.cs, p.scatterKernel,
                         Mathf.CeilToInt(p.dims.x * p.views / 4f),
                         Mathf.CeilToInt(p.dims.y / 4f),
                         Mathf.CeilToInt(p.dims.z / 4f));
+                });
+            }
+
+            // ── Integrate ────────────────────────────────────────────────────
+            using (var builder = rg.AddComputePass<ScatterData>("VRSL Froxel Integrate", out var d))
+            {
+                builder.AllowPassCulling(false);
+
+                d.cs              = _source.FroxelShader;
+                d.integrateKernel = _integrateKernel;
+                d.volume          = volume;
+                d.froxelParams    = froxelParams;
+                d.viewParams      = viewParams;
+                d.dims            = dims;
+                d.views           = views;
+
+                builder.UseTexture(volume, AccessFlags.ReadWrite);
+
+                // Bind the finished volume for the composite through the graph
+                // rather than SetGlobalTexture on the command buffer. A render
+                // graph texture bound that way resolves to a 1x1 black fallback
+                // in the consuming shader, which reads as "the effect silently
+                // does nothing" — the same trap the DMX grid CRTs hit.
+                builder.SetGlobalTextureAfterPass(volume, s_VolumeID);
+
+                builder.SetRenderFunc((ScatterData p, ComputeGraphContext ctx) =>
+                {
+                    var cmd = ctx.cmd;
+
+                    cmd.SetComputeVectorParam( p.cs, s_ParamsID,     p.froxelParams);
+                    cmd.SetComputeVectorParam( p.cs, s_ViewParamsID, p.viewParams);
+                    cmd.SetComputeTextureParam(p.cs, p.integrateKernel, s_VolumeID, p.volume);
 
                     // One thread per column; the kernel walks Z itself, because
                     // the integration is a running sum along that axis.
@@ -326,7 +357,9 @@ namespace VRSL.URP
                 builder.SetRenderFunc((CompositeData p, RasterGraphContext ctx) =>
                 {
                     var cmd = ctx.cmd;
-                    cmd.SetGlobalTexture(s_VolumeID,     p.volume);
+                    // _VRSLFroxelVolume is already bound by the integrate pass's
+                    // SetGlobalTextureAfterPass; binding it here from the command
+                    // buffer is what made it resolve to a 1x1 black fallback.
                     cmd.SetGlobalVector( s_ParamsID,     p.froxelParams);
                     cmd.SetGlobalVector( s_ViewParamsID, p.viewParams);
                     cmd.SetGlobalVector( s_FogTintID,    p.fogTintParams);
