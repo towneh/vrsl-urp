@@ -253,6 +253,43 @@ namespace VRSL.URP
                  + "nothing renders the composite is sampling it wrongly";
         }
 
+        /// <summary>
+        /// Reports what one froxel actually reconstructed, against where the
+        /// fixtures really are. Everything upstream of this has been verified by
+        /// elimination; what remains is whether the sample positions land in the
+        /// scene, and that is not inferable from outside the compute.
+        /// </summary>
+        public static string FroxelProbeStatus(GraphicsBuffer probe)
+        {
+            if (probe == null) return "Froxel probe: not allocated";
+
+            var v = new Vector4[4];
+            probe.GetData(v);
+
+            Vector3 samplePos = v[0]; float centreZ  = v[0].w;
+            Vector3 rayDir    = v[1]; float cosAxis  = v[1].w;
+            Vector3 camPos    = v[2]; int   lights   = Mathf.RoundToInt(v[2].w);
+            Vector3 nearest   = v[3]; float nearDist = v[3].w;
+
+            var sb = new StringBuilder();
+            sb.Append($"Froxel probe (centre froxel): sample {Fmt(samplePos)} at {centreZ:G4}m "
+                    + $"along {Fmt(rayDir)} (cos {cosAxis:G3}), camera {Fmt(camPos)}, "
+                    + $"{lights} light(s) iterated");
+
+            sb.AppendLine();
+            if (lights == 0)
+                sb.Append("  No lights reached this froxel's tile — the lookup, not the geometry");
+            else if (nearDist > 1e29f)
+                sb.Append("  Nearest light not resolved");
+            else
+                sb.Append($"  Nearest fixture {Fmt(nearest)}, {nearDist:G4}m away — compare "
+                        + "against that fixture's Range; further than Range means the sample "
+                        + "position is the fault");
+            return sb.ToString();
+        }
+
+        static string Fmt(Vector3 v) => $"({v.x:F2}, {v.y:F2}, {v.z:F2})";
+
         public static string SurfacePrepassStatus(Shader surfacePropertiesShader)
         {
             if (surfacePropertiesShader == null)

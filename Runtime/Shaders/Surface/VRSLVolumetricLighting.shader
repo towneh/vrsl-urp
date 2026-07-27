@@ -445,9 +445,11 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 float eye   = (float)VRSL_EyeIndex();
                 float u     = (eye + saturate(i.uv.x)) / views;
 
-                // Half a slice inset so the trilinear filter doesn't reach past
-                // the volume at either end.
-                float w = (slice * (_VRSLFroxelParams.z - 1.0) + 0.5) / _VRSLFroxelParams.z;
+                // The scatter places froxel z at normalised depth (z + 0.5) / depth,
+                // which is exactly the texel centre coordinate — so the normalised
+                // slice is the texture coordinate directly. Rescaling it introduced
+                // a depth bias that grew towards the far end of the volume.
+                float w = slice;
 
                 float3 scattered = SAMPLE_TEXTURE3D_LOD(
                     _VRSLFroxelVolume, sampler_VRSLFroxelVolume,

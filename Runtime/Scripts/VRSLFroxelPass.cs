@@ -43,6 +43,11 @@ namespace VRSL.URP
 
         /// <summary>How far from the camera the volume reaches, in metres.</summary>
         float FroxelMaxDistance { get; }
+
+        /// <summary>Where the volume starts, in metres. Independent of the camera
+        /// near plane so the exponential slice spacing isn't wasted on the first
+        /// few centimetres.</summary>
+        float FroxelNearDistance { get; }
     }
 
     /// <summary>
@@ -82,6 +87,7 @@ namespace VRSL.URP
         static readonly int s_StepParamsID  = Shader.PropertyToID("_VRSLVolStepCount");
         static readonly int s_DensityID     = Shader.PropertyToID("_VRSLVolDensity");
         static readonly int s_FogTintID     = Shader.PropertyToID("_VRSLVolFogTint");
+        static readonly int s_ProbeID       = Shader.PropertyToID("_VRSLFroxelProbe");
 
         const string NoiseKeyword = "_VRSL_VOLUMETRIC_NOISE";
 
@@ -99,6 +105,12 @@ namespace VRSL.URP
 
         /// <summary>The froxel volume, for diagnostics. Null before first record.</summary>
         public RenderTexture Volume => _volume;
+
+        GraphicsBuffer _probe;
+
+        /// <summary>Four float4s the scatter fills for one probe froxel. See the
+        /// declaration in VRSLFroxelVolumetric.compute for the layout.</summary>
+        public GraphicsBuffer Probe => _probe;
 
         int _scatterKernel   = -1;
         int _integrateKernel = -1;
@@ -144,6 +156,7 @@ namespace VRSL.URP
             public TextureHandle volume;
             public BufferHandle  lightData;
             public BufferHandle  tileIndices;
+            public BufferHandle  probe;
             public bool          bindTileBuffer;
             public int           lightCount;
             public Vector4       froxelParams;
@@ -212,7 +225,12 @@ namespace VRSL.URP
             _allocatedViews = 0;
         }
 
-        public void Dispose() => ReleaseVolume();
+        public void Dispose()
+        {
+            ReleaseVolume();
+            _probe?.Release();
+            _probe = null;
+        }
 
         public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
         {
@@ -229,6 +247,7 @@ namespace VRSL.URP
             int views = Mathf.Clamp(camData.cameraTargetDescriptor.volumeDepth, 1, 2);
 
             EnsureVolume(dims, views);
+            _probe ??= new GraphicsBuffer(GraphicsBuffer.Target.Structured, 4, sizeof(float) * 4);
             TextureHandle volume = rg.ImportTexture(_volumeHandle);
 
             // Same convention as the tile cull and the fullscreen shaders, so the
@@ -280,7 +299,12 @@ namespace VRSL.URP
             }
 
             var froxelParams = new Vector4(dims.x, dims.y, dims.z, _source.FroxelMaxDistance);
-            var viewParams   = new Vector4(views, camData.camera.nearClipPlane, 0f, 0f);
+            // Volume near distance, not the camera's near plane — see
+            // IVRSLVolumetricSource.FroxelNearDistance. Clamped below the volume's
+            // far end so the exponential spacing always has a range to work over.
+            float nearDistance = Mathf.Clamp(_source.FroxelNearDistance,
+                                             0.05f, _source.FroxelMaxDistance * 0.5f);
+            var viewParams   = new Vector4(views, nearDistance, 0f, 0f);
 
             // ── Scatter ──────────────────────────────────────────────────────
             // Split from the integrate below rather than issuing both dispatches
@@ -310,8 +334,11 @@ namespace VRSL.URP
                 d.dims            = dims;
                 d.views           = views;
 
+                d.probe = rg.ImportBuffer(_probe);
+
                 builder.UseTexture(volume, AccessFlags.Write);
                 builder.UseBuffer(d.lightData, AccessFlags.Read);
+                builder.UseBuffer(d.probe,     AccessFlags.Write);
                 if (d.bindTileBuffer)
                 {
                     d.tileIndices = rg.ImportBuffer(cull.TileBuffer);
@@ -335,6 +362,7 @@ namespace VRSL.URP
                     cmd.SetComputeFloatParam(      p.cs, s_TimeID,        p.time);
 
                     cmd.SetComputeTextureParam(p.cs, p.scatterKernel, s_VolumeID,      p.volume);
+                    cmd.SetComputeBufferParam( p.cs, p.scatterKernel, s_ProbeID,       p.probe);
                     cmd.SetComputeBufferParam( p.cs, p.scatterKernel, s_LightsID,      p.lightData);
                     if (p.bindTileBuffer)
                         cmd.SetComputeBufferParam(p.cs, p.scatterKernel, s_TileIndicesID, p.tileIndices);

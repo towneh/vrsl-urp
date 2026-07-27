@@ -91,6 +91,15 @@ namespace VRSL.URP
                + "or negative axis would produce an invalid volume.")]
         public Vector3Int froxelResolution = new Vector3Int(160, 90, 64);
 
+        [Range(0.1f, 10f)]
+        [Tooltip("Froxel mode only. Distance at which the volume starts, in metres. Deliberately "
+               + "not the camera near plane: slices are spaced exponentially between this and Max "
+               + "Distance, so a near plane of a few centimetres spends half the volume inside the "
+               + "first metre and leaves almost no depth resolution where the rig actually is. "
+               + "Raise it until beams stop smearing along the view direction; lower it if "
+               + "scattering close to the camera is missing.")]
+        public float froxelNearDistance = 1f;
+
         [Range(4f, 200f)]
         [Tooltip("Froxel mode only. How far the volume reaches, in metres. Scattering beyond this is not "
                + "represented, so set it to roughly the depth of the space rather than the "
@@ -222,7 +231,8 @@ namespace VRSL.URP
         // IVRSLVolumetricSource — lets the shared froxel pass drive either manager.
         ComputeShader IVRSLVolumetricSource.FroxelShader     => froxelShader;
         Vector3Int    IVRSLVolumetricSource.FroxelResolution => froxelResolution;
-        float         IVRSLVolumetricSource.FroxelMaxDistance => froxelMaxDistance;
+        float         IVRSLVolumetricSource.FroxelMaxDistance  => froxelMaxDistance;
+        float         IVRSLVolumetricSource.FroxelNearDistance => froxelNearDistance;
 
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }
@@ -739,7 +749,10 @@ namespace VRSL.URP
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader,
                                      "ScatterFroxels", "IntegrateFroxels"));
             if (volumetricResolution == VolumetricResolution.Froxel)
+            {
                 sb.AppendLine("  " + VRSLDiagnostics.FroxelVolumeStatus(_froxelPass?.Volume));
+                sb.AppendLine("  " + VRSLDiagnostics.FroxelProbeStatus(_froxelPass?.Probe));
+            }
             sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
             sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
             Debug.Log(sb.ToString(), this);

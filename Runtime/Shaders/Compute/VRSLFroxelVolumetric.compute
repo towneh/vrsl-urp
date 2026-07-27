@@ -30,6 +30,16 @@
 
 RWTexture3D<float4> _VRSLFroxelVolume;
 
+// Diagnostic probe. One froxel at the centre of the volume writes what it
+// actually reconstructed, so the CPU can compare it against where the fixtures
+// really are. Inferring this from the outside has repeatedly gone wrong; four
+// float4s of readback settles it.
+//   [0] xyz = sample position,   w = slice centre depth
+//   [1] xyz = ray direction,     w = cos to camera axis
+//   [2] xyz = camera position,   w = lights iterated for this froxel
+//   [3] xyz = nearest light pos, w = distance to it
+RWStructuredBuffer<float4> _VRSLFroxelProbe;
+
 StructuredBuffer<VRSLLightData> _VRSLLights;
 uint   _VRSLLightCount;
 
@@ -150,6 +160,26 @@ void ScatterFroxels(uint3 id : SV_DispatchThreadID)
     noisePos.y -= _VRSLFroxelTime * _VRSLVolDensity.z;
     density *= lerp(1.0, VRSL_ValueNoise3D(noisePos), _VRSLVolDensity.w);
 #endif
+
+    // Probe the middle froxel of eye 0 — far enough into the volume to be in
+    // the part of the scene fixtures actually light.
+    if (fx == width / 2u && id.y == height / 2u && id.z == depth / 2u && eye == 0u)
+    {
+        float  nearestDist = 1e30;
+        float3 nearestPos  = 0;
+        for (uint pl = 0; pl < lightCount; pl++)
+        {
+            VRSLLightData l = _VRSLLights[VRSL_LightListIndex(tileIndex, pl)];
+            float3 d = l.positionAndRange.xyz - samplePos;
+            float  dist = sqrt(dot(d, d));
+            if (dist < nearestDist) { nearestDist = dist; nearestPos = l.positionAndRange.xyz; }
+        }
+
+        _VRSLFroxelProbe[0] = float4(samplePos, centreZ);
+        _VRSLFroxelProbe[1] = float4(rayDir, cosToAxis);
+        _VRSLFroxelProbe[2] = float4(_VRSLFroxelCamPos.xyz, (float)lightCount);
+        _VRSLFroxelProbe[3] = float4(nearestPos, nearestDist);
+    }
 
     _VRSLFroxelVolume[id] = float4(inscatter * density, density);
 }
