@@ -13,6 +13,7 @@
 
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/BRDF.hlsl"
+#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
 
 TEXTURE2D_X(_VRSLAlbedoTexture);
@@ -61,6 +62,64 @@ BRDFData VRSL_GetSurfaceBRDF(float2 uv)
     BRDFData brdfData;
     InitializeBRDFData(albedo, metallic, half3(0, 0, 0), smoothness, alpha, brdfData);
     return brdfData;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Screen-space contact shadows
+// ──────────────────────────────────────────────────────────────────────────────
+
+// x = strength (0 disables), y = max trace distance in metres, z = step count,
+// w = depth thickness in metres.
+float4 _VRSLContactShadowParams;
+
+// March the depth buffer from the shaded point towards the light and report how
+// much of the path was blocked. 1 = fully lit, 0 = fully occluded.
+//
+// This is contact shadowing, not shadow mapping: it only knows about geometry
+// the camera can see, and only within the trace distance. An avatar standing in
+// a beam shadows the floor at its feet; a wall between a fixture and a surface
+// across the room does not, and neither does an occluder off the side of the
+// screen. Those need a light-perspective shadow map, which this pipeline
+// deliberately doesn't have.
+//
+// Positions are projected with ComputeNormalizedDeviceCoordinatesWithZ, the
+// exact inverse of the ComputeWorldSpacePosition call the caller reconstructed
+// posWS with, so the trace can't drift against the depth buffer it samples.
+float VRSL_ContactShadow(float3 posWS, float3 lightDirWS, float distanceToLight, float dither)
+{
+    float strength = _VRSLContactShadowParams.x;
+    if (strength <= 0.0) return 1.0;
+
+    int   stepCount = max(1, (int)_VRSLContactShadowParams.z);
+    float traceDist = min(_VRSLContactShadowParams.y, distanceToLight);
+    if (traceDist <= 1e-4) return 1.0;
+
+    float  thickness = _VRSLContactShadowParams.w;
+    float  stepSize  = traceDist / stepCount;
+    float3 rayStep   = lightDirWS * stepSize;
+
+    // Start a dithered fraction of a step along, so the banding the fixed step
+    // size would otherwise produce breaks up into noise the eye reads as grain.
+    float3 p = posWS + rayStep * (0.5 + dither);
+
+    [loop]
+    for (int s = 0; s < stepCount; s++, p += rayStep)
+    {
+        float3 ndc = ComputeNormalizedDeviceCoordinatesWithZ(p, GetWorldToHClipMatrix());
+        if (any(ndc.xy < 0.0) || any(ndc.xy > 1.0)) break;   // walked off screen
+
+        float sceneEye  = LinearEyeDepth(SampleSceneDepth(ndc.xy), _ZBufferParams);
+        float sampleEye = LinearEyeDepth(ndc.z, _ZBufferParams);
+
+        // Positive means the ray is behind whatever the camera sees here. The
+        // thickness window stops distant background from acting as an occluder,
+        // since a depth buffer records surfaces rather than solids.
+        float delta = sampleEye - sceneEye;
+        if (delta > stepSize && delta < thickness)
+            return 1.0 - strength;
+    }
+
+    return 1.0;
 }
 
 // Evaluate one VRSL light against the surface. Mirrors URP's

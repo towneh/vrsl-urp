@@ -288,6 +288,37 @@ Smoothness takes `max(_Smoothness, _Glossiness)` on the same reasoning. Metallic
 
 The opaque and alpha-test queues are drawn as separate renderer lists against separate passes, so an opaque material whose base map stores non-colour data in alpha is never clipped against a stale `_Cutoff`.
 
+### Contact shadows
+
+`contactShadowStrength` on the manager (0 disables, and the trace compiles out) marches the
+depth buffer from each lit pixel towards each fixture. Where the march finds geometry in the
+way, the light's contribution is scaled down.
+
+Positions are projected with `ComputeNormalizedDeviceCoordinatesWithZ`, the exact inverse of
+the `ComputeWorldSpacePosition` call that reconstructed the pixel, so the trace can't drift
+against the depth buffer it samples. A per-pixel interleaved-gradient dither offsets the
+first step so the fixed step size reads as grain rather than banding.
+
+What it does and doesn't cover matters:
+
+- **Covers** near-field occlusion the camera can see — an avatar in a beam shadowing the
+  floor at its feet, a prop shadowing the surface it stands on.
+- **Doesn't cover** anything off screen, or beyond `contactShadowDistance`. A wall between a
+  fixture and a surface across the room casts nothing, and an occluder just outside the
+  frame stops shadowing as it leaves. Those need a light-perspective shadow map.
+
+It is the most expensive term in the lighting loop — a depth march per light per pixel — so
+it runs last, only for lights still reaching the pixel after attenuation and the gobo, and
+is **off by default**. Raise the step count for thin occluders; raise the thickness if
+shadows disappear at grazing angles; lower it if distant background bleeds shadow forward.
+
+| Field | Effect |
+|---|---|
+| `contactShadowStrength` | 0 = off, 1 = fully shadowed where occluded. |
+| `contactShadowDistance` | Trace length in metres along the ray to the fixture. |
+| `contactShadowSteps` | Depth samples per light. Cost is linear in this. |
+| `contactShadowThickness` | How thick a depth-buffer surface is treated as being. |
+
 ### Tiled light culling
 
 `VRSLLightCull.compute` runs one thread group per 16×16 screen tile per eye. Each group builds its tile's world-space frustum from the same inverse view-projection the fullscreen shaders reconstruct with, tests every active light's bounding sphere against it, and writes the survivors into `_VRSLTileLightIndices` — one run of 65 uints per tile, the first holding the count.

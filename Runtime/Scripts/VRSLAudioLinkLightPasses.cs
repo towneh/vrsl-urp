@@ -126,6 +126,7 @@ namespace VRSL.URP
                 public Vector4       tileParams;
                 public bool          bindTileBuffer;
                 public bool          surfaceDataValid;
+                public Vector4       contactShadowParams;
             }
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
@@ -159,6 +160,7 @@ namespace VRSL.URP
                 d.material        = mgr.LightingMaterial;
                 d.lightCount      = mgr.FixtureCount;
                 d.surfaceDataValid = mgr.surfacePropertiesShader != null;
+                d.contactShadowParams = mgr.ContactShadowParams;
 
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
                 builder.UseBuffer( d.lightDataBuffer, AccessFlags.Read);
@@ -177,6 +179,7 @@ namespace VRSL.URP
                     cmd.SetGlobalInteger("_VRSLLightCount", p.lightCount);
                     cmd.SetGlobalVector( "_VRSLTileParams", p.tileParams);
                     cmd.SetGlobalFloat(  "_VRSLSurfaceDataValid", p.surfaceDataValid ? 1f : 0f);
+                    cmd.SetGlobalVector( "_VRSLContactShadowParams", p.contactShadowParams);
                     if (p.bindTileBuffer)
                         cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
                     // RenderingUtils.fullscreenMesh + cmd.DrawMesh is the URP-recommended

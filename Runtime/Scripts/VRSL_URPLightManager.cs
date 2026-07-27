@@ -73,6 +73,35 @@ namespace VRSL.URP
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
+        [Header("Contact Shadows")]
+        [Range(0f, 1f)]
+        [Tooltip("Screen-space contact shadows. 0 disables them and compiles the trace out. "
+               + "Each light marches the depth buffer from the lit pixel towards the fixture, "
+               + "so cost scales with lights-per-tile times step count — the most expensive "
+               + "term in the lighting loop. Off by default for that reason. "
+               + "This is contact shadowing, not shadow mapping: it only sees geometry the "
+               + "camera can see, and only within Distance. An avatar in a beam shadows the "
+               + "floor at its feet; a wall across the room does not, and neither does an "
+               + "occluder just off the edge of the screen.")]
+        public float contactShadowStrength = 0f;
+
+        [Range(0.05f, 10f)]
+        [Tooltip("How far along the ray to the fixture the trace runs, in metres. Longer "
+               + "catches larger gaps but spreads the same step count thinner, so thin "
+               + "geometry starts leaking light.")]
+        public float contactShadowDistance = 1.5f;
+
+        [Range(4, 32)]
+        [Tooltip("Depth samples per light. Higher is more reliable on thin occluders and "
+               + "costs linearly.")]
+        public int contactShadowSteps = 8;
+
+        [Range(0.05f, 5f)]
+        [Tooltip("How thick a depth-buffer surface is treated as being, in metres. A depth "
+               + "buffer records surfaces rather than solids, so without this bound distant "
+               + "background would shadow everything in front of it.")]
+        public float contactShadowThickness = 0.5f;
+
         [Header("Volumetric")]
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
                + "The volumetric raymarch pass runs whenever this is assigned — there is no "
@@ -159,6 +188,11 @@ namespace VRSL.URP
                + "Use to confirm the manager found your fixtures and is feeding the _VRSLU_* globals "
                + "from the right CRTs.")]
         public bool outputDebugLogs = false;
+
+        /// <summary>x = strength, y = trace distance, z = steps, w = thickness.</summary>
+        public Vector4 ContactShadowParams =>
+            new Vector4(contactShadowStrength, contactShadowDistance,
+                        contactShadowSteps, contactShadowThickness);
 
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }

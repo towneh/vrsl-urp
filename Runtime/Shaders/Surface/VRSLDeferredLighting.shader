@@ -142,6 +142,10 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                 // BRDF setup is hoisted out of it.
                 BRDFData brdfData = VRSL_GetSurfaceBRDF(uv);
 
+                // One dither value per pixel, reused by every light's trace.
+                float shadowDither = InterleavedGradientNoise(i.positionCS.xy,
+                                                              (int)(_Time.y * 60.0));
+
                 uint tileIndex = VRSL_TileIndex(uv, VRSL_EyeIndex());
                 uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
 
@@ -163,6 +167,18 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                                               light.directionAndType.xyz,
                                               light.spotParams.y,
                                               light.spotParams.z);
+
+                    // Costliest term in the loop — a depth-buffer march per
+                    // light — so it runs last, only for lights still reaching
+                    // this pixel, and compiles out entirely at strength 0.
+                    if (any(contrib > 0.0))
+                    {
+                        float3 toLight = light.positionAndRange.xyz - posWS;
+                        float  distToLight = length(toLight);
+                        contrib *= VRSL_ContactShadow(posWS,
+                                                      toLight / max(distToLight, 1e-4),
+                                                      distToLight, shadowDither);
+                    }
 
                     lighting += contrib;
                 }
