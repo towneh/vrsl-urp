@@ -54,7 +54,7 @@ namespace VRSL.URP
                + "ignored by the Half and Full raymarch modes.")]
         public ComputeShader froxelShader;
 
-        [Tooltip("Froxel volume dimensions per eye. Larger is sharper and costs more, but "
+        [Tooltip("Froxel mode only. Volume dimensions per eye. Larger is sharper and costs more, but "
                + "unlike the raymarch modes the cost does not track screen resolution. "
                + "Depth slices are spread exponentially, so most land near the camera. "
                + "Clamped to 8-256 on X and Y and 8-128 on Z when consumed, since a zero "
@@ -62,7 +62,7 @@ namespace VRSL.URP
         public Vector3Int froxelResolution = new Vector3Int(160, 90, 64);
 
         [Range(4f, 200f)]
-        [Tooltip("How far the froxel volume reaches, in metres. Scattering beyond this is not "
+        [Tooltip("Froxel mode only. How far the volume reaches, in metres. Scattering beyond this is not "
                + "represented, so set it to roughly the depth of the space rather than the "
                + "camera far plane — every slice spent past the back wall is wasted.")]
         public float froxelMaxDistance = 64f;
@@ -112,7 +112,8 @@ namespace VRSL.URP
 
         [Range(8, 64)]
         [Tooltip("Number of integration steps along each view ray. Higher = smoother, more cost. "
-               + "Cost scales linearly with step count and active fixture count.")]
+               + "Cost scales linearly with step count and active fixture count. "
+               + "Half and Full only — Froxel mode gets its depth resolution from Froxel Resolution's Z instead.")]
         public int volumetricStepCount = 32;
 
         [Range(0f, 2f)]
@@ -216,6 +217,7 @@ namespace VRSL.URP
         public Vector4 VolumetricFogTintParams =>
             new Vector4(volumetricTint.r, volumetricTint.g, volumetricTint.b, volumetricIntensity);
         public bool VolumetricUseNoise => volumetricUseNoise;
+        bool IVRSLVolumetricSource.VolumetricCoupleToSceneFog => coupleToSceneFog;
         public bool VolumetricUseFullRes => volumetricResolution == VolumetricResolution.Full;
         /// <summary>Froxel mode replaces the raymarch entirely rather than
         /// layering on top of it, so the raymarch pass sits out when it's on.</summary>

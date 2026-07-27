@@ -109,6 +109,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | V5 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
 | V6 | — | Select `Froxel` with `froxelShader` unassigned | Falls back to the raymarch, cones still render, one Console warning. Silent loss of all volumetrics is the failure this guards |
 | V7 | — | From V6, assign `froxelShader`, then disable and re-enable the manager | Froxel mode now renders. Guards the passes going stale across enable cycles, which made the warning's own advice a no-op |
+| V9 | — | Toggle `coupleToSceneFog` in **Froxel** mode with scene fog on | Shaft brightness and tint respond. Guards the toggle silently doing nothing outside the raymarch |
 | V8 | — | Set `froxelResolution` to something out of range (e.g. 0 or 2000 on an axis) | Diagnostics report the clamped value and flag it as CLAMPED, not the value typed |
 
 ### Cameras

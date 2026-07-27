@@ -31,6 +31,7 @@ namespace VRSL.URP
         Vector4  VolumetricDensityParams { get; }
         Vector4  VolumetricFogTintParams { get; }
         bool     VolumetricUseNoise { get; }
+        bool     VolumetricCoupleToSceneFog { get; }
         VRSLTileCullPass TileCullPass { get; }
 
         /// <summary>Compute driving the froxel scatter and integrate kernels.</summary>
@@ -211,6 +212,28 @@ namespace VRSL.URP
             var cull    = _source.TileCullPass;
             var binding = cull != null ? cull.GetBinding() : default;
 
+            // Scene-fog coupling, which the raymarch does in-shader from
+            // unity_FogParams. Those built-ins aren't reliably bound to a compute,
+            // so the same result is resolved here and folded into the density and
+            // tint the pass already sends. Without this the toggle silently did
+            // nothing in Froxel mode.
+            var densityParams = _source.VolumetricDensityParams;
+            var fogTint       = _source.VolumetricFogTintParams;
+            if (_source.VolumetricCoupleToSceneFog)
+            {
+                // Matches the raymarch's unity_FogParams.x, which is the Exp2
+                // coefficient regardless of the configured fog mode.
+                float coefficient = RenderSettings.fog
+                    ? RenderSettings.fogDensity / Mathf.Sqrt(Mathf.Log(2f))
+                    : 0f;
+                densityParams.x *= Mathf.Max(coefficient, 0f);
+
+                Color fogColor = RenderSettings.fogColor;
+                fogTint.x *= fogColor.r;
+                fogTint.y *= fogColor.g;
+                fogTint.z *= fogColor.b;
+            }
+
             var froxelParams = new Vector4(dims.x, dims.y, dims.z, _source.FroxelMaxDistance);
             var viewParams   = new Vector4(views, camData.camera.nearClipPlane, 0f, 0f);
 
@@ -234,7 +257,7 @@ namespace VRSL.URP
                 d.camFwd          = camData.camera.transform.forward;
                 d.tileParams      = binding.TileParams;
                 d.stepParams      = _source.VolumetricStepParams;
-                d.densityParams   = _source.VolumetricDensityParams;
+                d.densityParams   = densityParams;
                 d.invViewProj     = invViewProj;
                 d.time            = Time.timeSinceLevelLoad;
                 d.dims            = dims;
@@ -293,7 +316,7 @@ namespace VRSL.URP
                 d.volume        = volume;
                 d.froxelParams  = froxelParams;
                 d.viewParams    = viewParams;
-                d.fogTintParams = _source.VolumetricFogTintParams;
+                d.fogTintParams = fogTint;
 
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
                 builder.UseTexture(volume, AccessFlags.Read);
