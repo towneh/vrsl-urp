@@ -16,20 +16,70 @@ namespace VRSL.URP
     /// </summary>
     public static class VRSLDiagnostics
     {
-        /// <summary>A shader that failed to compile draws nothing rather than
-        /// drawing wrong, so this is usually the first line worth reading.</summary>
+        /// <summary>Whether a shader will actually render anything.</summary>
+        public static bool ShaderUsable(Shader shader)
+        {
+            if (shader == null) return false;
+#if UNITY_EDITOR
+            if (UnityEditor.ShaderUtil.ShaderHasError(shader)) return false;
+#endif
+            return shader.isSupported;
+        }
+
+        /// <summary>
+        /// A shader that won't run draws nothing rather than drawing wrong, so
+        /// this is usually the first line worth reading.
+        ///
+        /// <c>Shader.isSupported</c> answers "can this run on the end user's
+        /// graphics card", which is false for a compile error <i>and</i> for an
+        /// unsupported GPU, API or target level. Those need completely different
+        /// fixes, so in the editor the two are separated with
+        /// <c>ShaderUtil.ShaderHasError</c> rather than guessing at one of them.
+        /// </summary>
         public static string ShaderStatus(string label, Shader shader)
         {
             if (shader == null) return $"{label}: NOT ASSIGNED";
-            if (!shader.isSupported) return $"{label}: '{shader.name}' FAILED TO COMPILE — nothing will draw";
+
+#if UNITY_EDITOR
+            if (UnityEditor.ShaderUtil.ShaderHasError(shader))
+                return $"{label}: '{shader.name}' HAS COMPILE ERRORS — it will draw nothing. "
+                     + "Run VRSL → URP → Validate Shaders for the messages.";
+
+            if (!shader.isSupported)
+                return $"{label}: '{shader.name}' compiles but is UNSUPPORTED on this GPU/API — "
+                     + "it will draw nothing. Check the shader's target level and requirements.";
+#else
+            if (!shader.isSupported)
+                return $"{label}: '{shader.name}' WILL NOT RUN — it will draw nothing. Either a "
+                     + "compile error or an unsupported GPU/API; the Console distinguishes them.";
+#endif
+
             return $"{label}: '{shader.name}' ok";
         }
 
+        /// <summary>
+        /// <c>HasKernel</c> only reports whether the name is present in the
+        /// compiled shader, so its absence could be a wrong name, a compile
+        /// failure, or a stripped kernel. The message says so rather than
+        /// asserting one of them.
+        /// </summary>
         public static string ComputeStatus(string label, ComputeShader compute, string kernel)
         {
             if (compute == null) return $"{label}: NOT ASSIGNED";
+
+#if UNITY_EDITOR
+            foreach (var m in UnityEditor.ShaderUtil.GetComputeShaderMessages(compute))
+            {
+                if (m.severity != UnityEditor.Rendering.ShaderCompilerMessageSeverity.Error) continue;
+                return $"{label}: '{compute.name}' HAS COMPILE ERRORS — {m.message.Trim()}";
+            }
+#endif
+
             if (!compute.HasKernel(kernel))
-                return $"{label}: '{compute.name}' MISSING KERNEL '{kernel}' — likely a compile failure";
+                return $"{label}: '{compute.name}' has no kernel '{kernel}' — check the kernel "
+                     + "name and that the right compute is assigned; the Console will show any "
+                     + "compile errors.";
+
             return $"{label}: '{compute.name}' ok";
         }
 
@@ -108,8 +158,15 @@ namespace VRSL.URP
             if (surfacePropertiesShader == null)
                 return "Surface prepass: normals only — surfacePropertiesShader unassigned, "
                      + "every surface lights as neutral mid-grey";
-            return ShaderStatus("Surface prepass", surfacePropertiesShader)
-                 + " (albedo + smoothness + metallic captured)";
+
+            string status = ShaderStatus("Surface prepass", surfacePropertiesShader);
+
+            // Only claim the capture happened when the shader can actually run —
+            // otherwise the line contradicts itself, reporting a failure and a
+            // success in the same breath.
+            return ShaderUsable(surfacePropertiesShader)
+                ? status + " (albedo + smoothness + metallic captured)"
+                : status + " — surfaces fall back to neutral mid-grey";
         }
     }
 }
