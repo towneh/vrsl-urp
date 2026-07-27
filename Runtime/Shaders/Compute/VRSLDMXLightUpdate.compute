@@ -44,7 +44,13 @@ float GetDMXValue(uint ch, Texture2D<float4> tex)
 
     float resMultX = _VRSLDMXTexelSize.z / 13.0;
     float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
-    float v = ((y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
+    // floor: the Built-in path calls IndustryRead(int x, int y), so the row is
+    // truncated to an integer before it is scaled into UV. Porting the call to
+    // float dropped that truncation, and the row coordinate then drifted by
+    // frac(channel / 13) of a row — enough that every channel past the second in
+    // a row sampled the row below it, silently decoding a neighbouring fixture's
+    // value. The offsets below are inherited from that path and left alone.
+    float v = (floor(y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
 
     float4 c = tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0);
 
@@ -72,7 +78,13 @@ float GetDMXValueRaw(uint ch, Texture2D<float4> tex)
 
     float resMultX = _VRSLDMXTexelSize.z / 13.0;
     float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
-    float v = ((y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
+    // floor: the Built-in path calls IndustryRead(int x, int y), so the row is
+    // truncated to an integer before it is scaled into UV. Porting the call to
+    // float dropped that truncation, and the row coordinate then drifted by
+    // frac(channel / 13) of a row — enough that every channel past the second in
+    // a row sampled the row below it, silently decoding a neighbouring fixture's
+    // value. The offsets below are inherited from that path and left alone.
+    float v = (floor(y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
 
     return tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0).r;
 }
