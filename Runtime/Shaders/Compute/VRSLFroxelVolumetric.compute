@@ -38,6 +38,8 @@ RWTexture3D<float4> _VRSLFroxelVolume;
 //   [1] xyz = ray direction,     w = cos to camera axis
 //   [2] xyz = camera position,   w = lights iterated for this froxel
 //   [3] xyz = nearest light pos, w = distance to it
+//   [4] x = distance attenuation, y = spot attenuation, z = phase,
+//       w = resulting radiance, all for the strongest light at this froxel
 RWStructuredBuffer<float4> _VRSLFroxelProbe;
 
 StructuredBuffer<VRSLLightData> _VRSLLights;
@@ -167,18 +169,36 @@ void ScatterFroxels(uint3 id : SV_DispatchThreadID)
     {
         float  nearestDist = 1e30;
         float3 nearestPos  = 0;
+        float4 best        = 0;   // distAtten, spotAtten, phase, radiance
+
         for (uint pl = 0; pl < lightCount; pl++)
         {
             VRSLLightData l = _VRSLLights[VRSL_LightListIndex(tileIndex, pl)];
             float3 d = l.positionAndRange.xyz - samplePos;
             float  dist = sqrt(dot(d, d));
             if (dist < nearestDist) { nearestDist = dist; nearestPos = l.positionAndRange.xyz; }
+
+            // Same terms VRSL_EvaluateLightVolumetric combines, recorded
+            // separately so a near-zero result names which factor collapsed
+            // rather than leaving all three suspect.
+            float dsq  = dot(d, d);
+            float rng  = l.positionAndRange.w;
+            float dAtt = dsq > rng * rng ? 0.0 : VRSL_DistanceAttenuation(dsq, rng);
+            float sAtt = 1.0;
+            if (VRSL_LightType(l) < 0.5)
+                sAtt = VRSL_SpotAttenuation(l.directionAndType.xyz, d,
+                                            l.spotParams.x, l.spotParams.y, l.spotParams.z);
+            float3 toL = d * rsqrt(max(dsq, 0.0001));
+            float  ph  = VRSL_HenyeyGreenstein(dot(toCamera, toL), anisotropy);
+            float  rad = l.colorAndIntensity.w * dAtt * sAtt * ph;
+            if (rad > best.w) best = float4(dAtt, sAtt, ph, rad);
         }
 
         _VRSLFroxelProbe[0] = float4(samplePos, centreZ);
         _VRSLFroxelProbe[1] = float4(rayDir, cosToAxis);
         _VRSLFroxelProbe[2] = float4(_VRSLFroxelCamPos.xyz, (float)lightCount);
         _VRSLFroxelProbe[3] = float4(nearestPos, nearestDist);
+        _VRSLFroxelProbe[4] = best;
     }
 
     _VRSLFroxelVolume[id] = float4(inscatter * density, density);

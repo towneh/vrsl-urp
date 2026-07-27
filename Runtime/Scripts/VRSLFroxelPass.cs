@@ -247,7 +247,7 @@ namespace VRSL.URP
             int views = Mathf.Clamp(camData.cameraTargetDescriptor.volumeDepth, 1, 2);
 
             EnsureVolume(dims, views);
-            _probe ??= new GraphicsBuffer(GraphicsBuffer.Target.Structured, 4, sizeof(float) * 4);
+            _probe ??= new GraphicsBuffer(GraphicsBuffer.Target.Structured, 5, sizeof(float) * 4);
             TextureHandle volume = rg.ImportTexture(_volumeHandle);
 
             // Same convention as the tile cull and the fullscreen shaders, so the

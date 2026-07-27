@@ -263,7 +263,7 @@ namespace VRSL.URP
         {
             if (probe == null) return "Froxel probe: not allocated";
 
-            var v = new Vector4[4];
+            var v = new Vector4[5];
             probe.GetData(v);
 
             Vector3 samplePos = v[0]; float centreZ  = v[0].w;
@@ -285,6 +285,15 @@ namespace VRSL.URP
                 sb.Append($"  Nearest fixture {Fmt(nearest)}, {nearDist:G4}m away — compare "
                         + "against that fixture's Range; further than Range means the sample "
                         + "position is the fault");
+            sb.AppendLine();
+            Vector4 t = v[4];
+            sb.Append($"  Strongest light here: distance {t.x:G4} x spot {t.y:G4} x phase {t.z:G4} "
+                    + $"= radiance {t.w:G4}");
+            if (t.y < 1e-3f && t.x > 1e-3f)
+                sb.Append(" — the spot cone is what collapses it, not distance");
+            else if (t.x < 1e-3f)
+                sb.Append(" — distance attenuation is what collapses it");
+
             return sb.ToString();
         }
 
