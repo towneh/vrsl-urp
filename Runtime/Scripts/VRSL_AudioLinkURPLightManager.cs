@@ -130,6 +130,16 @@ namespace VRSL.URP
                + "to AudioLink's _AudioTexture atlas.")]
         public Texture samplingTexture;
 
+        [Header("Cameras")]
+        [Tooltip("How VRSL treats cameras that render into a texture rather than to the "
+               + "player's view — mirrors, portals, camera props. Full lights them like the "
+               + "main view, which is the default because beams in a mirror are a large part "
+               + "of a stage look. SurfaceOnly keeps surface lighting but drops the "
+               + "volumetric raymarch, the more expensive of the two. Skip runs nothing. "
+               + "Cameras feeding VRSL's own data path are always skipped regardless of "
+               + "this setting.")]
+        public SecondaryCameraMode secondaryCameraMode = SecondaryCameraMode.Full;
+
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer FixtureConfigBuffer { get; private set; }
         public GraphicsBuffer LightDataBuffer     { get; private set; }
