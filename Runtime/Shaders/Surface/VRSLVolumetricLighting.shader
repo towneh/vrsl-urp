@@ -453,6 +453,14 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     _VRSLFroxelVolume, sampler_VRSLFroxelVolume,
                     float3(u, i.uv.y, w), 0).rgb;
 
+                // The volume is written rather than cleared, so a scatter that
+                // fails to run leaves whatever was in that memory. This blend is
+                // additive, and a single NaN reaching it propagates across the
+                // whole frame — the difference between "no volumetrics" and "the
+                // entire view goes black". Degrade to the former.
+                if (any(isnan(scattered)) || any(isinf(scattered)))
+                    scattered = 0;
+
                 return float4(scattered * _VRSLVolFogTint.xyz * _VRSLVolFogTint.w, 0);
             }
             ENDHLSL

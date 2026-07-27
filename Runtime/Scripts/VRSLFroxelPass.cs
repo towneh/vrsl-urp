@@ -174,13 +174,15 @@ namespace VRSL.URP
                 dimension   = TextureDimension.Tex3D,
                 slices      = dims.z,
                 enableRandomWrite = true,
-                // Cleared even though the scatter writes every froxel: if that
-                // pass ever fails or is skipped, the composite would otherwise
-                // additively blend uninitialised memory, and a single NaN
-                // blackens the whole frame. A wasted clear is the cheaper
-                // failure mode.
-                clearBuffer = true,
-                clearColor  = Color.clear,
+                // Deliberately not cleared. RenderGraph applies clearBuffer when a
+                // texture is first used as a render attachment, and this one is
+                // only ever a compute UAV — so the clear's ordering against the
+                // dispatches isn't guaranteed and can land after them, leaving the
+                // volume zeroed and the effect silently absent. The scatter kernel
+                // writes every in-bounds froxel and nothing reads out-of-bounds
+                // ones, so the contents are fully defined without it. The
+                // composite guards against NaN instead.
+                clearBuffer = false,
                 filterMode  = FilterMode.Bilinear,
                 wrapMode    = TextureWrapMode.Clamp,
             };
