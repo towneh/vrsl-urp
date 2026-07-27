@@ -71,7 +71,8 @@ namespace VRSL.URP
         static readonly int s_ViewParamsID  = Shader.PropertyToID("_VRSLFroxelViewParams");
         static readonly int s_CamPosID      = Shader.PropertyToID("_VRSLFroxelCamPos");
         static readonly int s_CamFwdID      = Shader.PropertyToID("_VRSLFroxelCamFwd");
-        static readonly int s_InvViewProjID = Shader.PropertyToID("_VRSLFroxelInvViewProj");
+        static readonly int s_InvViewProjID = Shader.PropertyToID("_VRSLFroxelInvViewProj0");
+        static readonly int s_InvViewProj1ID = Shader.PropertyToID("_VRSLFroxelInvViewProj1");
         static readonly int s_TimeID        = Shader.PropertyToID("_VRSLFroxelTime");
         static readonly int s_LightsID      = Shader.PropertyToID("_VRSLLights");
         static readonly int s_LightCountID  = Shader.PropertyToID("_VRSLLightCount");
@@ -286,7 +287,8 @@ namespace VRSL.URP
                     cmd.SetComputeVectorParam(     p.cs, s_TileParamsID,  p.tileParams);
                     cmd.SetComputeVectorParam(     p.cs, s_StepParamsID,  p.stepParams);
                     cmd.SetComputeVectorParam(     p.cs, s_DensityID,     p.densityParams);
-                    cmd.SetComputeMatrixArrayParam(p.cs, s_InvViewProjID, p.invViewProj);
+                    cmd.SetComputeMatrixParam(     p.cs, s_InvViewProjID,  p.invViewProj[0]);
+                    cmd.SetComputeMatrixParam(     p.cs, s_InvViewProj1ID, p.invViewProj[1]);
                     cmd.SetComputeIntParam(        p.cs, s_LightCountID,  p.lightCount);
                     cmd.SetComputeFloatParam(      p.cs, s_TimeID,        p.time);
 

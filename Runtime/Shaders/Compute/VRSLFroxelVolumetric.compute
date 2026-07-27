@@ -41,8 +41,14 @@ float4 _VRSLFroxelViewParams;
 float4 _VRSLFroxelCamPos;
 // xyz = camera forward, normalised
 float4 _VRSLFroxelCamFwd;
+// Two separate matrices rather than a float4x4[2]. Matrix arrays in a compute
+// shader's constant buffer are an unreliable corner of the API, and when the
+// upload silently doesn't arrive the symptom is not an error but garbage world
+// positions - which read as "every light is out of range" or "every frustum test
+// passes", neither of which announces itself.
 // Same convention the fullscreen shaders reconstruct with, per eye.
-float4x4 _VRSLFroxelInvViewProj[2];
+float4x4 _VRSLFroxelInvViewProj0;
+float4x4 _VRSLFroxelInvViewProj1;
 
 // Mirrors the raymarch's parameter packing.
 float4 _VRSLVolStepCount;   // w = HG anisotropy
@@ -55,7 +61,8 @@ float3 VRSL_FroxelWorldFromUV(float2 uv, float deviceDepth, uint eye)
 #if UNITY_UV_STARTS_AT_TOP
     positionCS.y = -positionCS.y;
 #endif
-    float4 hpositionWS = mul(_VRSLFroxelInvViewProj[eye], positionCS);
+    float4 hpositionWS = mul(eye == 0u ? _VRSLFroxelInvViewProj0
+                                       : _VRSLFroxelInvViewProj1, positionCS);
     return hpositionWS.xyz / hpositionWS.w;
 }
 

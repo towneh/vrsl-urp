@@ -26,10 +26,16 @@ RWStructuredBuffer<uint>        _VRSLTileLightIndicesRW;
 uint _VRSLLightCount;
 // x = tiles across, y = tiles down, z = eye/slice count, w = unused.
 float4 _VRSLCullTileParams;
+// Two separate matrices rather than a float4x4[2]. Matrix arrays in a compute
+// shader's constant buffer are an unreliable corner of the API, and when the
+// upload silently doesn't arrive the symptom is not an error but garbage world
+// positions - which read as "every light is out of range" or "every frustum test
+// passes", neither of which announces itself.
 // Inverse view-projection per eye, in the same convention the fullscreen
 // shaders use for ComputeWorldSpacePosition — so tile boundaries here land
 // exactly where the sampling shaders think they do.
-float4x4 _VRSLCullInvViewProj[2];
+float4x4 _VRSLCullInvViewProj0;
+float4x4 _VRSLCullInvViewProj1;
 
 groupshared uint gs_TileLightCount;
 
@@ -43,7 +49,8 @@ float3 VRSL_CullWorldPos(float2 uv, float deviceDepth, uint eye)
 #if UNITY_UV_STARTS_AT_TOP
     positionCS.y = -positionCS.y;
 #endif
-    float4 hpositionWS = mul(_VRSLCullInvViewProj[eye], positionCS);
+    float4 hpositionWS = mul(eye == 0u ? _VRSLCullInvViewProj0
+                                      : _VRSLCullInvViewProj1, positionCS);
     return hpositionWS.xyz / hpositionWS.w;
 }
 

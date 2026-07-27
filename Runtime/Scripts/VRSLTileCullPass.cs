@@ -61,7 +61,8 @@ namespace VRSL.URP
         static readonly int s_TileIndicesRWID = Shader.PropertyToID("_VRSLTileLightIndicesRW");
         static readonly int s_LightCountID    = Shader.PropertyToID("_VRSLLightCount");
         static readonly int s_CullTileParamsID = Shader.PropertyToID("_VRSLCullTileParams");
-        static readonly int s_InvViewProjID   = Shader.PropertyToID("_VRSLCullInvViewProj");
+        static readonly int s_InvViewProjID   = Shader.PropertyToID("_VRSLCullInvViewProj0");
+        static readonly int s_InvViewProj1ID = Shader.PropertyToID("_VRSLCullInvViewProj1");
 
         readonly ComputeShader   _cullShader;
         readonly IVRSLLightSource _source;
@@ -233,7 +234,8 @@ namespace VRSL.URP
                 var cmd = ctx.cmd;
                 cmd.SetComputeIntParam(        p.cs,           s_LightCountID,     p.lightCount);
                 cmd.SetComputeVectorParam(     p.cs,           s_CullTileParamsID, p.cullTileParams);
-                cmd.SetComputeMatrixArrayParam(p.cs,           s_InvViewProjID,    p.invViewProj);
+                cmd.SetComputeMatrixParam(     p.cs,           s_InvViewProjID,    p.invViewProj[0]);
+                cmd.SetComputeMatrixParam(     p.cs,           s_InvViewProj1ID,   p.invViewProj[1]);
                 cmd.SetComputeBufferParam(     p.cs, p.kernel, s_LightsID,         p.lightData);
                 cmd.SetComputeBufferParam(     p.cs, p.kernel, s_TileIndicesRWID,  p.tileIndices);
 
