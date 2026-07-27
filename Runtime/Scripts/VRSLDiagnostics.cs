@@ -1,5 +1,6 @@
 using System.Text;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace VRSL.URP
 {
@@ -168,6 +169,59 @@ namespace VRSL.URP
                 ? " — barely above zero, so the source is probably near-silent rather than off"
                 : "";
             return $"Light data: {emitting}/{fixtureCount} emitting, peak intensity {peak:G4}{faint}";
+        }
+
+        /// <summary>
+        /// Reads the froxel volume back and reports what is actually in it.
+        ///
+        /// Inspecting a 3D texture in the Frame Debugger shows a single slice,
+        /// and slice 0 sits at the near plane where the integration has barely
+        /// started — so it reads black even when the volume is correct. This
+        /// scans the whole volume instead, and reports where the signal is, so
+        /// "the scatter wrote nothing" and "the composite isn't sampling it" stop
+        /// looking identical.
+        /// </summary>
+        public static string FroxelVolumeStatus(RenderTexture volume)
+        {
+            if (volume == null) return "Froxel volume: not allocated — has the pass recorded yet?";
+
+            var request = AsyncGPUReadback.Request(
+                volume, 0, UnityEngine.Experimental.Rendering.GraphicsFormat.R32G32B32A32_SFloat);
+            request.WaitForCompletion();
+            if (request.hasError) return "Froxel volume: readback failed";
+
+            var data = request.GetData<Vector4>();
+            int depth = Mathf.Max(1, volume.volumeDepth);
+            int perSlice = Mathf.Max(1, data.Length / depth);
+
+            float peak = 0f;
+            int firstLitSlice = -1, lastLitSlice = -1;
+            for (int z = 0; z < depth; z++)
+            {
+                float slicePeak = 0f;
+                int start = z * perSlice;
+                for (int i = start; i < start + perSlice && i < data.Length; i++)
+                {
+                    Vector4 v = data[i];
+                    float m = Mathf.Max(v.x, Mathf.Max(v.y, v.z));
+                    if (m > slicePeak) slicePeak = m;
+                }
+                if (slicePeak > 1e-6f)
+                {
+                    if (firstLitSlice < 0) firstLitSlice = z;
+                    lastLitSlice = z;
+                }
+                if (slicePeak > peak) peak = slicePeak;
+            }
+
+            if (peak <= 1e-6f)
+                return $"Froxel volume: {volume.width}x{volume.height}x{depth} — EMPTY across every "
+                     + "slice. The scatter or integrate kernel produced nothing, so this is not a "
+                     + "compositing problem";
+
+            return $"Froxel volume: {volume.width}x{volume.height}x{depth} — peak radiance "
+                 + $"{peak:G4}, content in slices {firstLitSlice}-{lastLitSlice}. Volume is "
+                 + "populated, so if nothing renders the composite is sampling it wrongly";
         }
 
         public static string SurfacePrepassStatus(Shader surfacePropertiesShader)

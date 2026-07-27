@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
@@ -64,7 +65,7 @@ namespace VRSL.URP
     /// Both eyes share one volume, packed along X, since a 3D texture cannot be
     /// a texture array.
     /// </summary>
-    public class VRSLFroxelPass : ScriptableRenderPass
+    public class VRSLFroxelPass : ScriptableRenderPass, IDisposable
     {
         static readonly int s_VolumeID      = Shader.PropertyToID("_VRSLFroxelVolume");
         static readonly int s_ParamsID      = Shader.PropertyToID("_VRSLFroxelParams");
@@ -85,6 +86,19 @@ namespace VRSL.URP
         const string NoiseKeyword = "_VRSL_VOLUMETRIC_NOISE";
 
         readonly IVRSLVolumetricSource _source;
+
+        // The volume is pass-owned rather than a render-graph transient. A
+        // transient can't be read back or examined once the frame ends, which
+        // made "is the scatter writing anything" unanswerable from outside the
+        // graph. It is also the allocation temporal reprojection needs, since
+        // history has to survive across frames.
+        RenderTexture _volume;
+        RTHandle      _volumeHandle;
+        Vector3Int    _allocatedDims;
+        int           _allocatedViews;
+
+        /// <summary>The froxel volume, for diagnostics. Null before first record.</summary>
+        public RenderTexture Volume => _volume;
 
         int _scatterKernel   = -1;
         int _integrateKernel = -1;
@@ -154,6 +168,52 @@ namespace VRSL.URP
             public Vector4       fogTintParams;
         }
 
+        void EnsureVolume(Vector3Int dims, int views)
+        {
+            if (_volume != null && _allocatedDims == dims && _allocatedViews == views) return;
+
+            ReleaseVolume();
+
+            var desc = new RenderTextureDescriptor(dims.x * views, dims.y,
+                                                   RenderTextureFormat.ARGBHalf, 0)
+            {
+                dimension         = TextureDimension.Tex3D,
+                volumeDepth       = dims.z,
+                enableRandomWrite = true,
+                sRGB              = false,
+                useMipMap         = false,
+                msaaSamples       = 1,
+            };
+
+            _volume = new RenderTexture(desc)
+            {
+                name       = "_VRSLFroxelVolume",
+                filterMode = FilterMode.Bilinear,
+                wrapMode   = TextureWrapMode.Clamp,
+                hideFlags  = HideFlags.HideAndDontSave,
+            };
+            _volume.Create();
+            _volumeHandle   = RTHandles.Alloc(_volume);
+            _allocatedDims  = dims;
+            _allocatedViews = views;
+        }
+
+        void ReleaseVolume()
+        {
+            RTHandles.Release(_volumeHandle);
+            _volumeHandle = null;
+            if (_volume != null)
+            {
+                _volume.Release();
+                UnityEngine.Object.Destroy(_volume);
+                _volume = null;
+            }
+            _allocatedDims  = Vector3Int.zero;
+            _allocatedViews = 0;
+        }
+
+        public void Dispose() => ReleaseVolume();
+
         public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
         {
             if (!IsUsable) return;
@@ -168,26 +228,8 @@ namespace VRSL.URP
             var dims  = ClampResolution(_source.FroxelResolution);
             int views = Mathf.Clamp(camData.cameraTargetDescriptor.volumeDepth, 1, 2);
 
-            var volumeDesc = new TextureDesc(dims.x * views, dims.y)
-            {
-                name        = "_VRSLFroxelVolume",
-                format      = GraphicsFormat.R16G16B16A16_SFloat,
-                dimension   = TextureDimension.Tex3D,
-                slices      = dims.z,
-                enableRandomWrite = true,
-                // Deliberately not cleared. RenderGraph applies clearBuffer when a
-                // texture is first used as a render attachment, and this one is
-                // only ever a compute UAV — so the clear's ordering against the
-                // dispatches isn't guaranteed and can land after them, leaving the
-                // volume zeroed and the effect silently absent. The scatter kernel
-                // writes every in-bounds froxel and nothing reads out-of-bounds
-                // ones, so the contents are fully defined without it. The
-                // composite guards against NaN instead.
-                clearBuffer = false,
-                filterMode  = FilterMode.Bilinear,
-                wrapMode    = TextureWrapMode.Clamp,
-            };
-            TextureHandle volume = rg.CreateTexture(volumeDesc);
+            EnsureVolume(dims, views);
+            TextureHandle volume = rg.ImportTexture(_volumeHandle);
 
             // Same convention as the tile cull and the fullscreen shaders, so the
             // volume lines up with the depth buffer the composite samples.

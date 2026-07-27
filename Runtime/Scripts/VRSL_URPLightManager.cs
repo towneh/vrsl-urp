@@ -369,6 +369,7 @@ namespace VRSL.URP
             // shader and re-enabling the component, which is what the froxel
             // warning tells you to do, silently changes nothing.
             _surfacePrepass = null;
+            _froxelPass?.Dispose();
             _froxelPass     = null;
             _warnedFroxelUnusable = false;
             ReleaseBuffers();
@@ -737,6 +738,8 @@ namespace VRSL.URP
             if (volumetricResolution == VolumetricResolution.Froxel)
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader,
                                      "ScatterFroxels", "IntegrateFroxels"));
+            if (volumetricResolution == VolumetricResolution.Froxel)
+                sb.AppendLine("  " + VRSLDiagnostics.FroxelVolumeStatus(_froxelPass?.Volume));
             sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
             sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
             Debug.Log(sb.ToString(), this);
