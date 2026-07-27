@@ -190,6 +190,13 @@ namespace VRSL.URP
             // this wrong would flip the tile grid against the sampling shaders,
             // so it is derived rather than assumed.
             bool renderIntoTexture = !resources.isActiveTargetBackBuffer;
+
+            // Clip-Y flip folded in here rather than applied in the compute. The
+            // shader-side UNITY_UV_STARTS_AT_TOP macro isn't defined for compute
+            // shaders, so relying on it there mirrored the reconstruction against
+            // the fragment shaders that consume it.
+            var clipFlip = Matrix4x4.identity;
+            if (SystemInfo.graphicsUVStartsAtTop) clipFlip.m11 = -1f;
             // Allocated per record rather than reused. SetComputeMatrixArrayParam
             // reads this when the graph executes, so a field shared across records
             // would let one camera's dispatch pick up another camera's matrices if
@@ -202,7 +209,8 @@ namespace VRSL.URP
                 Matrix4x4 gpuProj = GL.GetGPUProjectionMatrix(
                     camData.GetProjectionMatrix(src), renderIntoTexture);
                 invViewProj[view] =
-                    Matrix4x4.Inverse(camData.GetViewMatrix(src)) * Matrix4x4.Inverse(gpuProj);
+                    Matrix4x4.Inverse(camData.GetViewMatrix(src))
+                    * Matrix4x4.Inverse(gpuProj) * clipFlip;
             }
 
             TileParams      = new Vector4(tilesX, tilesY, TileSize, 0f);

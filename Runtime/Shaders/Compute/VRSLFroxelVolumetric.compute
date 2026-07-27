@@ -69,10 +69,13 @@ float  _VRSLFroxelTime;
 
 float3 VRSL_FroxelWorldFromUV(float2 uv, float deviceDepth, uint eye)
 {
+    // No UNITY_UV_STARTS_AT_TOP flip here. That macro describes render-target
+    // orientation and is only defined for graphics shaders — a compute shader
+    // never receives it, so this branch silently did nothing while the fragment
+    // shaders sampling the result did flip, negating clip Y between the two and
+    // mirroring everything vertically. The flip is baked into the matrix on the
+    // CPU instead, where SystemInfo.graphicsUVStartsAtTop is authoritative.
     float4 positionCS = float4(uv * 2.0 - 1.0, deviceDepth, 1.0);
-#if UNITY_UV_STARTS_AT_TOP
-    positionCS.y = -positionCS.y;
-#endif
     float4 hpositionWS = mul(eye == 0u ? _VRSLFroxelInvViewProj0
                                        : _VRSLFroxelInvViewProj1, positionCS);
     return hpositionWS.xyz / hpositionWS.w;
