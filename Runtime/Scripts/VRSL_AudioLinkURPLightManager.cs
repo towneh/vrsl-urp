@@ -145,7 +145,7 @@ namespace VRSL.URP
         public GraphicsBuffer LightDataBuffer     { get; private set; }
         public RTHandle       AudioLinkHandle     { get; private set; }
         public RTHandle       SamplingTextureHandle { get; private set; }
-        public Texture2DArray GoboArray           { get; private set; }
+        public RenderTexture  GoboArray           { get; private set; }
         public int  FixtureCount  { get; private set; }
         public int  GoboCount     { get; private set; }
         public int  ComputeKernel { get; private set; }
@@ -162,7 +162,6 @@ namespace VRSL.URP
         public bool VolumetricUseNoise => volumetricUseNoise;
         public bool VolumetricUseFullRes => volumetricResolution == VolumetricResolution.Full;
 
-        const int GoboResolution = 256;
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
         // VRSLALFixtureConfig: 7 × float4 = 112 bytes
@@ -327,34 +326,13 @@ namespace VRSL.URP
 
         void BuildGoboArray()
         {
-            if (GoboArray != null) { Object.Destroy(GoboArray); GoboArray = null; }
-
-            GoboCount = goboTextures != null ? goboTextures.Length : 0;
-            if (GoboCount == 0) return;
-
-            GoboArray = new Texture2DArray(GoboResolution, GoboResolution, GoboCount,
-                TextureFormat.RGBA32, false) { hideFlags = HideFlags.HideAndDontSave };
-
-            var tmp      = RenderTexture.GetTemporary(GoboResolution, GoboResolution, 0,
-                               RenderTextureFormat.ARGB32, RenderTextureReadWrite.Linear);
-            var readback = new Texture2D(GoboResolution, GoboResolution, TextureFormat.RGBA32, false);
-            var prevRT   = RenderTexture.active;
-
-            for (int i = 0; i < GoboCount; i++)
-            {
-                if (goboTextures[i] == null) continue;
-                Graphics.Blit(goboTextures[i], tmp);
-                RenderTexture.active = tmp;
-                readback.ReadPixels(new Rect(0, 0, GoboResolution, GoboResolution), 0, 0);
-                readback.Apply();
-                GoboArray.SetPixels(readback.GetPixels(), i);
-            }
-
-            RenderTexture.active = prevRT;
-            Object.Destroy(readback);
-            RenderTexture.ReleaseTemporary(tmp);
-            GoboArray.Apply();
+            VRSLGoboWheel.Release(ref _goboArray);
+            _goboArray = VRSLGoboWheel.Build(goboTextures, out int count);
+            GoboArray  = _goboArray;
+            GoboCount  = count;
         }
+
+        RenderTexture _goboArray;
 
         VRSLALFixtureConfig BuildConfig(VRStageLighting_AudioLink_RealtimeLight f)
         {
@@ -489,7 +467,7 @@ namespace VRSL.URP
         {
             FixtureConfigBuffer?.Release(); FixtureConfigBuffer = null;
             LightDataBuffer?.Release();     LightDataBuffer     = null;
-            if (GoboArray != null) { Object.Destroy(GoboArray); GoboArray = null; }
+            VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
         }
 
 
@@ -567,7 +545,12 @@ namespace VRSL.URP
                 Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
 
             renderer.EnqueuePass(_computePass);
-            renderer.EnqueuePass(_surfacePrepass);
+            // The surface prepass costs two opaque geometry draws and writes the
+            // same targets regardless of which manager drives it. When a DMX
+            // manager is present it owns the prepass and this one defers, rather
+            // than both rendering it and the second overwriting the first.
+            if (VRSL_URPLightManager.Instance == null)
+                renderer.EnqueuePass(_surfacePrepass);
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)

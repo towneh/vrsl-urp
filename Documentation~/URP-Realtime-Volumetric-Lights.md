@@ -240,6 +240,27 @@ Where the prepass wrote nothing — geometry drawn by shaders with no forward Li
 
 Shadowing is still absent, so a fixture lights every surface in range regardless of occluders. See *Known Limitations*.
 
+### Intensity scale
+
+`maxIntensity` is on the same scale as a URP spot light's **Intensity** value in
+non-physical mode. The surface pass evaluates
+
+```
+radiance = colour * intensity * distanceAttenuation * NdotL
+result   = DirectBRDF(...) * radiance
+```
+
+which is the same form URP's `LightingPhysicallyBased` uses, against distance and cone
+attenuation functions written to match URP's. So a VRSL fixture at full output with Final
+and Global Intensity at 1 matches a URP spot set to the same number, and authors can
+calibrate against a reference light rather than by eye.
+
+For that to hold, the DMX dimmer curve has to reach exactly 1 at full. The curve exists so
+the cast light ramps together with the fixture-body glow, whose emission goes as
+`dimmer² × (1 + (curveMod − 1)·dimmer)`; the compute divides by `curveMod` so the shape is
+preserved while the peak lands at 1. The AudioLink path is linear in amplitude and needs no
+correction, so both sources now agree at full output.
+
 ### Material capture
 
 `VRSLSurfaceProperties` declares both property-naming conventions — `_BaseMap` / `_BaseColor` (URP-native) and `_MainTex` / `_Color` (the legacy naming most avatar shaders use) — and combines them with `min()`:

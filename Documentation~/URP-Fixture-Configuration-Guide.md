@@ -91,7 +91,7 @@ These fields appear on both `VRStageLighting_DMX_RealtimeLight` and `VRStageLigh
 | Field | Notes |
 |---|---|
 | `fixtureType` | `MoverSpotlight`, `MoverWashlight`, `StaticBlinder`, `StaticParLight`, `StaticPointLight`, `Custom`. Drives inspector field visibility and sets the wash-vs-spot inner-cone ratio (wash 0.65 = flat-bright with long feather; spot/static 0.5 = falloff over the outer half). `StaticPointLight` emits omnidirectionally — the manager forces point mode for it and the inspector hides the spot, cone, pan/tilt, and gobo fields. |
-| `maxIntensity` | Output at full DMX / full amplitude. Not a physical unit and not tied to URP's physical light units — tune relative to scene scale. |
+| `maxIntensity` | Output at full DMX / full amplitude, on the same scale as a URP spot light's **Intensity** value. A fixture at full output with Final and Global Intensity at 1 matches a URP spot set to the same number, so you can calibrate against a reference light instead of by eye. |
 | `range` | Attenuation range in metres. |
 | `spotAngle` (AudioLink) / `minSpotAngle` & `maxSpotAngle` (DMX) | Outer cone angle in degrees. DMX channel +4 lerps between min and max. |
 | `isPointLight` | Emit as a point light instead of a spot. |

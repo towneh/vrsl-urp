@@ -61,7 +61,10 @@ namespace VRSL.URP
         // ──────────────────────────────────────────────────────────────────────────
         // Light settings
         // ──────────────────────────────────────────────────────────────────────────
-        [Tooltip("Light intensity emitted at DMX full-on (255). Scale to taste for your scene.")]
+        [Tooltip("Light intensity at full output. Same scale as a URP spot light's Intensity "
+               + "value: a fixture at full DMX with Final and Global Intensity at 1 emits the "
+               + "same as a URP spot set to this number, so you can calibrate against a "
+               + "reference light rather than by eye.")]
         public float maxIntensity = 10f;
 
         [Range(0f, 1f)]

@@ -130,8 +130,13 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // lit. extras.z carries _CurveMod (CPU-synced to the shell material so the two agree).
     // Guard against an unset extras.z (0) — without the floor the factor collapses to
     // intensity*(1-intensity), which is zero at full dimmer and would black the light out.
+    //
+    // Divided by curveMod so the curve reaches exactly 1 at full dimmer. The shape that
+    // tracks the body glow is what matters; the peak gain was incidental, and it made
+    // maxIntensity mean "maxIntensity × curveMod" at full DMX — ×2 on the default curve,
+    // and twice the output of an AudioLink fixture set to the same value.
     float curveMod = max(cfg.extras.z, 1.0);
-    combinedIntensity *= intensity * (1.0 + (curveMod - 1.0) * intensity);
+    combinedIntensity *= intensity * (1.0 + (curveMod - 1.0) * intensity) / curveMod;
 
     // ── Direction (pan/tilt for moving heads) ─────────────────────────────────
     float3 baseForward = cfg.forwardAndType.xyz;
