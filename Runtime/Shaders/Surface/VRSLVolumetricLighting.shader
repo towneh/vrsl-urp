@@ -155,6 +155,8 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     float3 samplePos = cameraWS + viewDir * t;
 
                     float3 inscatter = 0;
+                    // Dynamic per tile — see the note in VRSLDeferredLighting.
+                    [loop]
                     for (uint slot = 0; slot < lightCount; slot++)
                     {
                         VRSLLightData light =

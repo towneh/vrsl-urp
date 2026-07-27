@@ -105,6 +105,8 @@ void ScatterFroxels(uint3 id : SV_DispatchThreadID)
     uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
 
     float3 inscatter = 0;
+    // Dynamic per tile — see the note in VRSLDeferredLighting.
+    [loop]
     for (uint slot = 0; slot < lightCount; slot++)
     {
         VRSLLightData light = _VRSLLights[VRSL_LightListIndex(tileIndex, slot)];

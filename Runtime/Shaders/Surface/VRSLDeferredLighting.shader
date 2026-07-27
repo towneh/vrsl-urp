@@ -150,6 +150,13 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                 uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
 
                 float3 lighting = 0;
+                // [loop] rather than letting the compiler choose: the body now
+                // carries a gobo fetch and a contact-shadow trace, and d3d11
+                // tries to unroll against lightCount, overruns its budget and
+                // fails the whole shader with "unable to unroll loop". The
+                // count is dynamic per tile anyway, so unrolling was never
+                // going to help.
+                [loop]
                 for (uint slot = 0; slot < lightCount; slot++)
                 {
                     VRSLLightData light = _VRSLLights[VRSL_LightListIndex(tileIndex, slot)];
