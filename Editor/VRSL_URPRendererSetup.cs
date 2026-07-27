@@ -21,7 +21,9 @@ namespace VRSL.URP.EditorScripts
 
         const string LIGHTING_SHADER_NAME   = "Hidden/VRSL-URP/DeferredLighting";
         const string VOLUMETRIC_SHADER_NAME = "Hidden/VRSL-URP/VolumetricLighting";
+        const string SURFACE_SHADER_NAME    = "Hidden/VRSL-URP/SurfaceProperties";
         const string COMPUTE_SHADER_FILTER  = "VRSLDMXLightUpdate t:ComputeShader";
+        const string CULL_SHADER_FILTER     = "VRSLLightCull t:ComputeShader";
 
         // ── Scene-level: URP light manager GameObject ─────────────────────────
 
@@ -79,6 +81,30 @@ namespace VRSL.URP.EditorScripts
                     manager.volumetricShader = sh;
                     assignedAny = true;
                     report.Add("Assigned volumetric shader.");
+                }
+            }
+
+            if (manager.surfacePropertiesShader == null)
+            {
+                var sh = Shader.Find(SURFACE_SHADER_NAME);
+                if (sh != null)
+                {
+                    Undo.RecordObject(manager, "Assign VRSL Surface Properties Shader");
+                    manager.surfacePropertiesShader = sh;
+                    assignedAny = true;
+                    report.Add("Assigned surface properties shader.");
+                }
+            }
+
+            if (manager.lightCullShader == null)
+            {
+                var compute = FindAsset<ComputeShader>(CULL_SHADER_FILTER);
+                if (compute != null)
+                {
+                    Undo.RecordObject(manager, "Assign VRSL Light Cull Shader");
+                    manager.lightCullShader = compute;
+                    assignedAny = true;
+                    report.Add("Assigned light cull compute shader.");
                 }
             }
 

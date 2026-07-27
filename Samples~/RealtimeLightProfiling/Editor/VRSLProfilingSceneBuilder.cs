@@ -275,7 +275,31 @@ namespace VRSL.URP.Profiling.Editor
                 mgr.volumetricShader = Shader.Find("Hidden/VRSL-URP/VolumetricLighting");
                 changed |= mgr.volumetricShader != null;
             }
+            // Without these two the sweep measures a different pipeline than the
+            // one that ships: no albedo prepass means flat additive lighting, and
+            // no cull compute means every pixel loops every fixture.
+            if (mgr.surfacePropertiesShader == null)
+            {
+                mgr.surfacePropertiesShader = Shader.Find("Hidden/VRSL-URP/SurfaceProperties");
+                changed |= mgr.surfacePropertiesShader != null;
+            }
+            if (mgr.lightCullShader == null)
+            {
+                mgr.lightCullShader = FindComputeShader("VRSLLightCull");
+                changed |= mgr.lightCullShader != null;
+            }
             if (changed) EditorUtility.SetDirty(mgr);
+        }
+
+        static ComputeShader FindComputeShader(string assetName)
+        {
+            foreach (var guid in AssetDatabase.FindAssets($"{assetName} t:ComputeShader"))
+            {
+                var path = AssetDatabase.GUIDToAssetPath(guid);
+                var cs   = AssetDatabase.LoadAssetAtPath<ComputeShader>(path);
+                if (cs != null && cs.name == assetName) return cs;
+            }
+            return null;
         }
 #endif
 

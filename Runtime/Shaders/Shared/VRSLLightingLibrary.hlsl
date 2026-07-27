@@ -77,33 +77,9 @@ float VRSL_SpotAttenuation(float3 lightDir, float3 toLight, float cosInner,
     return t * t * lensClip;
 }
 
-// Evaluate a single VRSL light at a world-space surface point with a normal
-float3 VRSL_EvaluateLight(VRSLLightData light, float3 posWS, float3 normalWS)
-{
-    if (light.spotCosines.z < 0.5) return 0;
-
-    float3 toLight  = light.positionAndRange.xyz - posWS;
-    float  distSq   = dot(toLight, toLight);
-    float  range    = light.positionAndRange.w;
-
-    float distAtten = VRSL_DistanceAttenuation(distSq, range);
-
-    float spotAtten = 1.0;
-    if (light.directionAndType.w < 0.5)
-        spotAtten = VRSL_SpotAttenuation(
-            light.directionAndType.xyz, toLight,
-            light.spotCosines.x, light.spotCosines.y,
-            light.spotCosines.w);
-
-    // NaN-safe light direction: normalize(toLight) is NaN when a surface sits at the
-    // light position (toLight ≈ 0) — common now that point-light origins sit on the bar
-    // mesh right next to floor/ceiling. The rsqrt-with-floor form matches
-    // VRSL_EvaluateLightVolumetric and never divides by zero.
-    float NdotL = max(0.0, dot(normalWS, toLight * rsqrt(max(distSq, 0.0001))));
-
-    return light.colorAndIntensity.xyz * light.colorAndIntensity.w
-           * distAtten * spotAtten * NdotL;
-}
+// Surface (BRDF) evaluation lives in VRSLSurfaceBRDF.hlsl, which pulls in URP's
+// BRDF library. It is kept out of this header so the compute kernels — which
+// include this file for the struct layouts alone — don't have to compile it.
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Volumetric (in-scattering) evaluation

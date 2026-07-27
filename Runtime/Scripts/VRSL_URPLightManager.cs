@@ -34,7 +34,7 @@ namespace VRSL.URP
     /// CustomRenderTextures, and assign the VRSLDMXLightUpdate compute shader.
     /// </summary>
     [AddComponentMenu("VRSL/URP Light Manager")]
-    public class VRSL_URPLightManager : MonoBehaviour
+    public class VRSL_URPLightManager : MonoBehaviour, IVRSLLightSource
     {
         public static VRSL_URPLightManager Instance { get; private set; }
 
@@ -55,22 +55,23 @@ namespace VRSL.URP
         [Header("Compute")]
         public ComputeShader computeShader;
 
+        [Tooltip("Assign VRSLLightCull. Builds the per-tile light list so the surface and "
+               + "volumetric passes only evaluate the fixtures that reach each screen tile. "
+               + "Leave empty to disable tiled culling — the passes then loop every fixture on "
+               + "every pixel, which is correct but scales badly past a handful of fixtures.")]
+        public ComputeShader lightCullShader;
+
         [Header("Lighting")]
         [Tooltip("Assign Hidden/VRSL-URP/DeferredLighting (the VRSLDeferredLighting shader asset).")]
         public Shader lightingShader;
 
-        [Range(0f, 1f)]
-        [Tooltip("Modulates each light's surface contribution by the pre-light scene colour, "
-               + "as an albedo proxy. 0 = pure additive (existing behaviour — light is added on "
-               + "top of the surface unmodulated, can read as washed-out under bright spots). "
-               + "1 = pure multiplicative against the pre-light frame (light picks up the "
-               + "surface's hue and dark surfaces stay dark — physically closer to reflectance, "
-               + "but loses contribution on near-black surfaces). Tune to taste; 0.4–0.6 is a "
-               + "reasonable starting point in ambient-dominated stage scenes. When > 0 the "
-               + "lighting pass adds an extra fullscreen blit that captures the pre-VRSL camera "
-               + "colour into a private RT (~0.1 ms on desktop, more under SPSI VR); skipped "
-               + "entirely at 0 so the cost is opt-in.")]
-        public float albedoTintStrength = 0f;
+        [Tooltip("Assign Hidden/VRSL-URP/SurfaceProperties (the VRSLSurfaceProperties shader "
+               + "asset). Drives the prepass that captures each surface's albedo, smoothness and "
+               + "metallic so the lighting pass can run a real BRDF — that is what makes a lit "
+               + "surface keep its texture colour instead of washing towards white. Costs one "
+               + "extra opaque geometry pass. Leave empty to skip it, in which case every "
+               + "surface is lit as a neutral mid-grey dielectric.")]
+        public Shader surfacePropertiesShader;
 
         [Header("Volumetric")]
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
@@ -213,10 +214,15 @@ namespace VRSL.URP
         // ConfigureInput flags, so a single instance per pass type is correct
         // even with multiple cameras.
         VRSLDMXLightPasses.ComputePass    _computePass;
-        VRSLNormalsPrepass                _normalsPrepass;
+        VRSLSurfacePrepass                _surfacePrepass;
+        VRSLTileCullPass                  _tileCullPass;
         VRSLDMXLightPasses.LightingPass   _lightingPass;
         VRSLDMXLightPasses.VolumetricPass _volumetricPass;
         bool _injectionSubscribed;
+
+        /// <summary>Per-tile light culling for the current camera. Null until the
+        /// passes are allocated, and inert when <c>lightCullShader</c> is unassigned.</summary>
+        public VRSLTileCullPass TileCullPass => _tileCullPass;
 
 #if UNITY_EDITOR
         // Called by Unity when the component is first added or the context-menu Reset is chosen.
@@ -270,6 +276,8 @@ namespace VRSL.URP
         {
             VRStageLighting_DMX_RealtimeLight.ConfigChanged -= OnFixtureConfigChanged;
             UnsubscribeRuntimeInjection();
+            _tileCullPass?.Dispose();
+            _tileCullPass = null;
             ReleaseBuffers();
             ReleaseTextureHandles();
         }
@@ -592,7 +600,8 @@ namespace VRSL.URP
             {
                 renderPassEvent = RenderPassEvent.BeforeRenderingOpaques,
             };
-            _normalsPrepass ??= new VRSLNormalsPrepass();
+            _surfacePrepass ??= new VRSLSurfacePrepass(surfacePropertiesShader);
+            _tileCullPass   ??= new VRSLTileCullPass(lightCullShader, this);
             _lightingPass   ??= new VRSLDMXLightPasses.LightingPass
             {
                 renderPassEvent = RenderPassEvent.AfterRenderingOpaques,
@@ -627,14 +636,11 @@ namespace VRSL.URP
             var renderer = camData.scriptableRenderer;
             if (renderer == null) return;
 
-            // VRSLNormalsPrepass writes _VRSLNormalsTexture into a VRSL-owned
-            // non-MSAA RT before opaque rendering; the lighting shader samples
-            // that global. The lighting and volumetric passes only need depth
-            // from URP, so neither requests Normal here. The albedo-tint path
-            // captures its own opaque snapshot inside LightingPass rather than
-            // reading URP's _CameraOpaqueTexture, so Color isn't requested
-            // either — URP 17 render graph mode doesn't always honour
-            // ConfigureInput(Color) for our injection point.
+            // VRSLSurfacePrepass writes _VRSLNormalsTexture, _VRSLAlbedoTexture and
+            // _VRSLMaterialTexture into VRSL-owned non-MSAA RTs before opaque
+            // rendering; the lighting shader samples those globals. The lighting
+            // and volumetric passes only need depth from URP, so neither requests
+            // Normal or Color here.
             _lightingPass.ConfigureInput(ScriptableRenderPassInput.Depth);
             _volumetricPass.ConfigureInput(ScriptableRenderPassInput.Depth);
 
@@ -644,7 +650,8 @@ namespace VRSL.URP
                 Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
 
             renderer.EnqueuePass(_computePass);
-            renderer.EnqueuePass(_normalsPrepass);
+            renderer.EnqueuePass(_surfacePrepass);
+            renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
             if (VolumetricMaterial != null)
                 renderer.EnqueuePass(_volumetricPass);

@@ -13,20 +13,20 @@ The two paths share most authoring concepts; differences are called out per sect
 
 ## Quickstart
 
-The two URP-only shaders (`Hidden/VRSL-URP/DeferredLighting`, `Hidden/VRSL-URP/VolumetricLighting`) ship at `Runtime/Shaders/Surface/` inside this package. URP is a hard dependency, so the shaders compile unconditionally and the Light Manager menu utilities can resolve them via `Shader.Find` without any sample-import step.
+The three URP-only shaders (`Hidden/VRSL-URP/DeferredLighting`, `Hidden/VRSL-URP/VolumetricLighting`, `Hidden/VRSL-URP/SurfaceProperties`) ship at `Runtime/Shaders/Surface/` inside this package. URP is a hard dependency, so the shaders compile unconditionally and the Light Manager menu utilities can resolve them via `Shader.Find` without any sample-import step.
 
-VRSL never reads, mutates, or recommends URP asset / URP renderer asset settings — those belong to your project. The realtime light path is implemented entirely through runtime pass injection and a VRSL-owned normals prepass, so it co-exists with whatever URP renderer configuration the project uses.
+VRSL never reads, mutates, or recommends URP asset / URP renderer asset settings — those belong to your project. The realtime light path is implemented entirely through runtime pass injection and a VRSL-owned surface prepass, so it co-exists with whatever URP renderer configuration the project uses.
 
 Two menu utilities under `VRSL → URP` cover scene-level setup. Both are idempotent — safe to re-run.
 
 | Menu | Effect |
 |---|---|
-| **VRSL → URP → Add Light Manager to Active Scene** | Creates a `VRSL URP Light Manager` GameObject in the active scene with compute / lighting / volumetric shader references assigned. |
+| **VRSL → URP → Add Light Manager to Active Scene** | Creates a `VRSL URP Light Manager` GameObject in the active scene with the compute, light-cull, lighting, surface-properties and volumetric shader references assigned. |
 | **VRSL → URP → Setup AudioLink Realtime Lights in Scene** | Adds `VRStageLighting_AudioLink_RealtimeLight` to every AudioLink mover spotlight in the active scene and wires up pan/tilt transforms. |
 
 The managers inject their render passes at runtime via `RenderPipelineManager.beginCameraRendering`, so there is no `ScriptableRendererFeature` to add to the URP Renderer asset. This is what lets the package work in environments where users don't author the renderer asset (notably VRChat worlds, where the renderer is owned by the VRChat client).
 
-`VRSLNormalsPrepass` (enqueued automatically by the manager) writes `_VRSLNormalsTexture` from the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses — any opaque shader with a URP `DepthNormals` pass (URP Lit / Poiyomi URP / lilToon URP / Mochie URP) contributes its authored normals automatically; third-party shader authors don't need to add anything VRSL-specific. Surfaces drawn by shaders without a URP `DepthNormals` pass fall back to depth-derivative normals on the lit pixels.
+`VRSLSurfacePrepass` (enqueued automatically by the manager) captures the surface data the lighting pass shades against. Authored normals come from the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses, so any opaque shader with a URP `DepthNormals` pass (URP Lit / Poiyomi URP / lilToon URP / Mochie URP) contributes automatically; surfaces drawn by shaders without one fall back to depth-derivative normals. Albedo, smoothness and metallic come from a second draw using the `SurfaceProperties` shader as an override, which keeps each renderer's own material values — that is what lets a lit surface keep its texture colour. Third-party shader authors don't need to add anything VRSL-specific for either.
 
 The remainder of this document describes the per-fixture fields exposed in the inspectors.
 
@@ -44,7 +44,9 @@ The remainder of this document describes the per-fixture fields exposed in the i
 | `dmxStrobeTimerTexture` | StrobeTimings CRT, published as `_VRSLU_DMXGridStrobeTimer`. The StrobeOutput CRT samples it to compute the strobe gate; leave empty if strobe is unused. |
 | `dmxSpinTimerTexture` | CRT producing `_VRSLU_DMXGridSpinTimer` |
 | `computeShader` | `VRSLDMXLightUpdate` |
+| `lightCullShader` | `VRSLLightCull`. Builds the per-tile light list. Leave empty to disable tiled culling. |
 | `lightingShader` | `Hidden/VRSL-URP/DeferredLighting` |
+| `surfacePropertiesShader` | `Hidden/VRSL-URP/SurfaceProperties`. Drives the albedo / smoothness / metallic prepass. Leave empty to light every surface as a neutral mid-grey dielectric. |
 | `volumetricShader` | `Hidden/VRSL-URP/VolumetricLighting` |
 | `goboTextures` | Optional `Texture2D[]` packed into a shared `Texture2DArray`; DMX channel +11 selects the slot. |
 
@@ -55,7 +57,9 @@ On enable the manager publishes its assigned DMX CRTs as the `_VRSLU_DMX*` shade
 | Field | Asset |
 |---|---|
 | `computeShader` | `VRSLAudioLinkLightUpdate` |
+| `lightCullShader` | `VRSLLightCull`. Builds the per-tile light list. Leave empty to disable tiled culling. |
 | `lightingShader` | `Hidden/VRSL-URP/DeferredLighting` |
+| `surfacePropertiesShader` | `Hidden/VRSL-URP/SurfaceProperties`. Drives the albedo / smoothness / metallic prepass. Leave empty to light every surface as a neutral mid-grey dielectric. |
 | `volumetricShader` | `Hidden/VRSL-URP/VolumetricLighting` |
 | `goboTextures` | Optional `Texture2D[]` for the shared gobo wheel. |
 | `samplingTexture` | Optional `Texture2D` or `RenderTexture` sampled by every fixture in `ColorTexture` / `ColorTextureTraditional` color modes. Per-fixture `textureSamplingCoordinates` UVs pick the colour. Leave empty when no fixtures use those modes. |
@@ -87,7 +91,7 @@ These fields appear on both `VRStageLighting_DMX_RealtimeLight` and `VRStageLigh
 | Field | Notes |
 |---|---|
 | `fixtureType` | `MoverSpotlight`, `MoverWashlight`, `StaticBlinder`, `StaticParLight`, `StaticPointLight`, `Custom`. Drives inspector field visibility and sets the wash-vs-spot inner-cone ratio (wash 0.65 = flat-bright with long feather; spot/static 0.5 = falloff over the outer half). `StaticPointLight` emits omnidirectionally — the manager forces point mode for it and the inspector hides the spot, cone, pan/tilt, and gobo fields. |
-| `maxIntensity` | Peak lux at full output. Tune relative to scene scale. |
+| `maxIntensity` | Output at full DMX / full amplitude. Not a physical unit and not tied to URP's physical light units — tune relative to scene scale. |
 | `range` | Attenuation range in metres. |
 | `spotAngle` (AudioLink) / `minSpotAngle` & `maxSpotAngle` (DMX) | Outer cone angle in degrees. DMX channel +4 lerps between min and max. |
 | `isPointLight` | Emit as a point light instead of a spot. |
@@ -166,7 +170,7 @@ With `use5ChannelMode` enabled this collapses to the 5-channel static form — d
 
 ### Tuning maxIntensity
 
-AudioLink amplitude is normalised (0–1), so `maxIntensity` directly controls peak lux output. Calibration:
+AudioLink amplitude is normalised (0–1), so `maxIntensity` directly controls peak output. Calibration:
 
 1. Play a loud section so the target band is near full amplitude.
 2. Adjust `maxIntensity` until illumination on a lit surface matches your artistic intent.

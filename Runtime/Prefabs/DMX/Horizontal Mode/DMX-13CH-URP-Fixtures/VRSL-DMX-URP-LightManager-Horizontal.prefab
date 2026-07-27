@@ -49,7 +49,9 @@ MonoBehaviour:
   dmxStrobeTexture: {fileID: 8600000, guid: e3fa773f91559868d4104ab3ce54bf79, type: 2}
   dmxSpinTimerTexture: {fileID: 8600000, guid: 5bee9c07b3305e88be89de0d01fc2f07, type: 2}
   computeShader: {fileID: 7200000, guid: 213d3149ed0cbc73835aee17d5180332, type: 3}
+  lightCullShader: {fileID: 7200000, guid: 5f41dc4adb8e42f8937cb0064c39ea17, type: 3}
   lightingShader: {fileID: 4800000, guid: d8c757279dc0dc7ff544149ea9f3e897, type: 3}
+  surfacePropertiesShader: {fileID: 4800000, guid: 5e926720f16a403487984bfa2578e36f, type: 3}
   volumetricShader: {fileID: 4800000, guid: ee4b25e5a146ba8b36ed731b36047774, type: 3}
   volumetricResolution: 0
   volumetricStepCount: 32

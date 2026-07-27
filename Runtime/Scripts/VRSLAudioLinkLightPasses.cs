@@ -117,16 +117,12 @@ namespace VRSL.URP
             {
                 public BufferHandle  lightDataBuffer;
                 public TextureHandle depthTexture;
-                public TextureHandle opaqueSnapshot;
+                public BufferHandle  tileLightIndices;
                 public Material      material;
                 public int           lightCount;
-                public float         albedoTintStrength;
-            }
-
-            class CapturePassData
-            {
-                public TextureHandle source;
-                public Material      material;
+                public Vector4       tileParams;
+                public bool          bindTileBuffer;
+                public bool          surfaceDataValid;
             }
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
@@ -145,69 +141,42 @@ namespace VRSL.URP
                     return;
                 }
 
-                // Mirrors VRSLDMXLightPasses.LightingPass — see there for the
-                // rationale on capturing our own opaque snapshot rather than
-                // relying on URP's _CameraOpaqueTexture.
-                bool wantTint = mgr.albedoTintStrength > 0f;
-                TextureHandle opaqueSnapshot = TextureHandle.nullHandle;
-                if (wantTint)
-                {
-                    var camData = frame.Get<UniversalCameraData>();
-                    var camDesc = camData.cameraTargetDescriptor;
-                    int sliceCount = Mathf.Max(1, camDesc.volumeDepth);
-                    var snapDesc = new TextureDesc(camDesc.width, camDesc.height)
-                    {
-                        name        = "VRSL Opaque Snapshot",
-                        format      = camDesc.graphicsFormat,
-                        clearBuffer = false,
-                        filterMode  = FilterMode.Bilinear,
-                        dimension   = sliceCount > 1
-                                          ? TextureDimension.Tex2DArray
-                                          : TextureDimension.Tex2D,
-                        slices      = sliceCount,
-                    };
-                    opaqueSnapshot = rg.CreateTexture(snapDesc);
-
-                    using var capture = rg.AddRasterRenderPass<CapturePassData>(
-                        "VRSL AudioLink Opaque Capture", out var cd);
-                    cd.source   = resources.activeColorTexture;
-                    cd.material = mgr.LightingMaterial;
-                    capture.SetRenderAttachment(opaqueSnapshot, 0, AccessFlags.Write);
-                    capture.UseTexture(cd.source, AccessFlags.Read);
-                    capture.AllowGlobalStateModification(true);
-                    capture.SetRenderFunc((CapturePassData p, RasterGraphContext ctx) =>
-                    {
-                        var cmd = ctx.cmd;
-                        cmd.SetGlobalTexture("_VRSLBlitSource", p.source);
-                        cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
-                            p.material, 0, 1);
-                    });
-                }
-
                 using var builder = rg.AddRasterRenderPass<PassData>("VRSL AudioLink Lighting Pass", out var d);
 
-                d.lightDataBuffer    = rg.ImportBuffer(mgr.LightDataBuffer);
-                d.depthTexture       = resources.cameraDepthTexture;
-                d.opaqueSnapshot     = opaqueSnapshot;
-                d.material           = mgr.LightingMaterial;
-                d.lightCount         = mgr.FixtureCount;
-                d.albedoTintStrength = wantTint ? mgr.albedoTintStrength : 0f;
+                // Mirrors VRSLDMXLightPasses.LightingPass — the tile cull records
+                // earlier in this graph, and a zero tileParams tells the shader to
+                // fall back to iterating every light.
+                var cull = mgr.TileCullPass;
+                d.bindTileBuffer = cull != null && cull.TileBuffer != null;
+                d.tileParams     = d.bindTileBuffer && cull.TileParams.x >= 1f
+                                       ? cull.TileParams
+                                       : Vector4.zero;
+
+                d.lightDataBuffer = rg.ImportBuffer(mgr.LightDataBuffer);
+                d.depthTexture    = resources.cameraDepthTexture;
+                d.material        = mgr.LightingMaterial;
+                d.lightCount      = mgr.FixtureCount;
+                d.surfaceDataValid = mgr.surfacePropertiesShader != null;
 
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
                 builder.UseBuffer( d.lightDataBuffer, AccessFlags.Read);
                 builder.UseTexture(d.depthTexture,    AccessFlags.Read);
-                if (wantTint)
-                    builder.UseTexture(opaqueSnapshot, AccessFlags.Read);
+                if (d.bindTileBuffer)
+                {
+                    d.tileLightIndices = rg.ImportBuffer(cull.TileBuffer);
+                    builder.UseBuffer(d.tileLightIndices, AccessFlags.Read);
+                }
                 builder.AllowGlobalStateModification(true);
 
                 builder.SetRenderFunc((PassData p, RasterGraphContext ctx) =>
                 {
                     var cmd = ctx.cmd;
-                    cmd.SetGlobalBuffer( "_VRSLLights",      p.lightDataBuffer);
-                    cmd.SetGlobalInteger("_VRSLLightCount",  p.lightCount);
-                    cmd.SetGlobalFloat(  "_VRSLAlbedoTint",  p.albedoTintStrength);
-                    if (p.albedoTintStrength > 0f)
-                        cmd.SetGlobalTexture("_VRSLOpaqueTexture", p.opaqueSnapshot);
+                    cmd.SetGlobalBuffer( "_VRSLLights",     p.lightDataBuffer);
+                    cmd.SetGlobalInteger("_VRSLLightCount", p.lightCount);
+                    cmd.SetGlobalVector( "_VRSLTileParams", p.tileParams);
+                    cmd.SetGlobalFloat(  "_VRSLSurfaceDataValid", p.surfaceDataValid ? 1f : 0f);
+                    if (p.bindTileBuffer)
+                        cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
                     // RenderingUtils.fullscreenMesh + cmd.DrawMesh is the URP-recommended
                     // pattern for fullscreen passes (cmd.DrawProcedural and cmd.Blit have
                     // known XR-integration issues in URP); URP's XR system applies
@@ -236,10 +205,13 @@ namespace VRSL.URP
                 public Material      material;
                 public TextureHandle halfDepth;
                 public BufferHandle  lightDataBuffer;
+                public BufferHandle  tileLightIndices;
                 public int           lightCount;
                 public Vector4       stepParams;
                 public Vector4       densityParams;
                 public Vector4       fogTintParams;
+                public Vector4       tileParams;
+                public bool          bindTileBuffer;
             }
 
             class UpsampleData
@@ -270,6 +242,17 @@ namespace VRSL.URP
 
                 BufferHandle lightDataHandle = rg.ImportBuffer(mgr.LightDataBuffer);
 
+                // Same tile list the surface pass uses — the view ray for a pixel
+                // stays inside its screen tile, so one lookup serves every step.
+                var  cull         = mgr.TileCullPass;
+                bool bindTileBuffer = cull != null && cull.TileBuffer != null;
+                Vector4 tileParams  = bindTileBuffer && cull.TileParams.x >= 1f
+                                          ? cull.TileParams
+                                          : Vector4.zero;
+                BufferHandle tileHandle = bindTileBuffer
+                    ? rg.ImportBuffer(cull.TileBuffer)
+                    : default;
+
                 if (mgr.VolumetricUseFullRes)
                 {
                     // Full-res path — single raymarch pass that samples the full
@@ -285,10 +268,15 @@ namespace VRSL.URP
                         d.stepParams      = mgr.VolumetricStepParams;
                         d.densityParams   = mgr.VolumetricDensityParams;
                         d.fogTintParams   = mgr.VolumetricFogTintParams;
+                        d.bindTileBuffer  = bindTileBuffer;
+                        d.tileParams      = tileParams;
+                        d.tileLightIndices = tileHandle;
 
                         builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
                         builder.UseBuffer(d.lightDataBuffer, AccessFlags.Read);
                         builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
+                        if (bindTileBuffer)
+                            builder.UseBuffer(d.tileLightIndices, AccessFlags.Read);
                         builder.AllowGlobalStateModification(true);
 
                         builder.SetRenderFunc((RaymarchData p, RasterGraphContext ctx) =>
@@ -299,6 +287,9 @@ namespace VRSL.URP
                             cmd.SetGlobalVector( "_VRSLVolStepCount", p.stepParams);
                             cmd.SetGlobalVector( "_VRSLVolDensity",   p.densityParams);
                             cmd.SetGlobalVector( "_VRSLVolFogTint",   p.fogTintParams);
+                            cmd.SetGlobalVector( "_VRSLTileParams",   p.tileParams);
+                            if (p.bindTileBuffer)
+                                cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
                             cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
                                 p.material, 0, 3);
                         });
@@ -372,10 +363,15 @@ namespace VRSL.URP
                     d.stepParams      = mgr.VolumetricStepParams;
                     d.densityParams   = mgr.VolumetricDensityParams;
                     d.fogTintParams   = mgr.VolumetricFogTintParams;
+                    d.bindTileBuffer  = bindTileBuffer;
+                    d.tileParams      = tileParams;
+                    d.tileLightIndices = tileHandle;
 
                     builder.SetRenderAttachment(halfRT, 0, AccessFlags.Write);
                     builder.UseTexture(d.halfDepth, AccessFlags.Read);
                     builder.UseBuffer(d.lightDataBuffer, AccessFlags.Read);
+                    if (bindTileBuffer)
+                        builder.UseBuffer(d.tileLightIndices, AccessFlags.Read);
                     builder.AllowGlobalStateModification(true);
 
                     builder.SetRenderFunc((RaymarchData p, RasterGraphContext ctx) =>
@@ -387,6 +383,9 @@ namespace VRSL.URP
                         cmd.SetGlobalVector( "_VRSLVolStepCount",      p.stepParams);
                         cmd.SetGlobalVector( "_VRSLVolDensity",        p.densityParams);
                         cmd.SetGlobalVector( "_VRSLVolFogTint",        p.fogTintParams);
+                        cmd.SetGlobalVector( "_VRSLTileParams",        p.tileParams);
+                        if (p.bindTileBuffer)
+                            cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
                         cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
                             p.material, 0, 1);
                     });

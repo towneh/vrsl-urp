@@ -1,0 +1,175 @@
+#pragma kernel CullLights
+
+// Screen-space tiled light culling, shared by the DMX and AudioLink paths —
+// both produce the same _VRSLLights buffer, so the cull only has to run once.
+//
+// One thread group per tile per eye. Each group builds its tile's world-space
+// frustum, tests every active light's bounding sphere against it, and writes the
+// survivors into _VRSLTileLightIndicesRW. The fullscreen surface and volumetric
+// passes then iterate that list instead of every fixture in the scene.
+//
+// The tile frustum spans the camera's whole depth range rather than the tile's
+// min/max scene depth. That costs a little tightness on the surface pass but
+// keeps the list valid for the volumetric raymarch, whose ray runs from the
+// camera to the surface, and removes any dependency on depth being ready.
+
+#include "../Shared/VRSLLightingLibrary.hlsl"
+
+// Must match VRSLTileCulling.hlsl and VRSL_TileCulling.MaxLightsPerTile.
+#define VRSL_MAX_LIGHTS_PER_TILE 64
+#define VRSL_TILE_STRIDE         (VRSL_MAX_LIGHTS_PER_TILE + 1)
+#define VRSL_CULL_GROUP_SIZE     64
+
+StructuredBuffer<VRSLLightData> _VRSLLights;
+RWStructuredBuffer<uint>        _VRSLTileLightIndicesRW;
+
+uint _VRSLLightCount;
+// x = tiles across, y = tiles down, z = eye/slice count, w = unused.
+float4 _VRSLCullTileParams;
+// Inverse view-projection per eye, in the same convention the fullscreen
+// shaders use for ComputeWorldSpacePosition — so tile boundaries here land
+// exactly where the sampling shaders think they do.
+float4x4 _VRSLCullInvViewProj[2];
+
+groupshared uint gs_TileLightCount;
+
+// Reconstruct a world-space point from tile UV and device depth. Mirrors
+// ComputeClipSpacePosition + ComputeWorldSpacePosition from the core library,
+// including the clip-space Y flip, so there is no chance of the cull grid
+// drifting from the grid the fragment shaders index with.
+float3 VRSL_CullWorldPos(float2 uv, float deviceDepth, uint eye)
+{
+    float4 positionCS = float4(uv * 2.0 - 1.0, deviceDepth, 1.0);
+#if UNITY_UV_STARTS_AT_TOP
+    positionCS.y = -positionCS.y;
+#endif
+    float4 hpositionWS = mul(_VRSLCullInvViewProj[eye], positionCS);
+    return hpositionWS.xyz / hpositionWS.w;
+}
+
+// Plane in the form dot(n, p) + d >= 0 for points inside the frustum.
+struct VRSLPlane
+{
+    float3 n;
+    float  d;
+};
+
+// Plane through `origin` spanned by two edge vectors, oriented so the given
+// inside point satisfies dot(n, p) + d >= 0.
+VRSLPlane VRSL_MakePlane(float3 origin, float3 edgeA, float3 edgeB, float3 insidePoint)
+{
+    VRSLPlane p;
+    float3 n = cross(edgeA, edgeB);
+    float  l = length(n);
+    // A degenerate tile (zero-area, or a corner case at extreme FOV) yields no
+    // usable plane; fall back to one that accepts everything rather than
+    // silently culling the tile empty.
+    if (l < 1e-8)
+    {
+        p.n = float3(0, 0, 0);
+        p.d = 1.0;
+        return p;
+    }
+    n /= l;
+    float d = -dot(n, origin);
+    if (dot(n, insidePoint) + d < 0.0)
+    {
+        n = -n;
+        d = -d;
+    }
+    p.n = n;
+    p.d = d;
+    return p;
+}
+
+bool VRSL_SphereOutside(VRSLPlane p, float3 center, float radius)
+{
+    return (dot(p.n, center) + p.d) < -radius;
+}
+
+[numthreads(VRSL_CULL_GROUP_SIZE, 1, 1)]
+void CullLights(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
+{
+    uint tilesX = (uint)_VRSLCullTileParams.x;
+    uint tilesY = (uint)_VRSLCullTileParams.y;
+
+    uint tx  = groupId.x;
+    uint ty  = groupId.y;
+    uint eye = groupId.z;
+    if (tx >= tilesX || ty >= tilesY) return;
+
+    uint tileIndex = (eye * tilesY + ty) * tilesX + tx;
+    uint base      = tileIndex * VRSL_TILE_STRIDE;
+
+    if (groupIndex == 0) gs_TileLightCount = 0;
+    GroupMemoryBarrierWithGroupSync();
+
+    // ── Tile frustum ─────────────────────────────────────────────────────────
+    // Two depths per corner give an exact ray direction without needing a far
+    // plane, which an infinite-far projection would send to infinity.
+#if UNITY_REVERSED_Z
+    const float kNearDepth = 1.0;
+    const float kMidDepth  = 0.5;
+#else
+    const float kNearDepth = 0.0;
+    const float kMidDepth  = 0.5;
+#endif
+
+    float2 uv0 = float2( tx      / _VRSLCullTileParams.x,  ty      / _VRSLCullTileParams.y);
+    float2 uv1 = float2((tx + 1) / _VRSLCullTileParams.x, (ty + 1) / _VRSLCullTileParams.y);
+
+    float3 n0 = VRSL_CullWorldPos(float2(uv0.x, uv0.y), kNearDepth, eye);
+    float3 n1 = VRSL_CullWorldPos(float2(uv1.x, uv0.y), kNearDepth, eye);
+    float3 n2 = VRSL_CullWorldPos(float2(uv1.x, uv1.y), kNearDepth, eye);
+    float3 n3 = VRSL_CullWorldPos(float2(uv0.x, uv1.y), kNearDepth, eye);
+
+    float3 m0 = VRSL_CullWorldPos(float2(uv0.x, uv0.y), kMidDepth, eye);
+    float3 m1 = VRSL_CullWorldPos(float2(uv1.x, uv0.y), kMidDepth, eye);
+    float3 m2 = VRSL_CullWorldPos(float2(uv1.x, uv1.y), kMidDepth, eye);
+    float3 m3 = VRSL_CullWorldPos(float2(uv0.x, uv1.y), kMidDepth, eye);
+
+    float3 d0 = normalize(m0 - n0);
+    float3 d1 = normalize(m1 - n1);
+    float3 d2 = normalize(m2 - n2);
+    float3 d3 = normalize(m3 - n3);
+
+    // A point comfortably inside the tile frustum, used to orient each plane.
+    float3 insidePoint = (m0 + m1 + m2 + m3) * 0.25;
+
+    VRSLPlane planes[5];
+    planes[0] = VRSL_MakePlane(n0, n3 - n0, d0, insidePoint);   // left
+    planes[1] = VRSL_MakePlane(n1, n2 - n1, d1, insidePoint);   // right
+    planes[2] = VRSL_MakePlane(n0, n1 - n0, d0, insidePoint);   // bottom
+    planes[3] = VRSL_MakePlane(n3, n2 - n3, d3, insidePoint);   // top
+    // Near plane, from the tile's own near-face corners.
+    planes[4] = VRSL_MakePlane(n0, n1 - n0, n3 - n0, insidePoint);
+
+    // ── Light test ───────────────────────────────────────────────────────────
+    for (uint li = groupIndex; li < _VRSLLightCount; li += VRSL_CULL_GROUP_SIZE)
+    {
+        VRSLLightData light = _VRSLLights[li];
+
+        // Fixtures the decode marked as emitting nothing never reach a pixel,
+        // so keeping them out of the list is free saving on a dark cue.
+        if (light.spotCosines.z < 0.5) continue;
+
+        float3 center = light.positionAndRange.xyz;
+        float  radius = light.positionAndRange.w;
+
+        bool outside = false;
+        [unroll]
+        for (int pi = 0; pi < 5; pi++)
+            outside = outside || VRSL_SphereOutside(planes[pi], center, radius);
+        if (outside) continue;
+
+        uint slot;
+        InterlockedAdd(gs_TileLightCount, 1u, slot);
+        if (slot < VRSL_MAX_LIGHTS_PER_TILE)
+            _VRSLTileLightIndicesRW[base + 1u + slot] = li;
+    }
+
+    GroupMemoryBarrierWithGroupSync();
+
+    if (groupIndex == 0)
+        _VRSLTileLightIndicesRW[base] = min(gs_TileLightCount, VRSL_MAX_LIGHTS_PER_TILE);
+}

@@ -18,7 +18,14 @@ The pipeline lives in the `Towneh.VRSL.URP` assembly, which targets URP ≥17.0 
 
 The two managers (`VRSL_URPLightManager` for DMX, `VRSL_AudioLinkURPLightManager` for AudioLink) inject their render passes at runtime by subscribing to `RenderPipelineManager.beginCameraRendering` and calling `EnqueuePass` directly on each camera's `ScriptableRenderer`. There is no `ScriptableRendererFeature` to add to the URP Renderer asset — the package works without any renderer-asset authoring step.
 
-Authored surface normals come through a VRSL-owned prepass (`VRSLNormalsPrepass`) that renders opaque scene geometry into a non-MSAA RT bound to `_VRSLNormalsTexture`, using the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses. Any opaque shader that ships a URP-compatible `DepthNormals` pass — URP Lit, Poiyomi URP, lilToon URP, Mochie URP — contributes its authored normals automatically; third-party shader authors don't need to add anything VRSL-specific. Pixels drawn by shaders without a URP `DepthNormals` pass fall back to a depth-derivative normal reconstruction in the lighting shader, so those surfaces still pick up VRSL light, just faceted to the underlying tessellation. The prepass RT is allocated as a `Tex2DArray` with `volumeDepth` matching the camera target so the per-eye normals are correct under Single-Pass Stereo Instanced VR.
+Surface data comes through a VRSL-owned prepass (`VRSLSurfacePrepass`) that renders opaque scene geometry twice into non-MSAA RTs:
+
+- **Normals**, using the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses, into `_VRSLNormalsTexture`. Any opaque shader that ships a URP-compatible `DepthNormals` pass — URP Lit, Poiyomi URP, lilToon URP, Mochie URP — contributes its authored normals automatically. Pixels drawn by shaders without one fall back to a depth-derivative normal reconstruction in the lighting shader, so those surfaces still pick up VRSL light, just faceted to the underlying tessellation.
+- **Albedo, smoothness and metallic**, using `VRSLSurfaceProperties` as a `DrawingSettings.overrideShader` over the opaque forward tags, into `_VRSLAlbedoTexture` (rgb = base colour, a = smoothness) and `_VRSLMaterialTexture` (r = metallic). An override shader keeps each renderer's own material property values, so this reaches albedo on shaders VRSL knows nothing about. See *Material capture* below for how the two property-naming conventions are resolved.
+
+Neither half asks third-party shader authors to add anything VRSL-specific. Both RTs are allocated as `Tex2DArray` with `volumeDepth` matching the camera target so per-eye data is correct under Single-Pass Stereo Instanced VR.
+
+The two halves can't be merged into one geometry pass: a shader-tag draw renders each material's own pass (which is what supplies authored normal maps) and an override draw replaces it (which is what supplies albedo). Skipping the albedo half by leaving `surfacePropertiesShader` unassigned is supported and drops the cost back to one pass, at the price of every surface lighting as a neutral mid-grey dielectric.
 
 ---
 
@@ -33,19 +40,27 @@ Per-fixture config (StructuredBuffer)
         │
                 │
         ▼ [AfterRenderingPrePasses]
-[NORMALS PREPASS — VRSLNormalsPrepass]
-  Renders opaque geometry with the DepthNormals / DepthNormalsOnly
-  shader tags into a VRSL-owned non-MSAA Tex2DArray bound globally as
-  _VRSLNormalsTexture. Independent of URP's _CameraNormalsTexture, so
+[SURFACE PREPASS — VRSLSurfacePrepass]
+  Two opaque geometry draws into VRSL-owned non-MSAA Tex2DArrays:
+  authored normals via the DepthNormals / DepthNormalsOnly shader tags
+  (_VRSLNormalsTexture), and albedo / smoothness / metallic via
+  VRSLSurfaceProperties as an override shader (_VRSLAlbedoTexture,
+  _VRSLMaterialTexture). Independent of URP's _CameraNormalsTexture, so
   the lighting pass works under any MSAA setting on the URP asset.
+        │
+        ▼ [BeforeRenderingOpaques + 1]
+[TILE CULL — VRSLLightCull.compute]
+  One thread group per 16x16 screen tile per eye. Tests each active
+  light's bounding sphere against the tile frustum and writes the
+  survivors into a per-tile index list.
         │
         ▼ [AfterRenderingOpaques]
 [SURFACE — VRSLDeferredLighting.shader]
   Fullscreen additive triangle. Reconstructs world position from depth,
   reads the surface normal from _VRSLNormalsTexture (with a depth-
   derivative fallback for pixels drawn by shaders without a URP
-  DepthNormals pass), evaluates every fixture per pixel, accumulates
-  onto the colour target.
+  DepthNormals pass) and the material inputs from the prepass, then
+  evaluates the tile's lights through URP's BRDF onto the colour target.
         │
         ▼ [AfterRenderingOpaques, immediately after surface lighting]
 [VOLUMETRIC — VRSLVolumetricLighting.shader]
@@ -203,18 +218,51 @@ Gobo spin is integrated on the GPU each frame: `spinPhase = fmod(spinSpeed × _V
 
 - Three vertices generated entirely from `SV_VertexID` — no vertex buffer.
 - World position reconstructed via `ComputeWorldSpacePosition(uv, rawDepth, UNITY_MATRIX_I_VP)`.
-- Surface normal sampled from `_VRSLNormalsTexture` (written by `VRSLNormalsPrepass` at `AfterRenderingPrePasses`). On pixels where the prepass wrote no normal — surfaces drawn by shaders without a URP `DepthNormals` pass — the shader falls back to `normalize(cross(ddy(posWS), ddx(posWS)))` so those surfaces still pick up VRSL light, just faceted to the underlying tessellation rather than smooth-shaded.
-- Per-pixel loop over `_VRSLLights[0..N-1]`, skipping inactive lights, accumulating `colour × intensity × distAtten × spotAtten × NdotL` plus the per-pixel gobo sample.
+- Surface normal sampled from `_VRSLNormalsTexture` (written by `VRSLSurfacePrepass` at `AfterRenderingPrePasses`). On pixels where the prepass wrote no normal — surfaces drawn by shaders without a URP `DepthNormals` pass — the shader falls back to `normalize(cross(ddy(posWS), ddx(posWS)))` so those surfaces still pick up VRSL light, just faceted to the underlying tessellation rather than smooth-shaded.
+- Per-pixel loop over the tile's light list (see *Tiled light culling*), evaluating each through URP's BRDF.
 
-`ConfigureInput(ScriptableRenderPassInput.Depth)` runs in the manager's per-camera callback before enqueue. The lighting pass declares `_CameraDepthTexture` as a tracked Render Graph resource and samples `_VRSLNormalsTexture` through the global binding the prepass sets up via `SetGlobalTextureAfterPass`.
+`ConfigureInput(ScriptableRenderPassInput.Depth)` runs in the manager's per-camera callback before enqueue. The lighting pass declares `_CameraDepthTexture` as a tracked Render Graph resource and samples the prepass targets through the global bindings the prepass sets up via `SetGlobalTextureAfterPass`.
 
-### Albedo tint
+### Surface response
 
-`albedoTintStrength` on the manager (range 0–1, default 0) modulates the accumulated additive contribution by the pre-light scene colour as an albedo proxy: the shader applies `lighting *= lerp(1, sceneColor, _VRSLAlbedoTint)` immediately before the additive blend. At `0` the pass is purely additive and the scene-colour sample is skipped entirely. At `1` the surface response is fully multiplicative — light picks up the surface's hue and dark surfaces stay dark, which reads as physically more correct in ambient-dominated stage scenes but loses contribution on near-black surfaces. Intermediate values blend between the two.
+Material inputs are read once per pixel and fed to URP's own BRDF, so a VRSL fixture shades a Lit material the way a URP spot light would:
 
-When the strength is non-zero, the lighting pass records an extra **opaque-capture** sub-pass first: a fullscreen blit (Pass 1 of `VRSLDeferredLighting.shader`) that copies the active camera colour into a transient render-graph texture sized to the camera target (Tex2DArray when SPSI VR is active, matching the camera's `volumeDepth`). The captured texture is bound globally as `_VRSLOpaqueTexture` and consumed by the lighting sub-pass. URP's own `_CameraOpaqueTexture` isn't used: under URP 17 render graph mode `CopyColor` doesn't reliably run for our injection point, even when "Opaque Texture" is enabled on the URP asset and `ConfigureInput(Color)` is requested, so the package captures its own snapshot. The capture sub-pass is skipped entirely when `albedoTintStrength == 0`, so the feature is genuinely opt-in cost-wise (~0.1 ms desktop, more under SPSI VR).
+```hlsl
+InitializeBRDFData(albedo, metallic, 0, smoothness, alpha, brdfData);
+...
+float3 radiance = lightColour * lightIntensity * (distAtten * spotAtten * NdotL);
+return DirectBRDF(brdfData, normalWS, lightDirWS, viewDirWS) * radiance;
+```
 
-True per-pixel albedo isn't available in this lightweight prepass (only normals are written); the camera-colour snapshot is the closest stand-in URP exposes universally. It includes any other lighting (URP realtime / baked / ambient) that has already affected the surface, so the proxy is most accurate when ambient dominates and least accurate in heavily realtime-lit scenes — tune to taste rather than expecting physical correctness.
+That gives the diffuse albedo term (a lit red carpet stays red instead of washing towards white), the GGX specular lobe (a stage spot on a polished floor gets its highlight), and the metallic response (metals lose their diffuse and tint their specular).
+
+Where the prepass wrote nothing — geometry drawn by shaders with no forward LightMode tag, or a scene running without `surfacePropertiesShader` assigned — the shader falls back to a mid-grey dielectric so those surfaces still respond to light. The lighting pass pushes `_VRSLSurfaceDataValid` so that case is explicit rather than depending on what an unbound texture slot resolves to, which differs by graphics API.
+
+Shadowing is still absent, so a fixture lights every surface in range regardless of occluders. See *Known Limitations*.
+
+### Material capture
+
+`VRSLSurfaceProperties` declares both property-naming conventions — `_BaseMap` / `_BaseColor` (URP-native) and `_MainTex` / `_Color` (the legacy naming most avatar shaders use) — and combines them with `min()`:
+
+- a URP material leaves the legacy pair at its default white, so the URP pair wins;
+- an avatar material leaves the URP pair at white, so the legacy pair wins;
+- a material converted from Standard that still carries a stale `_MainTex` pointing at the same texture resolves to that texture once instead of squaring it.
+
+Where a material genuinely populates both with different values the darker wins, which under-applies light rather than blowing it out. A tint whose alpha reads zero is treated as a property the material doesn't declare, since an unbound scalar resolves to zero rather than to the shader's stated default and a transparent tint is meaningless on an opaque renderer.
+
+Smoothness takes `max(_Smoothness, _Glossiness)` on the same reasoning. Metallic and smoothness maps aren't sampled — the scalars only.
+
+The opaque and alpha-test queues are drawn as separate renderer lists against separate passes, so an opaque material whose base map stores non-colour data in alpha is never clipped against a stale `_Cutoff`.
+
+### Tiled light culling
+
+`VRSLLightCull.compute` runs one thread group per 16×16 screen tile per eye. Each group builds its tile's world-space frustum from the same inverse view-projection the fullscreen shaders reconstruct with, tests every active light's bounding sphere against it, and writes the survivors into `_VRSLTileLightIndices` — one run of 65 uints per tile, the first holding the count.
+
+Both fullscreen passes then iterate the tile's list rather than the whole fixture buffer. The volumetric pass gains the most: a view ray stays inside its screen tile for its whole length, so the list is resolved once and reused for every raymarch step, where previously each step walked every fixture in the scene.
+
+Tile frusta span the camera's full depth range rather than each tile's scene-depth bounds. That costs a little tightness on the surface pass, but keeps one list valid for the volumetric ray (which runs from the camera to the surface) and removes any dependency on the depth texture being ready when the cull runs.
+
+The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile rather than falling back to the full list. Leaving `lightCullShader` unassigned publishes a zero `_VRSLTileParams`, which both shaders read as "iterate every light" — correct, just without the saving.
 
 ---
 
@@ -291,13 +339,19 @@ A few Unity 6-specific requirements are worth flagging for contributors:
 - **Per-frame CPU cost is bounded.** DMX uploads the config once at setup and on `MarkConfigDirty()`; AudioLink uploads `N × 112 bytes` per frame. `VRStageLighting_DMX_RealtimeLight.OnValidate` raises a static `ConfigChanged` event the DMX manager subscribes to, so inspector tweaks propagate to the GPU on the next `LateUpdate` without authors needing to call `MarkConfigDirty` themselves. No per-fixture CPU decode; no `Light` component writes; no `MaterialPropertyBlock` push per cone.
 - **No GPU→CPU readback** in either path.
 - **No shadow pass penalty.** Bypassing Unity's `Light` component means URP doesn't generate per-light shadow atlases — the architectural choice that makes 100+ fixtures feasible. URP's per-light shadow atlas at scale is the dominant cost in the equivalent `Light`-component approach (one full scene redraw per shadow-casting spot, six per point light).
-- **GPU cost is dominated by the fullscreen passes.** The compute dispatch is one workgroup per 64 fixtures and finishes in well under 1 ms at any practical fixture count. Scaling to large rigs is a GPU-bandwidth conversation, not CPU.
+- **Per-pixel light cost scales with lights-per-tile, not fixture count.** The tile cull is what bounds it; without `lightCullShader` assigned, both fullscreen passes fall back to iterating every fixture on every pixel and the volumetric pass does so once per raymarch step.
+- **Geometry cost is the surface prepass.** Two extra opaque draws per camera, and both again when the DMX and AudioLink managers are active together. In a scene whose opaque cost is dominated by avatars this is the term that grows with occupancy rather than with rig size.
+- **The decode compute is negligible.** One workgroup per 64 fixtures, well under 1 ms at any practical fixture count.
+
+No measured sweep is published with the package. The `RealtimeLightProfiling` sample builds a deterministic scene for one; run it before tuning anything above.
 
 ---
 
 ## Known Limitations
 
-- **No shadow casting.** This pipeline bypasses Unity's `Light` component to avoid the per-light shadow atlas cost. A future opt-in `castVolumetricShadows` flag could drive a small pool of real `Light` components for hero fixtures.
+- **No shadow casting.** This pipeline bypasses Unity's `Light` component to avoid the per-light shadow atlas cost, so a fixture lights every surface within range regardless of what stands between them. Screen-space contact shadows off the depth buffer would cover the near field cheaply; a small pool of real `Light` components for hero fixtures would cover the rest.
+- **No ambient occlusion term** in the surface response. The BRDF runs against albedo, smoothness and metallic only.
+- **No smoothness or metallic maps.** The surface prepass samples the scalar material properties, so a surface with a metallic/smoothness texture is lit against its uniform values.
 - **No light-perspective shadows in volume.** On-screen occluders silhouette out of the cone correctly; off-screen occluders (an avatar in the beam viewed from the side) don't cast a darkened wedge through the rest of the volume.
 - **Transparent geometry is not illuminated.** The additive surface and volumetric passes run after opaques; haze, glass, and water materials don't receive contribution. The legacy volumetric mesh shaders remain available alongside for haze-only effects on platforms that need them.
 - **NineUniverse DMX mode not supported.** The compute shader implements the standard `IndustryRead` sampling path only.
@@ -315,12 +369,18 @@ A few Unity 6-specific requirements are worth flagging for contributors:
 | `Runtime/Scripts/VRSL_AudioLinkURPLightManager.cs` | Towneh.VRSL.URP | AudioLink manager singleton |
 | `Runtime/Scripts/VRSLDMXLightPasses.cs` | Towneh.VRSL.URP | DMX pass classes (compute + surface + volumetric) |
 | `Runtime/Scripts/VRSLAudioLinkLightPasses.cs` | Towneh.VRSL.URP | AudioLink pass classes |
+| `Runtime/Scripts/VRSLSurfacePrepass.cs` | Towneh.VRSL.URP | Normals + albedo/material prepass (shared) |
+| `Runtime/Scripts/VRSLTileCullPass.cs` | Towneh.VRSL.URP | Tiled light culling pass and `IVRSLLightSource` (shared) |
 | `Editor/VRSL_URPRendererSetup.cs` | Towneh.VRSL.URP.Editor | Read-only renderer-config diagnostics and the scene-level "Add Light Manager" menu (DMX) |
 | `Runtime/Shaders/Compute/VRSLDMXLightUpdate.compute` | — | DMX compute kernel |
 | `Runtime/Shaders/Compute/VRSLAudioLinkLightUpdate.compute` | — | AudioLink compute kernel |
 | `Runtime/Shaders/Surface/VRSLDeferredLighting.shader` | — | Fullscreen surface lighting pass (shared) |
+| `Runtime/Shaders/Surface/VRSLSurfaceProperties.shader` | — | Override shader for the albedo/material prepass |
+| `Runtime/Shaders/Compute/VRSLLightCull.compute` | — | Tiled light-culling kernel (shared) |
 | `Runtime/Shaders/Surface/VRSLVolumetricLighting.shader` | — | Raymarched volumetric pass (shared) |
-| `Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl` | — | Struct definitions and lighting evaluation functions |
+| `Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl` | — | Struct definitions, attenuation, volumetric evaluation, gobo |
+| `Runtime/Shaders/Shared/VRSLSurfaceBRDF.hlsl` | — | Material capture read-back and BRDF surface evaluation |
+| `Runtime/Shaders/Shared/VRSLTileCulling.hlsl` | — | Read side of the per-tile light list |
 | `Editor/VRStageLighting_DMX_RealtimeLightEditor.cs` | Towneh.VRSL.URP.Editor | DMX custom inspector |
 | `Editor/VRStageLighting_AudioLink_RealtimeLightEditor.cs` | Towneh.VRSL.URP.Editor | AudioLink custom inspector |
 | `Editor/VRSL_AudioLinkURPSetup.cs` | Towneh.VRSL.URP.Editor | Scene-wide AudioLink fixture configuration utility |

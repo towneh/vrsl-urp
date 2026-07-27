@@ -27,6 +27,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
             #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
+            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLTileCulling.hlsl"
 
             // Mesh-driven attributes — manager renders RenderingUtils.fullscreenMesh,
             // whose vertices are already in clip space (-1..1). Each pass below also
@@ -174,6 +175,14 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
 
                 float3 accumulated = 0;
 
+                // The whole view ray for this pixel stays inside one screen
+                // tile, and the tile frustum spans the camera's full depth
+                // range, so the light list is resolved once and reused for
+                // every step. That turns the inner loop from "every fixture in
+                // the scene" into "the fixtures that reach this tile".
+                uint tileIndex  = VRSL_TileIndex(uv, VRSL_EyeIndex());
+                uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
+
                 [loop]
                 for (int s = 0; s < stepCount; s++)
                 {
@@ -181,18 +190,26 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     float3 samplePos = cameraWS + viewDir * t;
 
                     float3 inscatter = 0;
-                    for (uint li = 0; li < _VRSLLightCount; li++)
+                    for (uint slot = 0; slot < lightCount; slot++)
                     {
-                        VRSLLightData light = _VRSLLights[li];
+                        VRSLLightData light =
+                            _VRSLLights[VRSL_LightListIndex(tileIndex, slot)];
+
                         float3 contrib = VRSL_EvaluateLightVolumetric(
                             light, samplePos, toCamera, anisotropy);
-                        contrib *= SampleGobo(
-                            light.goboAndSpin.x, light.goboAndSpin.y,
-                            samplePos,
-                            light.positionAndRange.xyz,
-                            light.directionAndType.xyz,
-                            light.spotCosines.y,
-                            light.spotCosines.w);
+
+                        // The gobo fetch is the most expensive part of the step,
+                        // and a gobo can only reduce the result — skip it wherever
+                        // the light already contributes nothing at this sample.
+                        if (any(contrib > 0.0))
+                            contrib *= SampleGobo(
+                                light.goboAndSpin.x, light.goboAndSpin.y,
+                                samplePos,
+                                light.positionAndRange.xyz,
+                                light.directionAndType.xyz,
+                                light.spotCosines.y,
+                                light.spotCosines.w);
+
                         inscatter += contrib;
                     }
 
