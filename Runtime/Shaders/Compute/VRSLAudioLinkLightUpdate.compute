@@ -30,6 +30,7 @@ Texture2D<float4> _VRSLALSamplingTexture;
 StructuredBuffer<VRSLALFixtureConfig>  _ALFixtureConfigs;
 RWStructuredBuffer<VRSLLightData>      _LightData;
 uint                                    _FixtureCount;
+uint                                    _VRSLGoboCount;
 // Elapsed seconds since scene load — supplied from CPU each frame. Used to
 // integrate the gobo spin rate into a rotation phase, matching the volumetric
 // AudioLink shader's _Time.w · 10 · spinSpeed (degrees). fmod in the kernel
@@ -190,8 +191,21 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // (spinSpeed *= -goboSpinSpeed in VRSL-StandardMover-VolumetricFrag.cginc).
     // fmod to [-2π, 2π] bounds precision for long-running scenes.
     float spinPhase = fmod(cfg.reserved.y * _VRSLTime * -0.34906585, 6.28318530718);
-    light.directionAndType  = float4(dir, VRSL_PackTypeAndGobo((float)lightType,
-                                                              (int)cfg.reserved.x));
+    // Gobo selection, mirroring the DMX kernel's guards.
+    //   - reserved.x is already 0-based (the inspector field is 1-based, so its 0
+    //     "open beam" arrives here as -1). -1 must survive as the SampleGobo no-op.
+    //   - Point lights are omnidirectional but SampleGobo is a spot-cone
+    //     projection, so a gobo would mask their spill down to a cone and zero it
+    //     behind the axis.
+    //   - Clamp against the live wheel: a fixture authored when the manager had
+    //     more gobo textures would otherwise index past the end of the array.
+    int goboIdx = (int)cfg.reserved.x;
+    if (goboIdx < 0 || lightType != 0 || _VRSLGoboCount == 0u)
+        goboIdx = -1;
+    else
+        goboIdx = min(goboIdx, (int)_VRSLGoboCount - 1);
+
+    light.directionAndType  = float4(dir, VRSL_PackTypeAndGobo((float)lightType, goboIdx));
     light.spotParams        = float4(innerCos, outerCos, cfg.spotAngles.z, spinPhase);
     _LightData[idx] = light;
 }

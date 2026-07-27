@@ -178,11 +178,10 @@ namespace VRSL.URP
                 // the shader falls back to iterating every light — but the buffer
                 // is still bound, since leaving the slot empty is not uniformly
                 // safe across graphics APIs.
-                var cull = mgr.TileCullPass;
-                d.bindTileBuffer = cull != null && cull.TileBuffer != null;
-                d.tileParams     = d.bindTileBuffer && cull.TileParams.x >= 1f
-                                       ? cull.TileParams
-                                       : Vector4.zero;
+                var cull    = mgr.TileCullPass;
+                var binding = cull != null ? cull.GetBinding() : default;
+                d.bindTileBuffer = binding.Bind;
+                d.tileParams     = binding.TileParams;
 
                 d.lightDataBuffer = rg.ImportBuffer(mgr.LightDataBuffer);
                 d.depthTexture    = resources.cameraDepthTexture;
@@ -278,10 +277,9 @@ namespace VRSL.URP
                 // stays inside its screen tile, and the tile frusta cover the
                 // camera's full depth range, so one lookup serves every step.
                 var  cull         = mgr.TileCullPass;
-                bool bindTileBuffer = cull != null && cull.TileBuffer != null;
-                Vector4 tileParams  = bindTileBuffer && cull.TileParams.x >= 1f
-                                          ? cull.TileParams
-                                          : Vector4.zero;
+                var binding         = cull != null ? cull.GetBinding() : default;
+                bool bindTileBuffer = binding.Bind;
+                Vector4 tileParams  = binding.TileParams;
                 BufferHandle tileHandle = bindTileBuffer
                     ? rg.ImportBuffer(cull.TileBuffer)
                     : default;

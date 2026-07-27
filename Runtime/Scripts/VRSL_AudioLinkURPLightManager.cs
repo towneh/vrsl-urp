@@ -546,10 +546,16 @@ namespace VRSL.URP
 
             renderer.EnqueuePass(_computePass);
             // The surface prepass costs two opaque geometry draws and writes the
-            // same targets regardless of which manager drives it. When a DMX
-            // manager is present it owns the prepass and this one defers, rather
-            // than both rendering it and the second overwriting the first.
-            if (VRSL_URPLightManager.Instance == null)
+            // same targets regardless of which manager drives it, so when a DMX
+            // manager is present it owns the prepass and this one defers.
+            //
+            // isActiveAndEnabled, not just a null check: Instance is assigned in
+            // Awake and cleared only in OnDestroy, so a DMX manager that is merely
+            // disabled still answers non-null while having unsubscribed from
+            // beginCameraRendering. Deferring to it then would leave the prepass
+            // enqueued by nobody and the lighting pass shading against stale data.
+            var dmxManager = VRSL_URPLightManager.Instance;
+            if (dmxManager == null || !dmxManager.isActiveAndEnabled)
                 renderer.EnqueuePass(_surfacePrepass);
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);

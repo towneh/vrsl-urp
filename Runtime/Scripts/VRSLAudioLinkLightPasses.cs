@@ -46,6 +46,7 @@ namespace VRSL.URP
                 public ComputeShader cs;
                 public int           kernel;
                 public int           fixtureCount;
+                public int           goboCount;
                 public float         time;
             }
 
@@ -81,6 +82,7 @@ namespace VRSL.URP
                 d.cs                  = mgr.computeShader;
                 d.kernel              = mgr.ComputeKernel;
                 d.fixtureCount        = mgr.FixtureCount;
+                d.goboCount           = mgr.GoboCount;
                 // Captured here so the render graph lambda doesn't read Time.* off thread.
                 // timeSinceLevelLoad resets on scene reload, which is the desirable behaviour
                 // for gobo spin — phase restarts cleanly with the scene.
@@ -98,6 +100,7 @@ namespace VRSL.URP
                 {
                     var cmd = ctx.cmd;
                     cmd.SetComputeIntParam(    p.cs,           "_FixtureCount",            p.fixtureCount);
+                    cmd.SetComputeIntParam(    p.cs,           "_VRSLGoboCount",           p.goboCount);
                     cmd.SetComputeFloatParam(  p.cs,           "_VRSLTime",                p.time);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_ALFixtureConfigs",        p.fixtureConfigBuffer);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_LightData",               p.lightDataBuffer);
@@ -146,11 +149,10 @@ namespace VRSL.URP
                 // Mirrors VRSLDMXLightPasses.LightingPass — the tile cull records
                 // earlier in this graph, and a zero tileParams tells the shader to
                 // fall back to iterating every light.
-                var cull = mgr.TileCullPass;
-                d.bindTileBuffer = cull != null && cull.TileBuffer != null;
-                d.tileParams     = d.bindTileBuffer && cull.TileParams.x >= 1f
-                                       ? cull.TileParams
-                                       : Vector4.zero;
+                var cull    = mgr.TileCullPass;
+                var binding = cull != null ? cull.GetBinding() : default;
+                d.bindTileBuffer = binding.Bind;
+                d.tileParams     = binding.TileParams;
 
                 d.lightDataBuffer = rg.ImportBuffer(mgr.LightDataBuffer);
                 d.depthTexture    = resources.cameraDepthTexture;
@@ -245,10 +247,9 @@ namespace VRSL.URP
                 // Same tile list the surface pass uses — the view ray for a pixel
                 // stays inside its screen tile, so one lookup serves every step.
                 var  cull         = mgr.TileCullPass;
-                bool bindTileBuffer = cull != null && cull.TileBuffer != null;
-                Vector4 tileParams  = bindTileBuffer && cull.TileParams.x >= 1f
-                                          ? cull.TileParams
-                                          : Vector4.zero;
+                var binding         = cull != null ? cull.GetBinding() : default;
+                bool bindTileBuffer = binding.Bind;
+                Vector4 tileParams  = binding.TileParams;
                 BufferHandle tileHandle = bindTileBuffer
                     ? rg.ImportBuffer(cull.TileBuffer)
                     : default;

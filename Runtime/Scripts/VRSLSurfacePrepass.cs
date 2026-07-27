@@ -34,10 +34,14 @@ namespace VRSL.URP
     /// replaces it.
     ///
     /// Both <see cref="VRSL_URPLightManager"/> (DMX) and
-    /// <see cref="VRSL_AudioLinkURPLightManager"/> (AudioLink) instantiate and
-    /// enqueue this pass per camera before their lighting passes. When both
-    /// managers are active the pass enqueues twice per camera; the second run
-    /// overwrites the first with identical data.
+    /// <see cref="VRSL_AudioLinkURPLightManager"/> (AudioLink) instantiate this
+    /// pass, but only one enqueues it per camera: the output is identical either
+    /// way, so the DMX manager owns it and the AudioLink manager defers while a
+    /// DMX manager is present and enabled.
+    ///
+    /// Holds no GPU resources and so is deliberately not <c>IDisposable</c>,
+    /// unlike <see cref="VRSLTileCullPass"/>. Every target here comes from
+    /// <c>RenderGraph.CreateTexture</c>, which the graph pools and frees itself.
     /// </summary>
     public class VRSLSurfacePrepass : ScriptableRenderPass
     {

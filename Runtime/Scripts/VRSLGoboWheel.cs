@@ -78,6 +78,14 @@ namespace VRSL.URP
         {
             if (array == null) return;
             array.Release();
+            // Object.Destroy is illegal outside play mode. The managers don't run
+            // OnEnable/OnDisable in the editor today (neither carries
+            // ExecuteAlways), but this is public and reachable from editor
+            // tooling through RefreshFixtures, so it shouldn't depend on that.
+#if UNITY_EDITOR
+            if (!Application.isPlaying) Object.DestroyImmediate(array);
+            else
+#endif
             Object.Destroy(array);
             array = null;
         }

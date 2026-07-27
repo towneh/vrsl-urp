@@ -88,6 +88,40 @@ namespace VRSL.URP
         /// </summary>
         public Vector4 TileParams { get; private set; }
 
+        /// <summary>
+        /// What a consuming pass needs to bind for tiling. Derived here rather
+        /// than at each of the four call sites (DMX and AudioLink × lighting and
+        /// volumetric), because the four have to agree: this decides whether a
+        /// shader walks the tile list or falls back to scanning every fixture,
+        /// and a copy that drifts would silently change what gets lit.
+        /// </summary>
+        public readonly struct TileBinding
+        {
+            /// <summary>Bind <see cref="TileBuffer"/> to <c>_VRSLTileLightIndices</c>.
+            /// True whenever the buffer exists, even when tiling is inactive —
+            /// leaving a StructuredBuffer slot unbound is not uniformly safe
+            /// across graphics APIs.</summary>
+            public readonly bool Bind;
+
+            /// <summary>Value for <c>_VRSLTileParams</c>. Zero means "tiling
+            /// inactive", which the shaders read as "iterate every light".</summary>
+            public readonly Vector4 TileParams;
+
+            public TileBinding(bool bind, Vector4 tileParams)
+            {
+                Bind       = bind;
+                TileParams = tileParams;
+            }
+        }
+
+        /// <summary>Resolve what this camera's passes should bind. Safe to call on
+        /// a null pass via <c>cull?.GetBinding() ?? default</c>.</summary>
+        public TileBinding GetBinding()
+        {
+            if (_tileBuffer == null) return default;
+            return new TileBinding(true, TileParams.x >= 1f ? TileParams : Vector4.zero);
+        }
+
         public VRSLTileCullPass(ComputeShader cullShader, IVRSLLightSource source)
         {
             _cullShader = cullShader;
