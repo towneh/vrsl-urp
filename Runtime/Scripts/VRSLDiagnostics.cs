@@ -62,8 +62,12 @@ namespace VRSL.URP
         /// compiled shader, so its absence could be a wrong name, a compile
         /// failure, or a stripped kernel. The message says so rather than
         /// asserting one of them.
+        ///
+        /// Takes every kernel the caller depends on, not just one: reporting a
+        /// compute as ok while a pass rejects it for a missing second kernel is
+        /// the kind of half-truth this tool exists to remove.
         /// </summary>
-        public static string ComputeStatus(string label, ComputeShader compute, string kernel)
+        public static string ComputeStatus(string label, ComputeShader compute, params string[] kernels)
         {
             if (compute == null) return $"{label}: NOT ASSIGNED";
 
@@ -75,10 +79,13 @@ namespace VRSL.URP
             }
 #endif
 
-            if (!compute.HasKernel(kernel))
+            foreach (string kernel in kernels)
+            {
+                if (compute.HasKernel(kernel)) continue;
                 return $"{label}: '{compute.name}' has no kernel '{kernel}' — check the kernel "
                      + "name and that the right compute is assigned; the Console will show any "
                      + "compile errors.";
+            }
 
             return $"{label}: '{compute.name}' ok";
         }
@@ -158,7 +165,7 @@ namespace VRSL.URP
             // Enough precision to distinguish "barely lit" from "not lit": at F1 a
             // fixture at 0.04 printed as 0.0 and contradicted the count beside it.
             string faint = peak < 0.05f
-                ? " — - barely above zero, so the source is probably near-silent rather than off"
+                ? " — barely above zero, so the source is probably near-silent rather than off"
                 : "";
             return $"Light data: {emitting}/{fixtureCount} emitting, peak intensity {peak:G4}{faint}";
         }

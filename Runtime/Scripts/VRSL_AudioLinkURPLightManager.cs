@@ -587,7 +587,8 @@ namespace VRSL.URP
                 sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
-                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader, "ScatterFroxels"));
+                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader,
+                                     "ScatterFroxels", "IntegrateFroxels"));
                 sb.AppendLine("  Enter play mode and run this again for the rest.");
                 Debug.Log(sb.ToString(), this);
                 return;
@@ -617,7 +618,8 @@ namespace VRSL.URP
             }
             sb.AppendLine();
             if (volumetricResolution == VolumetricResolution.Froxel)
-                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader, "ScatterFroxels"));
+                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader,
+                                     "ScatterFroxels", "IntegrateFroxels"));
             sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
             sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
             Debug.Log(sb.ToString(), this);
