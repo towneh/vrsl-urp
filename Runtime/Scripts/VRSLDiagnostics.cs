@@ -194,7 +194,13 @@ namespace VRSL.URP
             int depth = Mathf.Max(1, volume.volumeDepth);
             int perSlice = Mathf.Max(1, data.Length / depth);
 
-            float peak = 0f;
+            // Alpha is tracked separately from colour on purpose. The scatter
+            // writes density into alpha unconditionally and the integrate writes
+            // transmittance, which starts at 1 — so alpha is non-zero whenever
+            // the kernels ran at all, regardless of what the lighting maths
+            // produced. Colour alone can't tell "nothing was written" from
+            // "everything was written as zero", and those have nothing in common.
+            float peak = 0f, peakAlpha = 0f;
             int firstLitSlice = -1, lastLitSlice = -1;
             for (int z = 0; z < depth; z++)
             {
@@ -205,6 +211,7 @@ namespace VRSL.URP
                     Vector4 v = data[i];
                     float m = Mathf.Max(v.x, Mathf.Max(v.y, v.z));
                     if (m > slicePeak) slicePeak = m;
+                    if (v.w > peakAlpha) peakAlpha = v.w;
                 }
                 if (slicePeak > 1e-6f)
                 {
@@ -214,14 +221,21 @@ namespace VRSL.URP
                 if (slicePeak > peak) peak = slicePeak;
             }
 
-            if (peak <= 1e-6f)
-                return $"Froxel volume: {volume.width}x{volume.height}x{depth} — EMPTY across every "
-                     + "slice. The scatter or integrate kernel produced nothing, so this is not a "
-                     + "compositing problem";
+            string size = $"{volume.width}x{volume.height}x{depth}";
 
-            return $"Froxel volume: {volume.width}x{volume.height}x{depth} — peak radiance "
-                 + $"{peak:G4}, content in slices {firstLitSlice}-{lastLitSlice}. Volume is "
-                 + "populated, so if nothing renders the composite is sampling it wrongly";
+            if (peak <= 1e-6f && peakAlpha <= 1e-6f)
+                return $"Froxel volume: {size} — NOTHING WRITTEN (colour and alpha both zero). "
+                     + "The kernels didn't reach the volume at all: suspect the UAV binding or "
+                     + "the dispatch, not the lighting maths";
+
+            if (peak <= 1e-6f)
+                return $"Froxel volume: {size} — kernels RAN (peak alpha {peakAlpha:G4}) but "
+                     + "produced no radiance. The write path works, so the fault is in the light "
+                     + "evaluation: sample positions, the tile lookup, or the range test";
+
+            return $"Froxel volume: {size} — peak radiance {peak:G4}, peak alpha {peakAlpha:G4}, "
+                 + $"content in slices {firstLitSlice}-{lastLitSlice}. Volume is populated, so if "
+                 + "nothing renders the composite is sampling it wrongly";
         }
 
         public static string SurfacePrepassStatus(Shader surfacePropertiesShader)
