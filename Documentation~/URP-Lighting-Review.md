@@ -95,9 +95,15 @@ unbounded in fixture count, which is precisely what the requirement rules out.
    fixture count real; everything else is small next to it.
 2. **Reject early.** Add the range test to `VRSL_EvaluateLight` and guard the gobo fetch
    behind a non-zero contribution in both shaders.
-3. **Restructure the volumetric integration.** Accumulating scattering into a froxel volume
-   once, rather than re-marching per screen pixel, decouples cost from resolution and opens
-   the door to temporal reprojection.
+3. **Restructure the volumetric integration.** *Evaluated and not recommended.*
+   Accumulating scattering into a froxel volume once, rather than re-marching per screen
+   pixel, does decouple cost from resolution. It also cannot hold the edges of hard-edged
+   spotlight cones: a view-aligned grid blurs through depth discontinuities where the
+   half-res path's bilateral upsample explicitly rejects across them. Matching the raymarch's
+   edge quality needs a volume dense enough to cost what the raymarch costs, plus the volume's
+   own memory. The raymarch modes stay as they are. This also weakens the case for temporal
+   reprojection on a volume, since accumulation cannot recover lateral resolution the grid
+   never had, and moving beams are the worst case for it.
 4. **Shrink `VRSLLightData`.** 80 bytes re-fetched per light per step is the bandwidth term.
 5. **Filter cameras.** `OnBeginCameraRendering` skips only `Reflection` and `Preview`.
    Mirror and portal cameras are `CameraType.Game`, so every mirror in a scene currently
@@ -243,14 +249,6 @@ Still open, in the order they are worth doing:
   for it.
 - **Occlusion.** Screen-space contact shadows for the near field, a small pool of real
   `Light` components for hero fixtures.
-- ~~**Froxel volumetric integration** (section 2, fix 3) to decouple cost from resolution.~~
-  Built, and the conclusion is negative: it decouples cost from resolution as designed, but a
-  view-aligned grid at any affordable resolution cannot hold the edges of hard-edged spotlight
-  cones, and at the resolution that could it costs what the raymarch costs. Shipped as an
-  option for high fixture counts and soft-haze looks; `Half` remains the default. See
-  *Choosing a volumetric mode* in the architecture document. This also weakens the case for
-  temporal reprojection on top of it, since accumulation cannot recover lateral resolution the
-  grid never had, and moving beams are its worst case.
 - **Camera filtering and prepass deduplication** (fixes 5 and 6) — mirrors currently pay the
   full stack, and the prepass runs twice when both managers are active. Both matter more than
   they did before, since the stack costs more per camera now.

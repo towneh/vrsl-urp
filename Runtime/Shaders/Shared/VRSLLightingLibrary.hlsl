@@ -236,7 +236,7 @@ struct VRSLALFixtureConfig
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Procedural density noise — shared by the raymarch and the froxel scatter pass
+// Procedural density noise — shared by the half- and full-res raymarch passes
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Dave Hoskins-style 3D hash. ~6 ALU per call.

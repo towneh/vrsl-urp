@@ -104,13 +104,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 |---|---|---|---|
 | V1 | — | `Half` (default) | Cones visible, silhouetted correctly against geometry |
 | V2 | — | `Full` | Same shape, no upsample fringing, ~4× the per-pixel cost |
-| V3 | — | `Froxel` | Beams in the same **place** as Half, but visibly softer — that is the mode's nature, not a fault. Beams vanishing, mirrored, or misplaced points at the depth-slice mapping, the clip-Y flip or the per-eye packing |
-| V4 | — | `Froxel` with `froxelMaxDistance` below the room depth | Scattering stops at that distance. **Expected** |
-| V5 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
-| V6 | — | Select `Froxel` with `froxelShader` unassigned | Falls back to the raymarch, cones still render, one Console warning. Silent loss of all volumetrics is the failure this guards |
-| V7 | — | From V6, assign `froxelShader`, then disable and re-enable the manager | Froxel mode now renders. Guards the passes going stale across enable cycles, which made the warning's own advice a no-op |
-| V9 | — | Toggle `coupleToSceneFog` in **Froxel** mode with scene fog on | Shaft brightness and tint respond. Guards the toggle silently doing nothing outside the raymarch |
-| V8 | — | Set `froxelResolution` to something out of range (e.g. 0 or 2000 on an axis) | Diagnostics report the clamped value and flag it as CLAMPED, not the value typed |
+| V3 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
 
 ### Cameras
 
@@ -147,7 +141,6 @@ Don't raise these; they're documented limitations with reasons in
 - Transparent geometry receives no VRSL light — the passes run after opaques.
 - Running the DMX and AudioLink managers on the same camera is unsupported; both write
   `_VRSLLights` and the last one scheduled wins.
-- Froxel mode represents no scattering past `froxelMaxDistance`.
 
 ---
 

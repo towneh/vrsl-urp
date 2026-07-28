@@ -25,7 +25,7 @@ namespace VRSL.URP
     /// VRSLAudioLinkLightUpdate compute shader and Hidden/VRSL-URP/DeferredLighting shader.
     /// </summary>
     [AddComponentMenu("VRSL/AudioLink URP Light Manager")]
-    public class VRSL_AudioLinkURPLightManager : MonoBehaviour, IVRSLVolumetricSource
+    public class VRSL_AudioLinkURPLightManager : MonoBehaviour, IVRSLLightSource
     {
         public static VRSL_AudioLinkURPLightManager Instance { get; private set; }
 
@@ -49,32 +49,6 @@ namespace VRSL.URP
                + "extra opaque geometry pass. Leave empty to skip it, in which case every "
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
-
-        [Tooltip("Assign VRSLFroxelVolumetric. Required for the Froxel volumetric mode; "
-               + "ignored by the Half and Full raymarch modes.")]
-        public ComputeShader froxelShader;
-
-        [Tooltip("Froxel mode only. Volume dimensions per eye. Larger is sharper and costs more, but "
-               + "unlike the raymarch modes the cost does not track screen resolution. "
-               + "Depth slices are spread exponentially, so most land near the camera. "
-               + "Clamped to 8-256 on X and Y and 8-128 on Z when consumed, since a zero "
-               + "or negative axis would produce an invalid volume.")]
-        public Vector3Int froxelResolution = new Vector3Int(160, 90, 64);
-
-        [Range(0.1f, 10f)]
-        [Tooltip("Froxel mode only. Distance at which the volume starts, in metres. Deliberately "
-               + "not the camera near plane: slices are spaced exponentially between this and Max "
-               + "Distance, so a near plane of a few centimetres spends half the volume inside the "
-               + "first metre and leaves almost no depth resolution where the rig actually is. "
-               + "Raise it until beams stop smearing along the view direction; lower it if "
-               + "scattering close to the camera is missing.")]
-        public float froxelNearDistance = 1f;
-
-        [Range(4f, 200f)]
-        [Tooltip("Froxel mode only. How far the volume reaches, in metres. Scattering beyond this is not "
-               + "represented, so set it to roughly the depth of the space rather than the "
-               + "camera far plane — every slice spent past the back wall is wasted.")]
-        public float froxelMaxDistance = 64f;
 
         [Header("Contact Shadows")]
         [Range(0f, 1f)]
@@ -121,8 +95,7 @@ namespace VRSL.URP
 
         [Range(8, 64)]
         [Tooltip("Number of integration steps along each view ray. Higher = smoother, more cost. "
-               + "Cost scales linearly with step count and active fixture count. "
-               + "Half and Full only — Froxel mode gets its depth resolution from Froxel Resolution's Z instead.")]
+               + "Cost scales linearly with step count and active fixture count.")]
         public int volumetricStepCount = 32;
 
         [Range(0f, 2f)]
@@ -201,12 +174,6 @@ namespace VRSL.URP
             new Vector4(contactShadowStrength, contactShadowDistance,
                         contactShadowSteps, contactShadowThickness);
 
-        // IVRSLVolumetricSource — lets the shared froxel pass drive either manager.
-        ComputeShader IVRSLVolumetricSource.FroxelShader     => froxelShader;
-        Vector3Int    IVRSLVolumetricSource.FroxelResolution => froxelResolution;
-        float         IVRSLVolumetricSource.FroxelMaxDistance  => froxelMaxDistance;
-        float         IVRSLVolumetricSource.FroxelNearDistance => froxelNearDistance;
-
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer FixtureConfigBuffer { get; private set; }
         public GraphicsBuffer LightDataBuffer     { get; private set; }
@@ -227,19 +194,7 @@ namespace VRSL.URP
         public Vector4 VolumetricFogTintParams =>
             new Vector4(volumetricTint.r, volumetricTint.g, volumetricTint.b, volumetricIntensity);
         public bool VolumetricUseNoise => volumetricUseNoise;
-        bool IVRSLVolumetricSource.VolumetricCoupleToSceneFog => coupleToSceneFog;
         public bool VolumetricUseFullRes => volumetricResolution == VolumetricResolution.Full;
-        /// <summary>Froxel mode replaces the raymarch entirely rather than
-        /// layering on top of it, so the raymarch pass sits out when it's on.</summary>
-        public bool VolumetricUseFroxel  => volumetricResolution == VolumetricResolution.Froxel;
-
-        /// <summary>Froxel mode selected <i>and</i> able to run. The raymarch pass
-        /// stands down on this rather than on the mode alone: standing down on the
-        /// mode while the froxel pass declined to record would leave neither
-        /// running, which is silent — no cones, no error, nothing to search for.</summary>
-        public bool VolumetricFroxelActive =>
-            VolumetricUseFroxel && _froxelPass != null && _froxelPass.IsUsable;
-
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
         // VRSLALFixtureConfig: 7 × float4 = 112 bytes
@@ -280,11 +235,9 @@ namespace VRSL.URP
         VRSLAudioLinkLightPasses.ComputePass    _computePass;
         VRSLSurfacePrepass                      _surfacePrepass;
         VRSLTileCullPass                        _tileCullPass;
-        VRSLFroxelPass                          _froxelPass;
         VRSLAudioLinkLightPasses.LightingPass   _lightingPass;
         VRSLAudioLinkLightPasses.VolumetricPass _volumetricPass;
         bool _injectionSubscribed;
-        bool _warnedFroxelUnusable;
 
         /// <summary>Per-tile light culling for the current camera. Null until the
         /// passes are allocated, and inert when <c>lightCullShader</c> is unassigned.</summary>
@@ -313,14 +266,10 @@ namespace VRSL.URP
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;
-            // These two resolve their shader and kernels in their constructors, so
-            // they have to be rebuilt rather than reused — otherwise assigning a
-            // shader and re-enabling the component, which is what the froxel
-            // warning tells you to do, silently changes nothing.
+            // Resolves its shader in the constructor, so it has to be rebuilt
+            // rather than reused — otherwise assigning a shader and re-enabling
+            // the component silently changes nothing.
             _surfacePrepass = null;
-            _froxelPass?.Dispose();
-            _froxelPass     = null;
-            _warnedFroxelUnusable = false;
             ReleaseBuffers();
             ReleaseAudioLinkHandle();
             ReleaseSamplingTextureHandle();
@@ -598,8 +547,6 @@ namespace VRSL.URP
                 sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
-                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader,
-                                     "ScatterFroxels", "IntegrateFroxels"));
                 sb.AppendLine("  Enter play mode and run this again for the rest.");
                 Debug.Log(sb.ToString(), this);
                 return;
@@ -618,24 +565,7 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
             sb.AppendLine("  " + VRSLDiagnostics.LightDataStatus(LightDataBuffer, FixtureCount));
             sb.AppendLine("  " + VRSLDiagnostics.TileStatus(TileCullPass, FixtureCount));
-            sb.Append($"  Volumetric mode: {volumetricResolution}");
-            if (volumetricResolution == VolumetricResolution.Froxel)
-            {
-                var effective = VRSLFroxelPass.ClampResolution(froxelResolution);
-                sb.Append($" ({effective.x}x{effective.y}x{effective.z}, {froxelMaxDistance}m)");
-                if (effective != froxelResolution)
-                    sb.Append($" — CLAMPED from {froxelResolution.x}x{froxelResolution.y}"
-                            + $"x{froxelResolution.z}");
-            }
-            sb.AppendLine();
-            if (volumetricResolution == VolumetricResolution.Froxel)
-                sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Froxel compute", froxelShader,
-                                     "ScatterFroxels", "IntegrateFroxels"));
-            if (volumetricResolution == VolumetricResolution.Froxel)
-            {
-                sb.AppendLine("  " + VRSLDiagnostics.FroxelVolumeStatus(_froxelPass?.Volume));
-                sb.AppendLine("  " + VRSLDiagnostics.FroxelProbeStatus(_froxelPass?.Probe));
-            }
+            sb.AppendLine($"  Volumetric mode: {volumetricResolution}");
             sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
             sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
             Debug.Log(sb.ToString(), this);
@@ -656,7 +586,6 @@ namespace VRSL.URP
             };
             _surfacePrepass ??= new VRSLSurfacePrepass(surfacePropertiesShader);
             _tileCullPass   ??= new VRSLTileCullPass(lightCullShader, this);
-            _froxelPass     ??= new VRSLFroxelPass(this);
             _lightingPass   ??= new VRSLAudioLinkLightPasses.LightingPass
             {
                 renderPassEvent = RenderPassEvent.AfterRenderingOpaques,
@@ -721,23 +650,7 @@ namespace VRSL.URP
             renderer.EnqueuePass(_lightingPass);
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
             {
-                // Inside the block so the message can't claim a fallback that
-                // isn't going to happen — with no volumetric shader, or on a
-                // secondary camera set to SurfaceOnly, neither pass runs.
-                if (VolumetricUseFroxel && !VolumetricFroxelActive && !_warnedFroxelUnusable)
-                {
-                    _warnedFroxelUnusable = true;
-                    Debug.LogWarning(
-                        "[VRSL] Volumetric resolution is set to Froxel but the froxel compute "
-                        + "isn't usable — assign froxelShader (VRSLFroxelVolumetric). Falling "
-                        + "back to the raymarch. The kernels resolve when the manager enables, "
-                        + "so disable and re-enable the component after assigning it.", this);
-                }
-
-                if (VolumetricFroxelActive)
-                    renderer.EnqueuePass(_froxelPass);
-                else
-                    renderer.EnqueuePass(_volumetricPass);
+                renderer.EnqueuePass(_volumetricPass);
             }
         }
 

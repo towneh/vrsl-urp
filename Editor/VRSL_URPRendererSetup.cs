@@ -24,7 +24,6 @@ namespace VRSL.URP.EditorScripts
         const string SURFACE_SHADER_NAME    = "Hidden/VRSL-URP/SurfaceProperties";
         const string COMPUTE_SHADER_FILTER  = "VRSLDMXLightUpdate t:ComputeShader";
         const string CULL_SHADER_FILTER     = "VRSLLightCull t:ComputeShader";
-        const string FROXEL_SHADER_FILTER   = "VRSLFroxelVolumetric t:ComputeShader";
 
         // ── Scene-level: URP light manager GameObject ─────────────────────────
 
@@ -106,18 +105,6 @@ namespace VRSL.URP.EditorScripts
                     manager.lightCullShader = compute;
                     assignedAny = true;
                     report.Add("Assigned light cull compute shader.");
-                }
-            }
-
-            if (manager.froxelShader == null)
-            {
-                var compute = FindAsset<ComputeShader>(FROXEL_SHADER_FILTER);
-                if (compute != null)
-                {
-                    Undo.RecordObject(manager, "Assign VRSL Froxel Shader");
-                    manager.froxelShader = compute;
-                    assignedAny = true;
-                    report.Add("Assigned froxel volumetric compute shader.");
                 }
             }
 
