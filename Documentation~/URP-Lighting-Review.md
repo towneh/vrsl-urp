@@ -12,12 +12,15 @@ This is a design-review document, not a reference. For how the pipeline works, s
 
 ## Summary
 
-| Requirement | Verdict |
-|---|---|
-| DMX + AudioLink reactivity | Solid. The strongest part of the package. |
-| Cost at 100+ fixtures | Architecture is right, shader implementation is not. No light culling of any kind. |
-| Surface accuracy against PBR materials | Not implemented. No albedo, no BRDF, no specular, no occlusion. |
-| Evolution from Built-in | Real progress, but two DMX decode paths still run in parallel. |
+| Requirement | Verdict as reviewed | Where it stands now |
+|---|---|---|
+| DMX + AudioLink reactivity | Solid. The strongest part of the package. | Unchanged. |
+| Cost at 100+ fixtures | Architecture is right, shader implementation is not. No light culling of any kind. | Tiled culling, early rejection, a 64-byte light struct and camera filtering have landed. Still unmeasured. |
+| Surface accuracy against PBR materials | Not implemented. No albedo, no BRDF, no specular, no occlusion. | A surface prepass, URP's BRDF and contact shadows have landed. No light-perspective shadows; smoothness and metallic are scalars rather than maps. |
+| Evolution from Built-in | Real progress, but two DMX decode paths still run in parallel. | Unchanged. The single decode path is still open. |
+
+Sections 1–4 are the assessment as first written, kept as the baseline the work was planned
+against. **Status** at the end records what has changed since.
 
 ---
 
@@ -237,28 +240,38 @@ albedo gap sooner.
 
 ## Status
 
-Implemented on top of the reviewed version:
+### Landed
 
-- The surface-prepass route from section 3, with URP's BRDF replacing the flat additive
-  accumulation. The scene-colour proxy is gone.
-- Tiled light culling (section 2, fix 1) and the early rejections (fix 2).
+- **The surface-prepass route from section 3**, with URP's `InitializeBRDFData` + `DirectBRDF`
+  replacing the flat additive accumulation. The scene-colour proxy is gone.
+- **Tiled light culling** (fix 1) and the early rejections (fix 2).
+- **Screen-space contact shadows**, off by default, closing the near-field half of the
+  occlusion gap in section 3.
+- **Camera filtering** (fix 5) and **prepass deduplication** (fix 6). Mirrors no longer pay the
+  full stack, and the prepass runs once rather than twice when both managers are active.
+- **`VRSLLightData` shrunk** (fix 4) from 80 bytes to 64.
+- **The gobo wheel packed on the GPU** (fix 7). The per-slot `ReadPixels` readback is gone.
+- **A defined intensity unit** (section 1). `maxIntensity` now sits on the same scale as a URP
+  spot light's Intensity value, which halved DMX fixtures at full output.
 
-Still open, in the order they are worth doing:
+### Open
 
-- **Record a profiling sweep.** Nothing above has been measured. The sample builds the scene
-  for it.
-- **Occlusion.** Screen-space contact shadows for the near field, a small pool of real
-  `Light` components for hero fixtures.
-- **Camera filtering and prepass deduplication** (fixes 5 and 6) — mirrors currently pay the
-  full stack, and the prepass runs twice when both managers are active. Both matter more than
-  they did before, since the stack costs more per camera now.
-- **Shrink `VRSLLightData`** (fix 4). Tiling reduced how often the 80-byte fetch happens
-  without making it smaller.
-- **Keep the gobo wheel on the GPU** (fix 7).
-- **The single decode path** from section 4, which retires `curveMod` and the duplicated
-  channel constants.
-- **A defined intensity unit**, from section 1. It matters more now that albedo has changed
-  the useful range.
-- **Smoothness and metallic maps**, which the prepass doesn't sample — scalars only.
-- **Opt-in VRSL Lit materials** for surfaces the world author controls, layered on top of the
-  prepass baseline.
+- **Record a profiling sweep.** Nothing above has been measured, so section 2's verdict rests
+  on structure rather than numbers. This is the largest remaining gap in the review. The
+  profiling sample builds the scene for it.
+- **The single decode path** from section 4, which would retire `curveMod` and the duplicated
+  channel constants. Blocked on a specification for the grid image: GridReader ships as closed
+  binaries, and the codebase carries three different `u` values for channel 13.
+- **Smoothness and metallic maps.** The prepass captures scalars only, so a surface with a
+  roughness map lights as though it were uniform.
+- **Light-perspective shadows.** Contact shadows only occlude against geometry the camera can
+  see and only within the trace distance, so a wall across the room still doesn't block a beam.
+
+### Closed by decision
+
+- **Froxel volumetric integration** (fix 3). Evaluated against the raymarch and rejected; the
+  reasoning is on fix 3 in section 2.
+- **A pool of real `Light` components for hero fixtures.** Ruled out — the package drives no
+  Unity `Light` components, which is the property section 2 credits for the cost profile.
+- **Opt-in VRSL Lit materials.** Ruled out — receiving VRSL light should not require a surface
+  to adopt a VRSL-specific shader path.

@@ -36,7 +36,7 @@ Per-fixture config (StructuredBuffer)
         │
         ▼ [BeforeRenderingOpaques]
 [COMPUTE PASS — VRSLDMXLightUpdate.compute or VRSLAudioLinkLightUpdate.compute]
-  Decodes per-fixture state into VRSLLightData (GPU-resident, 80 bytes/light)
+  Decodes per-fixture state into VRSLLightData (GPU-resident, 64 bytes/light)
         │
                 │
         ▼ [AfterRenderingPrePasses]
@@ -100,7 +100,7 @@ All struct fields use `float4` rather than `float3` to guarantee identical layou
 | `dmxChannel` | x = absolute channel, y = enableStrobe, z = enablePanTilt, w = enableFineChannels |
 | `panSettings` | x = maxMinPan (deg), y = panOffset (deg), z = invertPan (0/1), w = enableGoboSpin (0/1) |
 | `tiltSettings` | x = maxMinTilt (deg), y = tiltOffset (deg), z = invertTilt (0/1), w = enableGobo (0/1) |
-| `extras` | x = emitterDepth (m), yzw = reserved |
+| `extras` | x = emitterDepth (m), y = use5ChannelMode (0/1), zw = reserved |
 
 ### VRSLALFixtureConfig (AudioLink) — 112 bytes, 7 × float4
 
@@ -114,7 +114,7 @@ All struct fields use `float4` rather than `float3` to guarantee identical layou
 | `emissionColor` | xyz = linear RGB (used when colorMode == 0), w = unused |
 | `reserved` | x = gobo array index (-1 = none), y = gobo spin speed, zw = textureSamplingCoordinates UV (used when colorMode == 6 or 7) |
 
-### VRSLLightData — 80 bytes, 5 × float4 (shared)
+### VRSLLightData — 64 bytes, 4 × float4 (shared)
 
 Compute pass output, surface and volumetric pass input.
 

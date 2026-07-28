@@ -1,6 +1,6 @@
 # VRSL URP
 
-Unity 6 / URP 17+ realtime stage lighting and raymarched volumetric beams driven from DMX or AudioLink data. Genuine scene illumination from up to hundreds of fixtures with no per-light shadow atlas cost, authored normals from any URP-compatible shader, and no URP renderer settings touched.
+Unity 6 / URP 17+ realtime stage lighting and raymarched volumetric beams driven from DMX or AudioLink data. Genuine scene illumination from up to hundreds of fixtures with no per-light shadow atlas cost, real PBR surface response against any URP-compatible shader's own textures, and no URP renderer settings touched.
 
 ## Attribution
 
@@ -10,7 +10,9 @@ This package is a fork of [VR Stage Lighting](https://github.com/AcChosen/VR-Sta
 
 - A render-pass pipeline injected at runtime via `RenderPipelineManager.beginCameraRendering` — no URP Renderer Features required, no URP asset / renderer asset settings touched.
 - Per-fixture realtime light components (`VRStageLighting_DMX_RealtimeLight`, `VRStageLighting_AudioLink_RealtimeLight`) consumed by manager singletons.
-- A VRSL-owned normals prepass that renders opaque scene geometry with the standard URP `DepthNormals` / `DepthNormalsOnly` shader tags into a VRSL-owned RT, so authored surface normals from any URP-targeted shader (URP Lit, Poiyomi URP, lilToon URP, Mochie URP) come through without per-shader work.
+- A VRSL-owned surface prepass that captures authored normals (via the standard URP `DepthNormals` / `DepthNormalsOnly` shader tags) plus albedo, smoothness and metallic (via an override shader that keeps each renderer's own material values). Lighting then runs URP's own BRDF against them, so a lit surface keeps its texture colour instead of washing towards white, and glossy and metallic surfaces respond correctly. Works with any URP-targeted shader (URP Lit, Poiyomi URP, lilToon URP, Mochie URP) without per-shader work.
+- Screen-space tiled light culling, so per-pixel cost tracks the fixtures overlapping each 16×16 screen tile rather than the scene's total fixture count.
+- Optional screen-space contact shadows, so an avatar standing in a beam shadows the floor at its feet.
 - Half-res or full-res raymarched in-scattering for cone volumetrics with optional 3D-noise modulation and scene-fog coupling.
 - URP fixture prefab variants for AudioLink and DMX (Mover Spotlight, Mover Washlight, Static Blinder, Static ParLight) that drive the fixture-body emissive directly from the realtime light component.
 

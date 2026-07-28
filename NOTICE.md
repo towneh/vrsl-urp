@@ -26,7 +26,11 @@ The following were authored by towneh on the `urp-volumetric-lights` development
 
 - `VRSL_URPLightManager`, `VRSL_AudioLinkURPLightManager` (manager singletons).
 - `VRSLDMXLightPasses`, `VRSLAudioLinkLightPasses` (URP render pass classes).
-- `VRSLNormalsPrepass` (VRSL-owned normals prepass for MSAA-agnostic authored normals).
+- `VRSLSurfacePrepass` (VRSL-owned prepass capturing MSAA-agnostic authored normals plus albedo, smoothness and metallic).
+- `VRSLTileCullPass`, `VRSLLightCull.compute` (screen-space tiled light culling).
+- `VRSLSurfaceBRDF.hlsl`, `VRSLTileCulling.hlsl` (surface BRDF evaluation and the tile-list read side).
+- `VRSLSurfaceProperties.shader` (prepass override shader for albedo / smoothness / metallic capture).
+- `VRSLCameraFilter`, `VRSLGoboWheel`, `VRSLDiagnostics` (camera classification, GPU gobo packing, runtime diagnostics).
 - `VRStageLighting_{DMX,AudioLink}_RealtimeLight` (per-fixture realtime light components consumed by the managers).
 - `VRSLDMXLightUpdate.compute`, `VRSLAudioLinkLightUpdate.compute` (per-fixture state decode kernels).
 - `VRSLLightingLibrary.hlsl` (struct definitions and lighting evaluation helpers shared between the URP fullscreen passes).
