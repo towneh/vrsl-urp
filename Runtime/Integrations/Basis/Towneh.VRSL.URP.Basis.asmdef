@@ -1,0 +1,30 @@
+{
+    "name": "Towneh.VRSL.URP.Basis",
+    "references": [
+        "BasisMediaPlayer",
+        "Cilbox"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "VRSL_BASIS_MEDIAPLAYER_PRESENT",
+        "VRSL_CILBOX_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.basis.mediaplayer",
+            "expression": "",
+            "define": "VRSL_BASIS_MEDIAPLAYER_PRESENT"
+        },
+        {
+            "name": "com.cnlohr.cilbox",
+            "expression": "",
+            "define": "VRSL_CILBOX_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}

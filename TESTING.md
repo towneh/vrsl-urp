@@ -115,6 +115,20 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | M3 | — | `SurfaceOnly` | Surface lighting in the mirror, no volumetric cones |
 | M4 | — | `Skip` | No VRSL lighting in the mirror |
 
+### Basis video → DMX (optional integration)
+
+Needs `com.basis.mediaplayer` and `com.cnlohr.cilbox` in the project; without them the
+assembly is skipped and none of these rows apply.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| B1 | D | `BasisVideoToVRSLDMX` with `GlobalTextureName` set to the RAW grid global, DMX-over-video stream playing | Fixtures decode as they do from a capture camera; `Log Decoded Fixture Light Data` shows non-zero intensity |
+| B2 | D | `BasisVideoRenderTextureOutput` into the RAW grid RT, corners dragged over the live frame | Framed grid lands in the RT and the inspector's output preview matches what the decode chain reads |
+| B3 | D | Stop the player mid-cue, `ClearWhenNoFrame` on | Fixtures go dark rather than latching the last grid |
+| B4 | D | Two clients, one reporting `OutputFrameIsTopLeftOrigin` | Grid decodes the same way up on both. A vertical flip on one means the per-client origin correction |
+| B5 | D | Change stream resolution or re-open mid-cue, so the player reallocates `OutputTexture` | Decode continues; the global is republished on the new texture rather than left on the dead one |
+| B6 | — | Project without `com.basis.mediaplayer` / `com.cnlohr.cilbox` | `Towneh.VRSL.URP.Basis` skipped on its define constraints, no compile errors, rest of the package unaffected |
+
 ### VR (single-pass instanced)
 
 | # | Path | Scenario | Expected |
