@@ -3,6 +3,19 @@
 
 #define VRSL_PI 3.14159265359
 
+// How far apart two linear eye depths may be and still be taken to describe the
+// same surface. Used to reconcile the surface prepass, which draws through an
+// override shader, with the depth the camera actually kept — see
+// VRSLSurfaceProperties and VRSL_SurfaceDataCovers.
+//
+// Both sides describe the same vertex, so honest disagreement is float precision,
+// far below a micrometre against a 32-bit reversed-Z buffer at any distance an
+// avatar is viewed from. What the comparison has to separate is a garment from
+// the skin beneath it — a couple of millimetres on a fitted mesh. Set anywhere
+// near that gap the test goes marginal across whole surfaces and resolves as a
+// stipple of clipped and unclipped pixels, visible wherever a light lands.
+#define VRSL_SURFACE_DEPTH_TOLERANCE(eyeDepth) max((eyeDepth) * 0.0005, 0.0005)
+
 // ──────────────────────────────────────────────────────────────────────────────
 // GPU data layout — must exactly match the C# structs in VRSL_URPLightManager.cs
 // ──────────────────────────────────────────────────────────────────────────────

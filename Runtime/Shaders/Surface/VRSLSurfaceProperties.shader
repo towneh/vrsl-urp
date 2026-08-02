@@ -39,6 +39,9 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+        // For VRSL_SURFACE_DEPTH_TOLERANCE, shared with VRSL_SurfaceDataCovers so
+        // the prepass gate and the lighting-pass backstop agree.
+        #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
 
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
         TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
@@ -131,6 +134,14 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
         // A tolerance in linear eye space rather than equality, because the two
         // depths come from separate shader compilations of the same transform and
         // so agree closely rather than bit-exactly.
+        //
+        // It has to be tight. Both sides describe the same vertex, so honest
+        // disagreement is float precision — far below a micrometre against a
+        // 32-bit reversed-Z buffer at any distance an avatar is viewed from. What
+        // the test has to separate is a garment from the skin beneath it, which on
+        // a fitted mesh is a couple of millimetres. A tolerance anywhere near that
+        // gap leaves the comparison marginal across whole surfaces, which shows up
+        // as a stipple of clipped and unclipped pixels wherever a light lands.
         void ClipToCameraDepth(float4 positionCS)
         {
             float2 screenUV = positionCS.xy / _ScreenParams.xy;
@@ -138,7 +149,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             float cameraEye = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
             float fragEye   = LinearEyeDepth(positionCS.z,               _ZBufferParams);
 
-            clip(max(cameraEye * 0.01, 0.01) - abs(fragEye - cameraEye));
+            clip(VRSL_SURFACE_DEPTH_TOLERANCE(cameraEye) - abs(fragEye - cameraEye));
         }
 
         void WriteSurface(half4 baseColor,

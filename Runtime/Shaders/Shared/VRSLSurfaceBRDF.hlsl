@@ -52,11 +52,15 @@ float _VRSLSurfaceDataValid;
 // thing that was supposed to be invisible — the discarded shape reappears as
 // lit colour.
 //
-// Comparing the two depths catches all of it without needing to know any
-// individual shader's rule. Compared in linear eye space against a tolerance
-// proportional to viewing distance, since raw depth precision is wildly
-// non-uniform and the two values come from different shader compilations of the
-// same transform, so they agree closely rather than exactly.
+// This is a backstop. The prepass already clips against the camera's depth as it
+// rasterises (see VRSLSurfaceProperties), which is what actually fixes the case
+// above — rejecting here alone cannot, because by this point the hidden surface
+// has won the prepass depth test and the albedo behind it is gone, leaving only
+// the neutral fallback to substitute. What this catches is geometry the clip
+// can't, such as a shader whose real vertices are displaced somewhere else.
+//
+// Compared in linear eye space on the shared tolerance, so the gate and the
+// backstop can't disagree about what counts as the same surface.
 bool VRSL_SurfaceDataCovers(float2 uv, float cameraRawDepth)
 {
     float prepassRaw = SAMPLE_TEXTURE2D_X(
@@ -73,7 +77,7 @@ bool VRSL_SurfaceDataCovers(float2 uv, float cameraRawDepth)
     float prepassEye = LinearEyeDepth(prepassRaw,      _ZBufferParams);
     float cameraEye  = LinearEyeDepth(cameraRawDepth,  _ZBufferParams);
 
-    return abs(prepassEye - cameraEye) <= max(cameraEye * 0.01, 0.01);
+    return abs(prepassEye - cameraEye) <= VRSL_SURFACE_DEPTH_TOLERANCE(cameraEye);
 }
 
 // Build the per-pixel BRDF inputs once, outside the light loop.
