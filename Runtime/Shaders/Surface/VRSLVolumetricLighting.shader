@@ -197,6 +197,26 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     float spanEnd   = min(proj + halfChord, maxDist);
                     if (spanEnd <= spanStart) continue;
 
+                    // For a spot, tighten the sphere span to the cone itself.
+                    // The sphere includes everything outside the beam and the
+                    // whole backward hemisphere, so on a narrow cone it can be
+                    // tens of times longer than the lit part of the ray. Point
+                    // lights fill their sphere, so the sphere span is already
+                    // tight for them.
+                    if (VRSL_LightType(light) < 0.5)
+                    {
+                        // Same virtual apex VRSL_SpotAttenuation uses, so the
+                        // span matches the cone the attenuation actually lights.
+                        float3 apex = light.positionAndRange.xyz
+                                    - light.directionAndType.xyz * light.spotParams.z;
+
+                        if (!VRSL_NarrowSpanToCone(cameraWS, viewDir, apex,
+                                                   light.directionAndType.xyz,
+                                                   light.spotParams.y,
+                                                   spanStart, spanEnd))
+                            continue;
+                    }
+
                     float stepSize = (spanEnd - spanStart) / stepCount;
 
                     [loop]

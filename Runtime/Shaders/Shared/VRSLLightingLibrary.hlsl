@@ -125,6 +125,87 @@ float VRSL_HenyeyGreenstein(float cosTheta, float g)
     return (1.0 - g2) / (4.0 * VRSL_PI * pow(max(denom, 0.0001), 1.5));
 }
 
+// Narrow an existing ray span to the part that lies inside a spot cone.
+// tNear/tFar arrive as the span against the light's bounding sphere and are
+// tightened in place; returns false when the ray misses the cone entirely.
+//
+// The sphere is a very loose proxy for a cone. At 20 m range its chord runs to
+// 40 m, while a ray crossing a beam near the lens covers well under a metre of
+// lit space, so the step budget is spent almost entirely in the dark and the
+// handful of samples that do land inside carry the whole result. That is large
+// per-pixel quadrature error, and no dither hides error that big — it only
+// reshapes it into whatever pattern the dither itself carries.
+//
+// A single cone nappe is convex, so a ray meets it in exactly one interval. The
+// quadratic supplies the surface crossings and midpoint tests pick the inside
+// sub-interval, which avoids case analysis on root signs and folds the
+// ray-parallel-to-surface degeneracy into the same path.
+bool VRSL_NarrowSpanToCone(float3 rayOrigin, float3 rayDir, float3 apex,
+                           float3 axis, float cosOuter,
+                           inout float tNear, inout float tFar)
+{
+    float3 co = rayOrigin - apex;
+    float  c2 = cosOuter * cosOuter;
+
+    float dv = dot(rayDir, axis);
+    float dc = dot(co, axis);
+
+    float a = dv * dv - c2;
+    float b = 2.0 * (dv * dc - dot(rayDir, co) * c2);
+    float c = dc * dc - dot(co, co) * c2;
+
+    float r0 = tNear;
+    float r1 = tNear;
+
+    if (abs(a) > 1e-7)
+    {
+        float disc = b * b - 4.0 * a * c;
+        if (disc > 0.0)
+        {
+            float sq  = sqrt(disc);
+            float inv = 0.5 / a;
+            r0 = (-b - sq) * inv;
+            r1 = (-b + sq) * inv;
+            if (r0 > r1) { float s = r0; r0 = r1; r1 = s; }
+        }
+    }
+    else if (abs(b) > 1e-7)
+    {
+        r0 = -c / b;
+        r1 = r0;
+    }
+
+    r0 = clamp(r0, tNear, tFar);
+    r1 = clamp(r1, tNear, tFar);
+
+    float bounds[4] = { tNear, r0, r1, tFar };
+
+    float lo =  1e30;
+    float hi = -1e30;
+
+    [unroll]
+    for (int k = 0; k < 3; k++)
+    {
+        float s = bounds[k];
+        float e = bounds[k + 1];
+        if (e - s < 1e-5) continue;
+
+        float3 v     = rayOrigin + rayDir * (0.5 * (s + e)) - apex;
+        float  axial = dot(v, axis);
+        if (axial <= 0.0) continue;
+        if (axial < cosOuter * length(v)) continue;
+
+        lo = min(lo, s);
+        hi = max(hi, e);
+    }
+
+    if (hi - lo < 1e-5) return false;
+
+    tNear = lo;
+    tFar  = hi;
+    return true;
+}
+
 // Evaluate a single VRSL light's contribution at a point inside the volume.
 // viewToCamera is the unit vector pointing from samplePos back toward the camera.
 // Returns radiance per unit density per unit length — caller multiplies by
