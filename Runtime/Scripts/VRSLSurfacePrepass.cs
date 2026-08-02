@@ -74,6 +74,12 @@ namespace VRSL.URP
         static readonly int s_MaterialTextureID = Shader.PropertyToID("_VRSLMaterialTexture");
         static readonly int s_SurfaceDepthID    = Shader.PropertyToID("_VRSLSurfaceDepthTexture");
 
+        // 1 when the camera depth texture is available to the override draw, 0
+        // otherwise. Without it the depth gate in VRSLSurfaceProperties would
+        // compare against an unbound texture and clip every fragment, which is a
+        // far worse failure than the mismatched albedo the gate exists to stop.
+        static readonly int s_DepthGateID       = Shader.PropertyToID("_VRSLSurfaceDepthGate");
+
         readonly Shader _surfacePropertiesShader;
 
         class NormalsPassData
@@ -85,6 +91,7 @@ namespace VRSL.URP
         {
             public RendererListHandle opaqueList;
             public RendererListHandle alphaTestList;
+            public bool depthGate;
         }
 
         /// <param name="surfacePropertiesShader">
@@ -125,7 +132,8 @@ namespace VRSL.URP
                           width, height, slices, dimension);
 
             if (_surfacePropertiesShader != null)
-                RecordSurfaceProperties(rg, renderingData, camData, lightData, sortFlags,
+                RecordSurfaceProperties(rg, frame.Get<UniversalResourceData>(),
+                                        renderingData, camData, lightData, sortFlags,
                                         width, height, slices, dimension);
         }
 
@@ -183,7 +191,8 @@ namespace VRSL.URP
             });
         }
 
-        void RecordSurfaceProperties(RenderGraph rg, UniversalRenderingData renderingData,
+        void RecordSurfaceProperties(RenderGraph rg, UniversalResourceData resources,
+                                     UniversalRenderingData renderingData,
                                      UniversalCameraData camData, UniversalLightData lightData,
                                      SortingCriteria sortFlags,
                                      int width, int height, int slices, TextureDimension dimension)
@@ -264,8 +273,26 @@ namespace VRSL.URP
             builder.SetGlobalTextureAfterPass(materialRT, s_MaterialTextureID);
             builder.SetGlobalTextureAfterPass(depthRT,    s_SurfaceDepthID);
 
+            // The override draw samples the camera depth to reject geometry the
+            // camera dropped. ConfigureInput asks URP to produce that texture;
+            // declaring the read here is what makes Render Graph order this pass
+            // after whatever produces it, and is why the other passes that sample
+            // it do the same. Requesting it is not the same as declaring it.
+            data.depthGate = resources.cameraDepthTexture.IsValid();
+            if (data.depthGate)
+                builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
+
+            // Setting a global from a raster pass requires this, or Unity throws
+            // on the SetGlobalFloat below.
+            builder.AllowGlobalStateModification(true);
+
             builder.SetRenderFunc((SurfacePassData p, RasterGraphContext ctx) =>
             {
+                // Depth unavailable degrades to drawing everything, matching the
+                // behaviour before the gate existed. Clipping against an unbound
+                // texture would instead reject every fragment and leave the whole
+                // scene on the neutral fallback.
+                ctx.cmd.SetGlobalFloat(s_DepthGateID, p.depthGate ? 1f : 0f);
                 ctx.cmd.DrawRendererList(p.opaqueList);
                 ctx.cmd.DrawRendererList(p.alphaTestList);
             });

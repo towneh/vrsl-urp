@@ -142,8 +142,15 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
         // a fitted mesh is a couple of millimetres. A tolerance anywhere near that
         // gap leaves the comparison marginal across whole surfaces, which shows up
         // as a stipple of clipped and unclipped pixels wherever a light lands.
+        // 0 when the prepass could not get hold of the camera depth texture, in
+        // which case the comparison below would run against an unbound texture and
+        // reject everything. Drawing unfiltered is the milder failure.
+        float _VRSLSurfaceDepthGate;
+
         void ClipToCameraDepth(float4 positionCS)
         {
+            if (_VRSLSurfaceDepthGate < 0.5) return;
+
             float2 screenUV = positionCS.xy / _ScreenParams.xy;
 
             float cameraEye = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
