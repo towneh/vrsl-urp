@@ -337,16 +337,27 @@ The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile r
 
 ### Per-light march span
 
-Each light in the tile's list is integrated over its own span of the view ray rather than all of them sharing one march from the camera to the opaque surface. The span comes from intersecting the ray with the light's bounding sphere (`positionAndRange`), clamped to `[0, distance-to-surface]`, so a light behind the camera or fully occluded drops out before any stepping.
+Each light in the tile's list is integrated over its own span of the view ray rather than all of them sharing one march from the camera to the opaque surface. The span is built in two stages:
 
-The reason this matters is sample distribution. A shared march divides `volumetricStepCount` across the whole ray, so its step size is set by whatever geometry sits behind the beam, not by the beam. A cone a few metres away with a wall thirty metres behind it gets its cone crossed in one or two steps, and since the march is jittered to break up banding, that undersampling arrives as per-pixel grain. Marching each light's own span makes step size a function of the beam's thickness alone, so the result is stable regardless of scene depth. This is the dominant term in how clean `Half` looks.
+1. Intersect the ray with the light's bounding sphere (`positionAndRange`), clamped to `[0, distance-to-surface]`. A light behind the camera or fully occluded drops out here, before any stepping.
+2. For spots, narrow that span to the cone itself via `VRSL_NarrowSpanToCone`. Point lights fill their sphere, so they keep the stage-1 span.
 
-Cost is unchanged in the worst case: `stepCount` steps per light per pixel either way. It improves in the common case, because a light whose sphere the ray misses costs one intersection test instead of a full march that early-outs at every step.
+Both stages matter, and for different reasons.
+
+Stage 1 decouples step size from scene depth. A shared march divides `volumetricStepCount` across the whole ray, so its step size is set by whatever geometry sits behind the beam rather than by the beam. A cone a few metres away with a wall thirty metres behind it would be crossed in one or two steps.
+
+Stage 2 is what makes the sample budget actually land in the light. A sphere is a poor proxy for a cone: at 20 m range the chord runs to 40 m, it contains the entire backward hemisphere, and everything outside the beam angle. A ray crossing a beam near the lens covers well under a metre of lit space, so without this the great majority of steps sample dark and the few inside carry the whole result. That is large per-pixel quadrature error, and the jitter cannot hide error of that size — it only reshapes it into whatever pattern the dither itself carries, which is how it surfaces visually. The effect is worst near a fixture head, where the cone is narrowest relative to its sphere.
+
+`VRSL_NarrowSpanToCone` relies on a cone nappe being convex, so a ray meets it in exactly one interval. The quadratic supplies the surface crossings; midpoint tests select which sub-interval is inside. That avoids case analysis on root signs and puts the ray-parallel-to-surface degeneracy on the same path as the general case. It projects from the same virtual apex as `VRSL_SpotAttenuation`, so the marched span matches the cone the attenuation lights.
+
+Worst-case cost is `stepCount` steps per light per pixel, as it would be for a shared march. It improves in the common case: a ray missing the sphere costs one intersection test, and a ray missing the cone costs the quadratic plus three midpoint tests, instead of a full march that early-outs at every step.
 
 Two consequences worth knowing:
 
 - Density noise (`_VRSL_VOLUMETRIC_NOISE`) is evaluated per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one noise fetch per light per step.
 - Each light's step size differs, and the accumulation weights by that light's own `stepSize`, so overlapping cones still sum to the same result as marching them together.
+
+Because the span is tight, `volumetricStepCount` buys far more than it would against an untargeted march, and can usually be set well below the 32 default before stepping becomes visible.
 
 ### Resolution modes
 
@@ -355,10 +366,17 @@ Two consequences worth knowing:
 - **Half** (default) — three sub-passes:
   - Pass 0: depth downsample. Min-depth filter on each 2×2 source quad keeps the half-res depth tight to silhouettes.
   - Pass 1: half-res jittered raymarch into an `R16G16B16A16_SFloat` half-res RT.
-  - Pass 2: 9-tap Gaussian-weighted bilateral upsample, additive over the camera colour. The bilateral term `1 / (eps + |fullEye - halfEye|)` rejects taps across silhouettes.
+  - Pass 2: 9-tap bilateral upsample, additive over the camera colour. Taps are weighted by a separable tent centred on the pixel's true sub-texel position within the half-res grid, times a depth term of `1 / (1 + d²)` where `d` is the eye-depth difference over a tolerance proportional to viewing distance.
 - **Full** — single pass at the camera target resolution; samples `_CameraDepthTexture` directly and additive-blends. ~4× per-pixel cost vs Half but no upsample artefacts.
 
-The half-res raymarch jitters the ray origin per pixel using an R2 (plastic-constant) low-discrepancy sequence with frame-indexed offset, so head and fixture motion average the residual pattern over time.
+Two details of the upsample are load-bearing rather than incidental:
+
+- **Weights follow the sub-texel position, not the nearest texel centre.** Snapping would give all four full-res pixels of a 2×2 block identical taps and identical weights, making the composite constant across the block. A constant-per-block reconstruction of a smooth gradient terraces into contours, and a beam is almost entirely smooth gradient. Tent radius is 1.5 so a tap has reached zero weight by the time the centre texel flips, which keeps the reconstruction continuous across texel boundaries.
+- **The depth term needs a real tolerance, not a divide guard.** Weighting by `1/depthDiff` alone is unbounded as the difference approaches zero, which gives the centre tap a weight orders of magnitude above its neighbours on any surface that isn't exactly fronto-parallel and collapses the kernel to a point sample.
+
+The raymarch offsets each pixel's step phase with interleaved gradient noise. The dither has to decorrelate in both screen axes: a Weyl lattice, `frac(a*x + b*y)`, has straight diagonal iso-value contours, so every pixel along one diagonal receives the same phase and residual stepping streaks rather than breaking up. A frame-indexed offset decorrelates across frames so motion averages the residual out.
+
+Note that a dither only conceals quadrature error while that error is small. If stepping is visible as a *structured* pattern rather than fine grain, the sample budget is landing in the wrong place — check the march span before reaching for the dither or the step count.
 
 ### Density model
 
