@@ -1,6 +1,6 @@
 # VRSL URP Fixture Configuration Guide
 
-Setup and authoring for VRSL realtime lights on Unity 6 URP. For pipeline architecture, struct layouts, and tuning internals, see `URP-Realtime-Volumetric-Lights.md`.
+Setup and authoring for VRSL realtime lights on Unity 6 URP. For installation and a first-run walkthrough, see the README. For pipeline architecture, struct layouts, and tuning internals, see `URP-Realtime-Volumetric-Lights.md`.
 
 This guide covers two paths:
 
@@ -72,7 +72,7 @@ The volumetric pass runs whenever `volumetricShader` is assigned. Inspector fiel
 
 | Field | Effect |
 |---|---|
-| `volumetricStepCount` | Integration steps per ray (default 32). Cost scales linearly with steps × active fixture count. |
+| `volumetricStepCount` | Integration steps per light, spent across the part of the ray inside that light's own cone (default 24). Cost scales with steps × lights per tile. Because the span is bounded to the cone rather than to the geometry behind it, low counts go further than they would otherwise — 16 holds up on 60° spots at 20 m range. Wide cones, long beams and dense haze want more. |
 | `volumetricDensity` | Base scattering density. |
 | `volumetricAnisotropy` | Henyey–Greenstein g (default 0.2; 0 = isotropic; positive forward-scatters). |
 | `volumetricTint` / `volumetricIntensity` | Colour tint and global multiplier. |

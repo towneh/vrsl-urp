@@ -483,7 +483,7 @@ where the swapchain is handled outside the camera.
 
 ## Known Limitations
 
-- **No shadow casting.** This pipeline bypasses Unity's `Light` component to avoid the per-light shadow atlas cost, so a fixture lights every surface within range regardless of what stands between them. Screen-space contact shadows off the depth buffer would cover the near field cheaply; a small pool of real `Light` components for hero fixtures would cover the rest.
+- **No shadow casting beyond the near field.** This pipeline bypasses Unity's `Light` component to avoid the per-light shadow atlas cost, so a fixture lights every surface within range regardless of what stands between them. Screen-space contact shadows (see above) cover the near field off the depth buffer, but only for geometry the camera can see and only within the trace distance — a wall across the room still doesn't block a beam.
 - **No ambient occlusion term** in the surface response. The BRDF runs against albedo, smoothness and metallic only.
 - **No smoothness or metallic maps.** The surface prepass samples the scalar material properties, so a surface with a metallic/smoothness texture is lit against its uniform values.
 - **No light-perspective shadows in volume.** On-screen occluders silhouette out of the cone correctly; off-screen occluders (an avatar in the beam viewed from the side) don't cast a darkened wedge through the rest of the volume.
@@ -505,6 +505,11 @@ where the swapchain is handled outside the camera.
 | `Runtime/Scripts/VRSLAudioLinkLightPasses.cs` | Towneh.VRSL.URP | AudioLink pass classes |
 | `Runtime/Scripts/VRSLSurfacePrepass.cs` | Towneh.VRSL.URP | Normals + albedo/material prepass (shared) |
 | `Runtime/Scripts/VRSLTileCullPass.cs` | Towneh.VRSL.URP | Tiled light culling pass and `IVRSLLightSource` (shared) |
+| `Runtime/Scripts/VRSLCameraFilter.cs` | Towneh.VRSL.URP | Per-camera inject/skip decision (see Camera Selection) |
+| `Runtime/Scripts/VRSLGoboWheel.cs` | Towneh.VRSL.URP | Gobo slice packing into the `_VRSLGobos` array |
+| `Runtime/Scripts/VRSLDiagnostics.cs` | Towneh.VRSL.URP | Runtime state readout — fixture counts, tile occupancy, pass activity |
+| `Runtime/Integrations/Basis/BasisVideoToVRSLDMX.cs` | Towneh.VRSL.URP.Basis | Feeds the DMX decode chain from a `BasisMediaPlayer` stream |
+| `Runtime/Integrations/Basis/BasisVideoRenderTextureOutput.cs` | Towneh.VRSL.URP.Basis | Corner-UV blit for a DMX grid occupying part of a larger frame |
 | `Editor/VRSL_URPRendererSetup.cs` | Towneh.VRSL.URP.Editor | Read-only renderer-config diagnostics and the scene-level "Add Light Manager" menu (DMX) |
 | `Runtime/Shaders/Compute/VRSLDMXLightUpdate.compute` | — | DMX compute kernel |
 | `Runtime/Shaders/Compute/VRSLAudioLinkLightUpdate.compute` | — | AudioLink compute kernel |
@@ -518,6 +523,9 @@ where the swapchain is handled outside the camera.
 | `Editor/VRStageLighting_DMX_RealtimeLightEditor.cs` | Towneh.VRSL.URP.Editor | DMX custom inspector |
 | `Editor/VRStageLighting_AudioLink_RealtimeLightEditor.cs` | Towneh.VRSL.URP.Editor | AudioLink custom inspector |
 | `Editor/VRSL_AudioLinkURPSetup.cs` | Towneh.VRSL.URP.Editor | Scene-wide AudioLink fixture configuration utility |
+| `Editor/VRSL_LegacyToUrpMigration.cs` | Towneh.VRSL.URP.Editor | BIRP → URP fixture migration, sibling and in-place modes (compiled only when the upstream package is present) |
+| `Editor/VRSL_ShaderValidation.cs` | Towneh.VRSL.URP.Editor | `VRSL → URP → Validate Shaders` — reports shaders that failed to compile |
+| `Editor/VRSL_MissingScriptCleaner.cs` | Towneh.VRSL.URP.Editor | `[InitializeOnLoad]`; scrubs missing-script slots in VRSL subtrees on scene open, in memory only |
 | `Editor/VRSL_EditorHeader.cs` | Towneh.VRSL.URP.Editor | Shared logo + version-bar helper |
 | `Editor/VRSL_URPProfilingSampleMenu.cs` | Towneh.VRSL.URP.Editor | `VRSL → Profiling → Import Profiling Sample` menu entry |
 | `Samples~/RealtimeLightProfiling/` | Towneh.VRSL.URP.Profiling, Towneh.VRSL.URP.Profiling.Editor | Opt-in sample: scene builder window and synthetic CRT-bypass DMX source for benchmarking the realtime light path |
