@@ -72,6 +72,7 @@ namespace VRSL.URP
         static readonly int s_NormalsTextureID  = Shader.PropertyToID("_VRSLNormalsTexture");
         static readonly int s_AlbedoTextureID   = Shader.PropertyToID("_VRSLAlbedoTexture");
         static readonly int s_MaterialTextureID = Shader.PropertyToID("_VRSLMaterialTexture");
+        static readonly int s_SurfaceDepthID    = Shader.PropertyToID("_VRSLSurfaceDepthTexture");
 
         readonly Shader _surfacePropertiesShader;
 
@@ -207,14 +208,22 @@ namespace VRSL.URP
                 filterMode  = FilterMode.Point,
                 wrapMode    = TextureWrapMode.Clamp,
             };
+            // Published to the lighting pass, which rejects albedo wherever this
+            // disagrees with the camera's depth. An override shader replaces the
+            // material's own shader outright, so any visibility logic living in
+            // that shader — Poiyomi's UDIM discard, alpha clips, vertex
+            // displacement — never runs here and this pass draws geometry the
+            // camera didn't keep. Comparing the two depths is what catches that.
             var depthDesc = new TextureDesc(width, height)
             {
-                name            = "VRSL Surface Depth",
+                name            = "_VRSLSurfaceDepthTexture",
                 depthBufferBits = DepthBits.Depth32,
                 clearBuffer     = true,
                 dimension       = dimension,
                 slices          = slices,
                 msaaSamples     = MSAASamples.None,
+                filterMode      = FilterMode.Point,
+                wrapMode        = TextureWrapMode.Clamp,
             };
 
             TextureHandle albedoRT   = rg.CreateTexture(albedoDesc);
@@ -246,6 +255,7 @@ namespace VRSL.URP
             builder.SetRenderAttachmentDepth(depthRT, AccessFlags.Write);
             builder.SetGlobalTextureAfterPass(albedoRT,   s_AlbedoTextureID);
             builder.SetGlobalTextureAfterPass(materialRT, s_MaterialTextureID);
+            builder.SetGlobalTextureAfterPass(depthRT,    s_SurfaceDepthID);
 
             builder.SetRenderFunc((SurfacePassData p, RasterGraphContext ctx) =>
             {

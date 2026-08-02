@@ -286,6 +286,10 @@ Where a material genuinely populates both with different values the darker wins,
 
 Smoothness takes `max(_Smoothness, _Glossiness)` on the same reasoning. Metallic and smoothness maps aren't sampled — the scalars only.
 
+An override shader replaces the material's shader outright, which is what reaches albedo on shaders VRSL knows nothing about, but it also means any visibility decision made *inside* that shader never runs here. Poiyomi's UV Tile Discard is the clearest case: in its default Vertex mode it returns NaN from the vertex program, collapsing the triangle in the passes that feed `_CameraDepthTexture`, while the prepass — running VRSL's shader, not Poiyomi's — draws the geometry as though it were there. The lighting pass would then take position from the camera's depth (the surface behind) and albedo from the prepass (the hidden avatar), and the discarded shape would reappear as lit colour on whatever stood behind it.
+
+The prepass therefore publishes its depth as `_VRSLSurfaceDepthTexture`, and `VRSL_SurfaceDataCovers` in `VRSLSurfaceBRDF.hlsl` drops the albedo read wherever that disagrees with the camera's depth, falling through to the neutral dielectric. The comparison is in linear eye space against a tolerance proportional to viewing distance: raw depth precision is far from uniform, and the two values come from different shader compilations of the same transform, so they agree closely rather than bit-exactly. Custom alpha clips and vertex displacement produce the same mismatch and are covered by the same check — a displaced material lights as neutral grey rather than as a ghost offset from the mesh.
+
 The opaque and alpha-test queues are drawn as separate renderer lists against separate passes, so an opaque material whose base map stores non-colour data in alpha is never clipped against a stale `_Cutoff`.
 
 ### Contact shadows

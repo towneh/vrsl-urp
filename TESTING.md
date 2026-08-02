@@ -79,6 +79,8 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | S5 | — | Geometry drawn by a shader with no forward LightMode tag | Lights as neutral mid-grey rather than black |
 | S6 | — | Unassign `surfacePropertiesShader` | Everything falls back to neutral grey, nothing goes black |
 | S7 | — | Match `maxIntensity` against a URP spot light of the same Intensity | Comparable brightness at full output |
+| S8 | — | Avatar using Poiyomi UV Tile Discard, both `Vertex` and `Pixel` discard modes, standing in a beam | Discarded regions stay invisible. **In `Vertex` mode the prepass draws geometry the camera dropped, so the surface behind must not pick up the avatar's albedo** |
+| S9 | — | Avatar whose shader displaces vertices, standing in a beam | Lit without a mismatched-colour ghost offset from the mesh. Neutral grey there is the expected fallback, not a bug |
 
 ### Occlusion
 

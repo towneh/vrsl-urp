@@ -140,7 +140,7 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
 
                 // Material inputs are constant across the light loop, so the
                 // BRDF setup is hoisted out of it.
-                BRDFData brdfData = VRSL_GetSurfaceBRDF(uv);
+                BRDFData brdfData = VRSL_GetSurfaceBRDF(uv, rawDepth);
 
                 // One dither value per pixel, reused by every light's trace.
                 float shadowDither = InterleavedGradientNoise(i.positionCS.xy,
