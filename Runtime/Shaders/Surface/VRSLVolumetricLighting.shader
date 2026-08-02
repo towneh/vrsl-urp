@@ -78,17 +78,26 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             // xyz = colour tint, w = global intensity multiplier
             float4 _VRSLVolFogTint;
 
-            // R2 (plastic-constant) quasi-random sequence — gives a spatially
-            // uniform low-discrepancy distribution that reads perceptually as
-            // fine grain rather than the structured banding produced by
-            // interleaved gradient noise. The frame-indexed offset decorrelates
-            // the pattern across frames so head/fixture motion averages it out.
+            // Interleaved gradient noise (Jimenez 2014), offsetting each pixel's
+            // step phase along the ray.
+            //
+            // The dither has to decorrelate in both screen axes. A plain Weyl
+            // lattice — frac(a*x + b*y) — does not: its iso-value contours are
+            // straight lines of slope -a/b, so every pixel along that diagonal
+            // receives the same phase and the raymarch's residual stepping
+            // streaks into a visible diagonal weave over the cones. IGN's outer
+            // multiply amplifies a very shallow inner gradient, so neighbours in
+            // both axes land far apart in the output and it reads as fine grain.
+            //
+            // The frame offset decorrelates across frames so motion averages the
+            // residual out. Any monotonic time term does that — the 60 is a
+            // pseudo-frame rate for scaling, not an assumption about the real
+            // frame rate.
             float VRSL_Jitter(float2 pixelCoord)
             {
-                const float2 alpha = float2(0.7548776662, 0.5698402910);
-                float frameIdx = _Time.y * 60.0;
-                float2 p = pixelCoord * alpha + fmod(frameIdx, 64.0) * alpha;
-                return frac(p.x + p.y);
+                float2 p = pixelCoord + fmod(_Time.y * 60.0, 64.0) * 5.588238;
+                return frac(52.9829189
+                          * frac(dot(p, float2(0.06711056, 0.00583715))));
             }
 
 
