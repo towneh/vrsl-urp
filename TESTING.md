@@ -105,6 +105,9 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | V1 | — | `Half` (default) | Cones visible, silhouetted correctly against geometry |
 | V2 | — | `Full` | Same shape, no upsample fringing, ~4× the per-pixel cost |
 | V3 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
+| V4 | — | Beam a few metres from the camera, `Half`, with the geometry behind it first near and then far | Cone grain unchanged as the backing surface moves away. **Guards the per-light march span — a shared march loses sample density to whatever sits behind the beam** |
+| V5 | — | Several cones overlapping, `Half` | Brightness in the overlap is the sum of the individual cones; no seam or banding where one cone's span ends |
+| V6 | — | Camera inside a cone, then walking out through its edge | No pop or brightness step as the near end of the span crosses the camera |
 
 ### Cameras
 

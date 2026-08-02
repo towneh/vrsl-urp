@@ -323,7 +323,7 @@ shadows disappear at grazing angles; lower it if distant background bleeds shado
 
 `VRSLLightCull.compute` runs one thread group per 16×16 screen tile per eye. Each group builds its tile's world-space frustum from the same inverse view-projection the fullscreen shaders reconstruct with, tests every active light's bounding sphere against it, and writes the survivors into `_VRSLTileLightIndices` — one run of 65 uints per tile, the first holding the count.
 
-Both fullscreen passes then iterate the tile's list rather than the whole fixture buffer. The volumetric pass gains the most: a view ray stays inside its screen tile for its whole length, so the list is resolved once and reused for every raymarch step, where previously each step walked every fixture in the scene.
+Both fullscreen passes then iterate the tile's list rather than the whole fixture buffer. The volumetric pass gains the most: a view ray stays inside its screen tile for its whole length, so the list is resolved once and serves every light that pixel marches, rather than each pixel walking every fixture in the scene.
 
 Tile frusta span the camera's full depth range rather than each tile's scene-depth bounds. That costs a little tightness on the surface pass, but keeps one list valid for the volumetric ray (which runs from the camera to the surface) and removes any dependency on the depth texture being ready when the cull runs.
 
@@ -334,6 +334,19 @@ The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile r
 ## Volumetric Pass
 
 `VRSLVolumetricLighting.shader`. Runs whenever the `volumetricShader` field is assigned on the manager.
+
+### Per-light march span
+
+Each light in the tile's list is integrated over its own span of the view ray rather than all of them sharing one march from the camera to the opaque surface. The span comes from intersecting the ray with the light's bounding sphere (`positionAndRange`), clamped to `[0, distance-to-surface]`, so a light behind the camera or fully occluded drops out before any stepping.
+
+The reason this matters is sample distribution. A shared march divides `volumetricStepCount` across the whole ray, so its step size is set by whatever geometry sits behind the beam, not by the beam. A cone a few metres away with a wall thirty metres behind it gets its cone crossed in one or two steps, and since the march is jittered to break up banding, that undersampling arrives as per-pixel grain. Marching each light's own span makes step size a function of the beam's thickness alone, so the result is stable regardless of scene depth. This is the dominant term in how clean `Half` looks.
+
+Cost is unchanged in the worst case: `stepCount` steps per light per pixel either way. It improves in the common case, because a light whose sphere the ray misses costs one intersection test instead of a full march that early-outs at every step.
+
+Two consequences worth knowing:
+
+- Density noise (`_VRSL_VOLUMETRIC_NOISE`) is evaluated per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one noise fetch per light per step.
+- Each light's step size differs, and the accumulation weights by that light's own `stepSize`, so overlapping cones still sum to the same result as marching them together.
 
 ### Resolution modes
 
@@ -404,7 +417,7 @@ A few Unity 6-specific requirements are worth flagging for contributors:
 - **Per-frame CPU cost is bounded.** DMX uploads the config once at setup and on `MarkConfigDirty()`; AudioLink uploads `N × 112 bytes` per frame. `VRStageLighting_DMX_RealtimeLight.OnValidate` raises a static `ConfigChanged` event the DMX manager subscribes to, so inspector tweaks propagate to the GPU on the next `LateUpdate` without authors needing to call `MarkConfigDirty` themselves. No per-fixture CPU decode; no `Light` component writes; no `MaterialPropertyBlock` push per cone.
 - **No GPU→CPU readback** in either path.
 - **No shadow pass penalty.** Bypassing Unity's `Light` component means URP doesn't generate per-light shadow atlases — the architectural choice that makes 100+ fixtures feasible. URP's per-light shadow atlas at scale is the dominant cost in the equivalent `Light`-component approach (one full scene redraw per shadow-casting spot, six per point light).
-- **Per-pixel light cost scales with lights-per-tile, not fixture count.** The tile cull is what bounds it; without `lightCullShader` assigned, both fullscreen passes fall back to iterating every fixture on every pixel and the volumetric pass does so once per raymarch step.
+- **Per-pixel light cost scales with lights-per-tile, not fixture count.** The tile cull is what bounds it; without `lightCullShader` assigned, both fullscreen passes fall back to iterating every fixture on every pixel, and the volumetric pass tests a march span for each one.
 - **Geometry cost is the surface prepass.** Two extra opaque draws per camera, and both again when the DMX and AudioLink managers are active together. In a scene whose opaque cost is dominated by avatars this is the term that grows with occupancy rather than with rig size.
 - **The decode compute is negligible.** One workgroup per 64 fixtures, well under 1 ms at any practical fixture count.
 

@@ -115,7 +115,6 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 float3 toCamera  = -viewDir;
 
                 int   stepCount = max(1, (int)_VRSLVolStepCount.x);
-                float stepSize  = maxDist / stepCount;
 
                 float jitter   = VRSL_Jitter(pixelCS);
                 float density  = _VRSLVolDensity.x;
@@ -143,53 +142,89 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 // The whole view ray for this pixel stays inside one screen
                 // tile, and the tile frustum spans the camera's full depth
                 // range, so the light list is resolved once and reused for
-                // every step. That turns the inner loop from "every fixture in
-                // the scene" into "the fixtures that reach this tile".
+                // every light marched below. That turns the outer loop from
+                // "every fixture in the scene" into "the fixtures that reach
+                // this tile".
                 uint tileIndex  = VRSL_TileIndex(uv, VRSL_EyeIndex());
                 uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
 
+                // Each light is integrated only across the span of the view ray
+                // that falls inside its own range, so sample density depends on
+                // how thick the beam is rather than on how far away the surface
+                // behind it happens to be. A shared march over the full ray
+                // would put the whole budget into empty space whenever the
+                // geometry behind a beam is distant, leaving the cone itself
+                // with a sample or two; the jitter then turns that
+                // undersampling into visible grain, which is what makes the
+                // half-res path read as dithered.
+                //
+                // The per-light step budget is the full step count, so the
+                // worst case costs what a shared march costs. Rays that miss a
+                // light's sphere skip it outright.
                 [loop]
-                for (int s = 0; s < stepCount; s++)
+                for (uint slot = 0; slot < lightCount; slot++)
                 {
-                    float  t         = (s + jitter) * stepSize;
-                    float3 samplePos = cameraWS + viewDir * t;
+                    VRSLLightData light =
+                        _VRSLLights[VRSL_LightListIndex(tileIndex, slot)];
 
-                    float3 inscatter = 0;
-                    // Dynamic per tile — see the note in VRSLDeferredLighting.
+                    if (!VRSL_IsActive(light)) continue;
+
+                    // Ray against the light's bounding sphere, solved in march
+                    // parameter t. perpSq is the squared distance from the centre
+                    // to the ray; when it exceeds the range the ray misses and the
+                    // light costs a handful of ALU instead of a full march.
+                    float3 toCentre = light.positionAndRange.xyz - cameraWS;
+                    float  range    = light.positionAndRange.w;
+                    float  proj     = dot(toCentre, viewDir);
+                    float  perpSq   = dot(toCentre, toCentre) - proj * proj;
+                    float  halfSq   = range * range - perpSq;
+                    if (halfSq <= 0.0) continue;
+
+                    // Clamped to the visible ray, so a light sitting behind the
+                    // camera or entirely beyond the opaque surface drops out
+                    // before any stepping happens.
+                    float halfChord = sqrt(halfSq);
+                    float spanStart = max(proj - halfChord, 0.0);
+                    float spanEnd   = min(proj + halfChord, maxDist);
+                    if (spanEnd <= spanStart) continue;
+
+                    float stepSize = (spanEnd - spanStart) / stepCount;
+
                     [loop]
-                    for (uint slot = 0; slot < lightCount; slot++)
+                    for (int s = 0; s < stepCount; s++)
                     {
-                        VRSLLightData light =
-                            _VRSLLights[VRSL_LightListIndex(tileIndex, slot)];
+                        float3 samplePos = cameraWS + viewDir
+                                         * (spanStart + (s + jitter) * stepSize);
 
                         float3 contrib = VRSL_EvaluateLightVolumetric(
                             light, samplePos, toCamera, anisotropy);
 
                         // The gobo fetch is the most expensive part of the step,
-                        // and a gobo can only reduce the result — skip it wherever
-                        // the light already contributes nothing at this sample.
-                        if (any(contrib > 0.0))
-                            contrib *= SampleGobo(
-                                VRSL_GoboIndex(light), light.spotParams.w,
-                                samplePos,
-                                light.positionAndRange.xyz,
-                                light.directionAndType.xyz,
-                                light.spotParams.y,
-                                light.spotParams.z);
+                        // and a gobo can only reduce the result — skip the rest of
+                        // the step wherever the light already contributes nothing.
+                        if (!any(contrib > 0.0)) continue;
 
-                        inscatter += contrib;
+                        contrib *= SampleGobo(
+                            VRSL_GoboIndex(light), light.spotParams.w,
+                            samplePos,
+                            light.positionAndRange.xyz,
+                            light.directionAndType.xyz,
+                            light.spotParams.y,
+                            light.spotParams.z);
+
+                    #ifdef _VRSL_VOLUMETRIC_NOISE
+                        // Now evaluated per light rather than once per shared
+                        // step, so haze varies with each beam's own sample
+                        // positions. Costs a noise fetch per light per step where
+                        // beams overlap; the keyword is off by default.
+                        float3 noisePos = samplePos * noiseScale;
+                        noisePos.y -= _Time.y * noiseScroll;
+                        float n = VRSL_ValueNoise3D(noisePos);
+                        contrib *= lerp(1.0, n, noiseStrength);
+                    #endif
+
+                        accumulated += contrib * density * stepSize;
                     }
-
-                #ifdef _VRSL_VOLUMETRIC_NOISE
-                    float3 noisePos = samplePos * noiseScale;
-                    noisePos.y -= _Time.y * noiseScroll;
-                    float n = VRSL_ValueNoise3D(noisePos);
-                    float modulation = lerp(1.0, n, noiseStrength);
-                #else
-                    float modulation = 1.0;
-                #endif
-
-                    accumulated += inscatter * density * modulation * stepSize;
                 }
 
                 float3 result = accumulated * tint * _VRSLVolFogTint.w;
