@@ -510,7 +510,7 @@ where the swapchain is handled outside the camera.
 | `Runtime/Scripts/VRSLDiagnostics.cs` | Towneh.VRSL.URP | Runtime state readout — fixture counts, tile occupancy, pass activity |
 | `Runtime/Integrations/Basis/BasisVideoToVRSLDMX.cs` | Towneh.VRSL.URP.Basis | Feeds the DMX decode chain from a `BasisMediaPlayer` stream |
 | `Runtime/Integrations/Basis/BasisVideoRenderTextureOutput.cs` | Towneh.VRSL.URP.Basis | Corner-UV blit for a DMX grid occupying part of a larger frame |
-| `Editor/VRSL_URPRendererSetup.cs` | Towneh.VRSL.URP.Editor | Read-only renderer-config diagnostics and the scene-level "Add Light Manager" menu (DMX) |
+| `Editor/VRSL_URPRendererSetup.cs` | Towneh.VRSL.URP.Editor | The scene-level "Add Light Manager" menu (DMX); resolves the package's own shader and compute references. Edits scene contents only, never project assets |
 | `Runtime/Shaders/Compute/VRSLDMXLightUpdate.compute` | — | DMX compute kernel |
 | `Runtime/Shaders/Compute/VRSLAudioLinkLightUpdate.compute` | — | AudioLink compute kernel |
 | `Runtime/Shaders/Surface/VRSLDeferredLighting.shader` | — | Fullscreen surface lighting pass (shared) |
