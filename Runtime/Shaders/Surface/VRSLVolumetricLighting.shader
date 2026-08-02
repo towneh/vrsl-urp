@@ -374,6 +374,18 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
 
                 float fullEye = LinearEyeDepth(fullDepth, _ZBufferParams);
 
+                // Depth rejection is measured against a tolerance proportional to
+                // viewing distance, so the term means the same thing near and far.
+                // The tolerance has to be a real distance rather than a guard
+                // epsilon: weighting by 1/depthDiff alone is unbounded as the
+                // difference approaches zero, which hands the centre tap a weight
+                // orders of magnitude above its neighbours on any surface that
+                // isn't exactly fronto-parallel. That collapses the kernel to a
+                // point sample, and a point-sampled half-res buffer replicated to
+                // full res is what turns the raymarch jitter into visible blocky
+                // structure instead of the grain it was shaped to be.
+                float tolerance = max(fullEye * 0.02, 0.02);
+
                 float4 sum  = 0;
                 float  wSum = 0;
 
@@ -384,8 +396,11 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     float halfDepth = SAMPLE_TEXTURE2D_X_LOD(
                         _VRSLVolHalfResDepth, sampler_point_clamp, uv, 0).r;
                     float halfEye  = LinearEyeDepth(halfDepth, _ZBufferParams);
-                    float depthDiff = abs(fullEye - halfEye);
-                    float bilateral = 1.0 / (0.0001 + depthDiff);
+
+                    // Flat within tolerance keeps the full Gaussian weight; a
+                    // silhouette falls off quadratically and still gets rejected.
+                    float depthDiff = abs(fullEye - halfEye) / tolerance;
+                    float bilateral = rcp(1.0 + depthDiff * depthDiff);
                     float w = gauss[j] * bilateral;
                     sum  += SAMPLE_TEXTURE2D_X_LOD(
                         _VRSLVolumetricRT, sampler_point_clamp, uv, 0) * w;
