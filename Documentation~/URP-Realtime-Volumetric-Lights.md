@@ -382,6 +382,8 @@ The raymarch offsets each pixel's step phase with interleaved gradient noise. Th
 
 Note that a dither only conceals quadrature error while that error is small. If stepping is visible as a *structured* pattern rather than fine grain, the sample budget is landing in the wrong place — check the march span before reaching for the dither or the step count.
 
+**Full earns its place as a diagnostic, not just as a quality tier.** It runs the same `VRSL_Raymarch` as Half but skips the depth downsample and the bilateral upsample entirely, so comparing the two modes on one view separates a fault in the integration from a fault in the reconstruction: an artefact present in both is in the march, one that appears only in Half is in passes 0 or 2. That bisection is the fastest way into any volumetric bug and it is why the mode is worth keeping even though Half is the default and now clean — the alternative is guessing at which half of the pipeline is at fault. Test row V8 exists for exactly this. Pass 3 shares all its logic with Half, so there is no second implementation to keep in step.
+
 ### Density model
 
 `multi_compile _ _VRSL_VOLUMETRIC_NOISE` toggles between two variants:
