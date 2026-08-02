@@ -21,6 +21,11 @@ SAMPLER(sampler_VRSLAlbedoTexture);
 TEXTURE2D_X(_VRSLMaterialTexture);
 SAMPLER(sampler_VRSLMaterialTexture);
 
+// Depth the surface prepass drew at, used to reject albedo the camera didn't
+// actually keep. See VRSL_SurfaceDataCovers below.
+TEXTURE2D_X(_VRSLSurfaceDepthTexture);
+SAMPLER(sampler_VRSLSurfaceDepthTexture);
+
 // 1 when the surface prepass ran and its targets are bound, 0 otherwise. Set by
 // the lighting pass. Without it the shader would be reading whatever an unbound
 // texture slot resolves to, which differs per graphics API — a white default
@@ -34,14 +39,55 @@ float _VRSLSurfaceDataValid;
 #define VRSL_FALLBACK_ALBEDO     half3(0.5, 0.5, 0.5)
 #define VRSL_FALLBACK_SMOOTHNESS half(0.0)
 
+// Does the prepass's surface at this pixel belong to the surface the camera
+// actually shows?
+//
+// The albedo prepass draws through DrawingSettings.overrideShader, which
+// replaces the material's own shader outright. Any visibility logic living in
+// that shader therefore never runs: Poiyomi's UDIM discard (which returns NaN
+// from its vertex program, collapsing the triangle in the real passes), custom
+// alpha clips, vertex displacement. The prepass happily draws geometry the
+// camera dropped, and since the lighting pass takes position from the camera's
+// depth, the result is the surface *behind* being lit through the albedo of the
+// thing that was supposed to be invisible — the discarded shape reappears as
+// lit colour.
+//
+// This is a backstop. The prepass already clips against the camera's depth as it
+// rasterises (see VRSLSurfaceProperties), which is what actually fixes the case
+// above — rejecting here alone cannot, because by this point the hidden surface
+// has won the prepass depth test and the albedo behind it is gone, leaving only
+// the neutral fallback to substitute. What this catches is geometry the clip
+// can't, such as a shader whose real vertices are displaced somewhere else.
+//
+// Compared in linear eye space on the shared tolerance, so the gate and the
+// backstop can't disagree about what counts as the same surface.
+bool VRSL_SurfaceDataCovers(float2 uv, float cameraRawDepth)
+{
+    float prepassRaw = SAMPLE_TEXTURE2D_X(
+        _VRSLSurfaceDepthTexture, sampler_VRSLSurfaceDepthTexture, uv).r;
+
+    // Nothing drawn here by the prepass: cleared depth is 0 in reversed-Z and 1
+    // otherwise. The albedo read handles this case on its own, so defer to it.
+#if UNITY_REVERSED_Z
+    if (prepassRaw <= 0.0) return true;
+#else
+    if (prepassRaw >= 1.0) return true;
+#endif
+
+    float prepassEye = LinearEyeDepth(prepassRaw,      _ZBufferParams);
+    float cameraEye  = LinearEyeDepth(cameraRawDepth,  _ZBufferParams);
+
+    return abs(prepassEye - cameraEye) <= VRSL_SURFACE_DEPTH_TOLERANCE(cameraEye);
+}
+
 // Build the per-pixel BRDF inputs once, outside the light loop.
-BRDFData VRSL_GetSurfaceBRDF(float2 uv)
+BRDFData VRSL_GetSurfaceBRDF(float2 uv, float cameraRawDepth)
 {
     half3 albedo     = VRSL_FALLBACK_ALBEDO;
     half  smoothness = VRSL_FALLBACK_SMOOTHNESS;
     half  metallic   = 0;
 
-    if (_VRSLSurfaceDataValid > 0.5)
+    if (_VRSLSurfaceDataValid > 0.5 && VRSL_SurfaceDataCovers(uv, cameraRawDepth))
     {
         half4 albedoSmoothness = SAMPLE_TEXTURE2D_X(
             _VRSLAlbedoTexture, sampler_VRSLAlbedoTexture, uv);

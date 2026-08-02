@@ -286,6 +286,10 @@ Where a material genuinely populates both with different values the darker wins,
 
 Smoothness takes `max(_Smoothness, _Glossiness)` on the same reasoning. Metallic and smoothness maps aren't sampled — the scalars only.
 
+An override shader replaces the material's shader outright, which is what reaches albedo on shaders VRSL knows nothing about, but it also means any visibility decision made *inside* that shader never runs here. Poiyomi's UV Tile Discard is the clearest case: in its default Vertex mode it returns NaN from the vertex program, collapsing the triangle in the passes that feed `_CameraDepthTexture`, while the prepass — running VRSL's shader, not Poiyomi's — draws the geometry as though it were there. The lighting pass would then take position from the camera's depth (the surface behind) and albedo from the prepass (the hidden avatar), and the discarded shape would reappear as lit colour on whatever stood behind it.
+
+The prepass therefore publishes its depth as `_VRSLSurfaceDepthTexture`, and `VRSL_SurfaceDataCovers` in `VRSLSurfaceBRDF.hlsl` drops the albedo read wherever that disagrees with the camera's depth, falling through to the neutral dielectric. The comparison is in linear eye space against a tolerance proportional to viewing distance: raw depth precision is far from uniform, and the two values come from different shader compilations of the same transform, so they agree closely rather than bit-exactly. Custom alpha clips and vertex displacement produce the same mismatch and are covered by the same check — a displaced material lights as neutral grey rather than as a ghost offset from the mesh.
+
 The opaque and alpha-test queues are drawn as separate renderer lists against separate passes, so an opaque material whose base map stores non-colour data in alpha is never clipped against a stale `_Cutoff`.
 
 ### Contact shadows
@@ -323,7 +327,7 @@ shadows disappear at grazing angles; lower it if distant background bleeds shado
 
 `VRSLLightCull.compute` runs one thread group per 16×16 screen tile per eye. Each group builds its tile's world-space frustum from the same inverse view-projection the fullscreen shaders reconstruct with, tests every active light's bounding sphere against it, and writes the survivors into `_VRSLTileLightIndices` — one run of 65 uints per tile, the first holding the count.
 
-Both fullscreen passes then iterate the tile's list rather than the whole fixture buffer. The volumetric pass gains the most: a view ray stays inside its screen tile for its whole length, so the list is resolved once and reused for every raymarch step, where previously each step walked every fixture in the scene.
+Both fullscreen passes then iterate the tile's list rather than the whole fixture buffer. The volumetric pass gains the most: a view ray stays inside its screen tile for its whole length, so the list is resolved once and serves every light that pixel marches, rather than each pixel walking every fixture in the scene.
 
 Tile frusta span the camera's full depth range rather than each tile's scene-depth bounds. That costs a little tightness on the surface pass, but keeps one list valid for the volumetric ray (which runs from the camera to the surface) and removes any dependency on the depth texture being ready when the cull runs.
 
@@ -335,6 +339,30 @@ The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile r
 
 `VRSLVolumetricLighting.shader`. Runs whenever the `volumetricShader` field is assigned on the manager.
 
+### Per-light march span
+
+Each light in the tile's list is integrated over its own span of the view ray rather than all of them sharing one march from the camera to the opaque surface. The span is built in two stages:
+
+1. Intersect the ray with the light's bounding sphere (`positionAndRange`), clamped to `[0, distance-to-surface]`. A light behind the camera or fully occluded drops out here, before any stepping.
+2. For spots, narrow that span to the cone itself via `VRSL_NarrowSpanToCone`. Point lights fill their sphere, so they keep the stage-1 span.
+
+Both stages matter, and for different reasons.
+
+Stage 1 decouples step size from scene depth. A shared march divides `volumetricStepCount` across the whole ray, so its step size is set by whatever geometry sits behind the beam rather than by the beam. A cone a few metres away with a wall thirty metres behind it would be crossed in one or two steps.
+
+Stage 2 is what makes the sample budget actually land in the light. A sphere is a poor proxy for a cone: at 20 m range the chord runs to 40 m, it contains the entire backward hemisphere, and everything outside the beam angle. A ray crossing a beam near the lens covers well under a metre of lit space, so without this the great majority of steps sample dark and the few inside carry the whole result. That is large per-pixel quadrature error, and the jitter cannot hide error of that size — it only reshapes it into whatever pattern the dither itself carries, which is how it surfaces visually. The effect is worst near a fixture head, where the cone is narrowest relative to its sphere.
+
+`VRSL_NarrowSpanToCone` relies on a cone nappe being convex, so a ray meets it in exactly one interval. The quadratic supplies the surface crossings; midpoint tests select which sub-interval is inside. That avoids case analysis on root signs and puts the ray-parallel-to-surface degeneracy on the same path as the general case. It projects from the same virtual apex as `VRSL_SpotAttenuation`, so the marched span matches the cone the attenuation lights.
+
+Worst-case cost is `stepCount` steps per light per pixel, as it would be for a shared march. It improves in the common case: a ray missing the sphere costs one intersection test, and a ray missing the cone costs the quadratic plus three midpoint tests, instead of a full march that early-outs at every step.
+
+Two consequences worth knowing:
+
+- Density noise (`_VRSL_VOLUMETRIC_NOISE`) is evaluated per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one noise fetch per light per step.
+- Each light's step size differs, and the accumulation weights by that light's own `stepSize`, so overlapping cones still sum to the same result as marching them together.
+
+Because the span is tight, every step lands inside the beam and `volumetricStepCount` buys far more than it would against an untargeted march. The default is 24, and 16 has held up in practice on a rig of 60° spots at 20 m range. What governs the floor is metres of cone per step rather than the count on its own, so wide cones, long beams and dense haze all want more; a narrow spot needs very few.
+
 ### Resolution modes
 
 `volumetricResolution` on the manager selects:
@@ -342,10 +370,19 @@ The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile r
 - **Half** (default) — three sub-passes:
   - Pass 0: depth downsample. Min-depth filter on each 2×2 source quad keeps the half-res depth tight to silhouettes.
   - Pass 1: half-res jittered raymarch into an `R16G16B16A16_SFloat` half-res RT.
-  - Pass 2: 9-tap Gaussian-weighted bilateral upsample, additive over the camera colour. The bilateral term `1 / (eps + |fullEye - halfEye|)` rejects taps across silhouettes.
+  - Pass 2: 9-tap bilateral upsample, additive over the camera colour. Taps are weighted by a separable tent centred on the pixel's true sub-texel position within the half-res grid, times a depth term of `1 / (1 + d²)` where `d` is the eye-depth difference over a tolerance proportional to viewing distance.
 - **Full** — single pass at the camera target resolution; samples `_CameraDepthTexture` directly and additive-blends. ~4× per-pixel cost vs Half but no upsample artefacts.
 
-The half-res raymarch jitters the ray origin per pixel using an R2 (plastic-constant) low-discrepancy sequence with frame-indexed offset, so head and fixture motion average the residual pattern over time.
+Two details of the upsample are load-bearing rather than incidental:
+
+- **Weights follow the sub-texel position, not the nearest texel centre.** Snapping would give all four full-res pixels of a 2×2 block identical taps and identical weights, making the composite constant across the block. A constant-per-block reconstruction of a smooth gradient terraces into contours, and a beam is almost entirely smooth gradient. Tent radius is 1.5 so a tap has reached zero weight by the time the centre texel flips, which keeps the reconstruction continuous across texel boundaries.
+- **The depth term needs a real tolerance, not a divide guard.** Weighting by `1/depthDiff` alone is unbounded as the difference approaches zero, which gives the centre tap a weight orders of magnitude above its neighbours on any surface that isn't exactly fronto-parallel and collapses the kernel to a point sample.
+
+The raymarch offsets each pixel's step phase with interleaved gradient noise. The dither has to decorrelate in both screen axes: a Weyl lattice, `frac(a*x + b*y)`, has straight diagonal iso-value contours, so every pixel along one diagonal receives the same phase and residual stepping streaks rather than breaking up. A frame-indexed offset decorrelates across frames so motion averages the residual out.
+
+Note that a dither only conceals quadrature error while that error is small. If stepping is visible as a *structured* pattern rather than fine grain, the sample budget is landing in the wrong place — check the march span before reaching for the dither or the step count.
+
+**Full earns its place as a diagnostic, not just as a quality tier.** It runs the same `VRSL_Raymarch` as Half but skips the depth downsample and the bilateral upsample entirely, so comparing the two modes on one view separates a fault in the integration from a fault in the reconstruction: an artefact present in both is in the march, one that appears only in Half is in passes 0 or 2. That bisection is the fastest way into any volumetric bug and it is why the mode is worth keeping even though Half is the default and now clean — the alternative is guessing at which half of the pipeline is at fault. Test row V8 exists for exactly this. Pass 3 shares all its logic with Half, so there is no second implementation to keep in step.
 
 ### Density model
 
@@ -404,7 +441,7 @@ A few Unity 6-specific requirements are worth flagging for contributors:
 - **Per-frame CPU cost is bounded.** DMX uploads the config once at setup and on `MarkConfigDirty()`; AudioLink uploads `N × 112 bytes` per frame. `VRStageLighting_DMX_RealtimeLight.OnValidate` raises a static `ConfigChanged` event the DMX manager subscribes to, so inspector tweaks propagate to the GPU on the next `LateUpdate` without authors needing to call `MarkConfigDirty` themselves. No per-fixture CPU decode; no `Light` component writes; no `MaterialPropertyBlock` push per cone.
 - **No GPU→CPU readback** in either path.
 - **No shadow pass penalty.** Bypassing Unity's `Light` component means URP doesn't generate per-light shadow atlases — the architectural choice that makes 100+ fixtures feasible. URP's per-light shadow atlas at scale is the dominant cost in the equivalent `Light`-component approach (one full scene redraw per shadow-casting spot, six per point light).
-- **Per-pixel light cost scales with lights-per-tile, not fixture count.** The tile cull is what bounds it; without `lightCullShader` assigned, both fullscreen passes fall back to iterating every fixture on every pixel and the volumetric pass does so once per raymarch step.
+- **Per-pixel light cost scales with lights-per-tile, not fixture count.** The tile cull is what bounds it; without `lightCullShader` assigned, both fullscreen passes fall back to iterating every fixture on every pixel, and the volumetric pass tests a march span for each one.
 - **Geometry cost is the surface prepass.** Two extra opaque draws per camera, and both again when the DMX and AudioLink managers are active together. In a scene whose opaque cost is dominated by avatars this is the term that grows with occupancy rather than with rig size.
 - **The decode compute is negligible.** One workgroup per 64 fixtures, well under 1 ms at any practical fixture count.
 

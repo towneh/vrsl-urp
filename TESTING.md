@@ -79,6 +79,8 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | S5 | — | Geometry drawn by a shader with no forward LightMode tag | Lights as neutral mid-grey rather than black |
 | S6 | — | Unassign `surfacePropertiesShader` | Everything falls back to neutral grey, nothing goes black |
 | S7 | — | Match `maxIntensity` against a URP spot light of the same Intensity | Comparable brightness at full output |
+| S8 | — | Avatar using Poiyomi UV Tile Discard, both `Vertex` and `Pixel` discard modes, standing in a beam | Discarded regions stay invisible. **In `Vertex` mode the prepass draws geometry the camera dropped, so the surface behind must not pick up the avatar's albedo** |
+| S9 | — | Avatar whose shader displaces vertices, standing in a beam | Lit without a mismatched-colour ghost offset from the mesh. Neutral grey there is the expected fallback, not a bug |
 
 ### Occlusion
 
@@ -105,6 +107,13 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | V1 | — | `Half` (default) | Cones visible, silhouetted correctly against geometry |
 | V2 | — | `Full` | Same shape, no upsample fringing, ~4× the per-pixel cost |
 | V3 | — | Toggle `volumetricUseNoise` | Density becomes patchy; no cost when off |
+| V4 | — | Beam a few metres from the camera, `Half`, with the geometry behind it first near and then far | Cone grain unchanged as the backing surface moves away. **Guards the per-light march span — a shared march loses sample density to whatever sits behind the beam** |
+| V5 | — | Several cones overlapping, `Half` | Brightness in the overlap is the sum of the individual cones; no seam or banding where one cone's span ends |
+| V6 | — | Camera inside a cone, then walking out through its edge | No pop or brightness step as the near end of the span crosses the camera. **Exercises the midpoint selection in `VRSL_NarrowSpanToCone`** |
+| V7 | — | Narrow cone (small `spotAngle`), viewed side-on close to the fixture head | Smooth gradient, no dot-screen or weave pattern. **Worst case for span tightness — the cone is narrowest relative to its bounding sphere here** |
+| V8 | — | Compare `Half` and `Full` on the same view | Same structure in both. A pattern present in `Full` is in the march; one only in `Half` is in the downsample or upsample |
+| V9 | — | Drop `volumetricStepCount` towards its minimum | Degrades to visible stepping gradually, and far lower than the default before it shows |
+| V10 | — | Cone edges at a grazing angle | Soft feather to the outer angle, no hard rim. **A hard rim means the span is clipping before the attenuation has faded** |
 
 ### Cameras
 

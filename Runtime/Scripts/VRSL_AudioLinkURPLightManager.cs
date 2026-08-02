@@ -94,9 +94,13 @@ namespace VRSL.URP
         public VolumetricResolution volumetricResolution = VolumetricResolution.Half;
 
         [Range(8, 64)]
-        [Tooltip("Number of integration steps along each view ray. Higher = smoother, more cost. "
-               + "Cost scales linearly with step count and active fixture count.")]
-        public int volumetricStepCount = 32;
+        [Tooltip("Integration steps across each light's span of the view ray. Higher = smoother, "
+               + "more cost; cost scales linearly with this and with lights-per-tile. The span is "
+               + "bounded to the cone rather than the whole ray, so every step lands inside the "
+               + "beam and low counts go further than they otherwise would — 16 is often enough. "
+               + "Raise it for wide cones, long beams or dense haze, where each step covers more "
+               + "distance.")]
+        public int volumetricStepCount = 24;
 
         [Range(0f, 2f)]
         [Tooltip("Base scattering density. Lower = subtler shafts; higher = denser haze. "

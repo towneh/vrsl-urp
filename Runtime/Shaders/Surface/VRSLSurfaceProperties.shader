@@ -38,6 +38,10 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
+        // For VRSL_SURFACE_DEPTH_TOLERANCE, shared with VRSL_SurfaceDataCovers so
+        // the prepass gate and the lighting-pass backstop agree.
+        #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSLLightingLibrary.hlsl"
 
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
         TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
@@ -109,6 +113,52 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             return min(urp, legacy);
         }
 
+        // Discard fragments the camera didn't keep.
+        //
+        // This pass draws through DrawingSettings.overrideShader, which replaces
+        // the material's own shader outright. That is what reaches albedo on
+        // shaders VRSL knows nothing about, but it also means any visibility
+        // decision living inside that shader never runs here — Poiyomi's UV Tile
+        // Discard, custom alpha clips, vertex displacement. Left alone, this pass
+        // draws geometry the camera dropped and overwrites the albedo of whatever
+        // is genuinely visible behind it.
+        //
+        // Testing against the camera's depth restores those decisions without
+        // needing to know any individual shader's rule. Rejecting here rather
+        // than filtering the result downstream is the part that matters: once a
+        // hidden surface has written albedo, the surface behind it is gone and no
+        // later check can recover it — the best a downstream filter can do is
+        // substitute a neutral value, which still leaves the hidden shape legible
+        // wherever it differs from its surroundings.
+        //
+        // A tolerance in linear eye space rather than equality, because the two
+        // depths come from separate shader compilations of the same transform and
+        // so agree closely rather than bit-exactly.
+        //
+        // It has to be tight. Both sides describe the same vertex, so honest
+        // disagreement is float precision — far below a micrometre against a
+        // 32-bit reversed-Z buffer at any distance an avatar is viewed from. What
+        // the test has to separate is a garment from the skin beneath it, which on
+        // a fitted mesh is a couple of millimetres. A tolerance anywhere near that
+        // gap leaves the comparison marginal across whole surfaces, which shows up
+        // as a stipple of clipped and unclipped pixels wherever a light lands.
+        // 0 when the prepass could not get hold of the camera depth texture, in
+        // which case the comparison below would run against an unbound texture and
+        // reject everything. Drawing unfiltered is the milder failure.
+        float _VRSLSurfaceDepthGate;
+
+        void ClipToCameraDepth(float4 positionCS)
+        {
+            if (_VRSLSurfaceDepthGate < 0.5) return;
+
+            float2 screenUV = positionCS.xy / _ScreenParams.xy;
+
+            float cameraEye = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
+            float fragEye   = LinearEyeDepth(positionCS.z,               _ZBufferParams);
+
+            clip(VRSL_SURFACE_DEPTH_TOLERANCE(cameraEye) - abs(fragEye - cameraEye));
+        }
+
         void WriteSurface(half4 baseColor,
                           out half4 outAlbedo, out half4 outMaterial)
         {
@@ -145,6 +195,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             {
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+                ClipToCameraDepth(i.positionCS);
                 WriteSurface(SampleBaseColor(i), outAlbedo, outMaterial);
             }
             ENDHLSL
@@ -175,6 +226,8 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             {
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
+                ClipToCameraDepth(i.positionCS);
 
                 half4 baseColor = SampleBaseColor(i);
                 clip(baseColor.a - _Cutoff);
