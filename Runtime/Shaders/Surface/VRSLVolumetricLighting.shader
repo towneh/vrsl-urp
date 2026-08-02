@@ -355,17 +355,17 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 float2 halfRes   = _VRSLVolHalfResSize.xy;
                 float2 halfTexel = _VRSLVolHalfResSize.zw;
 
-                // Centre of the 3×3 half-res neighbourhood, snapped to texel.
-                float2 halfPos  = i.uv * halfRes;
-                float2 halfCtr  = floor(halfPos) + 0.5;
-                float2 ctrUV    = halfCtr * halfTexel;
+                // This pixel's position in half-res texel space, split into the
+                // nearest texel and the signed offset within it. The sub-texel
+                // part has to drive the weights: snapping every full-res pixel to
+                // its texel centre gives all four pixels of a 2×2 block the same
+                // taps and the same weights, so the composite is constant across
+                // the block. On a gradient as smooth as a beam that terraces into
+                // visible contours however good the depth rejection is.
+                float2 halfPos  = i.uv * halfRes - 0.5;
+                float2 ctrTexel = round(halfPos);
+                float2 subTexel = halfPos - ctrTexel;   // [-0.5, 0.5]
 
-                // 3×3 Gaussian kernel (1,2,1; 2,4,2; 1,2,1) / 16.
-                const float gauss[9] = {
-                    1.0/16.0, 2.0/16.0, 1.0/16.0,
-                    2.0/16.0, 4.0/16.0, 2.0/16.0,
-                    1.0/16.0, 2.0/16.0, 1.0/16.0
-                };
                 const float2 offs[9] = {
                     float2(-1,-1), float2(0,-1), float2(1,-1),
                     float2(-1, 0), float2(0, 0), float2(1, 0),
@@ -392,16 +392,24 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 [unroll]
                 for (int j = 0; j < 9; j++)
                 {
-                    float2 uv = ctrUV + offs[j] * halfTexel;
+                    float2 uv = (ctrTexel + offs[j] + 0.5) * halfTexel;
                     float halfDepth = SAMPLE_TEXTURE2D_X_LOD(
                         _VRSLVolHalfResDepth, sampler_point_clamp, uv, 0).r;
                     float halfEye  = LinearEyeDepth(halfDepth, _ZBufferParams);
 
-                    // Flat within tolerance keeps the full Gaussian weight; a
+                    // Separable tent centred on the true sub-texel position, so
+                    // weights slide continuously as the pixel crosses the block
+                    // instead of stepping at texel boundaries. Radius 1.5 is what
+                    // makes that continuous: the tap that leaves the footprint as
+                    // ctrTexel flips has already fallen to zero weight.
+                    float2 d       = abs(offs[j] - subTexel);
+                    float  spatial = max(0.0, 1.5 - d.x) * max(0.0, 1.5 - d.y);
+
+                    // Flat within tolerance keeps the full spatial weight; a
                     // silhouette falls off quadratically and still gets rejected.
                     float depthDiff = abs(fullEye - halfEye) / tolerance;
                     float bilateral = rcp(1.0 + depthDiff * depthDiff);
-                    float w = gauss[j] * bilateral;
+                    float w = spatial * bilateral;
                     sum  += SAMPLE_TEXTURE2D_X_LOD(
                         _VRSLVolumetricRT, sampler_point_clamp, uv, 0) * w;
                     wSum += w;
