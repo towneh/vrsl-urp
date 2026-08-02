@@ -38,6 +38,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
 
         HLSLINCLUDE
         #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
 
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
         TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
@@ -109,6 +110,37 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             return min(urp, legacy);
         }
 
+        // Discard fragments the camera didn't keep.
+        //
+        // This pass draws through DrawingSettings.overrideShader, which replaces
+        // the material's own shader outright. That is what reaches albedo on
+        // shaders VRSL knows nothing about, but it also means any visibility
+        // decision living inside that shader never runs here — Poiyomi's UV Tile
+        // Discard, custom alpha clips, vertex displacement. Left alone, this pass
+        // draws geometry the camera dropped and overwrites the albedo of whatever
+        // is genuinely visible behind it.
+        //
+        // Testing against the camera's depth restores those decisions without
+        // needing to know any individual shader's rule. Rejecting here rather
+        // than filtering the result downstream is the part that matters: once a
+        // hidden surface has written albedo, the surface behind it is gone and no
+        // later check can recover it — the best a downstream filter can do is
+        // substitute a neutral value, which still leaves the hidden shape legible
+        // wherever it differs from its surroundings.
+        //
+        // A tolerance in linear eye space rather than equality, because the two
+        // depths come from separate shader compilations of the same transform and
+        // so agree closely rather than bit-exactly.
+        void ClipToCameraDepth(float4 positionCS)
+        {
+            float2 screenUV = positionCS.xy / _ScreenParams.xy;
+
+            float cameraEye = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
+            float fragEye   = LinearEyeDepth(positionCS.z,               _ZBufferParams);
+
+            clip(max(cameraEye * 0.01, 0.01) - abs(fragEye - cameraEye));
+        }
+
         void WriteSurface(half4 baseColor,
                           out half4 outAlbedo, out half4 outMaterial)
         {
@@ -145,6 +177,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             {
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+                ClipToCameraDepth(i.positionCS);
                 WriteSurface(SampleBaseColor(i), outAlbedo, outMaterial);
             }
             ENDHLSL
@@ -175,6 +208,8 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             {
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
+                ClipToCameraDepth(i.positionCS);
 
                 half4 baseColor = SampleBaseColor(i);
                 clip(baseColor.a - _Cutoff);

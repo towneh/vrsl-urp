@@ -99,6 +99,13 @@ namespace VRSL.URP
             // Before opaque rendering, so the lighting pass at
             // AfterRenderingOpaques sees every target populated.
             renderPassEvent = RenderPassEvent.AfterRenderingPrePasses;
+
+            // The override-shader draw tests each fragment against the camera's
+            // depth (see VRSLSurfaceProperties), so _CameraDepthTexture has to be
+            // populated by the time this pass runs. Requesting it from a pass
+            // scheduled before opaques is what forces URP to satisfy it with a
+            // depth prepass rather than a copy after opaques.
+            ConfigureInput(ScriptableRenderPassInput.Depth);
         }
 
         public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
