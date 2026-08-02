@@ -357,7 +357,7 @@ Two consequences worth knowing:
 - Density noise (`_VRSL_VOLUMETRIC_NOISE`) is evaluated per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one noise fetch per light per step.
 - Each light's step size differs, and the accumulation weights by that light's own `stepSize`, so overlapping cones still sum to the same result as marching them together.
 
-Because the span is tight, `volumetricStepCount` buys far more than it would against an untargeted march, and can usually be set well below the 32 default before stepping becomes visible.
+Because the span is tight, every step lands inside the beam and `volumetricStepCount` buys far more than it would against an untargeted march. The default is 24, and 16 has held up in practice on a rig of 60° spots at 20 m range. What governs the floor is metres of cone per step rather than the count on its own, so wide cones, long beams and dense haze all want more; a narrow spot needs very few.
 
 ### Resolution modes
 

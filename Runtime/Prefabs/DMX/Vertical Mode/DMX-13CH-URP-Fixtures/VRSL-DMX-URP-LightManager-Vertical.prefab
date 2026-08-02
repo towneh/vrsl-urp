@@ -54,7 +54,7 @@ MonoBehaviour:
   surfacePropertiesShader: {fileID: 4800000, guid: 5e926720f16a403487984bfa2578e36f, type: 3}
   volumetricShader: {fileID: 4800000, guid: ee4b25e5a146ba8b36ed731b36047774, type: 3}
   volumetricResolution: 0
-  volumetricStepCount: 32
+  volumetricStepCount: 24
   volumetricDensity: 0.1
   volumetricAnisotropy: 0.2
   volumetricTint: {r: 1, g: 1, b: 1, a: 1}
