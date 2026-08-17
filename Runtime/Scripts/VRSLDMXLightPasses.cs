@@ -51,6 +51,8 @@ namespace VRSL.URP
             {
                 public BufferHandle  fixtureConfigBuffer;
                 public BufferHandle  lightDataBuffer;
+                public BufferHandle  channelBuffer;
+                public int           channelCount;
                 public TextureHandle dmxMainTex;
                 public TextureHandle dmxMovementTex;
                 public TextureHandle dmxStrobeTex;
@@ -79,6 +81,7 @@ namespace VRSL.URP
                 if (mgr == null || mgr.FixtureCount == 0
                     || mgr.computeShader == null
                     || mgr.FixtureConfigBuffer == null
+                    || mgr.ChannelBuffer == null
                     || mgr.DMXMainHandle == null) return;
 
                 using var builder = rg.AddComputePass<PassData>("VRSL DMX Light Compute", out var d);
@@ -92,6 +95,10 @@ namespace VRSL.URP
 
                 d.fixtureConfigBuffer = rg.ImportBuffer(mgr.FixtureConfigBuffer);
                 d.lightDataBuffer     = rg.ImportBuffer(mgr.LightDataBuffer);
+                // The manager keeps this allocated even with no source publishing,
+                // so the binding is always valid and only the count varies.
+                d.channelBuffer       = rg.ImportBuffer(mgr.ChannelBuffer);
+                d.channelCount        = mgr.ChannelCount;
                 d.dmxMainTex          = rg.ImportTexture(mgr.DMXMainHandle);
                 d.dmxMovementTex      = mgr.DMXMovementHandle != null
                     ? rg.ImportTexture(mgr.DMXMovementHandle)
@@ -115,6 +122,7 @@ namespace VRSL.URP
 
                 builder.UseBuffer(d.fixtureConfigBuffer, AccessFlags.Read);
                 builder.UseBuffer(d.lightDataBuffer,     AccessFlags.Write);
+                builder.UseBuffer(d.channelBuffer,       AccessFlags.Read);
                 builder.UseTexture(d.dmxMainTex,         AccessFlags.Read);
                 if (d.dmxMovementTex.IsValid())
                     builder.UseTexture(d.dmxMovementTex, AccessFlags.Read);
@@ -140,6 +148,11 @@ namespace VRSL.URP
                     cmd.SetComputeIntParam(    p.cs,           "_VRSLGoboCount",    p.goboCount);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_FixtureConfigs",   p.fixtureConfigBuffer);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_LightData",        p.lightDataBuffer);
+                    // Bound explicitly rather than relying on the manager's global:
+                    // compute kernels take their buffers per dispatch, and the count
+                    // is what decides whether the kernel reads this or the CRTs.
+                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXChannels", p.channelBuffer);
+                    cmd.SetComputeIntParam(    p.cs,           "_VRSLU_DMXChannelCount", p.channelCount);
                     cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXMainTex",       p.dmxMainTex);
 
                     if (p.dmxMovementTex.IsValid())

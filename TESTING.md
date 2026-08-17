@@ -124,6 +124,19 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | M3 | — | `SurfaceOnly` | Surface lighting in the mirror, no volumetric cones |
 | M4 | — | `Skip` | No VRSL lighting in the mirror |
 
+### DMX channel buffer
+
+Values published as bytes rather than decoded from the pixel grid. A scene with no
+channel source is unaffected, so N4 is the regression that matters most.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| N1 | D | Synthetic DMX Channel Source in Ramp mode, Play, then `VRSL → URP → Validate DMX Channel Buffer` | PASS: every channel read back through the shader matches what was published. A constant offset in the reported channel is an indexing error; a value that looks like a neighbouring byte is a packing error |
+| N2 | D | Same source in Fixtures mode, no video and no capture camera running | Fixtures light and move from the buffer alone; `Log Decoded Fixture Light Data` shows non-zero intensity |
+| N3 | D | Fixtures mode, then disable the source component mid-cue | Fixtures fall back to the CRT chain within a frame rather than latching or going dark |
+| N4 | D | No channel source anywhere in the scene | Decode is bit-identical to the texture path — this is every existing scene |
+| N5 | D | Source publishing fewer channels than a fixture is patched at | The unpatched fixture reads 0 and goes dark, rather than reading another fixture's values |
+
 ### Basis video → DMX (optional integration)
 
 Needs `com.basis.mediaplayer` and `com.cnlohr.cilbox` in the project; without them the

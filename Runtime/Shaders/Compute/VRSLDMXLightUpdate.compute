@@ -1,4 +1,5 @@
 #pragma kernel UpdateLights
+#pragma kernel ValidateChannels
 
 #include "../Shared/VRSLLightingLibrary.hlsl"
 
@@ -15,6 +16,14 @@ StructuredBuffer<VRSLFixtureConfig>   _FixtureConfigs;
 RWStructuredBuffer<VRSLLightData>     _LightData;
 uint                                   _FixtureCount;
 uint                                   _VRSLGoboCount;
+
+// ── DMX channels as bytes ─────────────────────────────────────────────────────
+// Set by VRSL_URPLightManager when a channel source is publishing. Channel n
+// (1-based, as everywhere else in VRSL) is byte n-1. _VRSLU_DMXChannelCount is 0
+// when nothing is publishing, and the reads below fall back to the CRT textures,
+// so a scene without a source behaves exactly as it did.
+ByteAddressBuffer _VRSLU_DMXChannels;
+uint              _VRSLU_DMXChannelCount;
 
 // Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
 SamplerState sampler_point_clamp;
@@ -56,6 +65,29 @@ float GetDMXValue(uint ch, Texture2D<float4> tex)
 
     // LinearRgbToLuminance — matches CGINC standard (non-NineUniverse) path
     return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+}
+
+// Channel value straight out of the byte buffer. No coordinate maths, no
+// correction table for the 13th channel of a sector, no luminance conversion and
+// no layout modes: the channel number is the index. An unpatched or out-of-range
+// channel reads 0, which is what an unlit fixture expects.
+float LoadDMXChannel(uint ch)
+{
+    uint index = ch - 1u;
+    if (ch == 0u || index >= _VRSLU_DMXChannelCount) return 0.0;
+    uint word  = _VRSLU_DMXChannels.Load(index & ~3u);
+    uint shift = (index & 3u) * 8u;
+    return float((word >> shift) & 0xFFu) * (1.0 / 255.0);
+}
+
+// The colour and intensity channels, from whichever source is live. Movement,
+// strobe and spin are deliberately not routed here: those textures hold state
+// the CRT chain accumulates over time rather than DMX values, so they have no
+// equivalent in the channel buffer.
+float MainChannel(uint ch)
+{
+    if (_VRSLU_DMXChannelCount > 0u) return LoadDMXChannel(ch);
+    return GetDMXValue(ch, _DMXMainTex);
 }
 
 // Raw-channel variant — matches getValueAtCoordsRaw() in VRSL-DMXFunctions.cginc.
@@ -124,10 +156,10 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     uint bCh      = fiveCh ? absChannel + 3 : absChannel + 9;
     uint strobeCh = fiveCh ? absChannel + 4 : absChannel + 6;
 
-    float intensity = GetDMXValue(dimmerCh, _DMXMainTex);
-    float r = GetDMXValue(rCh, _DMXMainTex);
-    float g = GetDMXValue(gCh, _DMXMainTex);
-    float b = GetDMXValue(bCh, _DMXMainTex);
+    float intensity = MainChannel(dimmerCh);
+    float r = MainChannel(rCh);
+    float g = MainChannel(gCh);
+    float b = MainChannel(bCh);
     float strobe = 1.0;
     if (enableStrobe)
         strobe = GetDMXValue(strobeCh, _DMXStrobeTex);
@@ -193,7 +225,7 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // spotAngles.x = inner-to-outer ratio (0..1), spotAngles.y = max outer half-angle,
     // spotAngles.w = min outer half-angle. The inner cone tracks the dynamic outer
     // angle so wash movers stay flat-bright across the cone even as ch+4 zooms it.
-    float coneRaw   = GetDMXValue(absChannel + 4, _DMXMainTex);
+    float coneRaw   = MainChannel(absChannel + 4);
     float outerHalf = lerp(cfg.spotAngles.w, cfg.spotAngles.y, coneRaw);
     float innerHalf = outerHalf * cfg.spotAngles.x;
 
@@ -220,9 +252,9 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // to the next fixture in a 5-apart patch, so suppress the reads in 5CH mode.
     bool  enableGoboSpin = cfg.panSettings.w > 0.5 && !fiveCh;
     bool  enableGobo     = cfg.tiltSettings.w > 0.5 && !fiveCh;
-    float spinStatus = GetDMXValue   (absChannel + 10, _DMXMainTex);      // luminance — picks direction
+    float spinStatus = MainChannel   (absChannel + 10);                   // DMX value — picks direction
     float spinPhase  = GetDMXValueRaw(absChannel + 10, _DMXSpinTimerTex); // accumulated phase from CRT
-    float goboRaw    = enableGobo ? GetDMXValue(absChannel + 11, _DMXMainTex) : 0.0;
+    float goboRaw    = enableGobo ? MainChannel(absChannel + 11) : 0.0;
     // Mirrors getGoboSpinSpeed() in VRSL-DMXFunctions.cginc: direction is determined
     // by the raw DMX value, magnitude is the integrated phase from SpinnerTimer CRT.
     // The deferred pass uses this directly as radians, matching RotateUV(uv, degrees(·))
@@ -251,4 +283,20 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
                                     VRSL_PackTypeAndGobo(cfg.forwardAndType.w, goboIdx));
     light.spotParams       = float4(innerCos, outerCos, cfg.extras.x, spinSpeed);
     _LightData[idx] = light;
+}
+
+// ── Validation ────────────────────────────────────────────────────────────────
+// Reads channels back through the same accessor the fixtures use, so a readback
+// checks the packing and the indexing rather than merely checking that the CPU
+// wrote what it meant to. Driven by the editor menu item; costs nothing when it
+// is not dispatched.
+RWStructuredBuffer<float> _VRSLU_ValidationOut;
+uint _VRSLU_ValidationStart;   // 1-based channel of element 0
+uint _VRSLU_ValidationCount;
+
+[numthreads(64, 1, 1)]
+void ValidateChannels(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _VRSLU_ValidationCount) return;
+    _VRSLU_ValidationOut[id.x] = LoadDMXChannel(_VRSLU_ValidationStart + id.x);
 }

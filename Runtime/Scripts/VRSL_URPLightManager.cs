@@ -201,6 +201,11 @@ namespace VRSL.URP
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }
         public GraphicsBuffer  LightDataBuffer     { get; private set; }
+        /// <summary>Raw DMX channel bytes, four per word. Always allocated, so the
+        /// compute can read it unconditionally; <see cref="ChannelCount"/> is 0 when
+        /// no source is feeding it and the compute falls back to the CRT textures.</summary>
+        public GraphicsBuffer  ChannelBuffer       { get; private set; }
+        public int             ChannelCount        { get; private set; }
         public RTHandle        DMXMainHandle       { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
@@ -313,6 +318,9 @@ namespace VRSL.URP
         void OnEnable()
         {
             CreateTextureHandles();
+            // Allocated up front so the compute pass has a valid binding on the
+            // first frame, before any LateUpdate has run.
+            EnsureChannelBuffer(0);
             RefreshFixtures();
             SubscribeRuntimeInjection();
             VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
@@ -349,7 +357,66 @@ namespace VRSL.URP
                 UploadFixtureConfigs();
                 _configDirty = false;
             }
+            UploadChannels();
         }
+
+        // ── DMX channels as bytes ─────────────────────────────────────────────
+        static readonly int s_DMXChannels     = Shader.PropertyToID("_VRSLU_DMXChannels");
+        static readonly int s_DMXChannelCount = Shader.PropertyToID("_VRSLU_DMXChannelCount");
+
+        // A Raw buffer holds four channels per 32-bit word, so channel n lives at
+        // byte n and the shader picks its byte out of the word. One word is the
+        // smallest allocation that keeps the binding valid when nothing is
+        // publishing: an unbound buffer is undefined to read on some backends,
+        // and the compute reads it before it checks the count.
+        void EnsureChannelBuffer(int channelCount)
+        {
+            int words = Mathf.Max(1, (channelCount + 3) / 4);
+            if (ChannelBuffer != null && ChannelBuffer.count == words) return;
+            ChannelBuffer?.Release();
+            ChannelBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Raw, words, 4);
+            Shader.SetGlobalBuffer(s_DMXChannels, ChannelBuffer);
+        }
+
+        void UploadChannels()
+        {
+            if (ChannelSource == null ||
+                !ChannelSource.TryGetChannels(out var channels, out int count) ||
+                count <= 0)
+            {
+                EnsureChannelBuffer(0);
+                ChannelCount = 0;
+                Shader.SetGlobalInt(s_DMXChannelCount, 0);
+                return;
+            }
+
+            count = Mathf.Min(count, channels.Length);
+            EnsureChannelBuffer(count);
+
+            // SetData wants whole elements, so the tail of the last word is padded
+            // rather than partially written. Those bytes are past the count the
+            // shader honours, so their content never reaches a fixture.
+            int words = (count + 3) / 4;
+            if (_channelWords == null || _channelWords.Length != words)
+                _channelWords = new uint[words];
+            for (int i = 0; i < words; i++)
+            {
+                int b = i * 4;
+                uint w = 0;
+                for (int k = 0; k < 4; k++)
+                {
+                    int idx = b + k;
+                    if (idx < count) w |= (uint)channels[idx] << (k * 8);
+                }
+                _channelWords[i] = w;
+            }
+            ChannelBuffer.SetData(_channelWords);
+
+            ChannelCount = count;
+            Shader.SetGlobalInt(s_DMXChannelCount, count);
+        }
+
+        uint[] _channelWords;
 
         // ── Public ────────────────────────────────────────────────────────────
         /// <summary>Re-scan the scene for VRStageLighting_DMX_RealtimeLight components
@@ -396,6 +463,13 @@ namespace VRSL.URP
 
         /// <summary>Mark config dirty so it is re-uploaded next LateUpdate.</summary>
         public void MarkConfigDirty() => _configDirty = true;
+
+        /// <summary>
+        /// Where DMX channel values come from, when they arrive as bytes rather
+        /// than as a video frame. Null leaves the CRT decode chain in charge, which
+        /// is the unmodified behaviour.
+        /// </summary>
+        public IVRSLDMXChannelSource ChannelSource { get; set; }
 
         // ── Internal ──────────────────────────────────────────────────────────
         void UploadFixtureConfigs()
@@ -614,6 +688,8 @@ namespace VRSL.URP
         {
             FixtureConfigBuffer?.Release(); FixtureConfigBuffer = null;
             LightDataBuffer?.Release();     LightDataBuffer     = null;
+            ChannelBuffer?.Release();       ChannelBuffer       = null;
+            ChannelCount = 0;
             VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
         }
 
