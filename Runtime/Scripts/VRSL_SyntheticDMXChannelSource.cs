@@ -29,9 +29,17 @@ namespace VRSL.URP
             /// <summary>13-channel fixtures lit and moving, for looking at rather
             /// than measuring.</summary>
             Fixtures,
+            /// <summary>Every channel holds its own slot number within its universe,
+            /// so the pattern repeats every 520. Ramp is a function of the flat
+            /// index and therefore reads the same whichever stride a source packed
+            /// with; this is keyed on the slot, so it is the only pattern that can
+            /// tell a 520-strided buffer from a 512-strided one.</summary>
+            UniverseSlot,
         }
 
-        [Tooltip("Universes to generate. 512 channels each.")]
+        [Tooltip("Universes to generate. Each occupies 520 slots in VRSL's flat "
+               + "address space: 512 real channels and 8 of padding, because the "
+               + "grid is 13 wide and every universe starts on a fresh row.")]
         [Range(1, 32)]
         public int universes = 4;
 
@@ -43,7 +51,13 @@ namespace VRSL.URP
 
         NativeArray<byte> _channels;
 
-        public int ChannelCount => universes * 512;
+        // 520, not 512. VRSL resolves a patch through ComputeAbsoluteChannel as
+        // dmxChannel + (dmxUniverse - 1) * 520, so the buffer is indexed in that
+        // flat space rather than in real DMX channels. Packing 512 to a universe
+        // here would put every fixture from universe 2 onward 8 channels early.
+        public const int SlotsPerUniverse = 520;
+
+        public int ChannelCount => universes * SlotsPerUniverse;
 
         /// <summary>The value the Ramp pattern puts in a given zero-based channel.
         /// The validation harness compares against this, so it lives here rather
@@ -80,12 +94,19 @@ namespace VRSL.URP
                 case Pattern.Ramp:     FillRamp();     break;
                 case Pattern.Sweep:    FillSweep();    break;
                 case Pattern.Fixtures: FillFixtures(); break;
+                case Pattern.UniverseSlot: FillUniverseSlot(); break;
             }
         }
 
         void FillRamp()
         {
             for (int i = 0; i < _channels.Length; i++) _channels[i] = RampValue(i);
+        }
+
+        void FillUniverseSlot()
+        {
+            for (int i = 0; i < _channels.Length; i++)
+                _channels[i] = (byte)((i % SlotsPerUniverse) % 256);
         }
 
         void FillSweep()

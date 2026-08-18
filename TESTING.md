@@ -129,13 +129,22 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 Values published as bytes rather than decoded from the pixel grid. A scene with no
 channel source is unaffected, so N4 is the regression that matters most.
 
+The buffer is indexed in VRSL's flat address space, where a universe occupies **520**
+slots rather than 512: the grid is 13 wide, 512 does not divide by 13, and each universe
+starts on a fresh row of 40. N6 and N7 exist because N1-N5 cannot see a stride mistake —
+Ramp is a function of the flat index, so it reads the same whichever stride the source
+packed with. Use the UniverseSlot pattern for those two rows; it is keyed on the slot
+within a universe, which is the quantity that differs.
+
 | # | Path | Scenario | Expected |
 |---|---|---|---|
 | N1 | D | Synthetic DMX Channel Source in Ramp mode, Play, then `VRSL → URP → Validate DMX Channel Buffer` | PASS: every channel read back through the shader matches what was published. A constant offset in the reported channel is an indexing error; a value that looks like a neighbouring byte is a packing error |
 | N2 | D | Same source in Fixtures mode, no video and no capture camera running | Fixtures light and move from the buffer alone; `Log Decoded Fixture Light Data` shows non-zero intensity |
 | N3 | D | Fixtures mode, then disable the source component mid-cue | Fixtures fall back to the CRT chain within a frame rather than latching or going dark |
 | N4 | D | No channel source anywhere in the scene | Decode is bit-identical to the texture path — this is every existing scene |
-| N5 | D | Source publishing fewer channels than a fixture is patched at | The unpatched fixture reads 0 and goes dark, rather than reading another fixture's values |
+| N5 | D | Source publishing fewer channels than a fixture is patched at — profiling scene, `universes = 1`, so 520 slots against a patch running to 638 | Sectors 40-49 read 0 and go dark, 10 fixtures. They read 0 rather than another fixture's values, which is the point of the row. Sector 39 is the exception and not a failure: it spans flat 508-520, so its upper channels sit in the inter-universe padding. No real desk can patch a 13-channel fixture there — it would straddle the 512 boundary — so treat sector 39 as a dead zone rather than a case to make work |
+| N6 | D | Profiling scene, source in UniverseSlot mode with `universes = 2`. Compare fixture (000) at absolute channel 1 against fixture (040) at 521 | Both decode **identically** — rgb `0.027, 0.031, 0.035`. Legacy sector 40 is the first slot of the second universe, so it must read what sector 0 reads. Reading `0.059, 0.063, 0.067` instead means the source packed 512 to a universe and every fixture past the first universe is 8 channels early |
+| N7 | D | Add one fixture with `useLegacySectorMode = false`, `dmxUniverse = 2`, `dmxChannel = 1`, same source and pattern | It decodes the same as fixture (040) above. Confirms the two addressing modes agree on where universe 2 begins, since `1 + 520` and `40 * 13 + 1` must both land on flat 521 |
 
 ### Basis video → DMX (optional integration)
 
