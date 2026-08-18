@@ -52,6 +52,7 @@ namespace VRSL.URP
                 public BufferHandle  fixtureConfigBuffer;
                 public BufferHandle  lightDataBuffer;
                 public BufferHandle  channelBuffer;
+                public BufferHandle  spinPhaseBuffer;
                 public int           channelCount;
                 public TextureHandle dmxMainTex;
                 public TextureHandle dmxMovementTex;
@@ -82,6 +83,7 @@ namespace VRSL.URP
                     || mgr.computeShader == null
                     || mgr.FixtureConfigBuffer == null
                     || mgr.ChannelBuffer == null
+                    || mgr.SpinPhaseBuffer == null
                     || mgr.DMXMainHandle == null) return;
 
                 using var builder = rg.AddComputePass<PassData>("VRSL DMX Light Compute", out var d);
@@ -98,6 +100,9 @@ namespace VRSL.URP
                 // The manager keeps this allocated even with no source publishing,
                 // so the binding is always valid and only the count varies.
                 d.channelBuffer       = rg.ImportBuffer(mgr.ChannelBuffer);
+                // Read-only here. The manager integrates it once per frame in
+                // LateUpdate; this pass runs per camera and must not advance it.
+                d.spinPhaseBuffer     = rg.ImportBuffer(mgr.SpinPhaseBuffer);
                 d.channelCount        = mgr.ChannelCount;
                 d.dmxMainTex          = rg.ImportTexture(mgr.DMXMainHandle);
                 d.dmxMovementTex      = mgr.DMXMovementHandle != null
@@ -123,6 +128,7 @@ namespace VRSL.URP
                 builder.UseBuffer(d.fixtureConfigBuffer, AccessFlags.Read);
                 builder.UseBuffer(d.lightDataBuffer,     AccessFlags.Write);
                 builder.UseBuffer(d.channelBuffer,       AccessFlags.Read);
+                builder.UseBuffer(d.spinPhaseBuffer,     AccessFlags.Read);
                 builder.UseTexture(d.dmxMainTex,         AccessFlags.Read);
                 if (d.dmxMovementTex.IsValid())
                     builder.UseTexture(d.dmxMovementTex, AccessFlags.Read);
@@ -153,6 +159,7 @@ namespace VRSL.URP
                     // is what decides whether the kernel reads this or the CRTs.
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXChannels", p.channelBuffer);
                     cmd.SetComputeIntParam(    p.cs,           "_VRSLU_DMXChannelCount", p.channelCount);
+                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXSpinPhase", p.spinPhaseBuffer);
                     cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXMainTex",       p.dmxMainTex);
 
                     if (p.dmxMovementTex.IsValid())

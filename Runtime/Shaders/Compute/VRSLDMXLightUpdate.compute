@@ -1,5 +1,6 @@
 #pragma kernel UpdateLights
 #pragma kernel ValidateChannels
+#pragma kernel AdvanceState
 
 #include "../Shared/VRSLLightingLibrary.hlsl"
 
@@ -24,6 +25,20 @@ uint                                   _VRSLGoboCount;
 // so a scene without a source behaves exactly as it did.
 ByteAddressBuffer _VRSLU_DMXChannels;
 uint              _VRSLU_DMXChannelCount;
+
+// ── Accumulated state, when the buffer path is driving ────────────────────────
+// The SpinnerTimer CRT integrates phase across frames, which a per-frame read of
+// the channel buffer cannot reproduce on its own. AdvanceState keeps the same
+// integral here, indexed by channel like everything else. It is only meaningful
+// while a channel source is publishing; with none, the reads below stay on the
+// CRT and the buffer sits untouched.
+//
+// AdvanceState runs once per frame from the manager, NOT from the render pass.
+// The pass dispatches per camera, and an integrator that ran per camera would
+// scale its rate with however many cameras a scene has — both eyes in stereo,
+// every mirror, every reflection probe.
+RWStructuredBuffer<float> _VRSLU_DMXSpinPhase;
+float                     _VRSLU_DeltaTime;
 
 // Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
 SamplerState sampler_point_clamp;
@@ -119,6 +134,18 @@ float GetDMXValueRaw(uint ch, Texture2D<float4> tex)
     float v = (floor(y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
 
     return tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0).r;
+}
+
+// Accumulated gobo-spin phase for a channel, from whichever source is live.
+float SpinPhase(uint ch)
+{
+    if (_VRSLU_DMXChannelCount > 0u)
+    {
+        uint index = ch - 1u;
+        if (ch == 0u || index >= _VRSLU_DMXChannelCount) return 0.0;
+        return _VRSLU_DMXSpinPhase[index];
+    }
+    return GetDMXValueRaw(ch, _DMXSpinTimerTex);
 }
 
 // ── Rodrigues rotation ────────────────────────────────────────────────────────
@@ -253,7 +280,7 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     bool  enableGoboSpin = cfg.panSettings.w > 0.5 && !fiveCh;
     bool  enableGobo     = cfg.tiltSettings.w > 0.5 && !fiveCh;
     float spinStatus = MainChannel   (absChannel + 10);                   // DMX value — picks direction
-    float spinPhase  = GetDMXValueRaw(absChannel + 10, _DMXSpinTimerTex); // accumulated phase from CRT
+    float spinPhase  = SpinPhase(absChannel + 10);
     float goboRaw    = enableGobo ? MainChannel(absChannel + 11) : 0.0;
     // Mirrors getGoboSpinSpeed() in VRSL-DMXFunctions.cginc: direction is determined
     // by the raw DMX value, magnitude is the integrated phase from SpinnerTimer CRT.
@@ -284,6 +311,37 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     light.spotParams       = float4(innerCos, outerCos, cfg.extras.x, spinSpeed);
     _LightData[idx] = light;
 }
+
+// ── Accumulated state ─────────────────────────────────────────────────────────
+// One thread per channel, dispatched once per frame by the manager while a
+// channel source is publishing. Mirrors DMXRTShader-SpinnerTimer's non-nine-
+// universe path exactly:
+//
+//   dmx  = value at this channel
+//   dmx < 0.01            -> phase resets to 0, it does not hold
+//   spin = dmx > 0.5 ? dmx - 0.5 : dmx    (the upper half is reverse; the
+//                                          consumer negates on the same test)
+//   phase += dt * spin                    (unbounded; UpdateLights wraps it)
+//
+// The CRT's one-second warm-up gate has no equivalent here. It existed to let
+// the capture chain fill before integrating; a channel source publishes whole
+// frames from the first one.
+[numthreads(64, 1, 1)]
+void AdvanceState(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= _VRSLU_DMXChannelCount) return;
+
+    float dmx = LoadDMXChannel(index + 1u);
+    if (dmx < 0.01)
+    {
+        _VRSLU_DMXSpinPhase[index] = 0.0;
+        return;
+    }
+    float spin = (dmx > 0.5) ? (dmx - 0.5) : dmx;
+    _VRSLU_DMXSpinPhase[index] += _VRSLU_DeltaTime * spin;
+}
+
 
 // ── Validation ────────────────────────────────────────────────────────────────
 // Reads channels back through the same accessor the fixtures use, so a readback

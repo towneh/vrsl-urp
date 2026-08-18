@@ -206,6 +206,11 @@ namespace VRSL.URP
         /// no source is feeding it and the compute falls back to the CRT textures.</summary>
         public GraphicsBuffer  ChannelBuffer       { get; private set; }
         public int             ChannelCount        { get; private set; }
+        /// <summary>Accumulated gobo-spin phase, one float per channel, integrated by
+        /// the AdvanceState kernel while a channel source is publishing. Meaningless
+        /// and untouched when <see cref="ChannelCount"/> is 0, where the compute reads
+        /// the SpinnerTimer CRT instead.</summary>
+        public GraphicsBuffer  SpinPhaseBuffer     { get; private set; }
         public RTHandle        DMXMainHandle       { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
@@ -321,6 +326,7 @@ namespace VRSL.URP
             // Allocated up front so the compute pass has a valid binding on the
             // first frame, before any LateUpdate has run.
             EnsureChannelBuffer(0);
+            EnsureSpinPhaseBuffer(0);
             RefreshFixtures();
             SubscribeRuntimeInjection();
             VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
@@ -358,6 +364,7 @@ namespace VRSL.URP
                 _configDirty = false;
             }
             UploadChannels();
+            AdvanceState();
         }
 
         // ── DMX channels as bytes ─────────────────────────────────────────────
@@ -369,6 +376,37 @@ namespace VRSL.URP
         // smallest allocation that keeps the binding valid when nothing is
         // publishing: an unbound buffer is undefined to read on some backends,
         // and the compute reads it before it checks the count.
+        static readonly int s_DMXSpinPhase = Shader.PropertyToID("_VRSLU_DMXSpinPhase");
+        static readonly int s_DeltaTime    = Shader.PropertyToID("_VRSLU_DeltaTime");
+        int _advanceKernel = -1;
+
+        void EnsureSpinPhaseBuffer(int channelCount)
+        {
+            int count = Mathf.Max(1, channelCount);
+            if (SpinPhaseBuffer != null && SpinPhaseBuffer.count == count) return;
+            SpinPhaseBuffer?.Release();
+            // Cleared on allocation so a resize starts from zero phase rather than
+            // from whatever the driver left there.
+            SpinPhaseBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
+            SpinPhaseBuffer.SetData(new float[count]);
+        }
+
+        // Integrators advance here rather than in the render pass, and the difference
+        // is not cosmetic: the pass runs once per camera, so phase would accumulate
+        // twice per frame in stereo and again for every mirror in the scene, making
+        // the spin rate a function of how many cameras are looking.
+        void AdvanceState()
+        {
+            if (computeShader == null || ChannelCount == 0 || SpinPhaseBuffer == null) return;
+            if (_advanceKernel < 0) _advanceKernel = computeShader.FindKernel("AdvanceState");
+
+            computeShader.SetBuffer(_advanceKernel, s_DMXChannels,     ChannelBuffer);
+            computeShader.SetInt(   s_DMXChannelCount,                 ChannelCount);
+            computeShader.SetBuffer(_advanceKernel, s_DMXSpinPhase,    SpinPhaseBuffer);
+            computeShader.SetFloat( s_DeltaTime,                       Time.deltaTime);
+            computeShader.Dispatch(_advanceKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
+        }
+
         void EnsureChannelBuffer(int channelCount)
         {
             int words = Mathf.Max(1, (channelCount + 3) / 4);
@@ -385,6 +423,7 @@ namespace VRSL.URP
                 count <= 0)
             {
                 EnsureChannelBuffer(0);
+                EnsureSpinPhaseBuffer(0);
                 ChannelCount = 0;
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
                 return;
@@ -392,6 +431,7 @@ namespace VRSL.URP
 
             count = Mathf.Min(count, channels.Length);
             EnsureChannelBuffer(count);
+            EnsureSpinPhaseBuffer(count);
 
             // SetData wants whole elements, so the tail of the last word is padded
             // rather than partially written. Those bytes are past the count the
@@ -651,6 +691,11 @@ namespace VRSL.URP
                 var f = _fixtures[i];
                 Vector4 c = data[i].colorAndIntensity;
                 Vector4 p = data[i].positionAndRange;
+                // spotParams.w is the gobo spin angle in radians, already wrapped to
+                // [-2pi, 2pi]. Logged because it is the only observable of the phase
+                // integrator, and a rotating gobo looks the same whether the phase
+                // came from the CRT or the compute.
+                float spin = data[i].spotParams.w;
                 // Intensity doubles as the active flag in the packed layout.
                 float active = c.w > 0f ? 1f : 0f;
                 bool lens = f.lensTransform != null;
@@ -659,7 +704,7 @@ namespace VRSL.URP
                          ? f.fixtureShellRenderers[0] : null;
                 Vector3 sp = sr != null ? sr.bounds.center : f.transform.position;
                 Debug.Log($"[VRSL URP] Fixture {i} '{f.name}' (ch {f.ComputeAbsoluteChannel()}): intensity={c.w:F2} "
-                        + $"rgb=({c.x:F3},{c.y:F3},{c.z:F3}) active={active:F0} "
+                        + $"rgb=({c.x:F3},{c.y:F3},{c.z:F3}) active={active:F0} spin={spin:F4} "
                         + $"lightPos=({p.x:F1},{p.y:F1},{p.z:F1}) lensSet={lens} "
                         + $"lensPos=({lp.x:F1},{lp.y:F1},{lp.z:F1}) shellCtr=({sp.x:F1},{sp.y:F1},{sp.z:F1})",
                           f);
@@ -689,7 +734,9 @@ namespace VRSL.URP
             FixtureConfigBuffer?.Release(); FixtureConfigBuffer = null;
             LightDataBuffer?.Release();     LightDataBuffer     = null;
             ChannelBuffer?.Release();       ChannelBuffer       = null;
+            SpinPhaseBuffer?.Release();     SpinPhaseBuffer     = null;
             ChannelCount = 0;
+            _advanceKernel = -1;
             VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
         }
 
