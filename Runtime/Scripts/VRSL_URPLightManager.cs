@@ -323,11 +323,12 @@ namespace VRSL.URP
         void OnEnable()
         {
             CreateTextureHandles();
-            // Allocated up front so the compute pass has a valid binding on the
-            // first frame, before any LateUpdate has run.
+            RefreshFixtures();
+            // After RefreshFixtures, which releases the fixture buffers and would
+            // once have taken these with it. Allocated up front so the compute pass
+            // has a valid binding on the first frame, before any LateUpdate runs.
             EnsureChannelBuffer(0);
             EnsureSpinPhaseBuffer(0);
-            RefreshFixtures();
             SubscribeRuntimeInjection();
             VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
         }
@@ -343,6 +344,7 @@ namespace VRSL.URP
             // the component silently changes nothing.
             _surfacePrepass = null;
             ReleaseBuffers();
+            ReleaseChannelBuffers();
             ReleaseTextureHandles();
         }
 
@@ -733,11 +735,21 @@ namespace VRSL.URP
         {
             FixtureConfigBuffer?.Release(); FixtureConfigBuffer = null;
             LightDataBuffer?.Release();     LightDataBuffer     = null;
+            VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
+        }
+
+        // Deliberately not part of ReleaseBuffers. That one is fixture-scoped and
+        // RefreshFixtures calls it, which is public and meant to be called at
+        // runtime when fixtures come and go. Releasing the channel buffers there
+        // would null them under a live channel source, and the render pass would
+        // drop the whole DMX compute until the next LateUpdate re-allocated —
+        // a frame of darkness triggered by adding a fixture.
+        void ReleaseChannelBuffers()
+        {
             ChannelBuffer?.Release();       ChannelBuffer       = null;
             SpinPhaseBuffer?.Release();     SpinPhaseBuffer     = null;
             ChannelCount = 0;
             _advanceKernel = -1;
-            VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
         }
 
 
