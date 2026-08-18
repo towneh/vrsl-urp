@@ -216,7 +216,10 @@ namespace VRSL.URP
                + "material to read. Defaults match the shipped Horizontal material.")]
         public StrobeRate strobeRate = StrobeRate.StaticFrequencies;
 
-        [Tooltip("Static mode: the rate below a channel value of 0.2.")]
+        [Tooltip("Static mode: the rate below a channel value of 0.2. Kept to mirror the "
+               + "CRT material, but unreachable: the same 0.2 threshold that selects this "
+               + "rate also holds the fixture fully on, so its phase never reaches the "
+               + "output. Changing it has no effect, in the CRT chain either.")]
         public float strobeLowFrequency  = 25f;
         [Tooltip("Static mode: the rate between 0.2 and 0.5.")]
         public float strobeMedFrequency  = 45f;
