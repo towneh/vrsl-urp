@@ -85,6 +85,13 @@ namespace VRSL.URP
         /// manager's <c>ChannelSource</c>, which a component does in its own
         /// <c>OnDisable</c>.
         ///
+        /// A block must name a universe below <see cref="UniverseCount"/>, and its
+        /// run must stay inside both its universe's usable slots and the values
+        /// array. The manager drops a block naming a universe it does not cover, and
+        /// truncates a run passing <see cref="VRSLDMX.UsableSlotsPerUniverse"/> or the
+        /// end of <paramref name="values"/> — quietly unless the manager's debug logs
+        /// are on, so a producer that overruns loses slots rather than being told.
+        ///
         /// Both arrays are borrowed for the duration of the call and must stay
         /// valid until it returns; the manager copies out of them.
         /// </summary>

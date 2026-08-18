@@ -123,6 +123,13 @@ namespace VRSL.URP.Tests
             rig._camera.clearFlags      = CameraClearFlags.SolidColor;
             rig._camera.backgroundColor = Color.black;
             rig._camera.targetTexture   = rig._target;
+            // Rendering is driven from Step and RenderFrame only. Left enabled, the
+            // player loop renders it too and the DMX pass runs twice per frame. That
+            // happens to be harmless today because the integrators advance from
+            // LateUpdate and the pass is a pure function of the buffers, but the rows
+            // would drift by a factor of two the moment anything advanced per render,
+            // and they would still produce smooth plausible directions while doing it.
+            rig._camera.enabled         = false;
 
             var fixtureSrc = Load<GameObject>(FixturePrefab);
             for (int i = 0; i < fixtures; i++)
@@ -244,9 +251,7 @@ namespace VRSL.URP.Tests
                 // renders nothing on its own, and the light data buffer is written
                 // by the DMX pass, which only runs while a camera is rendering — so
                 // without this every row reads a buffer of zeros and blames the
-                // carrier. Rendering twice in a frame would be harmless anyway: the
-                // pass is idempotent, and the integrators advance from LateUpdate
-                // rather than per camera.
+                // carrier. The camera is disabled, so this is the only render.
                 _camera.Render();
             }
         }

@@ -79,8 +79,10 @@ StructuredBuffer<float>   _VRSLU_UniverseStep;
 uint                      _VRSLU_UniverseCount;
 
 // Flat addresses a universe occupies: 512 real slots and 8 of padding, because the
-// decode grid is 13 wide and 512 does not divide by 13. Matches VRSLDMX.SlotsPerUniverse.
-#define VRSLU_SLOTS_PER_UNIVERSE 520u
+// decode grid is 13 wide and 512 does not divide by 13. Set by the manager from
+// VRSLDMX.SlotsPerUniverse rather than repeated here: two copies drift silently, and
+// the wrong stride picks another universe's step for every channel past the first.
+uint _VRSLU_SlotsPerUniverse;
 
 // Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
 SamplerState sampler_point_clamp;
@@ -474,7 +476,7 @@ void AdvanceMovement(uint3 id : SV_DispatchThreadID)
     // arrived for it. The frame delta stands in when no source published a step,
     // which keeps a scene reading the CRT chain behaving as it did.
     // Named for its unit, and not `step`, which is an HLSL intrinsic.
-    uint  universe    = index / VRSLU_SLOTS_PER_UNIVERSE;
+    uint  universe    = index / max(_VRSLU_SlotsPerUniverse, 1u);
     float stepSeconds = (universe < _VRSLU_UniverseCount) ? _VRSLU_UniverseStep[universe]
                                                           : _VRSLU_DeltaTime;
 

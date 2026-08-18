@@ -456,6 +456,7 @@ namespace VRSL.URP
         static readonly int s_MoveSmooth     = Shader.PropertyToID("_VRSLU_MoveSmooth");
         static readonly int s_UniverseStep   = Shader.PropertyToID("_VRSLU_UniverseStep");
         static readonly int s_UniverseCount  = Shader.PropertyToID("_VRSLU_UniverseCount");
+        static readonly int s_SlotsPerUni    = Shader.PropertyToID("_VRSLU_SlotsPerUniverse");
         int _moveKernel = -1;
         int _advanceKernel = -1;
         int _strobeKernel  = -1;
@@ -526,6 +527,7 @@ namespace VRSL.URP
                 computeShader.SetBuffer(_moveKernel, s_DMXMovement,   MovementBuffer);
                 computeShader.SetBuffer(_moveKernel, s_UniverseStep,  UniverseStepBuffer);
                 computeShader.SetInt(   s_UniverseCount,              UniverseCount);
+                computeShader.SetInt(   s_SlotsPerUni,                VRSLDMX.SlotsPerUniverse);
                 computeShader.SetVector(s_MoveSmooth,
                     new Vector4(movementSmoothingMax, movementSmoothingMin, 0f, 0f));
                 computeShader.Dispatch(_moveKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
@@ -635,14 +637,26 @@ namespace VRSL.URP
             for (int i = 0; i < blockCount; i++)
             {
                 var b = blocks[i];
-                if (b.universe < 0 || b.universe >= universes) continue;
-                if (b.length <= 0 || b.start < 0 || b.valueOffset < 0) continue;
+                if (b.universe < 0 || b.universe >= universes ||
+                    b.length <= 0 || b.start < 0 || b.valueOffset < 0)
+                {
+                    // Silent, a producer bug reaches a lighting designer as stale or
+                    // dark fixtures rather than as a source fault.
+                    if (outputDebugLogs)
+                        Debug.LogWarning($"[VRSL URP] Dropped DMX block {i}: universe={b.universe} "
+                                       + $"start={b.start} length={b.length} offset={b.valueOffset}, "
+                                       + $"against {universes} universe(s).", this);
+                    continue;
+                }
 
                 // A run may not reach into the padding between universes, which no
                 // desk can address. Clamping rather than wrapping keeps a producer
                 // bug inside the universe that caused it.
                 int length = Mathf.Min(b.length, VRSLDMX.UsableSlotsPerUniverse - b.start);
                 length = Mathf.Min(length, values.Length - b.valueOffset);
+                if (outputDebugLogs && length != b.length)
+                    Debug.LogWarning($"[VRSL URP] Truncated DMX block {i} on universe "
+                                   + $"{b.universe} from {b.length} to {length} slot(s).", this);
                 if (length <= 0) continue;
 
                 int at = b.universe * VRSLDMX.SlotsPerUniverse + b.start;

@@ -15,12 +15,27 @@ namespace VRSL.URP.Tests
     /// </summary>
     class VRSLDMXFallbackTests : VRSLDMXTest
     {
-        static Vector4[] Colours(VRSL_URPLightManager.VRSLLightData[] d)
-            => d.Select(x => x.colorAndIntensity).ToArray();
+        /// <summary>
+        /// Decoded colour only, deliberately not the intensity in <c>w</c>.
+        ///
+        /// On the no-source path <c>w</c> carries a strobe multiplier read straight
+        /// from the CRT, and these rows compare samples taken seconds apart, so a
+        /// scene whose chain is running would differ by sample time rather than by
+        /// anything the row is asking about. The manager's Disable Strobe is no help:
+        /// <c>StrobeValue</c> checks the channel count before it checks that flag, so
+        /// with no source publishing the flag is never reached.
+        ///
+        /// What is given up is intensity coverage in N4. The colour is the decode of
+        /// the channel data, which is what the handover can actually break.
+        /// </summary>
+        static Vector3[] Colours(VRSL_URPLightManager.VRSLLightData[] d)
+            => d.Select(x => new Vector3(x.colorAndIntensity.x,
+                                         x.colorAndIntensity.y,
+                                         x.colorAndIntensity.z)).ToArray();
 
-        /// <summary>Colour arrives through a half and intensity carries a
-        /// time-dependent strobe term, so neither row compares exactly. Well below a
-        /// byte step, so it still separates one channel from its neighbour.</summary>
+        /// <summary>Colour arrives through a half, so nothing here compares exactly.
+        /// Well below a byte step, so it still separates one channel from its
+        /// neighbour.</summary>
         const float SameDecode = 1e-4f;
 
         [UnityTest]
@@ -78,7 +93,7 @@ namespace VRSL.URP.Tests
 
                 var after = Colours(rig.ReadLights());
                 bool changed = Enumerable.Range(0, VRSLDMXRig.FixtureCount)
-                                         .Any(i => Vector4.Distance(published[i], after[i]) > SameDecode);
+                                         .Any(i => Vector3.Distance(published[i], after[i]) > SameDecode);
                 Assert.IsTrue(changed,
                     "the decode did not move when the source went away, so the fixtures latched "
                   + "at the buffer's last values instead of falling back");
@@ -113,7 +128,7 @@ namespace VRSL.URP.Tests
                 var driven = Colours(rig.ReadLights());
                 Assert.IsTrue(
                     Enumerable.Range(0, VRSLDMXRig.FixtureCount)
-                              .Any(i => Vector4.Distance(baseline[i], driven[i]) > SameDecode),
+                              .Any(i => Vector3.Distance(baseline[i], driven[i]) > SameDecode),
                     "attaching a source changed nothing, so this row is not testing the handover");
 
                 rig.Manager.ChannelSource = null;
@@ -121,7 +136,7 @@ namespace VRSL.URP.Tests
 
                 var restored = Colours(rig.ReadLights());
                 for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)
-                    Assert.Less(Vector4.Distance(baseline[i], restored[i]), SameDecode,
+                    Assert.Less(Vector3.Distance(baseline[i], restored[i]), SameDecode,
                         $"fixture {i} did not return to its no-source decode. Every existing scene "
                       + "is a no-source scene, so this is the regression that matters most");
             }
