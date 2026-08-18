@@ -251,7 +251,7 @@ namespace VRSL.URP.Profiling.Editor
             inst.name = ManagerName;
             Undo.RegisterCreatedObjectUndo(inst, "Spawn URP light manager");
 
-            EnsureManagerShaders(inst.GetComponent<VRSL.VRSL_URPLightManager>());
+            EnsureManagerShaders(inst.GetComponent<VRSL.URP.VRSL_URPLightManager>());
 #endif
         }
 
@@ -260,7 +260,7 @@ namespace VRSL.URP.Profiling.Editor
         // manager if the prefab didn't carry refs. Profiling without the
         // volumetric shader silently produces only floor lighting (no cones),
         // which gives misleading "URP looks cheap" numbers in the sweep.
-        static void EnsureManagerShaders(VRSL.VRSL_URPLightManager mgr)
+        static void EnsureManagerShaders(VRSL.URP.VRSL_URPLightManager mgr)
         {
             if (mgr == null) return;
 
