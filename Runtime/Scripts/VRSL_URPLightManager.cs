@@ -259,6 +259,14 @@ namespace VRSL.URP
         /// <summary>Damped movement values, one float per channel, the buffer-path
         /// equivalent of the movement interpolation CRT.</summary>
         public GraphicsBuffer  MovementBuffer      { get; private set; }
+        /// <summary>Seconds of show time each universe advanced this frame, one float
+        /// per universe. Movement damps against this rather than against the frame
+        /// delta, so a universe delivered irregularly is smoothed over the interval
+        /// its data actually spans.</summary>
+        public GraphicsBuffer  UniverseStepBuffer  { get; private set; }
+        /// <summary>Universes the flat channel space covers. Zero when nothing is
+        /// publishing.</summary>
+        public int             UniverseCount       { get; private set; }
         public RTHandle        DMXMainHandle       { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
@@ -387,6 +395,7 @@ namespace VRSL.URP
             EnsureSpinPhaseBuffer(0);
             EnsureStrobePhaseBuffer(0);
             EnsureMovementBuffer(0);
+            EnsureUniverseStepBuffer(0);
             SubscribeRuntimeInjection();
             VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
         }
@@ -445,6 +454,8 @@ namespace VRSL.URP
         static readonly int s_StrobeDisabled = Shader.PropertyToID("_VRSLU_StrobeDisabled");
         static readonly int s_DMXMovement    = Shader.PropertyToID("_VRSLU_DMXMovement");
         static readonly int s_MoveSmooth     = Shader.PropertyToID("_VRSLU_MoveSmooth");
+        static readonly int s_UniverseStep   = Shader.PropertyToID("_VRSLU_UniverseStep");
+        static readonly int s_UniverseCount  = Shader.PropertyToID("_VRSLU_UniverseCount");
         int _moveKernel = -1;
         int _advanceKernel = -1;
         int _strobeKernel  = -1;
@@ -484,6 +495,15 @@ namespace VRSL.URP
             StrobePhaseBuffer.SetData(new float[count]);
         }
 
+        void EnsureUniverseStepBuffer(int universeCount)
+        {
+            int count = Mathf.Max(1, universeCount);
+            if (UniverseStepBuffer != null && UniverseStepBuffer.count == count) return;
+            UniverseStepBuffer?.Release();
+            UniverseStepBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
+            UniverseStepBuffer.SetData(new float[count]);
+        }
+
         // Integrators advance here rather than in the render pass, and the difference
         // is not cosmetic: the pass runs once per camera, so phase would accumulate
         // twice per frame in stereo and again for every mirror in the scene, making
@@ -499,11 +519,13 @@ namespace VRSL.URP
             computeShader.SetFloat( s_DeltaTime,                       Time.deltaTime);
             computeShader.Dispatch(_advanceKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
 
-            if (MovementBuffer != null)
+            if (MovementBuffer != null && UniverseStepBuffer != null)
             {
                 if (_moveKernel < 0) _moveKernel = computeShader.FindKernel("AdvanceMovement");
-                computeShader.SetBuffer(_moveKernel, s_DMXChannels,  ChannelBuffer);
-                computeShader.SetBuffer(_moveKernel, s_DMXMovement,  MovementBuffer);
+                computeShader.SetBuffer(_moveKernel, s_DMXChannels,   ChannelBuffer);
+                computeShader.SetBuffer(_moveKernel, s_DMXMovement,   MovementBuffer);
+                computeShader.SetBuffer(_moveKernel, s_UniverseStep,  UniverseStepBuffer);
+                computeShader.SetInt(   s_UniverseCount,              UniverseCount);
                 computeShader.SetVector(s_MoveSmooth,
                     new Vector4(movementSmoothingMax, movementSmoothingMin, 0f, 0f));
                 computeShader.Dispatch(_moveKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
@@ -530,24 +552,18 @@ namespace VRSL.URP
 
         void UploadChannels()
         {
-            if (ChannelSource == null ||
-                !ChannelSource.TryGetChannels(out var channels, out int count) ||
-                count <= 0)
-            {
-                EnsureChannelBuffer(0);
-                EnsureSpinPhaseBuffer(0);
-                EnsureStrobePhaseBuffer(0);
-                EnsureMovementBuffer(0);
-                ChannelCount = 0;
-                Shader.SetGlobalInt(s_DMXChannelCount, 0);
-                return;
-            }
+            int universes = ChannelSource != null ? ChannelSource.UniverseCount : 0;
+            if (universes <= 0) { StopPublishing(); return; }
 
-            count = Mathf.Min(count, channels.Length);
+            int count = universes * VRSLDMX.SlotsPerUniverse;
+            EnsureFlatSpace(universes);
             EnsureChannelBuffer(count);
             EnsureSpinPhaseBuffer(count);
             EnsureStrobePhaseBuffer(count);
             EnsureMovementBuffer(count);
+            EnsureUniverseStepBuffer(universes);
+
+            ScatterBlocks(universes);
 
             // SetData wants whole elements, so the tail of the last word is padded
             // rather than partially written. Those bytes are past the count the
@@ -562,17 +578,103 @@ namespace VRSL.URP
                 for (int k = 0; k < 4; k++)
                 {
                     int idx = b + k;
-                    if (idx < count) w |= (uint)channels[idx] << (k * 8);
+                    if (idx < count) w |= (uint)_flat[idx] << (k * 8);
                 }
                 _channelWords[i] = w;
             }
             ChannelBuffer.SetData(_channelWords);
+            UniverseStepBuffer.SetData(_universeStep);
 
-            ChannelCount = count;
+            UniverseCount = universes;
+            ChannelCount  = count;
             Shader.SetGlobalInt(s_DMXChannelCount, count);
         }
 
-        uint[] _channelWords;
+        void StopPublishing()
+        {
+            EnsureChannelBuffer(0);
+            EnsureSpinPhaseBuffer(0);
+            EnsureStrobePhaseBuffer(0);
+            EnsureMovementBuffer(0);
+            EnsureUniverseStepBuffer(0);
+            UniverseCount = 0;
+            ChannelCount  = 0;
+            Shader.SetGlobalInt(s_DMXChannelCount, 0);
+        }
+
+        // The flat space persists between frames. Values are absolute and a block is
+        // a run rather than a whole universe, so a partial snapshot corrects the slots
+        // it covers and leaves the rest holding what they were last told — which is
+        // what makes sending only the changed channels possible without a second
+        // format. Reallocating clears it, so a source that resizes starts dark rather
+        // than half-remembering an older patch.
+        void EnsureFlatSpace(int universes)
+        {
+            int count = universes * VRSLDMX.SlotsPerUniverse;
+            if (_flat != null && _flat.Length == count) return;
+            _flat         = new byte[count];
+            _universeStep = new float[universes];
+            _dataTime     = new double[universes];
+            _dataTimeSeen = new bool[universes];
+        }
+
+        void ScatterBlocks(int universes)
+        {
+            System.Array.Clear(_universeStep, 0, _universeStep.Length);
+
+            if (ChannelSource == null ||
+                !ChannelSource.TryGetBlocks(out var blocks, out int blockCount, out var values) ||
+                blockCount <= 0)
+                return;
+
+            blockCount = Mathf.Min(blockCount, blocks.Length);
+            // Double, because a universe's clock is differenced against the last frame's
+            // and a float loses the millisecond somewhere in the second hour of a show.
+            double now = Time.timeAsDouble;
+
+            for (int i = 0; i < blockCount; i++)
+            {
+                var b = blocks[i];
+                if (b.universe < 0 || b.universe >= universes) continue;
+                if (b.length <= 0 || b.start < 0 || b.valueOffset < 0) continue;
+
+                // A run may not reach into the padding between universes, which no
+                // desk can address. Clamping rather than wrapping keeps a producer
+                // bug inside the universe that caused it.
+                int length = Mathf.Min(b.length, VRSLDMX.UsableSlotsPerUniverse - b.start);
+                length = Mathf.Min(length, values.Length - b.valueOffset);
+                if (length <= 0) continue;
+
+                int at = b.universe * VRSLDMX.SlotsPerUniverse + b.start;
+                for (int s = 0; s < length; s++) _flat[at + s] = values[b.valueOffset + s];
+
+                // Each universe advances its own clock, which runs at the time its
+                // values were latched rather than at the time they were rendered. A
+                // universe heard twice in one frame contributes the newer of the two.
+                double dataTime = now - b.ageMicroseconds * 1e-6;
+                if (!_dataTimeSeen[b.universe])
+                {
+                    _dataTimeSeen[b.universe] = true;
+                    _dataTime[b.universe]     = dataTime - Time.deltaTime;
+                }
+                double step = dataTime - _dataTime[b.universe];
+                if (step <= 0.0) continue;
+
+                // Capped so a universe resuming after a stall damps as if a second had
+                // passed rather than snapping, which is the difference between a head
+                // catching up and a head teleporting.
+                _universeStep[b.universe] = (float)System.Math.Min(step, MaxUniverseStep);
+                _dataTime[b.universe]     = dataTime;
+            }
+        }
+
+        const double MaxUniverseStep = 1.0;
+
+        uint[]   _channelWords;
+        byte[]   _flat;
+        float[]  _universeStep;
+        double[] _dataTime;
+        bool[]   _dataTimeSeen;
 
         // ── Public ────────────────────────────────────────────────────────────
         /// <summary>Re-scan the scene for VRStageLighting_DMX_RealtimeLight components
@@ -625,7 +727,21 @@ namespace VRSL.URP
         /// than as a video frame. Null leaves the CRT decode chain in charge, which
         /// is the unmodified behaviour.
         /// </summary>
-        public IVRSLDMXChannelSource ChannelSource { get; set; }
+        public IVRSLDMXChannelSource ChannelSource
+        {
+            get => _channelSource;
+            set
+            {
+                if (ReferenceEquals(_channelSource, value)) return;
+                _channelSource = value;
+                // The flat space holds whatever the previous source last said. Keeping
+                // it across a handover would leave a new source publishing one universe
+                // on top of another source's patch, which reads as a plausible cue.
+                _flat = null;
+            }
+        }
+
+        IVRSLDMXChannelSource _channelSource;
 
         // ── Internal ──────────────────────────────────────────────────────────
         void UploadFixtureConfigs()
@@ -868,7 +984,10 @@ namespace VRSL.URP
             SpinPhaseBuffer?.Release();     SpinPhaseBuffer     = null;
             StrobePhaseBuffer?.Release();   StrobePhaseBuffer   = null;
             MovementBuffer?.Release();      MovementBuffer      = null;
-            ChannelCount = 0;
+            UniverseStepBuffer?.Release();  UniverseStepBuffer  = null;
+            ChannelCount  = 0;
+            UniverseCount = 0;
+            _flat = null;
             _advanceKernel = -1;
             _strobeKernel  = -1;
             _moveKernel    = -1;

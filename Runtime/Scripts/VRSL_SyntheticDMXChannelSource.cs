@@ -5,14 +5,14 @@ namespace VRSL.URP
 {
     /// <summary>
     /// A lighting desk that is not there: generates DMX channel values on the
-    /// CPU and feeds them to <see cref="VRSL_URPLightManager"/> as bytes.
+    /// CPU and hands them to <see cref="VRSL_URPLightManager"/> as blocks.
     ///
     /// It exists so the buffer path can be brought up and checked without a
     /// video stream, a network, or a real desk. The ramp pattern in particular
     /// is what the validation menu item compares against: every channel holds a
-    /// known function of its own index, so a value read back through the shader
-    /// proves the packing and the indexing rather than merely proving something
-    /// arrived.
+    /// known function of its own address, so a value read back through the
+    /// shader proves the packing and the indexing rather than merely proving
+    /// something arrived.
     /// </summary>
     [AddComponentMenu("VRSL-URP/Synthetic DMX Channel Source")]
     [DefaultExecutionOrder(-100)]
@@ -30,16 +30,16 @@ namespace VRSL.URP
             /// than measuring.</summary>
             Fixtures,
             /// <summary>Every channel holds its own slot number within its universe,
-            /// so the pattern repeats every 520. Ramp is a function of the flat
-            /// index and therefore reads the same whichever stride a source packed
+            /// so the pattern repeats every universe. Ramp is a function of the flat
+            /// address and therefore reads the same whichever stride a source packed
             /// with; this is keyed on the slot, so it is the only pattern that can
             /// tell a 520-strided buffer from a 512-strided one.</summary>
             UniverseSlot,
         }
 
-        [Tooltip("Universes to generate. Each occupies 520 slots in VRSL's flat "
-               + "address space: 512 real channels and 8 of padding, because the "
-               + "grid is 13 wide and every universe starts on a fresh row.")]
+        [Tooltip("Universes to generate. Each publishes its 512 real slots; the 8 "
+               + "addresses of padding VRSL leaves between universes are nobody's to "
+               + "write, so nothing is sent for them.")]
         [Range(1, 32)]
         public int universes = 4;
 
@@ -49,20 +49,40 @@ namespace VRSL.URP
                + "what makes it usable as a reference.")]
         public float speed = 0.25f;
 
-        NativeArray<byte> _channels;
+        [Header("Delivery")]
+        [Tooltip("Publish one universe per frame in rotation rather than all of them "
+               + "every frame, the way the relay latch rotates under budget pressure. "
+               + "Each universe then advances its own damping by the real interval "
+               + "between its snapshots instead of by a frame.")]
+        public bool rotateUniverses;
 
-        // 520, not 512. VRSL resolves a patch through ComputeAbsoluteChannel as
-        // dmxChannel + (dmxUniverse - 1) * 520, so the buffer is indexed in that
-        // flat space rather than in real DMX channels. Packing 512 to a universe
-        // here would put every fixture from universe 2 onward 8 channels early.
-        public const int SlotsPerUniverse = 520;
+        [Tooltip("Staleness to report on every block, in milliseconds. A constant age "
+               + "shifts each universe timeline by the same amount and so changes no "
+               + "damping step; it is here to prove the manager carries age through "
+               + "without it destabilising anything.")]
+        [Range(0f, 500f)]
+        public float simulatedAgeMs;
 
-        public int ChannelCount => universes * SlotsPerUniverse;
+        NativeArray<byte>         _values;
+        NativeArray<VRSLDMXBlock> _blocks;
+        int                       _blockCount;
 
-        /// <summary>The value the Ramp pattern puts in a given zero-based channel.
-        /// The validation harness compares against this, so it lives here rather
-        /// than being written out twice.</summary>
-        public static byte RampValue(int channelIndex) => (byte)(channelIndex % 251);
+        /// <summary>Kept for callers that predicted addresses from this type.
+        /// The stride belongs to VRSL flat space, not to any one source.</summary>
+        public const int SlotsPerUniverse = VRSLDMX.SlotsPerUniverse;
+
+        public int UniverseCount => universes;
+
+        /// <summary>The value the Ramp pattern puts at a given zero-based flat
+        /// address. The validation harness compares against this, so it lives here
+        /// rather than being written out twice. Padding reads 0 because no block
+        /// covers it.</summary>
+        public static byte RampValue(int flatAddress)
+        {
+            int slot = flatAddress % VRSLDMX.SlotsPerUniverse;
+            if (slot >= VRSLDMX.UsableSlotsPerUniverse) return 0;
+            return (byte)(flatAddress % 251);
+        }
 
         void OnEnable()
         {
@@ -75,73 +95,92 @@ namespace VRSL.URP
         {
             var mgr = VRSL_URPLightManager.Instance;
             if (mgr != null && ReferenceEquals(mgr.ChannelSource, this)) mgr.ChannelSource = null;
-            if (_channels.IsCreated) _channels.Dispose();
+            if (_values.IsCreated) _values.Dispose();
+            if (_blocks.IsCreated) _blocks.Dispose();
         }
+
+        int ValueCount => universes * VRSLDMX.UsableSlotsPerUniverse;
 
         void Allocate()
         {
-            if (_channels.IsCreated && _channels.Length == ChannelCount) return;
-            if (_channels.IsCreated) _channels.Dispose();
-            _channels = new NativeArray<byte>(ChannelCount, Allocator.Persistent,
-                                              NativeArrayOptions.ClearMemory);
+            if (_values.IsCreated && _values.Length == ValueCount) return;
+            if (_values.IsCreated) _values.Dispose();
+            if (_blocks.IsCreated) _blocks.Dispose();
+            _values = new NativeArray<byte>(ValueCount, Allocator.Persistent,
+                                            NativeArrayOptions.ClearMemory);
+            _blocks = new NativeArray<VRSLDMXBlock>(universes, Allocator.Persistent,
+                                                    NativeArrayOptions.ClearMemory);
         }
 
         void Update()
         {
             Allocate();
-            switch (pattern)
+
+            int first = 0, count = universes;
+            if (rotateUniverses)
             {
-                case Pattern.Ramp:     FillRamp();     break;
-                case Pattern.Sweep:    FillSweep();    break;
-                case Pattern.Fixtures: FillFixtures(); break;
-                case Pattern.UniverseSlot: FillUniverseSlot(); break;
+                first = universes > 0 ? Time.frameCount % universes : 0;
+                count = 1;
+            }
+
+            uint age = (uint)Mathf.RoundToInt(simulatedAgeMs * 1000f);
+            float t = Time.time * speed;
+
+            _blockCount = 0;
+            for (int i = 0; i < count; i++)
+            {
+                int u  = first + i;
+                int at = u * VRSLDMX.UsableSlotsPerUniverse;
+                for (int s = 0; s < VRSLDMX.UsableSlotsPerUniverse; s++)
+                    _values[at + s] = Value(u * VRSLDMX.SlotsPerUniverse + s, s, t);
+
+                _blocks[_blockCount++] = new VRSLDMXBlock
+                {
+                    universe        = u,
+                    start           = 0,
+                    length          = VRSLDMX.UsableSlotsPerUniverse,
+                    valueOffset     = at,
+                    ageMicroseconds = age,
+                };
             }
         }
 
-        void FillRamp()
+        byte Value(int flat, int slot, float t)
         {
-            for (int i = 0; i < _channels.Length; i++) _channels[i] = RampValue(i);
-        }
-
-        void FillUniverseSlot()
-        {
-            for (int i = 0; i < _channels.Length; i++)
-                _channels[i] = (byte)((i % SlotsPerUniverse) % 256);
-        }
-
-        void FillSweep()
-        {
-            byte v = (byte)(Mathf.PingPong(Time.time * speed * 255f, 255f));
-            for (int i = 0; i < _channels.Length; i++) _channels[i] = v;
+            switch (pattern)
+            {
+                case Pattern.Sweep:        return (byte)Mathf.PingPong(t * 255f, 255f);
+                case Pattern.Fixtures:     return FixtureValue(flat, t);
+                case Pattern.UniverseSlot: return (byte)(slot % 256);
+                default:                   return RampValue(flat);
+            }
         }
 
         // Channel offsets follow VRSL's 13-channel layout: pan, pan fine, tilt,
         // tilt fine, zoom, dimmer, strobe, R, G, B, gobo spin, gobo, reserved.
-        void FillFixtures()
+        static byte FixtureValue(int flat, float t)
         {
-            for (int i = 0; i < _channels.Length; i++) _channels[i] = 0;
-
-            int fixtures = _channels.Length / 13;
-            float t = Time.time * speed;
-            for (int f = 0; f < fixtures; f++)
+            float phase = t + (flat / 13) * 0.13f;
+            switch (flat % 13)
             {
-                int b = f * 13;
-                float phase = t + f * 0.13f;
-                _channels[b + 0]  = (byte)(Mathf.Sin(phase) * 127f + 128f);        // pan
-                _channels[b + 2]  = (byte)(Mathf.Cos(phase * 0.7f) * 127f + 128f); // tilt
-                _channels[b + 4]  = 128;                                           // zoom
-                _channels[b + 5]  = 255;                                           // dimmer
-                _channels[b + 7]  = (byte)(Mathf.Sin(phase) * 127f + 128f);        // red
-                _channels[b + 8]  = (byte)(Mathf.Sin(phase + 2.1f) * 127f + 128f); // green
-                _channels[b + 9]  = (byte)(Mathf.Sin(phase + 4.2f) * 127f + 128f); // blue
+                case 0:  return (byte)(Mathf.Sin(phase) * 127f + 128f);          // pan
+                case 2:  return (byte)(Mathf.Cos(phase * 0.7f) * 127f + 128f);   // tilt
+                case 4:  return 128;                                             // zoom
+                case 5:  return 255;                                             // dimmer
+                case 7:  return (byte)(Mathf.Sin(phase) * 127f + 128f);          // red
+                case 8:  return (byte)(Mathf.Sin(phase + 2.1f) * 127f + 128f);   // green
+                case 9:  return (byte)(Mathf.Sin(phase + 4.2f) * 127f + 128f);   // blue
+                default: return 0;
             }
         }
 
-        public bool TryGetChannels(out NativeArray<byte> channels, out int channelCount)
+        public bool TryGetBlocks(out NativeArray<VRSLDMXBlock> blocks, out int blockCount,
+                                 out NativeArray<byte> values)
         {
-            channels = _channels;
-            channelCount = _channels.IsCreated ? _channels.Length : 0;
-            return channelCount > 0;
+            blocks     = _blocks;
+            values     = _values;
+            blockCount = _blocks.IsCreated ? _blockCount : 0;
+            return blockCount > 0;
         }
     }
 }

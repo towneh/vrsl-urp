@@ -63,6 +63,25 @@ uint                      _VRSLU_StrobeDisabled;
 RWStructuredBuffer<float> _VRSLU_DMXMovement;
 float2                    _VRSLU_MoveSmooth;
 
+// Seconds of show time each universe advanced this frame, written by the manager
+// from the age its blocks carried. Universes are latched as their packets arrive
+// and are delivered on whatever schedule the carrier can afford, so the interval
+// a snapshot spans is not the interval a frame spans. Damping over the frame delta
+// instead would measure a designer's smoothing in frames rather than in seconds of
+// the show, and a universe delivered every fifth frame would be smoothed five times
+// over data that moved once.
+//
+// Spin and strobe stay on the frame delta on purpose. Those integrate a rate the
+// desk set, so they carry on at the same speed whether or not a fresh packet
+// arrived; movement converges on a target, and there is nothing to converge over
+// until the target is refreshed.
+StructuredBuffer<float>   _VRSLU_UniverseStep;
+uint                      _VRSLU_UniverseCount;
+
+// Flat addresses a universe occupies: 512 real slots and 8 of padding, because the
+// decode grid is 13 wide and 512 does not divide by 13. Matches VRSLDMX.SlotsPerUniverse.
+#define VRSLU_SLOTS_PER_UNIVERSE 520u
+
 // Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
 SamplerState sampler_point_clamp;
 
@@ -451,9 +470,24 @@ void AdvanceMovement(uint3 id : SV_DispatchThreadID)
     float target = LoadDMXChannel(ch);
     float dmxS   = LoadDMXChannel(((ch - 1u) / 13u + 1u) * 13u);
 
+    // This universe's own elapsed show time, which is zero on a frame where nothing
+    // arrived for it. The frame delta stands in when no source published a step,
+    // which keeps a scene reading the CRT chain behaving as it did.
+    uint  universe = index / VRSLU_SLOTS_PER_UNIVERSE;
+    float step     = (universe < _VRSLU_UniverseCount) ? _VRSLU_UniverseStep[universe]
+                                                       : _VRSLU_DeltaTime;
+
     float smoothing = lerp(saturate(_VRSLU_MoveSmooth.x), saturate(_VRSLU_MoveSmooth.y), dmxS);
-    float damped    = lerp(_VRSLU_DMXMovement[index], target,
-                           1.0 - pow(saturate(smoothing), _VRSLU_DeltaTime));
+    float prev      = _VRSLU_DMXMovement[index];
+    // Skipped rather than folded into the lerp: pow(0, 0) is a NaN, and a NaN written
+    // here stays in the buffer for the rest of the session because the next frame
+    // reads it back.
+    float damped    = (step > 0.0) ? lerp(prev, target, 1.0 - pow(saturate(smoothing), step))
+                                   : prev;
+    // The CRT's own second pull, which runs per frame rather than per snapshot: a
+    // fixture asking for little smoothing is also dragged towards the raw value, so a
+    // universe that stops arriving keeps creeping to its last target instead of
+    // freezing mid-move.
     _VRSLU_DMXMovement[index] = lerp(damped, target, dmxS * 0.1);
 }
 

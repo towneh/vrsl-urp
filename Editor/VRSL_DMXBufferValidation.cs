@@ -64,6 +64,16 @@ namespace VRSL.URP.EditorScripts
                                + $"source is in {source.pattern} mode, so there is nothing to compare to.");
                 return;
             }
+            // The manager holds the last value it was told for every slot, so a rotating
+            // source fills the flat space over as many frames as it has universes. Run
+            // before that and the universes still waiting read 0, which is a timing
+            // artefact rather than a packing fault.
+            if (source.rotateUniverses && Time.frameCount < source.universes)
+            {
+                Debug.LogWarning("[VRSL URP] The source is rotating universes and has not published all "
+                               + $"{source.universes} of them yet. Let it run a moment and validate again.");
+                return;
+            }
 
             var cs = mgr.computeShader;
             if (cs == null) { Debug.LogError("[VRSL URP] The manager has no compute shader assigned."); return; }
@@ -119,7 +129,9 @@ namespace VRSL.URP.EditorScripts
             Debug.LogError($"[VRSL] FAIL: {mismatches} of {count} channels differ.\n{first}"
                          + (mismatches > MaxReport ? $"  ... and {mismatches - MaxReport} more\n" : "")
                          + "A constant offset in the channel number is an indexing error; values that "
-                         + "look like a neighbouring byte are a packing error.");
+                         + "look like a neighbouring byte are a packing error. The last 8 addresses of "
+                         + "each universe are padding and must read 0 — anything there means a block "
+                         + "ran past slot 512, or the manager scattered one at the wrong stride.");
         }
     }
 }
