@@ -54,6 +54,7 @@ namespace VRSL.URP
                 public BufferHandle  channelBuffer;
                 public BufferHandle  spinPhaseBuffer;
                 public BufferHandle  strobePhaseBuffer;
+                public BufferHandle  movementBuffer;
                 public int           strobeStatic;
                 public Vector4       strobeFreqs;
                 public float         timeY;
@@ -90,6 +91,7 @@ namespace VRSL.URP
                     || mgr.ChannelBuffer == null
                     || mgr.SpinPhaseBuffer == null
                     || mgr.StrobePhaseBuffer == null
+                    || mgr.MovementBuffer == null
                     || mgr.DMXMainHandle == null) return;
 
                 using var builder = rg.AddComputePass<PassData>("VRSL DMX Light Compute", out var d);
@@ -110,6 +112,7 @@ namespace VRSL.URP
                 // LateUpdate; this pass runs per camera and must not advance it.
                 d.spinPhaseBuffer     = rg.ImportBuffer(mgr.SpinPhaseBuffer);
                 d.strobePhaseBuffer   = rg.ImportBuffer(mgr.StrobePhaseBuffer);
+                d.movementBuffer      = rg.ImportBuffer(mgr.MovementBuffer);
                 d.strobeStatic        = mgr.strobeRate == VRSL_URPLightManager.StrobeRate.Dynamic ? 0 : 1;
                 d.strobeFreqs         = new Vector4(mgr.strobeLowFrequency, mgr.strobeMedFrequency,
                                                     mgr.strobeHighFrequency, mgr.maxStrobeFrequency);
@@ -145,6 +148,7 @@ namespace VRSL.URP
                 builder.UseBuffer(d.channelBuffer,       AccessFlags.Read);
                 builder.UseBuffer(d.spinPhaseBuffer,     AccessFlags.Read);
                 builder.UseBuffer(d.strobePhaseBuffer,   AccessFlags.Read);
+                builder.UseBuffer(d.movementBuffer,      AccessFlags.Read);
                 builder.UseTexture(d.dmxMainTex,         AccessFlags.Read);
                 if (d.dmxMovementTex.IsValid())
                     builder.UseTexture(d.dmxMovementTex, AccessFlags.Read);
@@ -177,6 +181,7 @@ namespace VRSL.URP
                     cmd.SetComputeIntParam(    p.cs,           "_VRSLU_DMXChannelCount", p.channelCount);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXSpinPhase", p.spinPhaseBuffer);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXStrobePhase", p.strobePhaseBuffer);
+                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXMovement",   p.movementBuffer);
                     cmd.SetComputeIntParam(    p.cs,           "_VRSLU_StrobeStatic",   p.strobeStatic);
                     cmd.SetComputeVectorParam( p.cs,           "_VRSLU_StrobeFreqs",    p.strobeFreqs);
                     cmd.SetComputeFloatParam(  p.cs,           "_VRSLU_TimeY",          p.timeY);

@@ -231,6 +231,15 @@ namespace VRSL.URP
                + "global strobe disable, which only reaches the CRT materials.")]
         public bool  disableStrobe;
 
+        [Header("Movement smoothing (channel-source path only)")]
+        [Tooltip("Smoothing when a fixture's own smoothness channel reads 0. Defaults match "
+               + "the shipped movement CRT material. Unlike colour, this is kept on the buffer "
+               + "path: the amount is chosen per fixture from channel 13 of its sector, which "
+               + "is a lighting decision rather than a filter hiding capture noise.")]
+        public float movementSmoothingMax = 0.32258067f;
+        [Tooltip("Smoothing when that channel reads full. Lower means the head snaps sooner.")]
+        public float movementSmoothingMin = 0.16129033f;
+
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }
         public GraphicsBuffer  LightDataBuffer     { get; private set; }
@@ -247,6 +256,9 @@ namespace VRSL.URP
         /// <summary>Strobe phase for the dynamic rate mode, one float per channel.
         /// Static mode derives its phase from time and leaves this untouched.</summary>
         public GraphicsBuffer  StrobePhaseBuffer   { get; private set; }
+        /// <summary>Damped movement values, one float per channel, the buffer-path
+        /// equivalent of the movement interpolation CRT.</summary>
+        public GraphicsBuffer  MovementBuffer      { get; private set; }
         public RTHandle        DMXMainHandle       { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
@@ -366,6 +378,7 @@ namespace VRSL.URP
             EnsureChannelBuffer(0);
             EnsureSpinPhaseBuffer(0);
             EnsureStrobePhaseBuffer(0);
+            EnsureMovementBuffer(0);
             SubscribeRuntimeInjection();
             VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
         }
@@ -422,6 +435,9 @@ namespace VRSL.URP
         static readonly int s_StrobeFreqs    = Shader.PropertyToID("_VRSLU_StrobeFreqs");
         static readonly int s_TimeY          = Shader.PropertyToID("_VRSLU_TimeY");
         static readonly int s_StrobeDisabled = Shader.PropertyToID("_VRSLU_StrobeDisabled");
+        static readonly int s_DMXMovement    = Shader.PropertyToID("_VRSLU_DMXMovement");
+        static readonly int s_MoveSmooth     = Shader.PropertyToID("_VRSLU_MoveSmooth");
+        int _moveKernel = -1;
         int _advanceKernel = -1;
         int _strobeKernel  = -1;
 
@@ -442,6 +458,15 @@ namespace VRSL.URP
         // Always allocated, even in static mode where nothing writes it: the compute
         // declares the buffer and an unbound resource is undefined to read on some
         // backends, the same reason the channel buffer is never left unallocated.
+        void EnsureMovementBuffer(int channelCount)
+        {
+            int count = Mathf.Max(1, channelCount);
+            if (MovementBuffer != null && MovementBuffer.count == count) return;
+            MovementBuffer?.Release();
+            MovementBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
+            MovementBuffer.SetData(new float[count]);
+        }
+
         void EnsureStrobePhaseBuffer(int channelCount)
         {
             int count = Mathf.Max(1, channelCount);
@@ -465,6 +490,16 @@ namespace VRSL.URP
             computeShader.SetBuffer(_advanceKernel, s_DMXSpinPhase,    SpinPhaseBuffer);
             computeShader.SetFloat( s_DeltaTime,                       Time.deltaTime);
             computeShader.Dispatch(_advanceKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
+
+            if (MovementBuffer != null)
+            {
+                if (_moveKernel < 0) _moveKernel = computeShader.FindKernel("AdvanceMovement");
+                computeShader.SetBuffer(_moveKernel, s_DMXChannels,  ChannelBuffer);
+                computeShader.SetBuffer(_moveKernel, s_DMXMovement,  MovementBuffer);
+                computeShader.SetVector(s_MoveSmooth,
+                    new Vector4(movementSmoothingMax, movementSmoothingMin, 0f, 0f));
+                computeShader.Dispatch(_moveKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
+            }
 
             // Static mode has no integral to advance; its phase is a function of time,
             // computed where it is read. Skipping the dispatch is the whole saving.
@@ -494,6 +529,7 @@ namespace VRSL.URP
                 EnsureChannelBuffer(0);
                 EnsureSpinPhaseBuffer(0);
                 EnsureStrobePhaseBuffer(0);
+                EnsureMovementBuffer(0);
                 ChannelCount = 0;
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
                 return;
@@ -503,6 +539,7 @@ namespace VRSL.URP
             EnsureChannelBuffer(count);
             EnsureSpinPhaseBuffer(count);
             EnsureStrobePhaseBuffer(count);
+            EnsureMovementBuffer(count);
 
             // SetData wants whole elements, so the tail of the last word is padded
             // rather than partially written. Those bytes are past the count the
@@ -767,6 +804,10 @@ namespace VRSL.URP
                 // integrator, and a rotating gobo looks the same whether the phase
                 // came from the CRT or the compute.
                 float spin = data[i].spotParams.w;
+                // Pan and tilt are not stored anywhere readable; they survive only as
+                // the beam direction the compute derives from them. Logged because it
+                // is the sole observable of the movement damping.
+                Vector4 dir = data[i].directionAndType;
                 // Intensity doubles as the active flag in the packed layout.
                 float active = c.w > 0f ? 1f : 0f;
                 bool lens = f.lensTransform != null;
@@ -775,7 +816,7 @@ namespace VRSL.URP
                          ? f.fixtureShellRenderers[0] : null;
                 Vector3 sp = sr != null ? sr.bounds.center : f.transform.position;
                 Debug.Log($"[VRSL URP] Fixture {i} '{f.name}' (ch {f.ComputeAbsoluteChannel()}): intensity={c.w:F2} "
-                        + $"rgb=({c.x:F3},{c.y:F3},{c.z:F3}) active={active:F0} spin={spin:F4} "
+                        + $"rgb=({c.x:F3},{c.y:F3},{c.z:F3}) active={active:F0} spin={spin:F4} dir=({dir.x:F3},{dir.y:F3},{dir.z:F3}) "
                         + $"lightPos=({p.x:F1},{p.y:F1},{p.z:F1}) lensSet={lens} "
                         + $"lensPos=({lp.x:F1},{lp.y:F1},{lp.z:F1}) shellCtr=({sp.x:F1},{sp.y:F1},{sp.z:F1})",
                           f);
@@ -818,9 +859,11 @@ namespace VRSL.URP
             ChannelBuffer?.Release();       ChannelBuffer       = null;
             SpinPhaseBuffer?.Release();     SpinPhaseBuffer     = null;
             StrobePhaseBuffer?.Release();   StrobePhaseBuffer   = null;
+            MovementBuffer?.Release();      MovementBuffer      = null;
             ChannelCount = 0;
             _advanceKernel = -1;
             _strobeKernel  = -1;
+            _moveKernel    = -1;
         }
 
 
