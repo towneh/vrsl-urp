@@ -1,6 +1,7 @@
 #pragma kernel UpdateLights
 #pragma kernel ValidateChannels
 #pragma kernel AdvanceState
+#pragma kernel AdvanceStrobe
 
 #include "../Shared/VRSLLightingLibrary.hlsl"
 
@@ -39,6 +40,18 @@ uint              _VRSLU_DMXChannelCount;
 // every mirror, every reflection probe.
 RWStructuredBuffer<float> _VRSLU_DMXSpinPhase;
 float                     _VRSLU_DeltaTime;
+
+// Strobe. The shipped Horizontal and Vertical materials run the CRT's static path,
+// which is stateless: phase is _Time.y times one of three fixed frequencies picked
+// by DMX thresholds. Only the legacy material integrates. Both are supported here
+// because a scene on the legacy material would otherwise silently change rate.
+//   _VRSLU_StrobeStatic  1 = static frequencies, 0 = integrate at max frequency
+//   _VRSLU_StrobeFreqs   x=low, y=medium, z=high, w=max (dynamic mode only)
+RWStructuredBuffer<float> _VRSLU_DMXStrobePhase;
+uint                      _VRSLU_StrobeStatic;
+float4                    _VRSLU_StrobeFreqs;
+float                     _VRSLU_TimeY;
+uint                      _VRSLU_StrobeDisabled;
 
 // Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
 SamplerState sampler_point_clamp;
@@ -148,6 +161,36 @@ float SpinPhase(uint ch)
     return GetDMXValueRaw(ch, _DMXSpinTimerTex);
 }
 
+// Strobe multiplier for a channel, from whichever source is live. Mirrors the two
+// CRT stages at once: DMXRTShader-StrobeTimings produces the sine phase and
+// DMXRTShader-StrobeOutput turns it into the square wave, but that second stage is
+// a pure function of phase and the channel value, so it needs no storage.
+//
+//   square  = sin(phase) > 0 ? 1 : 0
+//   below a channel value of 0.2 the fixture is held fully on, not strobed
+float StrobeValue(uint ch)
+{
+    if (_VRSLU_DMXChannelCount == 0u) return GetDMXValue(ch, _DMXStrobeTex);
+    if (_VRSLU_StrobeDisabled > 0u)   return 1.0;
+
+    float status = LoadDMXChannel(ch);
+    float phase;
+    if (_VRSLU_StrobeStatic > 0u)
+    {
+        float speed = (status > 0.2) ? _VRSLU_StrobeFreqs.y : _VRSLU_StrobeFreqs.x;
+        speed       = (status > 0.5) ? _VRSLU_StrobeFreqs.z : speed;
+        phase       = _VRSLU_TimeY * speed;
+    }
+    else
+    {
+        uint index = ch - 1u;
+        phase = (ch == 0u || index >= _VRSLU_DMXChannelCount)
+              ? 0.0 : _VRSLU_DMXStrobePhase[index];
+    }
+    float square = (sin(phase) > 0.0) ? 1.0 : 0.0;
+    return (status > 0.2) ? square : 1.0;
+}
+
 // ── Rodrigues rotation ────────────────────────────────────────────────────────
 float3 RotateAroundAxis(float3 v, float3 axis, float angleDeg)
 {
@@ -189,7 +232,7 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     float b = MainChannel(bCh);
     float strobe = 1.0;
     if (enableStrobe)
-        strobe = GetDMXValue(strobeCh, _DMXStrobeTex);
+        strobe = StrobeValue(strobeCh);
 
     float combinedIntensity =
         intensity * cfg.spotAngles.z * cfg.rightAndMaxIntensity.w * strobe;
@@ -340,6 +383,24 @@ void AdvanceState(uint3 id : SV_DispatchThreadID)
     }
     float spin = (dmx > 0.5) ? (dmx - 0.5) : dmx;
     _VRSLU_DMXSpinPhase[index] += _VRSLU_DeltaTime * spin;
+}
+
+// Strobe phase, dynamic mode only. Static mode derives its phase from _Time.y in
+// StrobeValue and stores nothing, which is why the shipped Horizontal and Vertical
+// materials need no state at all. Mirrors DMXRTShader-StrobeTimings: the delta is
+// clamped to 2 seconds so a hitch cannot jump the phase an arbitrary distance, and
+// the wrap is a single subtraction, exactly as the CRT does it.
+[numthreads(64, 1, 1)]
+void AdvanceStrobe(uint3 id : SV_DispatchThreadID)
+{
+    uint index = id.x;
+    if (index >= _VRSLU_DMXChannelCount) return;
+
+    float dmx = LoadDMXChannel(index + 1u);
+    float dt  = clamp(_VRSLU_DeltaTime, 0.0, 2.0);
+    float t   = _VRSLU_DMXStrobePhase[index] + dt * (dmx * _VRSLU_StrobeFreqs.w);
+    t -= (t >= 6.28318530718) ? 6.28318530718 : 0.0;
+    _VRSLU_DMXStrobePhase[index] = clamp(t, 0.0, 1000000.0);
 }
 
 

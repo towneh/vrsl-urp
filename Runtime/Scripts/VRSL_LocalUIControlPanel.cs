@@ -206,6 +206,14 @@ namespace VRSL.URP
 
         void SetStrobeTextureStatus()
         {
+            // The URP compute reads its own flag, because a scene driven by a channel
+            // source need not have a strobe CRT for the loop below to find. Located by
+            // search rather than through the manager's singleton: this runs only when
+            // the toggle is pressed, so the cost is nothing, and a silently dead toggle
+            // would be worse than the lookup.
+            var urpManager = FindAnyObjectByType<VRSL_URPLightManager>();
+            if (urpManager != null) urpManager.disableStrobe = _globalDisableStrobe;
+
             foreach(CustomRenderTexture rt in DMX_CRTS_Legacy)
             {
                 if(rt == null){continue;}

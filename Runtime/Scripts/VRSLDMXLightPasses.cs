@@ -53,6 +53,11 @@ namespace VRSL.URP
                 public BufferHandle  lightDataBuffer;
                 public BufferHandle  channelBuffer;
                 public BufferHandle  spinPhaseBuffer;
+                public BufferHandle  strobePhaseBuffer;
+                public int           strobeStatic;
+                public Vector4       strobeFreqs;
+                public float         timeY;
+                public int           strobeDisabled;
                 public int           channelCount;
                 public TextureHandle dmxMainTex;
                 public TextureHandle dmxMovementTex;
@@ -84,6 +89,7 @@ namespace VRSL.URP
                     || mgr.FixtureConfigBuffer == null
                     || mgr.ChannelBuffer == null
                     || mgr.SpinPhaseBuffer == null
+                    || mgr.StrobePhaseBuffer == null
                     || mgr.DMXMainHandle == null) return;
 
                 using var builder = rg.AddComputePass<PassData>("VRSL DMX Light Compute", out var d);
@@ -103,6 +109,15 @@ namespace VRSL.URP
                 // Read-only here. The manager integrates it once per frame in
                 // LateUpdate; this pass runs per camera and must not advance it.
                 d.spinPhaseBuffer     = rg.ImportBuffer(mgr.SpinPhaseBuffer);
+                d.strobePhaseBuffer   = rg.ImportBuffer(mgr.StrobePhaseBuffer);
+                d.strobeStatic        = mgr.strobeRate == VRSL_URPLightManager.StrobeRate.Dynamic ? 0 : 1;
+                d.strobeFreqs         = new Vector4(mgr.strobeLowFrequency, mgr.strobeMedFrequency,
+                                                    mgr.strobeHighFrequency, mgr.maxStrobeFrequency);
+                // Sampled here rather than in the shader so both eyes and every mirror
+                // in a frame strobe together; Time.timeSinceLevelLoad is constant across
+                // the frame where a per-camera read would not be.
+                d.timeY               = Time.timeSinceLevelLoad;
+                d.strobeDisabled      = mgr.disableStrobe ? 1 : 0;
                 d.channelCount        = mgr.ChannelCount;
                 d.dmxMainTex          = rg.ImportTexture(mgr.DMXMainHandle);
                 d.dmxMovementTex      = mgr.DMXMovementHandle != null
@@ -129,6 +144,7 @@ namespace VRSL.URP
                 builder.UseBuffer(d.lightDataBuffer,     AccessFlags.Write);
                 builder.UseBuffer(d.channelBuffer,       AccessFlags.Read);
                 builder.UseBuffer(d.spinPhaseBuffer,     AccessFlags.Read);
+                builder.UseBuffer(d.strobePhaseBuffer,   AccessFlags.Read);
                 builder.UseTexture(d.dmxMainTex,         AccessFlags.Read);
                 if (d.dmxMovementTex.IsValid())
                     builder.UseTexture(d.dmxMovementTex, AccessFlags.Read);
@@ -160,6 +176,11 @@ namespace VRSL.URP
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXChannels", p.channelBuffer);
                     cmd.SetComputeIntParam(    p.cs,           "_VRSLU_DMXChannelCount", p.channelCount);
                     cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXSpinPhase", p.spinPhaseBuffer);
+                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXStrobePhase", p.strobePhaseBuffer);
+                    cmd.SetComputeIntParam(    p.cs,           "_VRSLU_StrobeStatic",   p.strobeStatic);
+                    cmd.SetComputeVectorParam( p.cs,           "_VRSLU_StrobeFreqs",    p.strobeFreqs);
+                    cmd.SetComputeFloatParam(  p.cs,           "_VRSLU_TimeY",          p.timeY);
+                    cmd.SetComputeIntParam(    p.cs,           "_VRSLU_StrobeDisabled", p.strobeDisabled);
                     cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXMainTex",       p.dmxMainTex);
 
                     if (p.dmxMovementTex.IsValid())

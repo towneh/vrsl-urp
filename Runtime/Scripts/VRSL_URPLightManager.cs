@@ -198,6 +198,36 @@ namespace VRSL.URP
             new Vector4(contactShadowStrength, contactShadowDistance,
                         contactShadowSteps, contactShadowThickness);
 
+        public enum StrobeRate
+        {
+            /// <summary>Phase is time times one of three fixed frequencies, picked by
+            /// DMX thresholds at 0.2 and 0.5. Stateless, and what the shipped Horizontal
+            /// and Vertical CRT materials do.</summary>
+            StaticFrequencies = 0,
+            /// <summary>Phase integrates at the channel value times the maximum
+            /// frequency. What the legacy CRT material does.</summary>
+            Dynamic = 1,
+        }
+
+        [Header("Strobe (channel-source path only)")]
+        [Tooltip("How the strobe rate is derived when a channel source is publishing. "
+               + "The CRT chain keeps using whatever its own material says; these settings "
+               + "exist because a scene driven from a channel source may have no CRT "
+               + "material to read. Defaults match the shipped Horizontal material.")]
+        public StrobeRate strobeRate = StrobeRate.StaticFrequencies;
+
+        [Tooltip("Static mode: the rate below a channel value of 0.2.")]
+        public float strobeLowFrequency  = 25f;
+        [Tooltip("Static mode: the rate between 0.2 and 0.5.")]
+        public float strobeMedFrequency  = 45f;
+        [Tooltip("Static mode: the rate above 0.5.")]
+        public float strobeHighFrequency = 65f;
+        [Tooltip("Dynamic mode: phase integrates at the channel value times this.")]
+        public float maxStrobeFrequency  = 185f;
+        [Tooltip("Hold every strobing fixture fully on. Mirrors the control panel's "
+               + "global strobe disable, which only reaches the CRT materials.")]
+        public bool  disableStrobe;
+
         // ── Public API for the render passes ──────────────────────────────────
         public GraphicsBuffer  FixtureConfigBuffer { get; private set; }
         public GraphicsBuffer  LightDataBuffer     { get; private set; }
@@ -211,6 +241,9 @@ namespace VRSL.URP
         /// and untouched when <see cref="ChannelCount"/> is 0, where the compute reads
         /// the SpinnerTimer CRT instead.</summary>
         public GraphicsBuffer  SpinPhaseBuffer     { get; private set; }
+        /// <summary>Strobe phase for the dynamic rate mode, one float per channel.
+        /// Static mode derives its phase from time and leaves this untouched.</summary>
+        public GraphicsBuffer  StrobePhaseBuffer   { get; private set; }
         public RTHandle        DMXMainHandle       { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
@@ -329,6 +362,7 @@ namespace VRSL.URP
             // has a valid binding on the first frame, before any LateUpdate runs.
             EnsureChannelBuffer(0);
             EnsureSpinPhaseBuffer(0);
+            EnsureStrobePhaseBuffer(0);
             SubscribeRuntimeInjection();
             VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
         }
@@ -378,9 +412,18 @@ namespace VRSL.URP
         // smallest allocation that keeps the binding valid when nothing is
         // publishing: an unbound buffer is undefined to read on some backends,
         // and the compute reads it before it checks the count.
-        static readonly int s_DMXSpinPhase = Shader.PropertyToID("_VRSLU_DMXSpinPhase");
-        static readonly int s_DeltaTime    = Shader.PropertyToID("_VRSLU_DeltaTime");
+        static readonly int s_DMXSpinPhase   = Shader.PropertyToID("_VRSLU_DMXSpinPhase");
+        static readonly int s_DeltaTime      = Shader.PropertyToID("_VRSLU_DeltaTime");
+        static readonly int s_DMXStrobePhase = Shader.PropertyToID("_VRSLU_DMXStrobePhase");
+        static readonly int s_StrobeStatic   = Shader.PropertyToID("_VRSLU_StrobeStatic");
+        static readonly int s_StrobeFreqs    = Shader.PropertyToID("_VRSLU_StrobeFreqs");
+        static readonly int s_TimeY          = Shader.PropertyToID("_VRSLU_TimeY");
+        static readonly int s_StrobeDisabled = Shader.PropertyToID("_VRSLU_StrobeDisabled");
         int _advanceKernel = -1;
+        int _strobeKernel  = -1;
+
+        Vector4 StrobeFreqs => new Vector4(strobeLowFrequency, strobeMedFrequency,
+                                           strobeHighFrequency, maxStrobeFrequency);
 
         void EnsureSpinPhaseBuffer(int channelCount)
         {
@@ -391,6 +434,18 @@ namespace VRSL.URP
             // from whatever the driver left there.
             SpinPhaseBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
             SpinPhaseBuffer.SetData(new float[count]);
+        }
+
+        // Always allocated, even in static mode where nothing writes it: the compute
+        // declares the buffer and an unbound resource is undefined to read on some
+        // backends, the same reason the channel buffer is never left unallocated.
+        void EnsureStrobePhaseBuffer(int channelCount)
+        {
+            int count = Mathf.Max(1, channelCount);
+            if (StrobePhaseBuffer != null && StrobePhaseBuffer.count == count) return;
+            StrobePhaseBuffer?.Release();
+            StrobePhaseBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
+            StrobePhaseBuffer.SetData(new float[count]);
         }
 
         // Integrators advance here rather than in the render pass, and the difference
@@ -407,6 +462,15 @@ namespace VRSL.URP
             computeShader.SetBuffer(_advanceKernel, s_DMXSpinPhase,    SpinPhaseBuffer);
             computeShader.SetFloat( s_DeltaTime,                       Time.deltaTime);
             computeShader.Dispatch(_advanceKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
+
+            // Static mode has no integral to advance; its phase is a function of time,
+            // computed where it is read. Skipping the dispatch is the whole saving.
+            if (strobeRate != StrobeRate.Dynamic || StrobePhaseBuffer == null) return;
+            if (_strobeKernel < 0) _strobeKernel = computeShader.FindKernel("AdvanceStrobe");
+            computeShader.SetBuffer(_strobeKernel, s_DMXChannels,     ChannelBuffer);
+            computeShader.SetBuffer(_strobeKernel, s_DMXStrobePhase,  StrobePhaseBuffer);
+            computeShader.SetVector(s_StrobeFreqs,                    StrobeFreqs);
+            computeShader.Dispatch(_strobeKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
         }
 
         void EnsureChannelBuffer(int channelCount)
@@ -426,6 +490,7 @@ namespace VRSL.URP
             {
                 EnsureChannelBuffer(0);
                 EnsureSpinPhaseBuffer(0);
+                EnsureStrobePhaseBuffer(0);
                 ChannelCount = 0;
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
                 return;
@@ -434,6 +499,7 @@ namespace VRSL.URP
             count = Mathf.Min(count, channels.Length);
             EnsureChannelBuffer(count);
             EnsureSpinPhaseBuffer(count);
+            EnsureStrobePhaseBuffer(count);
 
             // SetData wants whole elements, so the tail of the last word is padded
             // rather than partially written. Those bytes are past the count the
@@ -748,8 +814,10 @@ namespace VRSL.URP
         {
             ChannelBuffer?.Release();       ChannelBuffer       = null;
             SpinPhaseBuffer?.Release();     SpinPhaseBuffer     = null;
+            StrobePhaseBuffer?.Release();   StrobePhaseBuffer   = null;
             ChannelCount = 0;
             _advanceKernel = -1;
+            _strobeKernel  = -1;
         }
 
 
