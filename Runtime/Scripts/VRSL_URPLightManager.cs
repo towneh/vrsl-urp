@@ -649,8 +649,7 @@ namespace VRSL.URP
                 for (int s = 0; s < length; s++) _flat[at + s] = values[b.valueOffset + s];
 
                 // Each universe advances its own clock, which runs at the time its
-                // values were latched rather than at the time they were rendered. A
-                // universe heard twice in one frame contributes the newer of the two.
+                // values were latched rather than at the time they were rendered.
                 double dataTime = now - b.ageMicroseconds * 1e-6;
                 if (!_dataTimeSeen[b.universe])
                 {
@@ -660,10 +659,17 @@ namespace VRSL.URP
                 double step = dataTime - _dataTime[b.universe];
                 if (step <= 0.0) continue;
 
-                // Capped so a universe resuming after a stall damps as if a second had
-                // passed rather than snapping, which is the difference between a head
-                // catching up and a head teleporting.
-                _universeStep[b.universe] = (float)System.Math.Min(step, MaxUniverseStep);
+                // Added rather than assigned. A universe can arrive as several runs in
+                // one frame, each carrying its own age, and the clock has to advance
+                // across all of them: assigning would leave only the gap between the
+                // last two and silently damp over less show time than the data spans.
+                // The step is cleared per frame above, so this stays frame-local.
+                //
+                // Capped after the addition so a universe resuming after a stall damps
+                // as if a second had passed rather than snapping, which is the
+                // difference between a head catching up and a head teleporting.
+                _universeStep[b.universe] =
+                    (float)System.Math.Min(_universeStep[b.universe] + step, MaxUniverseStep);
                 _dataTime[b.universe]     = dataTime;
             }
         }

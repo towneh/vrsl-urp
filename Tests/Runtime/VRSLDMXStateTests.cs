@@ -23,7 +23,7 @@ namespace VRSL.URP.Tests
         /// to zero rather than holding it.</summary>
         static float? SpinRate(int absChannel)
         {
-            float dmx = VRSL_SyntheticDMXChannelSource.RampValue(absChannel + 9) / 255f;
+            float dmx = VRSLDMXRig.RampAt(VRSLDMXRig.SpinChannel(absChannel));
             if (dmx < 0.01f) return null;
             return dmx > 0.5f ? -4f * (dmx - 0.5f) : 4f * dmx;
         }
@@ -33,8 +33,7 @@ namespace VRSL.URP.Tests
         /// claim of N12.</summary>
         static float Smoothness(int absChannel)
         {
-            int ch = ((absChannel - 1) / 13 + 1) * 13;
-            return VRSL_SyntheticDMXChannelSource.RampValue(ch - 1) / 255f;
+            return VRSLDMXRig.RampAt(VRSLDMXRig.SmoothnessChannel(absChannel));
         }
 
         static float SpinOf(VRSL_URPLightManager.VRSLLightData d) => d.spotParams.w;

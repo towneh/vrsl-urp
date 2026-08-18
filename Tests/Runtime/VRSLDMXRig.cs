@@ -41,6 +41,8 @@ namespace VRSL.URP.Tests
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
         public readonly List<VRStageLighting_DMX_RealtimeLight> Fixtures = new();
 
+        static readonly List<string> s_vrslErrors = new();
+
         GameObject    _root;
         Camera        _camera;
         RenderTexture _target;
@@ -52,6 +54,23 @@ namespace VRSL.URP.Tests
         /// rig's patch. Mirrors <c>ComputeAbsoluteChannel</c> for legacy sector
         /// mode so a prediction never has to ask the component it is checking.</summary>
         public static int ChannelOf(int i) => i * 13 + 1;
+
+        // VRSL's 13-channel layout, in one place. Spelling these offsets out per
+        // test class is how a row ends up asserting confidently against the wrong
+        // channel after the layout moves.
+        public static int DimmerChannel(int abs)     => abs + 5;
+        public static int StrobeChannel(int abs)     => abs + 6;
+        public static int RedChannel(int abs)        => abs + 7;
+        public static int SpinChannel(int abs)       => abs + 10;
+        /// <summary>Channel 13 of the fixture's own sector, which is where the
+        /// movement damping reads its smoothness from.</summary>
+        public static int SmoothnessChannel(int abs) => ((abs - 1) / 13 + 1) * 13;
+
+        /// <summary>The value the Ramp pattern puts on a 1-based channel.
+        /// <c>RampValue</c> is indexed from 0, and mixing the two up shifts every
+        /// prediction by one channel.</summary>
+        public static float RampAt(int channel)
+            => VRSL_SyntheticDMXChannelSource.RampValue(channel - 1) / 255f;
 
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true)
         {
@@ -67,9 +86,16 @@ namespace VRSL.URP.Tests
             // Without this the rows that step thousands of frames fail for a reason
             // that has nothing to do with them, while the short ones pass — which
             // reads as flakiness rather than as an unrelated log.
+            // The host project logs errors of its own, and the framework fails any
+            // test that sees one, so whichever row is running at that moment loses.
+            // Swapping Debug.unityLogger.logHandler does not catch them — the host
+            // logs through a logger of its own — so the framework's blanket switch is
+            // the only lever. What it costs is that a VRSL error would no longer fail
+            // a row by itself, so those are collected below and judged in teardown.
             LogAssert.ignoreFailingMessages = true;
 
             var rig = building = new VRSLDMXRig();
+            Application.logMessageReceived += rig.OnLog;
             rig._captureWas = Time.captureDeltaTime;
             Time.captureDeltaTime = FrameDelta;
 
@@ -213,11 +239,6 @@ namespace VRSL.URP.Tests
         {
             for (int i = 0; i < frames; i++)
             {
-                // Re-asserted every frame rather than once per test: the runner
-                // resets it at test boundaries, and the host project's error can
-                // arrive on any frame, so whichever row happens to be running when
-                // it does was the one that failed.
-                LogAssert.ignoreFailingMessages = true;
                 yield return null;
                 // Driven explicitly rather than left to the player loop. Batch mode
                 // renders nothing on its own, and the light data buffer is written
@@ -231,8 +252,18 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>Render one frame. For helpers that cannot yield
-        /// <see cref="Step"/> because they are already a level deep.</summary>
-        public void RenderFrame() => _camera.Render();
+        /// <see cref="Step"/> because they are already a level deep.
+        ///
+        /// Re-asserts the log suppression as well, because the runner resets it
+        /// around each yield and this is the other path frames are advanced by. Left
+        /// only in <see cref="Step"/>, the gap was every frame a sampling helper
+        /// drove — which is why the strobe rows, with the longest sampling loops,
+        /// were the ones that kept catching the host's error.</summary>
+        public void RenderFrame()
+        {
+            LogAssert.ignoreFailingMessages = true;
+            _camera.Render();
+        }
 
         /// <summary>Frames covering the given span of game time.</summary>
         public static int Frames(float seconds) => Mathf.RoundToInt(seconds / FrameDelta);
@@ -303,6 +334,24 @@ namespace VRSL.URP.Tests
             return values;
         }
 
+        void OnLog(string message, string stack, LogType type)
+        {
+            if (type != LogType.Error && type != LogType.Exception && type != LogType.Assert) return;
+            // Matched on the package's own log prefix, and deliberately not on the
+            // stack: the host's errors are raised during the render this rig drives,
+            // so their stack runs through it and a stack match flags every one of them
+            // as ours.
+            if (message.Contains("[VRSL"))
+                s_vrslErrors.Add($"{type}: {message}");
+        }
+
+        /// <summary>Errors VRSL itself logged while a rig was alive. The host
+        /// project's are not here; theirs are what the suppression is for. Static
+        /// because the teardown that judges them outlives any one rig.</summary>
+        public static IReadOnlyList<string> CollectedErrors => s_vrslErrors;
+
+        public static void ClearCollectedErrors() => s_vrslErrors.Clear();
+
         static void Assert(bool condition, string what)
         {
             if (!condition) throw new InvalidOperationException($"Test rig: {what}.");
@@ -312,6 +361,7 @@ namespace VRSL.URP.Tests
         {
             // Restoring this matters beyond the test: left set, captureDeltaTime
             // decouples the whole editor from real time.
+            Application.logMessageReceived -= OnLog;
             Time.captureDeltaTime = _captureWas;
             if (_root != null) UnityEngine.Object.DestroyImmediate(_root);
             _root = null;

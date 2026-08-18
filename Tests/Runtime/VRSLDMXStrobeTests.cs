@@ -23,7 +23,7 @@ namespace VRSL.URP.Tests
         // on and never strobes. Above 0.5 selects the high rate.
         static Bucket BucketOf(int absChannel)
         {
-            float dmx = VRSL_SyntheticDMXChannelSource.RampValue(absChannel + 5) / 255f;
+            float dmx = VRSLDMXRig.RampAt(VRSLDMXRig.StrobeChannel(absChannel));
             return dmx <= 0.2f ? Bucket.Held : dmx <= 0.5f ? Bucket.Medium : Bucket.High;
         }
 

@@ -73,6 +73,12 @@ namespace VRSL.URP
 
         public int UniverseCount => universes;
 
+        /// <summary>Frames this source has published since it was enabled. A rotating
+        /// source covers the flat space only after a full rotation, and nothing else
+        /// can tell a consumer how far through that it is: frames since play started
+        /// counts frames before the source existed.</summary>
+        public int PublishedFrames { get; private set; }
+
         /// <summary>The value the Ramp pattern puts at a given zero-based flat
         /// address. The validation harness compares against this, so it lives here
         /// rather than being written out twice. Padding reads 0 because no block
@@ -86,6 +92,7 @@ namespace VRSL.URP
 
         void OnEnable()
         {
+            PublishedFrames = 0;
             Allocate();
             var mgr = VRSL_URPLightManager.Instance;
             if (mgr != null) mgr.ChannelSource = this;
@@ -143,6 +150,7 @@ namespace VRSL.URP
                     ageMicroseconds = age,
                 };
             }
+            PublishedFrames++;
         }
 
         byte Value(int flat, int slot, float t)

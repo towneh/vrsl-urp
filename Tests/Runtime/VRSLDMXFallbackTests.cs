@@ -18,6 +18,11 @@ namespace VRSL.URP.Tests
         static Vector4[] Colours(VRSL_URPLightManager.VRSLLightData[] d)
             => d.Select(x => x.colorAndIntensity).ToArray();
 
+        /// <summary>Colour arrives through a half and intensity carries a
+        /// time-dependent strobe term, so neither row compares exactly. Well below a
+        /// byte step, so it still separates one channel from its neighbour.</summary>
+        const float SameDecode = 1e-4f;
+
         [UnityTest]
         public IEnumerator N2_fixtures_light_and_move_from_the_buffer_alone()
         {
@@ -73,7 +78,7 @@ namespace VRSL.URP.Tests
 
                 var after = Colours(rig.ReadLights());
                 bool changed = Enumerable.Range(0, VRSLDMXRig.FixtureCount)
-                                         .Any(i => published[i] != after[i]);
+                                         .Any(i => Vector4.Distance(published[i], after[i]) > SameDecode);
                 Assert.IsTrue(changed,
                     "the decode did not move when the source went away, so the fixtures latched "
                   + "at the buffer's last values instead of falling back");
@@ -106,7 +111,9 @@ namespace VRSL.URP.Tests
 
                 Assert.Greater(rig.Manager.ChannelCount, 0, "the source never took over");
                 var driven = Colours(rig.ReadLights());
-                Assert.IsTrue(Enumerable.Range(0, VRSLDMXRig.FixtureCount).Any(i => baseline[i] != driven[i]),
+                Assert.IsTrue(
+                    Enumerable.Range(0, VRSLDMXRig.FixtureCount)
+                              .Any(i => Vector4.Distance(baseline[i], driven[i]) > SameDecode),
                     "attaching a source changed nothing, so this row is not testing the handover");
 
                 rig.Manager.ChannelSource = null;
@@ -114,7 +121,7 @@ namespace VRSL.URP.Tests
 
                 var restored = Colours(rig.ReadLights());
                 for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)
-                    Assert.AreEqual(baseline[i], restored[i],
+                    Assert.Less(Vector4.Distance(baseline[i], restored[i]), SameDecode,
                         $"fixture {i} did not return to its no-source decode. Every existing scene "
                       + "is a no-source scene, so this is the regression that matters most");
             }

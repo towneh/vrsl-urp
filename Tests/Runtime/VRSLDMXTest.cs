@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -11,24 +12,33 @@ namespace VRSL.URP.Tests
     abstract class VRSLDMXTest
     {
         /// <summary>
-        /// The project these run in is a Basis client, and its own systems log errors
-        /// about a missing scene once they have been ticking for a while. The test
-        /// framework fails any test that sees an unhandled error log, which failed
-        /// the rows that step thousands of frames and left the short ones passing —
-        /// flakiness, to look at, and nothing to do with what they measure.
+        /// Suppression has to start before the test body, not just inside it. The rig
+        /// sets the same flag, but only once <c>Build</c> runs, which leaves the frames
+        /// between one row ending and the next one building unguarded — and that is
+        /// where the host project's error kept landing.
         ///
         /// <c>[UnitySetUp]</c> rather than <c>[SetUp]</c>: a plain setup runs before
-        /// the runner opens the log scope for a <c>[UnityTest]</c>, so the flag it
-        /// sets is discarded.
+        /// the runner opens the log scope for a <c>[UnityTest]</c>, so the flag it sets
+        /// is discarded. No frame is advanced here, because a frame yielded from setup
+        /// is itself outside the scope.
         /// </summary>
         [UnitySetUp]
         public IEnumerator IgnoreHostProjectLogs()
         {
             LogAssert.ignoreFailingMessages = true;
-            // No frame is advanced here on purpose. The runner resets the flag
-            // around setup, so a frame yielded from inside it is the one window
-            // where a host-project error can still land unguarded.
             yield break;
+        }
+
+        [TearDown]
+        public void FailOnVRSLErrors()
+        {
+            var errors = VRSLDMXRig.CollectedErrors;
+            string joined = string.Join(" | ", errors);
+            VRSLDMXRig.ClearCollectedErrors();
+            // The blanket suppression above is what lets the host project's logs
+            // through; this puts the package's own back. Without it a row could go
+            // green while VRSL was reporting a shader that failed to compile.
+            Assert.IsEmpty(joined, $"VRSL logged errors during this row: {joined}");
         }
 
         /// <summary>Half a byte step. Channel values arrive as bytes, so anything

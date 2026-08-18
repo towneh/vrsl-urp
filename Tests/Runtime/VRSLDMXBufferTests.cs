@@ -187,15 +187,22 @@ namespace VRSL.URP.Tests
                 yield return rig.Step(3);
                 var whole = rig.ReadLights();
 
+                var baseline = rig.ReadChannels();
                 rig.Source.rotateUniverses = true;
-                // One universe per frame, so a full sweep plus a margin.
-                yield return rig.Step(rig.Source.universes * 3);
 
-                var read = rig.ReadChannels();
-                for (int i = 0; i < read.Length; i++)
-                    Assert.AreEqual(VRSL_SyntheticDMXChannelSource.RampValue(i) / 255f, read[i], Half,
-                        $"channel {i + 1} lost its value under rotation, so the manager is "
-                      + "rebuilding the flat space rather than keeping what it was told");
+                // Checked after every frame rather than after whole sweeps. A manager
+                // that cleared the flat space at the start of a sweep and refilled it
+                // before the last frame would pass a check that only looked at the end,
+                // and that is exactly the fault this row exists to catch.
+                for (int frame = 0; frame < rig.Source.universes * 3; frame++)
+                {
+                    yield return rig.Step(1);
+                    var partial = rig.ReadChannels();
+                    for (int i = 0; i < partial.Length; i++)
+                        Assert.AreEqual(baseline[i], partial[i], Half,
+                            $"channel {i + 1} lost its value on frame {frame} of rotation, so the "
+                          + "manager is rebuilding the flat space rather than keeping what it was told");
+                }
 
                 var rotated = rig.ReadLights();
                 for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)

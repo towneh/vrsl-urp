@@ -473,17 +473,19 @@ void AdvanceMovement(uint3 id : SV_DispatchThreadID)
     // This universe's own elapsed show time, which is zero on a frame where nothing
     // arrived for it. The frame delta stands in when no source published a step,
     // which keeps a scene reading the CRT chain behaving as it did.
-    uint  universe = index / VRSLU_SLOTS_PER_UNIVERSE;
-    float step     = (universe < _VRSLU_UniverseCount) ? _VRSLU_UniverseStep[universe]
-                                                       : _VRSLU_DeltaTime;
+    // Named for its unit, and not `step`, which is an HLSL intrinsic.
+    uint  universe    = index / VRSLU_SLOTS_PER_UNIVERSE;
+    float stepSeconds = (universe < _VRSLU_UniverseCount) ? _VRSLU_UniverseStep[universe]
+                                                          : _VRSLU_DeltaTime;
 
     float smoothing = lerp(saturate(_VRSLU_MoveSmooth.x), saturate(_VRSLU_MoveSmooth.y), dmxS);
     float prev      = _VRSLU_DMXMovement[index];
     // Skipped rather than folded into the lerp: pow(0, 0) is a NaN, and a NaN written
     // here stays in the buffer for the rest of the session because the next frame
     // reads it back.
-    float damped    = (step > 0.0) ? lerp(prev, target, 1.0 - pow(saturate(smoothing), step))
-                                   : prev;
+    float damped    = (stepSeconds > 0.0)
+                    ? lerp(prev, target, 1.0 - pow(saturate(smoothing), stepSeconds))
+                    : prev;
     // The CRT's own second pull, which runs per frame rather than per snapshot: a
     // fixture asking for little smoothing is also dragged towards the raw value, so a
     // universe that stops arriving keeps creeping to its last target instead of

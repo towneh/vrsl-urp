@@ -68,7 +68,12 @@ namespace VRSL.URP.EditorScripts
             // source fills the flat space over as many frames as it has universes. Run
             // before that and the universes still waiting read 0, which is a timing
             // artefact rather than a packing fault.
-            if (source.rotateUniverses && Time.frameCount < source.universes)
+            //
+            // Counted on the source rather than from Time.frameCount, which counts
+            // frames since play began: a source enabled late, or one whose universe
+            // count was raised at runtime, would pass that guard with the flat space
+            // still half empty and fail validation as a packing fault.
+            if (source.rotateUniverses && source.PublishedFrames < source.universes)
             {
                 Debug.LogWarning("[VRSL URP] The source is rotating universes and has not published all "
                                + $"{source.universes} of them yet. Let it run a moment and validate again.");

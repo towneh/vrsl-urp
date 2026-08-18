@@ -43,7 +43,7 @@ namespace VRSL.URP.Tests
                 for (int i = 0; i < rig.Fixtures.Count && i < 6; i++)
                 {
                     int ch = VRSLDMXRig.ChannelOf(i);
-                    float want = VRSL_SyntheticDMXChannelSource.RampValue(ch + 6) / 255f;
+                    float want = VRSLDMXRig.RampAt(VRSLDMXRig.RedChannel(ch));
                     sb.AppendLine($"[VRSL DIAG] fixture {i} ch {ch} sector={rig.Fixtures[i].sector} "
                                 + $"abs={rig.Fixtures[i].ComputeAbsoluteChannel()} wantRed={want:F4}");
                 }
