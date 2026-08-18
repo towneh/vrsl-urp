@@ -370,6 +370,14 @@ namespace VRSL.URP
 
         void OnEnable()
         {
+            // Awake claims the singleton and OnDisable releases it, but Awake does not
+            // run again on re-enable, so a component toggled off and on used to leave
+            // Instance null for the rest of the session. Everything that reaches the
+            // manager goes through Instance — the render passes, and any
+            // IVRSLDMXChannelSource registering itself — so the whole DMX path went
+            // quiet with no error. Re-claim it here, and only when it is free, so a
+            // second manager that took ownership meanwhile keeps it.
+            if (Instance == null) Instance = this;
             CreateTextureHandles();
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would
