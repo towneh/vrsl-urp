@@ -32,7 +32,33 @@ importer asks for, not the full keyword matrix. Errors confined to a variant onl
 scene requests can still get through. It reliably catches base-variant failures, which
 includes anything structural.
 
-### 2. Diagnostics
+### 2. The DMX suite
+
+The rows in **DMX channel buffer** below are implemented as PlayMode tests and should be
+run rather than performed by hand:
+
+```
+.compilecheck/tests.sh          # headless; needs the editor closed and a real GPU
+```
+
+or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite builds its own
+rig in code, so it needs neither the profiling sample nor a hand-authored scene.
+
+The rows are still written out in full below, because they are the specification the tests
+implement and because a failure message is only useful next to the claim it belongs to. Do
+them by hand when you need to see something on screen, or when a test fails and you want to
+watch what it was looking at.
+
+**`-nographics` is not an option.** What is under test is compute kernels, so the run needs
+a graphics device; a null device fails on the first dispatch.
+
+**The suite captures time rather than measuring it.** `Time.captureDeltaTime` makes every
+frame advance a fixed slice of game time however fast the machine renders, so a wait is a
+frame count and a run is reproducible. The movement rows need that: judged against
+wall-clock they are repeatable to a second or two at best, which is coarser than the
+effects they exist to separate.
+
+### 3. Diagnostics
 
 Right-click either light manager in play mode → **VRSL Diagnostics**. Reports shader compile
 state, decoded light data, tile-cull statistics, prepass configuration and camera mode.
@@ -151,7 +177,7 @@ delivered every frame.
 | N2 | D | Same source in Fixtures mode, no video and no capture camera running | Fixtures **light** from the buffer alone: `Log Decoded Fixture Light Data` shows non-zero intensity and the buffer's colours. They do **not** move from it. Colour, intensity, cone, gobo selection, movement, spin and strobe all read the buffer, so the fixtures light **and** move from it with no CRT chain involved |
 | N3 | D | Fixtures mode, then disable the source component mid-cue | Fixtures fall back to the CRT chain within a frame rather than latching or going dark |
 | N4 | D | No channel source anywhere in the scene | Decode is bit-identical to the texture path — this is every existing scene |
-| N5 | D | Source publishing fewer channels than a fixture is patched at — profiling scene, `universes = 1`, so 520 slots against a patch running to 638 | Sectors 40-49 read 0 and go dark, 10 fixtures. They read 0 rather than another fixture's values, which is the point of the row. Sector 39 goes dark too, for a different reason: it spans flat 508-520, so its upper channels sit in the inter-universe padding, which no block covers because no desk can address it. Its lower channels still hold real values, so it reads dark rather than absent. No real desk can patch a 13-channel fixture there — it would straddle the 512 boundary — so treat sector 39 as a dead zone rather than a case to make work |
+| N5 | D | Source publishing fewer channels than a fixture is patched at — profiling scene, `universes = 1`, so 520 slots against a patch running to 638 | Sectors 40-49 read 0 and go dark, 10 fixtures. They read 0 rather than another fixture's values, which is the point of the row. Sector 39 goes dark too, for a different reason: it spans flat 508-520, so its colour channels sit in the inter-universe padding, which no block covers because no desk can address it. **`dir` is what separates the two**, since both now read zero colour: sector 39's pan channel at flat 508 is a real published slot and gives it a direction of its own, while sectors 40-49 have no pan or tilt to read and must all share one. No real desk can patch a 13-channel fixture at sector 39 — it would straddle the 512 boundary — so treat it as a dead zone rather than a case to make work |
 | N6 | D | Profiling scene, source in UniverseSlot mode with `universes = 2`. Compare fixture (000) at absolute channel 1 against fixture (040) at 521 | Both decode **identically** — rgb `0.027, 0.031, 0.035`. Legacy sector 40 is the first slot of the second universe, so it must read what sector 0 reads. Reading `0.059, 0.063, 0.067` instead means the source packed 512 to a universe and every fixture past the first universe is 8 channels early |
 | N7 | D | Add one fixture with `useLegacySectorMode = false`, `dmxUniverse = 2`, `dmxChannel = 1`, same source and pattern | It decodes the same as fixture (040) above. Confirms the two addressing modes agree on where universe 2 begins, since `1 + 520` and `40 * 13 + 1` must both land on flat 521 |
 | N9 | D | Profiling scene, channel source on Ramp, `universes = 4`, manager strobe left on Static. `Log Decoded Fixture Light Data` three or four times | Judge on the **`active` flag**, not on printed intensity: under Ramp these fixtures have low dimmers and print `intensity=0.00` while genuinely lit, because the log formats to two decimals. Fixtures whose strobe channel is at or below 0.2 must read `active=1` in **every** sample. The rest must read `active=0` in at least one sample **and** `active=1` in at least one — the second half separates a strobing fixture from one that is dark for some other reason. Which fixtures fall either side depends on the count, since the ramp value at `absChannel + 6` decides it: at 10 fixtures it is a single split, (000)-(003) held and (004)-(009) strobing; at 50 the pattern repeats three times as the ramp wraps at 251. No timing precision is needed, only repetition. At 50 fixtures the patch splits three ways instead of two and the extra group is the point: the medium and high buckets must **disagree** in at least one sample, which is what proves they run at different rates. Ten fixtures cannot test it, because every strobing one falls in the medium bucket. Within a bucket every fixture must read identically at the same instant, wherever it sits on the truss. Beware that `active` also goes to 0 when a fixture is too dim to emit at all (`colorMax > 6/255`): under Ramp at 50 fixtures channel 248 is below that gate and reads 0 in every sample. A strobing fixture alternates, a too-dim one is constant, so repetition separates them |
@@ -160,7 +186,7 @@ delivered every frame.
 | N12 | D | Set both `movementSmoothingMax` and `movementSmoothingMin` to 0.99, re-enter Play so the buffers zero, then log at about two seconds and again at thirty | How far each fixture has travelled must follow its own smoothness channel, which is channel 13 of its sector — `absChannel + 12`. At the shipped defaults the time constants span only 0.14 s to 0.82 s and everything settles before a person can click twice; at 0.99 they span 0.17 s to 9.6 s, a factor of 56. Expect (016), (017), (018), (036), (037) identical in both samples, and (000), (019), (038), (039) visibly different, with (038) still a tenth short even at thirty seconds. Restore the defaults afterwards |
 | N8 | D | Profiling scene, channel source on Ramp, `universes = 4`. `Log Decoded Fixture Light Data` twice about ten seconds apart and compare the `spin` field | Every fixture's spin advances at `4 * (dmx > 0.5 ? dmx - 0.5 : dmx)` rad/s, negative above 0.5, wrapped to +-2pi. Solve the elapsed time from one slow fixture and the same figure must predict all the others, wraps included. Signs must follow the direction bit with no timing needed: above 0.5 spins backwards. All spins reading 0.0000 usually means the fixtures have gobo spin disabled (`cfg.panSettings.w`), not that the integrator is dead |
 | N13 | D | Profiling scene, channel source on Ramp, `universes = 4`, tick **Rotate Universes**. Let it run a second, then `VRSL → URP → Validate DMX Channel Buffer` and log the fixtures | PASS on every channel, and all 50 fixtures lit as they are without rotation. Only one universe is published per frame, so this is the row that proves the manager keeps what it was last told rather than re-uploading whatever arrived: if the flat space were rebuilt each frame, three universes in four would read 0 and the fixtures above sector 39 would flicker dark. Validating in the first few frames warns rather than fails — the source has not been round the rotation yet |
-| N14 | D | Two runs to compare. Set both `movementSmoothingMax` and `movementSmoothingMin` to 0.99 as in N12. Run A: Ramp, `universes = 4`, rotation off, log `dir` at about thirty seconds. Run B: identical but with **Rotate Universes** ticked. Restore the defaults afterwards | The two runs must land in the **same place**, fixture for fixture, to about a hundredth of a radian. Rotation quarters how often a universe is heard, and each snapshot then spans four frames of show time instead of one, so the damping advances by the same total either way. A run B that is visibly short of run A means the step is still the frame delta and a universe is being smoothed four times over data that moved once. A run B that overshoots or jitters means the age is being used as the step itself rather than as the interval between snapshots |
+| N14 | D | Three runs at `movementSmoothingMax` and `movementSmoothingMin` of 0.99, Ramp, `universes = 4`, each sampled at the same elapsed time mid-convergence. **A**: age 0, rotation off. **B**: age 200 ms, rotation off. **C**: age 0, rotation on | **B and C must both reproduce A**, fixture for fixture. A constant age shifts a universe's clock at both ends of the subtraction and so changes no step at all, which makes B an exact repeat of A. Rotation gives a universe one step of four frames instead of four of one — the same total, because the damping and the CRT's pull are both contractions of the same error and contractions commute. Age used as the timestep would put B roughly twelve times ahead and fully settled; a step that advanced only one frame per arrival would leave C four times behind. The row also has to check that something was still moving at the sample point: three settled runs agree whatever the step was. **Do this one through the suite.** Hand-timing is repeatable to a second or two, and the gap that opens between correct and incorrect behaviour in that window is smaller than the gap hand-timing introduces — a manual attempt at this row cannot separate them |
 
 ### Basis video → DMX (optional integration)
 
