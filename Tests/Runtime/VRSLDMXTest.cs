@@ -1,8 +1,5 @@
-using System.Collections;
-using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools;
 
 namespace VRSL.URP.Tests
 {
@@ -11,35 +8,15 @@ namespace VRSL.URP.Tests
     /// </summary>
     abstract class VRSLDMXTest
     {
-        /// <summary>
-        /// Suppression has to start before the test body, not just inside it. The rig
-        /// sets the same flag, but only once <c>Build</c> runs, which leaves the frames
-        /// between one row ending and the next one building unguarded — and that is
-        /// where the host project's error kept landing.
-        ///
-        /// <c>[UnitySetUp]</c> rather than <c>[SetUp]</c>: a plain setup runs before
-        /// the runner opens the log scope for a <c>[UnityTest]</c>, so the flag it sets
-        /// is discarded. No frame is advanced here, because a frame yielded from setup
-        /// is itself outside the scope.
-        /// </summary>
-        [UnitySetUp]
-        public IEnumerator IgnoreHostProjectLogs()
-        {
-            LogAssert.ignoreFailingMessages = true;
-            yield break;
-        }
+        // The host's own logging is off for the fixture's life, so the only
+        // errors a row can see are the package's, and those fail it the ordinary
+        // way. Once per fixture rather than per row: the host logs between rows
+        // too, and a message outside any row's scope is nobody's failure.
+        [OneTimeSetUp]
+        public void QuietTheHost() => VRSLHostQuiet.Silence();
 
-        [TearDown]
-        public void FailOnVRSLErrors()
-        {
-            var errors = VRSLDMXRig.CollectedErrors;
-            string joined = string.Join(" | ", errors);
-            VRSLDMXRig.ClearCollectedErrors();
-            // The blanket suppression above is what lets the host project's logs
-            // through; this puts the package's own back. Without it a row could go
-            // green while VRSL was reporting a shader that failed to compile.
-            Assert.IsEmpty(joined, $"VRSL logged errors during this row: {joined}");
-        }
+        [OneTimeTearDown]
+        public void LetTheHostSpeak() => VRSLHostQuiet.Restore();
 
         /// <summary>Half a byte step. Channel values arrive as bytes, so anything
         /// smaller than this is float representation and anything larger is a

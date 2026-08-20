@@ -14,6 +14,14 @@ namespace VRSL.URP.Tests
     /// </summary>
     class VRSLTrussDmxTests
     {
+        // Nothing here yields, so the host cannot log inside a row; the frames
+        // between rows are still this fixture's, so it is quietened like the rest.
+        [OneTimeSetUp]
+        public void QuietTheHost() => VRSLHostQuiet.Silence();
+
+        [OneTimeTearDown]
+        public void LetTheHostSpeak() => VRSLHostQuiet.Restore();
+
         struct Block
         {
             public int universe, start; public uint age; public byte[] values;
