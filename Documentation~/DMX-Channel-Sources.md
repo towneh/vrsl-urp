@@ -104,6 +104,13 @@ transcode: a path that re-encodes the video drops the lane entirely and silently
 because the picture keeps working. A remux that runs bitstream filters over the
 video can also strip or rewrite it.
 
+The same rule decides whether a **recording** keeps the lane. A recorder that copies
+the stream (`ffmpeg -c copy`, a server's recording feature, a remuxed capture) keeps
+every record, MP4 included: the MP4 sample holds the whole access unit, and the
+player's MP4 demuxer hands the SEI to the same scan as the TS path. A recorder that
+re-encodes (a capture of the screen, a "convert" step, an encoder recording its own
+canvas) loses it like a transcoding CDN does.
+
 So when nothing lights:
 
 | Symptom | Likely cause |

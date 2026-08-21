@@ -18,7 +18,7 @@ namespace VRSL.URP.Tests
     /// https://mr.town/vod/, and <c>VRSL_TRUSS_FIXTURES</c> points these rows at a
     /// local directory or another URL base instead.
     ///
-    /// Rows B7, B8 and the dropped half of B9 in TESTING.md.
+    /// Rows B7 to B11 in TESTING.md.
     /// </summary>
     class VRSLBasisUserDataTests : VRSLDMXTest
     {
@@ -178,6 +178,62 @@ namespace VRSL.URP.Tests
                 rig.Scene.Dispose();
             }
         }
+
+        /// <summary>Step real frames until the player has decoded at least
+        /// <paramref name="frames"/> video frames, or the clock runs out. For the
+        /// rows where no records are expected, so "the video plays" has to be
+        /// established some other way.</summary>
+        static IEnumerator UntilFrames(Rig rig, ulong frames)
+        {
+            float started = Time.realtimeSinceStartup;
+            while (rig.Player.FramesDecoded < frames)
+            {
+                Assert.AreNotEqual(BmState.Error, rig.Player.State,
+                    $"the player errored ({rig.Player.ErrorCode})");
+                Assert.Less(Time.realtimeSinceStartup - started, RealSecondsLimit,
+                    $"{rig.Player.FramesDecoded} frames decoded in {RealSecondsLimit:F0} s; wanted {frames}");
+                yield return rig.Scene.Step(1);
+            }
+        }
+
+        IEnumerator NothingArrivesAndNothingIsSaid(string fixture)
+        {
+            var rig = Open(Fixture(fixture));
+            try
+            {
+                // Well into the file: a lane that was going to deliver would have.
+                yield return UntilFrames(rig, 120);
+                Assert.AreEqual(0u, rig.Source.RecordsDecoded, "no records on this path");
+                Assert.AreEqual(0u, rig.Source.RecordsDropped,
+                    "nothing to drop either: the lane is absent, not damaged");
+                Assert.AreEqual(VRSLTrussDmx.Result.Ok, rig.Source.LastResult);
+                Assert.AreEqual(BaseUniverses, rig.Source.UniverseCount,
+                    "the buffer stays at the configured size");
+                Assert.Greater(rig.Player.FramesPresented, 0UL, "the picture itself plays");
+            }
+            finally
+            {
+                rig.Player.Close();
+                rig.Scene.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// A path that re-encodes the video loses the SEI. The picture keeps
+        /// working, so the only sign is the counters staying at zero; the row
+        /// also checks nothing is logged as a drop, since "stripped" and "damaged"
+        /// are different faults. x264's own build-string message survives (it is
+        /// the encoder's), under its own UUID, and is ignored.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator B10_a_transcoded_path_delivers_nothing_and_says_nothing()
+            => NothingArrivesAndNothingIsSaid("truss-dmx-ramp-transcoded.ts");
+
+        /// <summary>A remux that removes SEI NALs (`filter_units=remove_types=6`)
+        /// reads the same way as a transcode from here.</summary>
+        [UnityTest]
+        public IEnumerator B10_a_remux_that_strips_sei_delivers_nothing_and_says_nothing()
+            => NothingArrivesAndNothingIsSaid("truss-dmx-ramp-stripped.ts");
 
         /// <summary>
         /// The same checks against a live lane rather than a file: Art-Net into a
