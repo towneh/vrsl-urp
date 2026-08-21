@@ -268,11 +268,34 @@ player cannot surface user data. It is what VRSL has always used and it goes
 everywhere video goes.
 
 Sending both is a reasonable answer for a stream that has to work on paths you do
-not control. The manager reads whichever channel source is assigned and falls back
-to the grid when there is none, so a consumer can prefer the records and drop to the
-picture on a transcoding path without the fixtures noticing. [`DMX-Monitor.md`](DMX-Monitor.md)
-names which of the two is live at any moment, which is the thing to check first when
-the values look wrong rather than absent.
+not control, but read the next section before treating it as a safety net: the
+fallback is not automatic. [`DMX-Monitor.md`](DMX-Monitor.md) names which of the two
+is live at any moment, which is the thing to check first when the values look wrong
+rather than absent.
+
+### When both are present
+
+The **records win, always**. The manager reads the channel buffer whenever a channel
+source is publishing, and takes the grid only when none is. `MainChannel` in the
+compute is the whole decision: a non-zero channel count reads the buffer, and zero
+reads the texture. `BasisVideoRenderTextureOutput` is not a channel source at all,
+it only writes the RAW grid RT, so with both hooked up the picture path keeps
+running and nothing reads it.
+
+That holds **whether or not any records have arrived**, which is the part worth
+knowing. `BasisUserDataToVRSLDMX` reports at least `minimumUniverses` from the
+moment it is enabled, so the manager allocates that many universes and the channel
+count never falls to zero. On a path that re-encodes the video, where no record ever
+arrives, the buffer is a block of zeros and the fixtures read it: **the rig goes dark
+rather than falling back to the grid**. A lane that delivers and then stops is
+different again, since the manager keeps what it was last told, so the rig freezes
+on the last snapshot instead.
+
+Falling back is therefore something a scene has to do rather than something it gets.
+Disabling or removing the channel source hands the fixtures to the grid within a
+frame, which is what a consumer wanting the records with the picture as a backstop
+has to arrange for itself, keyed on `RecordsDecoded` staying at zero. Setting
+`minimumUniverses` to 0 does not do it: the count is clamped to at least one.
 
 ## Writing your own channel source
 

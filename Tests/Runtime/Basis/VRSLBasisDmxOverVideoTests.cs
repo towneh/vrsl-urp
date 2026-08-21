@@ -407,9 +407,14 @@ namespace VRSL.URP.Tests
                 Debug.Log($"N25: records at offset {fromRecords}, picture at {fromPicture}, "
                         + $"{frames:F1} frames apart");
 
+                // ReadChannels binds the manager's own channel count, so it takes
+                // whichever branch MainChannel would take for a fixture. With both
+                // feeds live it comes back exact, including on the channels the
+                // texture accessor shifts, which is what says the records win.
                 CollectionAssert.IsEmpty(
                     Disagreeing(buffer, fromRecords, Channels, Half * 255f, "records"),
-                    "the record path disagrees with itself");
+                    "with both feeds live the fixtures must read the records, and this "
+                  + "is the grid's shifted channels showing up in what they read");
                 AssertPictureReadsTheRamp(grid, fromPicture, "beside the records");
                 Assert.LessOrEqual(Mathf.Abs(frames), 2f,
                     "the two paths are further apart in time than the CRT's damping accounts for");
