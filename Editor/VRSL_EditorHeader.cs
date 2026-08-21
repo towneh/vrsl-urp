@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.IO;
 using UnityEditor;
+using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 using UnityEngine;
 
 namespace VRSL.URP
@@ -13,11 +14,10 @@ namespace VRSL.URP
     internal static class VRSL_EditorHeader
     {
         static Texture _logo;
-        static bool    _logoSearched;
 
         const string LogoPath =
             "Packages/town.mr.vrsl-urp/Runtime/Prefabs/Media/VRStageLighting-Logo.png";
-        const string LogoName = "VRStageLighting-Logo";
+        const string LogoLeaf = "Runtime/Prefabs/Media/VRStageLighting-Logo.png";
 
         /// <summary>Draws the logo + version bar with trailing spacing. Use as the
         /// first call inside an inspector's OnInspectorGUI.</summary>
@@ -32,7 +32,10 @@ namespace VRSL.URP
         /// <summary>Draws the VRSL logo centered at the top of an inspector.</summary>
         public static void DrawLogo()
         {
-            if (_logo == null && !_logoSearched) { _logo = LoadLogo(); _logoSearched = true; }
+            // Retried whenever it is missing rather than cached as absent: an
+            // inspector can draw before the import that brings the asset in, and
+            // both lookups behind this are dictionary hits rather than searches.
+            if (_logo == null) _logo = LoadLogo();
             // No blank 140-pixel hole where a missing logo would have gone.
             if (_logo == null) return;
 
@@ -54,15 +57,14 @@ namespace VRSL.URP
         {
             var tex = AssetDatabase.LoadAssetAtPath<Texture>(LogoPath);
             if (tex != null) return tex;
-            // An embedded or relocated copy of the package still resolves by name.
-            foreach (string guid in AssetDatabase.FindAssets($"{LogoName} t:Texture"))
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (Path.GetFileNameWithoutExtension(path) != LogoName) continue;
-                tex = AssetDatabase.LoadAssetAtPath<Texture>(path);
-                if (tex != null) return tex;
-            }
-            return null;
+
+            // A relocated or embedded copy of the package answers for itself.
+            // Searching the project by name would reach into Assets as well and
+            // pick up anything a user happened to name the same, in an order
+            // Unity does not promise.
+            var pkg = PackageInfo.FindForAssembly(typeof(VRSL_EditorHeader).Assembly);
+            if (pkg == null || string.IsNullOrEmpty(pkg.assetPath)) return null;
+            return AssetDatabase.LoadAssetAtPath<Texture>(pkg.assetPath + "/" + LogoLeaf);
         }
 
         /// <summary>Returns the rich-text version string read from VERSION.txt.</summary>
