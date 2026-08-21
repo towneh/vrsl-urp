@@ -13,6 +13,11 @@ namespace VRSL.URP
     internal static class VRSL_EditorHeader
     {
         static Texture _logo;
+        static bool    _logoSearched;
+
+        const string LogoPath =
+            "Packages/town.mr.vrsl-urp/Runtime/Prefabs/Media/VRStageLighting-Logo.png";
+        const string LogoName = "VRStageLighting-Logo";
 
         /// <summary>Draws the logo + version bar with trailing spacing. Use as the
         /// first call inside an inspector's OnInspectorGUI.</summary>
@@ -27,8 +32,9 @@ namespace VRSL.URP
         /// <summary>Draws the VRSL logo centered at the top of an inspector.</summary>
         public static void DrawLogo()
         {
-            if (_logo == null)
-                _logo = Resources.Load("VRStageLighting-Logo") as Texture;
+            if (_logo == null && !_logoSearched) { _logo = LoadLogo(); _logoSearched = true; }
+            // No blank 140-pixel hole where a missing logo would have gone.
+            if (_logo == null) return;
 
             var style = new GUIStyle(EditorStyles.label)
             {
@@ -38,6 +44,25 @@ namespace VRSL.URP
             };
             var rect = GUILayoutUtility.GetRect(300f, 140f, style);
             GUI.Box(rect, _logo, style);
+        }
+
+        /// <summary>The logo, by asset path rather than through Resources. The
+        /// package carries one copy of it and that copy is not in a Resources
+        /// folder, so a Resources lookup finds nothing however it is spelled.
+        /// Editor-only code, so the asset database is the right way to ask.</summary>
+        static Texture LoadLogo()
+        {
+            var tex = AssetDatabase.LoadAssetAtPath<Texture>(LogoPath);
+            if (tex != null) return tex;
+            // An embedded or relocated copy of the package still resolves by name.
+            foreach (string guid in AssetDatabase.FindAssets($"{LogoName} t:Texture"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (Path.GetFileNameWithoutExtension(path) != LogoName) continue;
+                tex = AssetDatabase.LoadAssetAtPath<Texture>(path);
+                if (tex != null) return tex;
+            }
+            return null;
         }
 
         /// <summary>Returns the rich-text version string read from VERSION.txt.</summary>
