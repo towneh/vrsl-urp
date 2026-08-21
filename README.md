@@ -52,7 +52,7 @@ Nothing else to configure. The package never reads, writes, or recommends URP as
 
 3. Drop in URP fixture prefabs from `Runtime/Prefabs/DMX/` or `Runtime/Prefabs/AudioLink/`, or add `VRStageLighting_DMX_RealtimeLight` / `VRStageLighting_AudioLink_RealtimeLight` to your own fixture geometry.
 
-4. For an AudioLink rig, **VRSL → URP → Setup AudioLink Realtime Lights in Scene** adds and wires the component on every AudioLink mover spotlight in one pass.
+4. For an AudioLink rig, **VRSL → URP → AudioLink Config → Setup AudioLink Realtime Lights in Scene** adds and wires the component on every AudioLink mover spotlight in one pass.
 
 Per-field authoring is in the [fixture configuration guide](Documentation~/URP-Fixture-Configuration-Guide.md).
 

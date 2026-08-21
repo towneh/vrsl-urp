@@ -96,7 +96,7 @@ namespace VRSL.URP.EditorScripts
         // Position-equality tolerance for idempotency check (1mm).
         const float POSITION_EPSILON_SQR = 0.001f * 0.001f;
 
-        [MenuItem(MENU_PATH)]
+        [MenuItem(MENU_PATH, false, 120)]
         static void Run()
         {
             var scene = SceneManager.GetActiveScene();
@@ -181,7 +181,7 @@ namespace VRSL.URP.EditorScripts
         /// Idempotent: a fixture that already has the URP twin is skipped, and material swaps key
         /// on the shader namespace (VRSL/… → VRSL-URP/…) so a second run is a no-op.
         /// </summary>
-        [MenuItem(MENU_PATH_INPLACE)]
+        [MenuItem(MENU_PATH_INPLACE, false, 121)]
         static void RunInPlace()
         {
             var scene = SceneManager.GetActiveScene();

@@ -22,7 +22,7 @@ Two menu utilities under `VRSL → URP` cover scene-level setup. Both are idempo
 | Menu | Effect |
 |---|---|
 | **VRSL → URP → Add Light Manager to Active Scene** | Creates a `VRSL URP Light Manager` GameObject in the active scene with the compute, light-cull, lighting, surface-properties and volumetric shader references assigned. |
-| **VRSL → URP → Setup AudioLink Realtime Lights in Scene** | Adds `VRStageLighting_AudioLink_RealtimeLight` to every AudioLink mover spotlight in the active scene and wires up pan/tilt transforms. |
+| **VRSL → URP → AudioLink Config → Setup AudioLink Realtime Lights in Scene** | Adds `VRStageLighting_AudioLink_RealtimeLight` to every AudioLink mover spotlight in the active scene and wires up pan/tilt transforms. |
 
 The managers inject their render passes at runtime via `RenderPipelineManager.beginCameraRendering`, so there is no `ScriptableRendererFeature` to add to the URP Renderer asset. This is what lets the package work in environments where users don't author the renderer asset (notably VRChat worlds, where the renderer is owned by the VRChat client).
 

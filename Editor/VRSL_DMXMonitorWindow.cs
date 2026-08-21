@@ -98,7 +98,7 @@ namespace VRSL.URP.EditorScripts
         };
         static readonly string[] Roles5 = { "dimmer", "red", "green", "blue", "strobe" };
 
-        [MenuItem("VRSL/URP/DMX Monitor", false, 401)]
+        [MenuItem("VRSL/URP/DMX Config/DMX Monitor", false, 220)]
         public static void Open()
         {
             var window = GetWindow<VRSL_DMXMonitorWindow>();

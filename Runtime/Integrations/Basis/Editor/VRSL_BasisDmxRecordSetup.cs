@@ -14,12 +14,12 @@ namespace VRSL.URP.BasisIntegration
     /// </summary>
     static class VRSL_BasisDmxRecordSetup
     {
-        const string Menu = "VRSL/URP/Add Basis DMX Record Source (SEI)";
+        const string Menu = "VRSL/URP/DMX Config/Add Basis DMX Record Source (SEI)";
 
-        [MenuItem(Menu, true, 403)]
+        [MenuItem(Menu, true, 201)]
         static bool Validate() => Selection.activeGameObject != null;
 
-        [MenuItem(Menu, false, 403)]
+        [MenuItem(Menu, false, 201)]
         static void AddAndBind()
         {
             var go = Selection.activeGameObject;

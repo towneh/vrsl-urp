@@ -3,7 +3,7 @@
 A live view of every channel in a universe, shaded by value, read from whichever DMX
 source is actually driving the scene.
 
-**VRSL → URP → DMX Monitor.** It opens as an ordinary editor window, so it docks beside
+**VRSL → URP → DMX Config → DMX Monitor.** It opens as an ordinary editor window, so it docks beside
 the Inspector or tears off to float, whichever suits.
 
 ## What it's for
@@ -85,7 +85,7 @@ list is rebuilt when the hierarchy changes, not per frame.
 On the buffer path only, **Verify** additionally reads the channels back through the
 compute shader and compares them against what the source published. It catches a packing
 or indexing fault against live data, where
-`VRSL → URP → Validate DMX Channel Buffer` only checks against the synthetic source's Ramp
+`VRSL → URP → DMX Config → Validate DMX Channel Buffer` only checks against the synthetic source's Ramp
 pattern.
 
 It costs a dispatch and a readback per sample, so it is off by default.

@@ -24,7 +24,7 @@ namespace VRSL.URP.EditorScripts
         const string BASE_NAME = "MoverLightMesh-LampFixture-Base";
         const string HEAD_NAME = "MoverLightMesh-LampFixture-Head";
 
-        [MenuItem("VRSL/URP/Setup AudioLink Realtime Lights in Scene")]
+        [MenuItem("VRSL/URP/AudioLink Config/Setup AudioLink Realtime Lights in Scene", false, 300)]
         static void SetupAudioLinkURPLights()
         {
             var roots = FindMoverRoots(out var headMap, out var baseMap);

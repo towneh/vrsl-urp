@@ -27,7 +27,7 @@ namespace VRSL.URP.EditorScripts
         const string Menu        = "VRSL/URP/Validate Shaders";
         const string PackageRoot = "Packages/town.mr.vrsl-urp";
 
-        [MenuItem(Menu)]
+        [MenuItem(Menu, false, 101)]
         public static void ValidateFromMenu()
         {
             var report = new StringBuilder();

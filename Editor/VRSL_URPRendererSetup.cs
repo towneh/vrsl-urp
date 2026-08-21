@@ -27,7 +27,7 @@ namespace VRSL.URP.EditorScripts
 
         // ── Scene-level: URP light manager GameObject ─────────────────────────
 
-        [MenuItem(MENU_SCENE)]
+        [MenuItem(MENU_SCENE, false, 100)]
         public static void AddManagerToScene()
         {
             var report = new List<string>();

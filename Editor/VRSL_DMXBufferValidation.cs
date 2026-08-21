@@ -20,7 +20,7 @@ namespace VRSL.URP.EditorScripts
     {
         const int MaxReport = 8;
 
-        [MenuItem("VRSL/URP/Validate DMX Channel Buffer", false, 400)]
+        [MenuItem("VRSL/URP/DMX Config/Validate DMX Channel Buffer", false, 221)]
         public static void Validate()
         {
             if (!Application.isPlaying)

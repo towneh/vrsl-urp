@@ -341,5 +341,5 @@ The manager calls `TryGetBlocks` once per frame. The contract:
 `VRSL_SyntheticDMXChannelSource` (`Runtime/Scripts/`) is the reference
 implementation: a desk that is not there, generating patterns on the CPU. Its Ramp
 pattern, where every channel holds a known function of its address, is what the
-*VRSL → URP → Validate DMX Channel Buffer* menu compares against, which makes it the
+*VRSL → URP → DMX Config → Validate DMX Channel Buffer* menu compares against, which makes it the
 quickest way to prove a new path end to end.

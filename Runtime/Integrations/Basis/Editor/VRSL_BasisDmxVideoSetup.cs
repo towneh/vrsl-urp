@@ -25,17 +25,17 @@ namespace VRSL.URP.BasisIntegration
     /// </summary>
     static class VRSL_BasisDmxVideoSetup
     {
-        const string Menu = "VRSL/URP/Add Basis DMX Video Output (Horizontal)";
+        const string Menu = "VRSL/URP/DMX Config/Add Basis DMX Video Output (Horizontal)";
         const string RawGridRT =
             "Packages/town.mr.vrsl-urp/Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
         const string RawGridName = "DMXRTViewer-RAWValues-Horizontal";
         const string RawGridLeaf =
             "Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
 
-        [MenuItem(Menu, true, 402)]
+        [MenuItem(Menu, true, 200)]
         static bool Validate() => Selection.activeGameObject != null;
 
-        [MenuItem(Menu, false, 402)]
+        [MenuItem(Menu, false, 200)]
         static void AddAndFrame()
         {
             var go = Selection.activeGameObject;
