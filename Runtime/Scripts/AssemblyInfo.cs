@@ -5,3 +5,4 @@ using System.Runtime.CompilerServices;
 // because its layout is a contract with the compute shader rather than public
 // API — exposing it to make it testable would invite a consumer to depend on it.
 [assembly: InternalsVisibleTo("Towneh.VRSL.URP.Tests")]
+[assembly: InternalsVisibleTo("Towneh.VRSL.URP.Basis.Tests")]

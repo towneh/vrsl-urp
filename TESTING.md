@@ -44,6 +44,11 @@ run rather than performed by hand:
 or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite builds its own
 rig in code, so it needs neither the profiling sample nor a hand-authored scene.
 
+A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` and
+`com.cnlohr.cilbox` are in the project and holds the Basis integration rows (B7-B9 below). Those
+play a real stream: the fixtures are hosted at `https://mr.town/vod/`, and `VRSL_TRUSS_FIXTURES`
+(a directory or a URL base) points the rows somewhere else. `tests.sh` runs both assemblies.
+
 The rows are still written out in full below, because they are the specification the tests
 implement and because a failure message is only useful next to the claim it belongs to. Do
 them by hand when you need to see something on screen, or when a test fails and you want to
@@ -202,9 +207,10 @@ assembly is skipped and none of these rows apply.
 | B4 | D | Two clients, one reporting `OutputFrameIsTopLeftOrigin` | Grid decodes the same way up on both. A vertical flip on one means the per-client origin correction |
 | B5 | D | Change stream resolution or re-open mid-cue, so the player reallocates `OutputTexture` | Decode continues; the global is republished on the new texture rather than left on the dead one |
 | B6 | — | Project without `com.basis.mediaplayer` / `com.cnlohr.cilbox` | `Towneh.VRSL.URP.Basis` skipped on its define constraints, no compile errors, rest of the package unaffected |
-| B7 | D | `BasisUserDataToVRSLDMX` on a player showing a Truss-carried stream, `minimumUniverses` set to the show's size | Fixtures follow the desk with no grid, camera or CRT chain in the scene; `RecordsDecoded` climbs one per video frame and `RecordsDropped` stays at 0; `LastHeader.FrameIndex` climbs with it. Seek or re-open: the count restarts from the landed frame with nothing from the old position applied |
-| B8 | D | As B7 with a universe the stream names above `minimumUniverses` | `UniverseCount` grows once, on the first block that names it, and the fixtures on it light; it does not shrink again |
-| B9 | D | As B7 with `logDrops` on and a transcoding path (one that re-encodes the video) | `RecordsDecoded` stays at 0 and nothing logs: the lane was stripped, not damaged. Against a path that remuxes with a bitstream filter that rewrites SEI, expect `BadCrc` or `BadMagic` once in the log and the dropped count climbing |
+| B7 | D | `VRSLBasisUserDataTests.B7_B8` in the suite: a real `BasisMediaPlayer` plays `truss-dmx-ramp.ts` (300 frames, one Truss DMX record per frame carrying VRSL's Ramp, universes 0-3 from the start), `BasisUserDataToVRSLDMX` with `minimumUniverses = 4` feeds the manager | After 30 records: nothing dropped, `UniverseCount` 4, and every one of the 2080 channels read back through the shader equals `RampValue` of its flat address; after all 300: still nothing dropped, the header's frame index and sequence agree and track the frame. A count short of 300 at `Ended` is a lost record, and the first place to look is the hand-over between the player's drain and a subscriber that attached a frame late |
+| B8 | D | Same row, past frame 90, where the stream starts naming universe 4 | `UniverseCount` grows to 5 exactly once and all 2600 channels read the Ramp, the new universe included; it does not shrink again |
+| B9 | D | `VRSLBasisUserDataTests.B9` in the suite: `truss-dmx-ramp-damaged.ts`, every tenth record with a value bit flipped after its CRC was written | 30 of 300 dropped, `BadCrc` observed as the reason while playing, and the buffer still byte-exact from the 270 that arrived intact |
+| B10 | D | A path that re-encodes the video (a transcoding CDN, or `ffmpeg -c:v libx264` over the fixture) and, separately, one that remuxes through a bitstream filter rewriting SEI | Re-encoded: `RecordsDecoded` stays at 0 and nothing logs, the lane was stripped rather than damaged. Filtered remux: `BadCrc` or `BadMagic` once in the log with `logDrops` on, and the dropped count climbing |
 
 ### VR (single-pass instanced)
 

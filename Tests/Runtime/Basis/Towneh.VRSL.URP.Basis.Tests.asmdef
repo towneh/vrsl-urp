@@ -1,0 +1,39 @@
+{
+    "name": "Towneh.VRSL.URP.Basis.Tests",
+    "rootNamespace": "VRSL.URP.Tests",
+    "references": [
+        "Towneh.VRSL.URP",
+        "Towneh.VRSL.URP.Basis",
+        "Towneh.VRSL.URP.Tests",
+        "BasisMediaPlayer",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Unity.Collections"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "VRSL_BASIS_MEDIAPLAYER_PRESENT",
+        "VRSL_CILBOX_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.basis.mediaplayer",
+            "expression": "",
+            "define": "VRSL_BASIS_MEDIAPLAYER_PRESENT"
+        },
+        {
+            "name": "com.cnlohr.cilbox",
+            "expression": "",
+            "define": "VRSL_CILBOX_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}
