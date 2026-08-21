@@ -1,5 +1,6 @@
 using UnityEditor;
 using UnityEngine;
+using PackageInfo = UnityEditor.PackageManager.PackageInfo;
 
 namespace VRSL.URP.BasisIntegration
 {
@@ -28,6 +29,9 @@ namespace VRSL.URP.BasisIntegration
         const string RawGridRT =
             "Packages/town.mr.vrsl-urp/Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
         const string RawGridName = "DMXRTViewer-RAWValues-Horizontal";
+        const string RawGridLeaf =
+            "Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
+        const string BlitShader  = "Hidden/VRSL-URP/BasisVideoUVBlit";
 
         [MenuItem(Menu, true, 402)]
         static bool Validate() => Selection.activeGameObject != null;
@@ -53,25 +57,43 @@ namespace VRSL.URP.BasisIntegration
             else Undo.RecordObject(output, "Frame Basis DMX Video Output");
 
             var so = new SerializedObject(output);
-            so.FindProperty("Target").objectReferenceValue = target;
+            // nameof for the public fields, so a rename breaks the build here
+            // rather than throwing at the menu item.
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.Target))
+              .objectReferenceValue = target;
 
             // A full-frame transpose: the destination's bottom edge reads up the
             // picture's left edge, and its left edge reads along the bottom.
-            Set(so, "uvBL", new Vector2(0f, 0f));
-            Set(so, "uvBR", new Vector2(0f, 1f));
-            Set(so, "uvTR", new Vector2(1f, 1f));
-            Set(so, "uvTL", new Vector2(1f, 0f));
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvBL)).vector2Value = new Vector2(0f, 0f);
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvBR)).vector2Value = new Vector2(0f, 1f);
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvTR)).vector2Value = new Vector2(1f, 1f);
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvTL)).vector2Value = new Vector2(1f, 0f);
 
+            // Private, so it is named by string and worth checking for.
             var blit = so.FindProperty("blitShader");
-            if (blit.objectReferenceValue == null)
-                blit.objectReferenceValue = Shader.Find("Hidden/VRSL-URP/BasisVideoUVBlit");
+            if (blit != null && blit.objectReferenceValue == null)
+            {
+                var shader = Shader.Find(BlitShader);
+                if (shader == null)
+                    Debug.LogWarning($"[VRSL] Shader \"{BlitShader}\" was not found. The component "
+                                   + "looks it up by name at runtime too, so this is only a "
+                                   + "warning, but the package may be incomplete.", output);
+                blit.objectReferenceValue = shader;
+            }
 
-            var player = so.FindProperty("Player");
+            var player = so.FindProperty(nameof(BasisVideoRenderTextureOutput.Player));
             if (player.objectReferenceValue == null)
                 player.objectReferenceValue = go.GetComponentInParent<BasisMediaPlayer>();
 
+            // ApplyModifiedProperties dirties the object itself, and a prefab
+            // instance needs its overrides recorded or they are lost on reload.
             so.ApplyModifiedProperties();
-            EditorUtility.SetDirty(output);
+            if (PrefabUtility.IsPartOfPrefabInstance(output))
+                PrefabUtility.RecordPrefabInstancePropertyModifications(output);
+            // Adding the component and framing it are one action to undo.
+            Undo.SetCurrentGroupName(added ? "Add Basis DMX Video Output"
+                                           : "Frame Basis DMX Video Output");
+            Undo.CollapseUndoOperations(Undo.GetCurrentGroup());
 
             Selection.activeGameObject = go;
             EditorGUIUtility.PingObject(output);
@@ -87,22 +109,17 @@ namespace VRSL.URP.BasisIntegration
                         + "strip's edges in the inspector.", output);
         }
 
-        static void Set(SerializedObject so, string field, Vector2 value)
-            => so.FindProperty(field).vector2Value = value;
-
         static RenderTexture LoadRawGrid()
         {
             var rt = AssetDatabase.LoadAssetAtPath<RenderTexture>(RawGridRT);
             if (rt != null) return rt;
-            // An embedded or relocated copy of the package still resolves by name.
-            foreach (var guid in AssetDatabase.FindAssets($"{RawGridName} t:RenderTexture"))
-            {
-                string path = AssetDatabase.GUIDToAssetPath(guid);
-                if (System.IO.Path.GetFileNameWithoutExtension(path) != RawGridName) continue;
-                rt = AssetDatabase.LoadAssetAtPath<RenderTexture>(path);
-                if (rt != null) return rt;
-            }
-            return null;
+
+            // A relocated or embedded copy of the package answers for itself.
+            // Searching the project by name would reach into Assets as well and
+            // pick up anything a user happened to name the same.
+            var pkg = PackageInfo.FindForAssembly(typeof(VRSL_BasisDmxVideoSetup).Assembly);
+            if (pkg == null || string.IsNullOrEmpty(pkg.assetPath)) return null;
+            return AssetDatabase.LoadAssetAtPath<RenderTexture>(pkg.assetPath + "/" + RawGridLeaf);
         }
     }
 }
