@@ -1,0 +1,28 @@
+{
+    "name": "Towneh.VRSL.URP.Basis.Editor",
+    "references": [
+        "Towneh.VRSL.URP",
+        "Towneh.VRSL.URP.Basis",
+        "Towneh.VRSL.URP.Editor",
+        "BasisMediaPlayer"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "VRSL_BASIS_MEDIAPLAYER_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.basis.mediaplayer",
+            "expression": "",
+            "define": "VRSL_BASIS_MEDIAPLAYER_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}
