@@ -83,6 +83,29 @@ Run this first whenever something is dark. It separates causes that look identic
 | `NOT IN PLAY MODE` | Nothing is initialised. Enter play mode; shader assignment is still reported. |
 | `Fixtures: NONE FOUND` | The manager collected nothing on enable — wrong manager for the scene, or fixtures inactive/added since. |
 
+### 4. The DMX monitor
+
+`VRSL → URP → DMX Monitor`. Every channel of a universe as a cell shaded by value, live,
+from whichever source is driving the scene. Read-only — it never writes a channel.
+
+**Play mode only**, for the same reason as the diagnostics report.
+
+Reach for it before the report when the question is about the *data* rather than about
+the rendering. It separates causes the lights cannot:
+
+| What you see | Means |
+|---|---|
+| Header names a channel source | Fixtures are reading published bytes, not the grid |
+| Header warns a source is registered but mute | The source published no universes, so the manager stopped and the fixtures fell back to the grid. Identical to having no source at all, from the lights |
+| `Change` ramp completely dark | No channel is *moving*. Not a liveness test on its own — a source republishing unchanged values reads the same as one that stopped. Confirm against `last heard N s ago` |
+| `last heard N s ago` climbing | That universe has stopped arriving; its last values are still on screen |
+| Diagonal shear in `Fixture` view | The patch is offset. One row is one 13-channel fixture, so an off-by-one is visible as a shear rather than as plausible colour |
+| Non-zero in a padding cell | A stride fault in the manager's scatter, or something writing the flat space outside it. **Not** an overrunning block — `ScatterBlocks` clamps every run to the universe's usable slots, so a block cannot reach these addresses however it is malformed |
+
+**What it doesn't cover:** on the video path it decodes through the compute shader's
+`IndustryRead`, so a legacy-mode or nine-universe grid does not read correctly there. The
+window states this whenever it is on the video path. The buffer path is unaffected.
+
 ---
 
 ## Test matrix
@@ -193,6 +216,13 @@ delivered every frame.
 | N13 | D | Profiling scene, channel source on Ramp, `universes = 4`, tick **Rotate Universes**. Let it run a second, then `VRSL → URP → Validate DMX Channel Buffer` and log the fixtures | PASS on every channel, and every fixture decoding the same colour it does without rotation. Judge on the decoded colour rather than on how many fixtures are lit: this is the same 50-fixture Ramp patch N9 uses, so ch 248 sits below the emit gate and reads `active=0` throughout, and a row demanding all 50 lit would fail on it for an unrelated reason. Only one universe is published per frame, so this is the row that proves the manager keeps what it was last told rather than re-uploading whatever arrived: if the flat space were rebuilt each frame, three universes in four would read 0 and the fixtures above sector 39 would flicker dark. Validating in the first few frames warns rather than fails — the source has not been round the rotation yet |
 | N14 | D | Three runs at `movementSmoothingMax` and `movementSmoothingMin` of 0.99, Ramp, `universes = 4`, each sampled at the same elapsed time mid-convergence. **A**: age 0, rotation off. **B**: age 200 ms, rotation off. **C**: age 0, rotation on | **B and C must both reproduce A**, fixture for fixture. A constant age shifts a universe's clock at both ends of the subtraction and so changes no step at all, which makes B an exact repeat of A. Rotation gives a universe one step of four frames instead of four of one — the same total, because the damping and the CRT's pull are both contractions of the same error and contractions commute. Age used as the timestep would put B roughly twelve times ahead and fully settled; a step that advanced only one frame per arrival would leave C four times behind. The row also has to check that something was still moving at the sample point: three settled runs agree whatever the step was. **Do this one through the suite.** Hand-timing is repeatable to a second or two, and the gap that opens between correct and incorrect behaviour in that window is smaller than the gap hand-timing introduces — a manual attempt at this row cannot separate them |
 | N15 | D | `VRSLTrussDmxTests` in the suite. No Basis packages needed: the decoder is in the core assembly | The Truss record decoder against records built byte for byte the way Truss builds them: a full universe and a partial run round-trip with their offsets and ages; records accumulate and the arrays grow from below one block's worth; an empty snapshot is valid and appends nothing; a flipped value bit reads as `BadCrc` and leaves what was already appended untouched; each framing fault (`TooShort`, `BadMagic`, `UnsupportedVersion`, `Truncated`, a probe body as `BadPayloadMagic`, `PayloadTooShort`, `UnsupportedPayloadVersion`) is told apart; a block running past its payload refuses the whole record, intact earlier blocks included; CRC-32 matches the `123456789` check value |
+| N16 | D | Synthetic DMX Channel Source on Ramp, `universes = 4`, Play, open the **DMX Monitor** | Header reads `Channel buffer — VRSL_SyntheticDMXChannelSource`. In `Fixture` view every page shows the ramp climbing left to right and wrapping down the rows, the last 8 cells of the final row drawn as padding. Paging through all four universes shows the same pattern, since Ramp is a function of the flat address. Hovering any cell reports a channel one higher than the cell to its left |
+| N17 | D | Same, then tick **Verify** | `Verify: all 520 channels read back as published`, on every page. This is N1 against whatever is really playing rather than against the Ramp pattern specifically — a mismatch reports the first differing channel, and a constant offset there is an indexing fault while a neighbouring-looking byte is a packing fault |
+| N18 | D | Same, then disable the source component mid-cue | Header switches to `Video grid — CRT decode chain` within a frame and the cells follow the grid. Re-enabling switches it back. This is N3 read from the data rather than from the fixtures |
+| N19 | D | Set the source's `universes` to 0 while it is registered | Header warns that the source is registered but publishing no universes and that the fixtures have fallen back to the grid. **The row exists because nothing else distinguishes this from an empty scene** — the manager calls `StopPublishing`, `ChannelCount` goes to 0, and the fixtures read the grid with nothing said |
+| N20 | D | Monitor open on a scene with no channel source at all, grid CRTs assigned and a DMX-over-video stream playing | Header reads `Video grid` and names the CRT and its dimensions with the universe count it holds — 3 for the shipped 26×240 Color/Intensity CRT, since a universe is 40 whole rows. Cells track the video. Judge the values against the fixtures rather than against the source: this path reads post-interpolation, which is what the fixtures read, not the raw grid bytes |
+| N21 | D | Monitor open and visible, then dock it behind another tab and leave it for a minute | Sampling stops while it is hidden — no dispatch, no readback. Switching back to the tab resumes it with no interaction. Watch it in the profiler or with a frame debugger if you want the claim rather than the absence of a symptom; the mechanism is that the window only asks to be repainted while it is being drawn |
+| N22 | D | Overview view, synthetic source on Ramp with `universes = 4` and **Rotate Universes** ticked, then page through the four | Each universe's `last heard N s ago` cycles on its own rather than all four moving together — rotation publishes one universe per frame, so each is a few frames stale in turn. That is what per-universe staleness means: a universe is latched as its packet arrives, and DMX at 44 Hz does not divide into a frame grid. **Watching one go permanently stale needs a source that can stop a single universe, which the synthetic one cannot** — reducing its `universes` reallocates the flat space and drops the page instead. Do that half against a real desk feed |
 
 ### Basis video → DMX (optional integration)
 

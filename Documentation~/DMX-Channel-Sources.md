@@ -19,6 +19,9 @@ into pixels and back is gone.
 A scene with no channel source behaves exactly as before. Assigning one switches
 the manager to the buffer for as long as it is assigned.
 
+Which of the two is driving the fixtures at any moment, and what every channel is
+reading, is what [`DMX-Monitor.md`](DMX-Monitor.md) covers.
+
 ## Feeding it from a Basis media player
 
 Lighting data can ride *inside* a live video stream. [Truss](https://github.com/towneh/Truss)

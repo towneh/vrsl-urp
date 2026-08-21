@@ -12,6 +12,7 @@ This is a standalone fork of [VR Stage Lighting](https://github.com/AcChosen/VR-
 | [`Documentation~/URP-Fixture-Configuration-Guide.md`](Documentation~/URP-Fixture-Configuration-Guide.md) | Authoring fixtures — every inspector field, both data paths |
 | [`Documentation~/URP-Realtime-Volumetric-Lights.md`](Documentation~/URP-Realtime-Volumetric-Lights.md) | Architecture — pipeline, GPU structs, performance model, limitations |
 | [`Documentation~/DMX-Channel-Sources.md`](Documentation~/DMX-Channel-Sources.md) | DMX as bytes rather than pixels — feeding the rig from a Basis media player carrying DMX in the stream, and writing a channel source of your own |
+| [`Documentation~/DMX-Monitor.md`](Documentation~/DMX-Monitor.md) | The DMX Monitor window — seeing every channel's value live, and which of the two paths the fixtures are actually reading |
 | [`TESTING.md`](TESTING.md) | The verification matrix, if you're changing the package |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed, and the current known issues |
 
