@@ -15,6 +15,9 @@ namespace VRSL.URP.BasisIntegration
         private int dragIndex = -1;
         private Material previewMat;
         private RenderTexture previewRT;
+        private double  nextPreview;
+        private int     previewKey;
+        private Texture previewTex;
 
         private void OnEnable()
         {
@@ -38,6 +41,19 @@ namespace VRSL.URP.BasisIntegration
             bool live = Application.isPlaying && cfg.Player != null && cfg.Player.OutputTexture != null;
             Texture tex = live ? cfg.Player.OutputTexture : (cfg.SetupPreview != null ? cfg.SetupPreview : cfg.Target);
             if (tex == null) return;
+
+            // Every editor tick would otherwise blit and ask for another repaint,
+            // holding the editor at full rate for as long as the component is
+            // selected. Nothing moves in edit mode unless the framing does; in
+            // play mode the frame does, so that case is capped rather than
+            // skipped.
+            int key = (cfg.uvBL, cfg.uvBR, cfg.uvTR, cfg.uvTL).GetHashCode();
+            bool framingMoved = key != previewKey || !ReferenceEquals(tex, previewTex);
+            if (!live && !framingMoved) return;
+            if (live && !framingMoved && EditorApplication.timeSinceStartup < nextPreview) return;
+            previewKey  = key;
+            previewTex  = tex;
+            nextPreview = EditorApplication.timeSinceStartup + 1.0 / 15.0;
 
             float outAspect = (cfg.Target != null && cfg.Target.height > 0) ? (float)cfg.Target.width / cfg.Target.height
                             : (tex.height > 0 ? (float)tex.width / tex.height : 16f / 9f);
@@ -63,10 +79,6 @@ namespace VRSL.URP.BasisIntegration
             VRSL_EditorHeader.Draw();
 
             var cfg = (BasisVideoRenderTextureOutput)target;
-
-            var blitProp = serializedObject.FindProperty("blitShader");
-            if (blitProp.objectReferenceValue == null)
-                blitProp.objectReferenceValue = Shader.Find("Hidden/VRSL-URP/BasisVideoUVBlit");
 
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Player"), L("DMX Media Player", "The BasisMediaPlayer decoding the DMX-over-video stream."));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Target"), L("DMX Grid RT", "The RAW DMX-grid RenderTexture the decode chain reads (the DMX camera's old Target Texture)."));
@@ -195,13 +207,23 @@ namespace VRSL.URP.BasisIntegration
                     EditorGUI.DrawRect(hr, cornerColors[i]);
                     GUI.Label(new Rect(sp[i].x + 8, sp[i].y - 8, 30, 16), cornerNames[i], EditorStyles.whiteMiniLabel);
                 }
-                if (e.type == EventType.MouseDown && hr.Contains(e.mousePosition)) { dragIndex = i; e.Use(); }
+                // Left button only: a right-click on a handle would otherwise
+                // capture the corner and drag it under the context menu.
+                if (e.type == EventType.MouseDown && e.button == 0 && hr.Contains(e.mousePosition))
+                { dragIndex = i; e.Use(); }
             }
 
             if (dragIndex >= 0)
             {
                 if (e.type == EventType.MouseDrag) { uvProps[dragIndex].vector2Value = ToUV(e.mousePosition); e.Use(); Repaint(); }
-                else if (e.type == EventType.MouseUp) { dragIndex = -1; e.Use(); }
+                // A button released outside the inspector never sends MouseUp here,
+                // and the corner would then keep following the pointer.
+                else if (e.type == EventType.MouseUp || e.type == EventType.MouseLeaveWindow
+                      || e.type == EventType.Ignore)
+                {
+                    dragIndex = -1;
+                    if (e.type == EventType.MouseUp) e.Use();
+                }
             }
         }
 

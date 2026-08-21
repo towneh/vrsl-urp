@@ -49,6 +49,11 @@ namespace VRSL.URP.BasisIntegration
         private void Reset()
         {
             if (Player == null) Player = GetComponentInParent<BasisMediaPlayer>();
+            // Adding the component is a user edit; drawing its inspector is not,
+            // and filling this in from a draw call dirties the scene for anyone
+            // who merely selects the object. Update() finds the shader by name
+            // anyway, so an empty field costs nothing.
+            if (blitShader == null) blitShader = Shader.Find("Hidden/VRSL-URP/BasisVideoUVBlit");
         }
 
         private void Start()
