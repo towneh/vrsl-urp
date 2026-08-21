@@ -499,8 +499,13 @@ void AdvanceMovement(uint3 id : SV_DispatchThreadID)
 // ── Validation ────────────────────────────────────────────────────────────────
 // Reads channels back through the same accessor the fixtures use, so a readback
 // checks the packing and the indexing rather than merely checking that the CPU
-// wrote what it meant to. Driven by the editor menu item; costs nothing when it
-// is not dispatched.
+// wrote what it meant to. Going through MainChannel rather than LoadDMXChannel
+// means it follows whichever source is live: identical on the buffer path, and
+// on the texture path it returns the grid cell a fixture would decode, exception
+// table included. Driven by the editor tools; costs nothing when not dispatched.
+//
+// Texture-path readbacks inherit GetDMXValue's limits — IndustryRead only, so a
+// legacy-mode or nine-universe grid is not readable this way.
 RWStructuredBuffer<float> _VRSLU_ValidationOut;
 uint _VRSLU_ValidationStart;   // 1-based channel of element 0
 uint _VRSLU_ValidationCount;
@@ -509,5 +514,5 @@ uint _VRSLU_ValidationCount;
 void ValidateChannels(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _VRSLU_ValidationCount) return;
-    _VRSLU_ValidationOut[id.x] = LoadDMXChannel(_VRSLU_ValidationStart + id.x);
+    _VRSLU_ValidationOut[id.x] = MainChannel(_VRSLU_ValidationStart + id.x);
 }
