@@ -134,6 +134,63 @@ integers big-endian, carried as SEI `user_data_unregistered` under the UUID
 `b1f0a7d4-9c3e-4a52-8f61-2d7c5e0b93a8`. Anything else that delivers the same bytes
 can feed the same decoder.
 
+## Choosing between them
+
+Both lanes can ride the same stream, and in the same stream they arrive together:
+measured through a real player, the records and the picture named the same frame,
+no frames apart. So the choice is not about timing. It is about what the path
+between the desk and the fixture is allowed to do to the data.
+
+| | Records (SEI user data) | Pixel grid |
+| --- | --- | --- |
+| Fidelity | The bytes the desk sent. Measured exact on every channel | Lossy by construction, see below |
+| Survives a transcode | No. The lane is dropped, silently | Yes. It is the picture |
+| Needs player support | Yes, the player has to surface SEI user data | No, anything that hands you a texture |
+| Integrity | CRC-32 per record. A damaged record is dropped and counted | None. A corrupt frame lights the rig |
+| Capacity | Whatever fits the bitrate | 3 universes in a 1080p frame, horizontal mode |
+| Costs picture | Nothing | A 1920x208 strip, a fifth of a 1080p frame |
+| Costs bitrate | About 1.7 kB a frame for 3 full universes, near 400 kbit/s at 30 fps. Send only the channels that changed and it drops in proportion | Nothing extra, but the strip takes bits the picture would have had |
+| Values reach fixtures | Straight into the channel buffer | Through the interpolation CRT, so damped and a frame behind |
+
+### Where the grid loses data, precisely
+
+Worth knowing before treating a grid reading as the value a desk sent.
+
+**TV range does not hold 256 values.** A normal encode carries luma in 16 to 235,
+which is 220 levels for 256 DMX values, so some values are not distinguishable
+once encoded and a channel reads back up to a unit or two low. Tagging the stream
+PC range round trips exactly, but only on a decoder that honours the tag, which is
+worth establishing before relying on it.
+
+**Colour space will curve the values if any stage disagrees.** The grid is data
+wearing a picture's clothes. Sampling an sRGB source into a linear target in linear
+colour space converts, and nothing converts back: a value of 104 arrives as 35, and
+104 and 105 both arrive as 35, so no later stage can recover them. `BasisVideoRenderTextureOutput`
+handles this for the target it writes. Any other route into the grid RT has to.
+
+**Forty channels read their neighbour.** The texture accessor carries a correction
+table for the 13th channel of a sector across five channel ranges, and those
+channels read the value 13 below their own. It applies to the grid path only. If a
+fixture's 13th channel matters to a show, that is the path it must not come down.
+
+### So
+
+Prefer the records where the path is yours end to end and you can establish it
+carries them, which `truss-detect` against your own egress settles in one run. That
+is the lane that delivers what the desk sent rather than an approximation of it,
+and the only one that can tell you when it did not.
+
+Prefer the grid where the path is not yours, where a CDN may re-encode, or where the
+player cannot surface user data. It is what VRSL has always used and it goes
+everywhere video goes.
+
+Sending both is a reasonable answer for a stream that has to work on paths you do
+not control. The manager reads whichever channel source is assigned and falls back
+to the grid when there is none, so a consumer can prefer the records and drop to the
+picture on a transcoding path without the fixtures noticing. [`DMX-Monitor.md`](DMX-Monitor.md)
+names which of the two is live at any moment, which is the thing to check first when
+the values look wrong rather than absent.
+
 ## Writing your own channel source
 
 Any `MonoBehaviour` implementing `IVRSLDMXChannelSource` can drive the rig:
