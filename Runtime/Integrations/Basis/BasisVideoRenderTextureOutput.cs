@@ -41,10 +41,13 @@ namespace VRSL.URP.BasisIntegration
         [Tooltip("Screen quad the DMX camera filmed (editor only). Can be deleted after baking.")]
         public Renderer SourceScreen;
 
+        internal const string BlitShaderName = "Hidden/VRSL-URP/BasisVideoUVBlit";
+
         [SerializeField, HideInInspector] private Shader blitShader;
 
         private Material blitMat;
         private bool cleared;
+        private bool warnedNoShader;
 
         private void Reset()
         {
@@ -53,7 +56,7 @@ namespace VRSL.URP.BasisIntegration
             // and filling this in from a draw call dirties the scene for anyone
             // who merely selects the object. Update() finds the shader by name
             // anyway, so an empty field costs nothing.
-            if (blitShader == null) blitShader = Shader.Find("Hidden/VRSL-URP/BasisVideoUVBlit");
+            if (blitShader == null) blitShader = Shader.Find(BlitShaderName);
         }
 
         private void Start()
@@ -73,8 +76,26 @@ namespace VRSL.URP.BasisIntegration
         private void EnsureMaterial()
         {
             if (blitMat != null) return;
-            var sh = blitShader != null ? blitShader : Shader.Find("Hidden/VRSL-URP/BasisVideoUVBlit");
-            if (sh == null) sh = Shader.Find("Unlit/Texture");
+            // The serialized reference is what pulls the shader into a player
+            // build; nothing else refers to it, so a build made with this field
+            // empty strips the shader and Shader.Find then answers nothing.
+            var sh = blitShader != null ? blitShader : Shader.Find(BlitShaderName);
+            if (sh == null)
+            {
+                // Refusing beats substituting. Any other shader ignores the four
+                // corner UVs and blits the whole frame, which fills the grid RT
+                // with a picture that decodes into plausible nonsense and says
+                // nothing about why.
+                if (!warnedNoShader)
+                {
+                    warnedNoShader = true;
+                    Debug.LogError($"[VRSL] \"{BlitShaderName}\" is not available, so the DMX "
+                                 + "grid cannot be framed. Assign the blit shader on this "
+                                 + "component: an empty field leaves the shader out of a player "
+                                 + "build entirely.", this);
+                }
+                return;
+            }
             blitMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
         }
 

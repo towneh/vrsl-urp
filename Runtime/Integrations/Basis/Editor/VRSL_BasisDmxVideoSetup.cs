@@ -31,7 +31,6 @@ namespace VRSL.URP.BasisIntegration
         const string RawGridName = "DMXRTViewer-RAWValues-Horizontal";
         const string RawGridLeaf =
             "Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
-        const string BlitShader  = "Hidden/VRSL-URP/BasisVideoUVBlit";
 
         [MenuItem(Menu, true, 402)]
         static bool Validate() => Selection.activeGameObject != null;
@@ -73,11 +72,11 @@ namespace VRSL.URP.BasisIntegration
             var blit = so.FindProperty("blitShader");
             if (blit != null && blit.objectReferenceValue == null)
             {
-                var shader = Shader.Find(BlitShader);
+                var shader = Shader.Find(BasisVideoRenderTextureOutput.BlitShaderName);
                 if (shader == null)
-                    Debug.LogWarning($"[VRSL] Shader \"{BlitShader}\" was not found. The component "
-                                   + "looks it up by name at runtime too, so this is only a "
-                                   + "warning, but the package may be incomplete.", output);
+                    Debug.LogWarning($"[VRSL] Shader \"{BasisVideoRenderTextureOutput.BlitShaderName}\" "
+                                   + "was not found, so the grid will not be framed. The package "
+                                   + "may be incomplete.", output);
                 blit.objectReferenceValue = shader;
             }
 

@@ -80,6 +80,24 @@ namespace VRSL.URP.BasisIntegration
 
             var cfg = (BasisVideoRenderTextureOutput)target;
 
+            // Components predating Reset filling this in keep an empty field, and
+            // an empty field is not merely a missing cache: the serialized
+            // reference is the only thing that pulls the shader into a player
+            // build. Offered as a button rather than written on sight, so looking
+            // at the component never dirties the scene.
+            var blitProp = serializedObject.FindProperty("blitShader");
+            if (blitProp != null && blitProp.objectReferenceValue == null)
+            {
+                EditorGUILayout.HelpBox(
+                    "No blit shader assigned. It works in the editor, where the shader can be "
+                  + "found by name, but a player build leaves it out and the grid is not framed "
+                  + "at all.", MessageType.Warning);
+                if (GUILayout.Button("Assign the blit shader"))
+                    blitProp.objectReferenceValue =
+                        Shader.Find(BasisVideoRenderTextureOutput.BlitShaderName);
+                EditorGUILayout.Space();
+            }
+
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Player"), L("DMX Media Player", "The BasisMediaPlayer decoding the DMX-over-video stream."));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("Target"), L("DMX Grid RT", "The RAW DMX-grid RenderTexture the decode chain reads (the DMX camera's old Target Texture)."));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("SetupPreview"), L("Setup Preview", "Edit-mode still of the grid to drag the corners over. Play mode shows the live frame."));
