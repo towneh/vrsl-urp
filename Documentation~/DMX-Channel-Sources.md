@@ -172,9 +172,12 @@ fill the RT and still light the rig while reading every channel off a different
 fixture.
 
 **Vertical mode needs no transpose.** Its picture is 13 cells wide and 67 tall,
-numbered exactly as the RT numbers them, so a crop is the whole job. The transpose
-exists only because horizontal mode lays the same channel space on its side to make
-a wide strip.
+which is 871 addresses rather than horizontal's 1560, so it carries about one and
+two thirds universes where horizontal carries three. Fewer addresses, but numbered
+the way the RT numbers them: channel `c` at column `(c-1) % 13` and row `(c-1) / 13`,
+filling the bottom 67 rows of the RT's 120 and leaving the rest unwritten. Cropping
+the frame to the grid is the whole job. The transpose exists only because horizontal
+mode lays a larger channel space on its side to make a wide strip.
 
 ### Working it out for a given stream
 
