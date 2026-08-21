@@ -267,6 +267,41 @@ namespace VRSL.URP
         /// <summary>Universes the flat channel space covers. Zero when nothing is
         /// publishing.</summary>
         public int             UniverseCount       { get; private set; }
+
+        /// <summary>The flat channel space as the manager holds it on the CPU, one byte
+        /// per slot at the <see cref="VRSLDMX.SlotsPerUniverse"/> stride. These are the
+        /// bytes a source published, with no smoothing applied — the buffer path has no
+        /// CRT to read them back through. Empty when nothing is publishing. Borrowed:
+        /// the manager rewrites it on the next upload.</summary>
+        public System.ReadOnlySpan<byte> PublishedChannels =>
+            ChannelCount > 0 && _flat != null ? _flat : System.Array.Empty<byte>();
+
+        /// <summary>Show time each universe advanced this frame, one entry per universe
+        /// — the CPU side of <see cref="UniverseStepBuffer"/>. Zero for a universe that
+        /// received no block this frame. Empty when nothing is publishing.</summary>
+        public System.ReadOnlySpan<float> UniverseSteps =>
+            UniverseCount > 0 && _universeStep != null
+                ? _universeStep
+                : System.Array.Empty<float>();
+
+        /// <summary>When <paramref name="universe"/>'s most recent values were latched at
+        /// the desk, on the same clock as <c>Time.timeAsDouble</c>, so subtracting it from
+        /// that gives staleness including the transport age the source reported. False for
+        /// a universe outside the published range or one not yet heard from. Only advances
+        /// on a block that moves the clock forward, so a source repeating a timestamp reads
+        /// as going stale rather than as current.</summary>
+        public bool TryGetUniverseLatchTime(int universe, out double latchedAt)
+        {
+            latchedAt = 0.0;
+            // StopPublishing zeroes the counts and leaves these arrays holding the last
+            // patch, so the count is what says whether any of it still means anything.
+            if (_dataTime == null || _dataTimeSeen == null ||
+                universe < 0 || universe >= UniverseCount ||
+                universe >= _dataTime.Length || !_dataTimeSeen[universe])
+                return false;
+            latchedAt = _dataTime[universe];
+            return true;
+        }
         public RTHandle        DMXMainHandle       { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
