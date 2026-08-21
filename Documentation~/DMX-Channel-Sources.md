@@ -194,6 +194,18 @@ The signature of a transpose is that bottom-left and bottom-right share a `u` wh
 their `v` differs, and likewise for the top pair. Four corners whose bottom pair
 share a `v` are a crop with the transpose missing.
 
+The inspector will do it for you: **Rotate 90°** followed by **Flip Vertical** is a
+transpose. Both are permutations of the four corners, so the pair applies to a crop
+already dragged rather than discarding it. Drag the strip's edges first, then press
+the two.
+
+The component's defaults are left as the identity mapping rather than as any of
+this. The crop belongs to whoever composed the stream, and the transpose belongs to
+horizontal mode alone, so there is no pair of values that is right in general. An
+identity default is also wrong in a way that shows: the output preview fills with
+the whole frame, which is plainly not a grid, where a default carrying the transpose
+would look nearly right on a stream it did not suit.
+
 ### Checking it
 
 None of this is visible. Identity, a rotation and a transpose all fill the RT and
