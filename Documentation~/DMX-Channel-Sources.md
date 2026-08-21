@@ -72,8 +72,14 @@ What to read when checking it works:
 
 ### Behaviour worth knowing
 
-- **Values are absolute**, so a dropped or late record is corrected by the next one
-  and a client joining mid-show is right within a frame.
+- **Values are absolute**, so a dropped or late record is corrected as soon as a
+  later record carries the affected slots again; nothing accumulates. How soon that
+  is depends on the sender. Truss's relay resends every universe it has heard in
+  every record, so with it a dropped record costs one frame and a client joining
+  mid-show is right within a frame. A sender that carries only the channels that
+  changed needs to resend whole universes periodically, or a dropped change stays
+  missing and a late joiner never sees channels that do not change again. The
+  manager itself keeps only what it was told and starts from zero.
 - **A damaged record is dropped, not applied.** Each record carries a CRC over
   everything in it; one that fails, or whose framing does not add up, is counted
   and ignored rather than lit. On a show, "arrived broken" and "did not arrive" are
@@ -144,8 +150,10 @@ The manager calls `TryGetBlocks` once per frame. The contract:
   resize them the moment the call returns.
 - **Values are absolute and idempotent.** A partial snapshot corrects the slots it
   covers and leaves the rest alone.
-- **`UniverseCount` sizes the buffer.** It must cover the highest universe any block
-  will name, and should not change frame to frame: every change reallocates.
+- **`UniverseCount` sizes the buffer.** Universes are 0-based indices and this is a
+  count, so it must be `max(block.universe) + 1`: a source naming universes 0 and 1
+  with a count of 1 has universe 1 dropped. It should not change frame to frame;
+  every change reallocates.
 - A block naming a universe at or above `UniverseCount` is dropped; a run passing
   slot 512 or the end of the values array is truncated. Both quietly unless the
   manager's debug logs are on.
