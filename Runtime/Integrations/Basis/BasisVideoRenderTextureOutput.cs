@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 #if VRSL_CILBOX_PRESENT
 using Cilbox;
 #endif
@@ -112,11 +113,27 @@ namespace VRSL.URP.BasisIntegration
             cleared = false;
         }
 
+        // Whether the blit has to re-encode its sample to sRGB. In linear colour space the
+        // sampler converts an sRGB source and the writer converts back only for an sRGB target,
+        // so an sRGB source into a linear target arrives curved. The DMX grid RT is linear and
+        // carries data rather than a picture, and the curve is not reversible once written at
+        // eight bits, so it has to be undone inside the blit while the value is still float.
+        // Nothing to do where the two agree, which is the Android path: the player's output is
+        // already a linear RenderTexture there.
+        static bool NeedsSrgbReencode(Texture src, RenderTexture dst)
+        {
+            if (QualitySettings.activeColorSpace != ColorSpace.Linear) return false;
+            if (src == null || dst == null) return false;
+            return GraphicsFormatUtility.IsSRGBFormat(src.graphicsFormat)
+               && !GraphicsFormatUtility.IsSRGBFormat(dst.graphicsFormat);
+        }
+
         // Draws src into dst as a fullscreen quad, sampling src at the four given UVs (one per
         // dst corner). Shared by the runtime path and the editor output preview.
         public static void BlitUVs(Material mat, Texture src, RenderTexture dst, Vector2 bl, Vector2 br, Vector2 tr, Vector2 tl)
         {
             if (mat == null || src == null || dst == null) return;
+            mat.SetFloat("_UnSrgb", NeedsSrgbReencode(src, dst) ? 1f : 0f);
             mat.SetVector("_UvBL", new Vector4(bl.x, bl.y, 0f, 0f));
             mat.SetVector("_UvBR", new Vector4(br.x, br.y, 0f, 0f));
             mat.SetVector("_UvTR", new Vector4(tr.x, tr.y, 0f, 0f));

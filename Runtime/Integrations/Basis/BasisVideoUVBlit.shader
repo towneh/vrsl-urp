@@ -7,6 +7,7 @@ Shader "Hidden/VRSL-URP/BasisVideoUVBlit"
         _UvBR ("UV Bottom-Right", Vector) = (1,0,0,0)
         _UvTR ("UV Top-Right", Vector) = (1,1,0,0)
         _UvTL ("UV Top-Left", Vector) = (0,1,0,0)
+        _UnSrgb ("Re-encode the sample to sRGB", Float) = 0
     }
     SubShader
     {
@@ -27,6 +28,7 @@ Shader "Hidden/VRSL-URP/BasisVideoUVBlit"
             float4 _UvBR;
             float4 _UvTR;
             float4 _UvTL;
+            float _UnSrgb;
 
             v2f vert (appdata v)
             {
@@ -39,11 +41,25 @@ Shader "Hidden/VRSL-URP/BasisVideoUVBlit"
             // Bilinear remap of the destination [0,1] quad onto the four source UVs,
             // reproducing the per-corner GL quad (BL/BR/TR/TL at the dst corners) so
             // crop, rotation, flip and shear are all expressible.
-            fixed4 frag (v2f i) : SV_Target
+            float4 frag (v2f i) : SV_Target
             {
                 float2 bottom = lerp(_UvBL.xy, _UvBR.xy, i.uv.x);
                 float2 top    = lerp(_UvTL.xy, _UvTR.xy, i.uv.x);
-                return tex2D(_MainTex, lerp(bottom, top, i.uv.y));
+                float4 c = tex2D(_MainTex, lerp(bottom, top, i.uv.y));
+                // Sampling an sRGB source in linear colour space converts, and
+                // writing to a linear target does not convert back. Harmless for
+                // a picture; fatal for a target that carries data, where the
+                // curve is not reversible once it has been quantised: DMX 104
+                // and 105 both land on 35. The sample is still float here, so
+                // re-encoding costs nothing. _UnSrgb is set by the component,
+                // which is what can see both formats.
+                if (_UnSrgb > 0.5)
+                {
+                    c.r = LinearToGammaSpaceExact(c.r);
+                    c.g = LinearToGammaSpaceExact(c.g);
+                    c.b = LinearToGammaSpaceExact(c.b);
+                }
+                return c;
             }
             ENDCG
         }
