@@ -12,8 +12,7 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [
-        "VRSL_BASIS_MEDIAPLAYER_PRESENT",
-        "VRSL_CILBOX_PRESENT"
+        "VRSL_BASIS_MEDIAPLAYER_PRESENT"
     ],
     "versionDefines": [
         {

@@ -1,5 +1,7 @@
 using UnityEngine;
+#if VRSL_CILBOX_PRESENT
 using Cilbox;
+#endif
 
 namespace VRSL.URP.BasisIntegration
 {
@@ -8,7 +10,9 @@ namespace VRSL.URP.BasisIntegration
     // only when the texture identity changes (resize / re-open). The native decoder updates
     // the same texture in place every frame, so the interpolation CRT samples the freshest
     // grid each update with no capture camera and no per-frame copy.
+#if VRSL_CILBOX_PRESENT
     [Cilboxable]
+#endif
     [DisallowMultipleComponent]
     public class BasisVideoToVRSLDMX : MonoBehaviour
     {

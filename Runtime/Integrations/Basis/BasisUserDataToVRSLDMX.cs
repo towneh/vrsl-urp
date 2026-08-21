@@ -1,7 +1,9 @@
 using System;
 using Unity.Collections;
 using UnityEngine;
+#if VRSL_CILBOX_PRESENT
 using Cilbox;
+#endif
 
 namespace VRSL.URP.BasisIntegration
 {
@@ -18,7 +20,9 @@ namespace VRSL.URP.BasisIntegration
     /// record that fails its CRC or its framing is dropped rather than applied,
     /// and counted, since a damaged snapshot on a rig looks like a cue.
     /// </summary>
+#if VRSL_CILBOX_PRESENT
     [Cilboxable]
+#endif
     [DisallowMultipleComponent]
     [AddComponentMenu("VRSL-URP/Basis SEI DMX Source")]
     public class BasisUserDataToVRSLDMX : MonoBehaviour, IVRSLDMXChannelSource

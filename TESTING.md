@@ -44,8 +44,8 @@ run rather than performed by hand:
 or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite builds its own
 rig in code, so it needs neither the profiling sample nor a hand-authored scene.
 
-A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` and
-`com.cnlohr.cilbox` are in the project and holds the Basis integration rows (B7-B9 below). Those
+A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
+in the project and holds the Basis integration rows (B7-B9 below). Those
 play a real stream: the fixtures are hosted at `https://mr.town/vod/`, and `VRSL_TRUSS_FIXTURES`
 (a directory or a URL base) points the rows somewhere else. `tests.sh` runs both assemblies.
 
@@ -196,8 +196,10 @@ delivered every frame.
 
 ### Basis video → DMX (optional integration)
 
-Needs `com.basis.mediaplayer` and `com.cnlohr.cilbox` in the project; without them the
-assembly is skipped and none of these rows apply.
+Needs `com.basis.mediaplayer` in the project; without it the assembly is skipped and none of
+these rows apply. `com.cnlohr.cilbox` is optional: with it the components are `[Cilboxable]`
+and usable from sandboxed world scripts, without it they are plain components for a
+scene-owned player.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -206,7 +208,8 @@ assembly is skipped and none of these rows apply.
 | B3 | D | Stop the player mid-cue, `ClearWhenNoFrame` on | Fixtures go dark rather than latching the last grid |
 | B4 | D | Two clients, one reporting `OutputFrameIsTopLeftOrigin` | Grid decodes the same way up on both. A vertical flip on one means the per-client origin correction |
 | B5 | D | Change stream resolution or re-open mid-cue, so the player reallocates `OutputTexture` | Decode continues; the global is republished on the new texture rather than left on the dead one |
-| B6 | — | Project without `com.basis.mediaplayer` / `com.cnlohr.cilbox` | `Towneh.VRSL.URP.Basis` skipped on its define constraints, no compile errors, rest of the package unaffected |
+| B6 | — | Project without `com.basis.mediaplayer` | `Towneh.VRSL.URP.Basis` and its test assembly skipped on their define constraint, no compile errors, rest of the package unaffected |
+| B6a | — | Project with `com.basis.mediaplayer` but without `com.cnlohr.cilbox` | The three integration components compile and work on a scene-owned player, without the `[Cilboxable]` attribute; with Cilbox added they carry it |
 | B7 | D | `VRSLBasisUserDataTests.B7_B8` in the suite: a real `BasisMediaPlayer` plays `truss-dmx-ramp.ts` (300 frames, one Truss DMX record per frame carrying VRSL's Ramp, universes 0-3 from the start), `BasisUserDataToVRSLDMX` with `minimumUniverses = 4` feeds the manager | After 30 records: nothing dropped, `UniverseCount` 4, and every one of the 2080 channels read back through the shader equals `RampValue` of its flat address; after all 300: still nothing dropped, the header's frame index and sequence agree and track the frame. A count short of 300 at `Ended` is a lost record, and the first place to look is the hand-over between the player's drain and a subscriber that attached a frame late |
 | B8 | D | Same row, past frame 90, where the stream starts naming universe 4 | `UniverseCount` grows to 5 exactly once and all 2600 channels read the Ramp, the new universe included; it does not shrink again |
 | B9 | D | `VRSLBasisUserDataTests.B9` in the suite: `truss-dmx-ramp-damaged.ts`, every tenth record with a value bit flipped after its CRC was written | 30 of 300 dropped, `BadCrc` observed as the reason while playing, and the buffer still byte-exact from the 270 that arrived intact |
