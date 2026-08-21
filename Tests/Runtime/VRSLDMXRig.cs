@@ -296,24 +296,15 @@ namespace VRSL.URP.Tests
             var cs = Manager.computeShader;
             if (_validateKernel < 0) _validateKernel = cs.FindKernel("ValidateChannels");
 
-            var readback = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
-            var values = new float[count];
-            try
-            {
-                cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels", Manager.ChannelBuffer);
-                cs.SetInt("_VRSLU_DMXChannelCount", count);
-                // The kernel names the grid texture in the branch it is not
-                // taking, and an unbound texture is an error at dispatch even so.
-                if (Manager.dmxMainTexture != null)
-                    cs.SetTexture(_validateKernel, "_DMXMainTex", Manager.dmxMainTexture);
-                cs.SetBuffer(_validateKernel, "_VRSLU_ValidationOut", readback);
-                cs.SetInt("_VRSLU_ValidationStart", 1);
-                cs.SetInt("_VRSLU_ValidationCount", count);
-                cs.Dispatch(_validateKernel, Mathf.CeilToInt(count / 64f), 1, 1);
-                readback.GetData(values);
-            }
-            finally { readback.Release(); }
-            return values;
+            cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels", Manager.ChannelBuffer);
+            cs.SetInt("_VRSLU_DMXChannelCount", count);
+            // The kernel names the grid texture in the branch it is not taking,
+            // and an unbound texture is an error at dispatch even so. A manager
+            // with no grid assigned is a legitimate buffer-only scene, so it gets
+            // something to bind rather than an assertion.
+            cs.SetTexture(_validateKernel, "_DMXMainTex",
+                          (Texture)Manager.dmxMainTexture ?? Texture2D.blackTexture);
+            return Validate(cs, count);
         }
 
         /// <summary>Channels 1..<paramref name="count"/> read back through the
@@ -340,16 +331,25 @@ namespace VRSL.URP.Tests
             // taken, and an unbound StructuredBuffer is not safe to dispatch with.
             _dummyChannels ??= new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, sizeof(uint));
 
+            cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels",
+                         Manager.ChannelBuffer ?? _dummyChannels);
+            cs.SetInt("_VRSLU_DMXChannelCount", 0);
+            cs.SetTexture(_validateKernel, "_DMXMainTex", grid);
+            cs.SetVector("_VRSLDMXTexelSize", new Vector4(
+                1f / grid.width, 1f / grid.height, grid.width, grid.height));
+            return Validate(cs, count);
+        }
+
+        /// <summary>Run the validation kernel over channels 1..<paramref name="count"/>
+        /// and bring the answers back. The caller binds whichever source it wants
+        /// read; this is the part both readers share, so a change to the kernel's
+        /// contract lands in one place.</summary>
+        float[] Validate(ComputeShader cs, int count)
+        {
             var readback = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
             var values = new float[count];
             try
             {
-                cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels",
-                             Manager.ChannelBuffer ?? _dummyChannels);
-                cs.SetInt("_VRSLU_DMXChannelCount", 0);
-                cs.SetTexture(_validateKernel, "_DMXMainTex", grid);
-                cs.SetVector("_VRSLDMXTexelSize", new Vector4(
-                    1f / grid.width, 1f / grid.height, grid.width, grid.height));
                 cs.SetBuffer(_validateKernel, "_VRSLU_ValidationOut", readback);
                 cs.SetInt("_VRSLU_ValidationStart", 1);
                 cs.SetInt("_VRSLU_ValidationCount", count);
