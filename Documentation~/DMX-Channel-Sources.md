@@ -99,7 +99,8 @@ What to read when checking it works:
 
 SEI rides inside the video elementary stream. It survives any path that copies that
 stream through unchanged, which is what a remuxing CDN does (RTSP, MPEG-TS and RTMP
-egress have all been measured carrying it intact). It does **not** survive a
+egress have all been measured carrying it intact, and this package's own end-to-end row
+has run green against VRCDN's TS egress). It does **not** survive a
 transcode: a path that re-encodes the video drops the lane entirely and silently,
 because the picture keeps working. A remux that runs bitstream filters over the
 video can also strip or rewrite it.
