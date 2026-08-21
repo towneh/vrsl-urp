@@ -45,7 +45,7 @@ or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite buil
 rig in code, so it needs neither the profiling sample nor a hand-authored scene.
 
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
-in the project and holds the Basis integration rows (B7-B9 below). Those
+in the project and holds the Basis integration rows (B7-B9 and B11 below). Those
 play a real stream: the fixtures are hosted at `https://mr.town/vod/`, and `VRSL_TRUSS_FIXTURES`
 (a directory or a URL base) points the rows somewhere else. `tests.sh` runs both assemblies.
 
@@ -214,6 +214,7 @@ scene-owned player.
 | B8 | D | Same row, past frame 90, where the stream starts naming universe 4 | `UniverseCount` grows to 5 exactly once and all 2600 channels read the Ramp, the new universe included; it does not shrink again |
 | B9 | D | `VRSLBasisUserDataTests.B9` in the suite: `truss-dmx-ramp-damaged.ts`, every tenth record with a value bit flipped after its CRC was written | 30 of 300 dropped, `BadCrc` observed as the reason while playing, and the buffer still byte-exact from the 270 that arrived intact |
 | B10 | D | A path that re-encodes the video (a transcoding CDN, or `ffmpeg -c:v libx264` over the fixture) and, separately, one that remuxes through a bitstream filter rewriting SEI | Re-encoded: `RecordsDecoded` stays at 0 and nothing logs, the lane was stripped rather than damaged. Filtered remux: `BadCrc` or `BadMagic` once in the log with `logDrops` on, and the dropped count climbing |
+| B11 | D | `VRSLBasisUserDataTests.B11` in the suite, run only with `VRSL_TRUSS_LIVE_URL` set: a live lane (Art-Net sender → `truss-relay --artnet` → `mediamtx` → RTSP; `BasisApps/basis-truss-live` brings one up on this machine) carrying the same Ramp over five universes | Over five seconds the record rate sits at the video's frame rate (20-45/s accepted), nothing is dropped on a remuxing path, `UniverseCount` is 5 and all 2600 channels read the Ramp. Same assertions as the fixture rows, so the two agree or the difference is the path |
 
 ### VR (single-pass instanced)
 

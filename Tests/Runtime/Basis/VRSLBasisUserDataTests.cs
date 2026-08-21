@@ -47,14 +47,14 @@ namespace VRSL.URP.Tests
             public BasisUserDataToVRSLDMX  Source;
         }
 
-        static Rig Open(string fixture)
+        static Rig Open(string fixture, bool live = false)
         {
             var rig = new Rig { Scene = VRSLDMXRig.Build(withSource: false) };
             var host = new GameObject("Basis Player");
             host.transform.SetParent(rig.Scene.Manager.transform.parent, false);
             rig.Player = host.AddComponent<BasisMediaPlayer>();
             rig.Player.playOnStart = false;
-            rig.Player.liveness = BmLiveness.Vod;
+            rig.Player.liveness = live ? BmLiveness.Live : BmLiveness.Vod;
             // A local fixture reads as a loopback-ish source to the engine's
             // gate; this opts out of it, here and only here.
             rig.Player.allowLocalAddresses = true;
@@ -171,6 +171,54 @@ namespace VRSL.URP.Tests
                 Assert.IsTrue(sawBadCrc, "a drop was observed as a CRC failure while playing");
                 yield return rig.Scene.Step(2);
                 AssertRamp(rig, BaseUniverses + 1, "with a tenth of the records dropped");
+            }
+            finally
+            {
+                rig.Player.Close();
+                rig.Scene.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// The same checks against a live lane rather than a file: Art-Net into a
+        /// Truss relay, the relay's RTMP into a server, the server's RTSP into the
+        /// player. The sender carries the same Ramp over five universes, so what
+        /// arrives is compared the same way. Skipped unless VRSL_TRUSS_LIVE_URL names
+        /// the lane; BasisApps/basis-truss-live brings one up on this machine.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator B11_the_live_lane_delivers_what_the_fixture_does()
+        {
+            string url = System.Environment.GetEnvironmentVariable("VRSL_TRUSS_LIVE_URL");
+            if (string.IsNullOrEmpty(url))
+                Assert.Ignore("VRSL_TRUSS_LIVE_URL is not set; no live lane to play");
+
+            var rig = Open(url, live: true);
+            try
+            {
+                yield return Until(rig, 30);
+                rig.Scene.Calibrate();
+                uint at30 = rig.Source.RecordsDecoded;
+                float t30 = Time.realtimeSinceStartup;
+
+                // Five seconds of the lane: the record rate is the video frame
+                // rate, and nothing arrives damaged on a path that copies the
+                // stream through.
+                yield return Until(rig, at30 + 150);
+                float seconds = Time.realtimeSinceStartup - t30;
+                float perSecond = (rig.Source.RecordsDecoded - at30) / seconds;
+                Assert.That(perSecond, Is.InRange(20f, 45f),
+                    $"{perSecond:F1} records/s; the lane runs at the video's 30 fps");
+                Assert.AreEqual(0u, rig.Source.RecordsDropped, "nothing dropped on a remuxing path");
+                Assert.AreEqual(BaseUniverses + 1, rig.Source.UniverseCount,
+                    "the sender carries five universes");
+                yield return rig.Scene.Step(2);
+                AssertRamp(rig, BaseUniverses + 1, "from the live lane");
+
+                // The relay stamps its own send time; a block's age is how long
+                // before that the universe was last heard from, and at 40 Hz
+                // Art-Net against 30 fps video that is well under a frame.
+                Assert.Less(rig.Source.LastHeader.SendUnixNanos, ulong.MaxValue);
             }
             finally
             {
