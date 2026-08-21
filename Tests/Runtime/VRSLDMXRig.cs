@@ -45,6 +45,7 @@ namespace VRSL.URP.Tests
         RenderTexture _target;
         float         _captureWas;
         int           _validateKernel = -1;
+        GraphicsBuffer _dummyChannels;
         int[]         _map;
 
         /// <summary>Absolute channel of fixture <paramref name="i"/> under the
@@ -301,6 +302,54 @@ namespace VRSL.URP.Tests
             {
                 cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels", Manager.ChannelBuffer);
                 cs.SetInt("_VRSLU_DMXChannelCount", count);
+                // The kernel names the grid texture in the branch it is not
+                // taking, and an unbound texture is an error at dispatch even so.
+                if (Manager.dmxMainTexture != null)
+                    cs.SetTexture(_validateKernel, "_DMXMainTex", Manager.dmxMainTexture);
+                cs.SetBuffer(_validateKernel, "_VRSLU_ValidationOut", readback);
+                cs.SetInt("_VRSLU_ValidationStart", 1);
+                cs.SetInt("_VRSLU_ValidationCount", count);
+                cs.Dispatch(_validateKernel, Mathf.CeilToInt(count / 64f), 1, 1);
+                readback.GetData(values);
+            }
+            finally { readback.Release(); }
+            return values;
+        }
+
+        /// <summary>Channels 1..<paramref name="count"/> read back through the
+        /// shader's own accessor forced onto the CRT texture path, whatever the
+        /// channel buffer is doing.
+        ///
+        /// <c>_VRSLU_DMXChannelCount</c> is bound zero here rather than from the
+        /// manager, which is what makes <c>MainChannel</c> take its texture
+        /// branch even while a source is publishing. A row can therefore read
+        /// both feeds within one frame and compare them against each other
+        /// rather than against two separate moments in the stream.
+        ///
+        /// The values come from the interpolation CRT, so they are damped: this
+        /// is what a fixture reads, not the raw grid bytes.</summary>
+        public float[] ReadGridChannels(int count)
+        {
+            var cs = Manager.computeShader;
+            Assert(cs != null, "the manager has no compute shader");
+            var grid = Manager.dmxMainTexture;
+            Assert(grid != null, "the manager has no DMX grid texture");
+            if (_validateKernel < 0) _validateKernel = cs.FindKernel("ValidateChannels");
+
+            // The kernel declares the channel buffer whether or not its branch is
+            // taken, and an unbound StructuredBuffer is not safe to dispatch with.
+            _dummyChannels ??= new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, sizeof(uint));
+
+            var readback = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
+            var values = new float[count];
+            try
+            {
+                cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels",
+                             Manager.ChannelBuffer ?? _dummyChannels);
+                cs.SetInt("_VRSLU_DMXChannelCount", 0);
+                cs.SetTexture(_validateKernel, "_DMXMainTex", grid);
+                cs.SetVector("_VRSLDMXTexelSize", new Vector4(
+                    1f / grid.width, 1f / grid.height, grid.width, grid.height));
                 cs.SetBuffer(_validateKernel, "_VRSLU_ValidationOut", readback);
                 cs.SetInt("_VRSLU_ValidationStart", 1);
                 cs.SetInt("_VRSLU_ValidationCount", count);
@@ -325,6 +374,8 @@ namespace VRSL.URP.Tests
             _root = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
             _target = null;
+            _dummyChannels?.Release();
+            _dummyChannels = null;
         }
     }
 }
