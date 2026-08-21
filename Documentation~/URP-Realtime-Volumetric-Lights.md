@@ -81,6 +81,10 @@ Both data sources (DMX, AudioLink) write the same `VRSLLightData` struct, so the
 | Strobe | Dedicated channel (pre-baked binary gate from `_VRSLU_DMXGridStrobeOutput`) | Not applicable |
 | Fine channels | Optional 16-bit pan/tilt via +1 / +3 | Not applicable |
 
+The DMX column describes the CRT chain. With a channel source assigned (see
+[`DMX-Channel-Sources.md`](DMX-Channel-Sources.md)) the same values arrive as bytes in a GPU
+channel buffer and the chain is bypassed; the Basis integration is one such source.
+
 The AudioLink CPU cost per frame is `N × 112 bytes` uploaded as one `GraphicsBuffer.SetData` call — well within typical SetData latency for any practical fixture count. There is no GPU→CPU readback in either path; the AudioLink and DMX textures stay GPU-resident.
 
 ---
