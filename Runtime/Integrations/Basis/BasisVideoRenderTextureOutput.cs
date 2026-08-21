@@ -315,8 +315,12 @@ namespace VRSL.URP.BasisIntegration
 
         void DrawInteractivePreview(BasisVideoRenderTextureOutput cfg, SerializedProperty[] uvProps)
         {
-            Texture tex = (Application.isPlaying && cfg.Player != null) ? cfg.Player.OutputTexture : null;
+            // Derived exactly as UpdatePreview derives it: the two previews showing
+            // different frames is worse than either being wrong on its own.
+            bool live = Application.isPlaying && cfg.Player != null && cfg.Player.OutputTexture != null;
+            Texture tex = live ? cfg.Player.OutputTexture : null;
             if (tex == null) tex = cfg.SetupPreview != null ? cfg.SetupPreview : cfg.Target;
+            bool flip = live && cfg.Player.OutputFrameIsTopLeftOrigin;
 
             // OUTPUT preview: the actual result written to the RT (rendered in UpdatePreview).
             DrawOutputPreview(cfg);
@@ -335,7 +339,14 @@ namespace VRSL.URP.BasisIntegration
 
             if (Event.current.type == EventType.Repaint)
             {
-                if (tex != null) GUI.DrawTexture(box, tex, ScaleMode.StretchToFill, false);
+                // The corner handles below live in UV space with v=0 at the bottom of
+                // the box, and the runtime flips v per client to land on the same
+                // content. A frame whose row 0 is the top of the picture therefore
+                // has to be drawn flipped, or a corner dragged onto something
+                // visible authors the mirror of it.
+                if (tex != null && flip)
+                    GUI.DrawTextureWithTexCoords(box, tex, new Rect(0f, 1f, 1f, -1f), false);
+                else if (tex != null) GUI.DrawTexture(box, tex, ScaleMode.StretchToFill, false);
                 else EditorGUI.DrawRect(box, new Color(0.12f, 0.12f, 0.12f));
                 DrawBorder(box, new Color(0.3f, 0.3f, 0.3f));
             }
