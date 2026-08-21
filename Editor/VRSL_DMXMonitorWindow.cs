@@ -20,7 +20,7 @@ namespace VRSL.URP.EditorScripts
     /// Read-only by design. It never writes a channel, so it can never be the cause of
     /// the fault it is being used to chase.
     ///
-    /// Menu: VRSL → URP → DMX Monitor. Play mode only — neither manager has
+    /// Menu: VRSL → URP → DMX Config → DMX Monitor. Play mode only — neither manager has
     /// <c>[ExecuteAlways]</c>, so nothing is initialised while the scene is stopped.
     /// </summary>
     public class VRSL_DMXMonitorWindow : EditorWindow

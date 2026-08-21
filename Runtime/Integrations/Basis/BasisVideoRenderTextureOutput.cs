@@ -74,9 +74,19 @@ namespace VRSL.URP.BasisIntegration
             if (blitMat != null) Destroy(blitMat);
         }
 
-        private void EnsureMaterial()
+        /// <summary>Blanks Target if this component is the one that owns it.
+        /// ClearWhenNoFrame is that claim of ownership, so a scene that leaves
+        /// the RT to something else keeps its own arrangement here too.</summary>
+        private void ClearTarget()
         {
-            if (blitMat != null) return;
+            if (!ClearWhenNoFrame || cleared) return;
+            Graphics.Blit(Texture2D.blackTexture, Target);
+            cleared = true;
+        }
+
+        private bool EnsureMaterial()
+        {
+            if (blitMat != null) return true;
             // The serialized reference is what pulls the shader into a player
             // build; nothing else refers to it, so a build made with this field
             // empty strips the shader and Shader.Find then answers nothing.
@@ -95,9 +105,10 @@ namespace VRSL.URP.BasisIntegration
                                  + "component: an empty field leaves the shader out of a player "
                                  + "build entirely.", this);
                 }
-                return;
+                return false;
             }
             blitMat = new Material(sh) { hideFlags = HideFlags.HideAndDontSave };
+            return true;
         }
 
         private void Update()
@@ -105,17 +116,13 @@ namespace VRSL.URP.BasisIntegration
             if (Target == null) return;
 
             Texture src = Player != null ? Player.OutputTexture : null;
-            if (src == null)
-            {
-                if (ClearWhenNoFrame && !cleared)
-                {
-                    Graphics.Blit(Texture2D.blackTexture, Target);
-                    cleared = true;
-                }
-                return;
-            }
+            if (src == null) { ClearTarget(); return; }
 
-            EnsureMaterial();
+            // Nothing framed means the RT keeps whatever it last held, and the
+            // decode chain reads it as DMX regardless. Blank it on the same terms
+            // as a missing frame rather than leaving the fixtures on a grid this
+            // component can no longer refresh.
+            if (!EnsureMaterial()) { ClearTarget(); return; }
 
             // Per-client frame-origin correction. Some Windows GPUs/drivers can't normalize the
             // decoded frame's orientation natively (the D3D11 video-processor mirror is optional),

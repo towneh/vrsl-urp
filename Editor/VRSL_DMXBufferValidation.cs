@@ -13,7 +13,7 @@ namespace VRSL.URP.EditorScripts
     /// Comparing against a ramp that never repeats on a fixture boundary makes a
     /// shift of one channel as visible as a shift of a hundred.
     ///
-    /// Menu: VRSL → URP → Validate DMX Channel Buffer. Play mode only, since the
+    /// Menu: VRSL → URP → DMX Config → Validate DMX Channel Buffer. Play mode only, since the
     /// buffer is uploaded per frame by the manager.
     /// </summary>
     public static class VRSL_DMXBufferValidation
