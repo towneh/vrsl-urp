@@ -50,7 +50,10 @@ namespace VRSL.URP.BasisIntegration
         /// <summary>The outer frame of the most recent decoded record.</summary>
         public VRSLTrussDmx.Header LastHeader { get; private set; }
 
-        public int UniverseCount => _universes;
+        // Read live rather than latched at enable, so a value assigned from code
+        // after AddComponent, or raised at runtime, takes effect. The grown
+        // count never shrinks below what a block has named.
+        public int UniverseCount => Mathf.Max(_named, Mathf.Max(1, minimumUniverses));
 
         // Pending blocks accumulate across every record delivered between two
         // hand-overs, since a snapshot may carry only the channels that changed
@@ -64,7 +67,8 @@ namespace VRSL.URP.BasisIntegration
         NativeArray<byte>         _values;
         int  _blockCount;
         int  _valueCount;
-        int  _universes;
+        // Highest universe a block has named, plus one.
+        int  _named;
         // One bit per Result, so each reason logs once.
         int  _logged;
         BasisMediaPlayer _subscribed;
@@ -72,7 +76,7 @@ namespace VRSL.URP.BasisIntegration
 
         void OnEnable()
         {
-            _universes   = Mathf.Max(1, minimumUniverses);
+            _named       = 0;
             _blockCount  = 0;
             _valueCount  = 0;
             _logged      = 0;
@@ -152,8 +156,8 @@ namespace VRSL.URP.BasisIntegration
             RecordsDecoded++;
             LastHeader = header;
             for (int i = before; i < _blockCount; i++)
-                if (_blocks[i].universe >= _universes)
-                    _universes = _blocks[i].universe + 1;
+                if (_blocks[i].universe >= _named)
+                    _named = _blocks[i].universe + 1;
         }
 
         public bool TryGetBlocks(out NativeArray<VRSLDMXBlock> blocks, out int blockCount,
