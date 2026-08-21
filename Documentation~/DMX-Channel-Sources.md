@@ -1,8 +1,8 @@
 # DMX Channel Sources
 
 How DMX reaches the fixtures as bytes rather than as a video frame, how to feed it
-from a Basis media player carrying DMX inside the stream, and how to write a source
-of your own.
+from a Basis media player carrying DMX inside the stream, how to frame a grid that
+arrives as picture, and how to write a source of your own.
 
 ## The two DMX paths
 
@@ -133,6 +133,77 @@ payload of blocks, each `(universe, start slot, length, age µs, values)`, all
 integers big-endian, carried as SEI `user_data_unregistered` under the UUID
 `b1f0a7d4-9c3e-4a52-8f61-2d7c5e0b93a8`. Anything else that delivers the same bytes
 can feed the same decoder.
+
+## Framing a grid into the RAW RT
+
+`BasisVideoRenderTextureOutput` takes a player's output frame and writes the grid
+into the RAW grid RenderTexture the CRT chain reads, replacing the capture camera
+that used to film a screen quad. It samples the source at four UVs, one per corner
+of the destination, which between them express crop, rotation, flip and shear.
+
+Its defaults are the identity mapping: bottom-left `(0,0)`, bottom-right `(1,0)`,
+top-right `(1,1)`, top-left `(0,1)`. That means "the source frame already **is** the
+RT's content, edge to edge, the same way up". It is a neutral starting point rather
+than a working one, and two things usually stand between it and a real stream.
+
+### The grid is a strip inside a larger frame
+
+A stream carrying a grid rarely carries only the grid. The corners crop to the part
+of the frame the grid occupies. Nothing surprising here, and the inspector's drag
+handles are enough on their own.
+
+### Horizontal mode turns the channel space on its side
+
+This is the part that is not guessable, and getting it wrong looks like a lighting
+design rather than a fault.
+
+The same 1560 addresses, three universes, are laid out differently in the two
+spaces. In the **RAW grid RT**, which is 13 cells wide and 120 tall, channel `c`
+sits at column `(c-1) % 13` and row `(c-1) / 13` counting up from the bottom: each
+**row** is one 13-channel fixture, reading left to right. In a **horizontal grid
+node's picture**, which is 120 cells wide and 13 tall, channel `c` sits at column
+`(c-1) / 13` and row `(c-1) % 13`: each **column** is one fixture, reading bottom
+to top.
+
+So the RT's column index is the picture's row index and its row index is the
+picture's column index. That is a transpose, a reflection about the diagonal, and
+not a rotation. A 90-degree rotation differs from it by a mirror, and will still
+fill the RT and still light the rig while reading every channel off a different
+fixture.
+
+**Vertical mode needs no transpose.** Its picture is 13 cells wide and 67 tall,
+numbered exactly as the RT numbers them, so a crop is the whole job. The transpose
+exists only because horizontal mode lays the same channel space on its side to make
+a wide strip.
+
+### Working it out for a given stream
+
+Take each corner of the destination, ask which channel sits there, then find where
+that channel is in the picture. For a 1920x1080 frame carrying the grid as a
+1920x208 strip whose bottom edge is 8 pixels up from the bottom of the frame, so
+`v` runs from `8/1080` to `216/1080`:
+
+| Destination corner | Channel there | Where it is in the picture | UV |
+| --- | --- | --- | --- |
+| Bottom-left | 1 | bottom-left of the strip | `(0, 0.0074074)` |
+| Bottom-right | 13 | **top**-left of the strip | `(0, 0.2)` |
+| Top-right | 1560 | top-right of the strip | `(1, 0.2)` |
+| Top-left | 1548 | **bottom**-right of the strip | `(1, 0.0074074)` |
+
+The signature of a transpose is that bottom-left and bottom-right share a `u` while
+their `v` differs, and likewise for the top pair. Four corners whose bottom pair
+share a `v` are a crop with the transpose missing.
+
+### Checking it
+
+None of this is visible. Identity, a rotation and a transpose all fill the RT and
+all light the rig, so the fixtures moving is no evidence. Judge it against content
+whose values are a known function of their own address: a ramp that marches with
+the frame gives every channel a value you can predict from its number, so a
+mis-framing shows up on any channel rather than only where a distinctive value
+happens to land. Rows N24 and N26 in [`TESTING.md`](../TESTING.md) do exactly that,
+and N26 reads the RT back directly, which is what separates a framing fault from a
+decode-chain one.
 
 ## Choosing between them
 
