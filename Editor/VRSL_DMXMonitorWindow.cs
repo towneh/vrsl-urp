@@ -157,6 +157,11 @@ namespace VRSL.URP.EditorScripts
         /// </summary>
         void OnEditorUpdate()
         {
+            // Nothing to sample while the scene is stopped: the manager has no
+            // [ExecuteAlways], so the window draws a fixed help box and asking it
+            // to redraw thirty times a second buys nothing. Entering play mode
+            // repaints the window, which stamps _lastDrawn and restarts the chain.
+            if (!Application.isPlaying) return;
             double now = EditorApplication.timeSinceStartup;
             if (now - _lastDrawn > DrawnWindow) return;
             if (now - _lastRepaint < SampleInterval) return;
