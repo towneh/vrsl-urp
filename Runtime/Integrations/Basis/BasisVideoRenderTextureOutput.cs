@@ -15,6 +15,7 @@ namespace VRSL.URP.BasisIntegration
     [Cilboxable]
 #endif
     [DisallowMultipleComponent]
+    [AddComponentMenu("VRSL-URP/VRSL Basis Video RT Output")]
     public class BasisVideoRenderTextureOutput : MonoBehaviour
     {
         [Tooltip("Player to read from. If unassigned, GetComponentInParent<BasisMediaPlayer>() is used.")]

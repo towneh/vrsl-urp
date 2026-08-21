@@ -24,7 +24,7 @@ namespace VRSL.URP.BasisIntegration
     [Cilboxable]
 #endif
     [DisallowMultipleComponent]
-    [AddComponentMenu("VRSL-URP/Basis SEI DMX Source")]
+    [AddComponentMenu("VRSL-URP/VRSL Truss SEI DMX Output")]
     public class BasisUserDataToVRSLDMX : MonoBehaviour, IVRSLDMXChannelSource
     {
         [Tooltip("Player decoding the stream that carries the DMX data.")]
