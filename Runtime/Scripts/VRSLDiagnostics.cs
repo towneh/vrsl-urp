@@ -92,22 +92,47 @@ namespace VRSL.URP
         }
 
         /// <summary>
-        /// Reads the tile list back and summarises it. Tells you whether culling
-        /// is running at all, how much it's actually saving, and whether the
-        /// per-tile cap is being hit — which silently drops fixtures.
+        /// The tile list as numbers. Shared by the console diagnostic and the
+        /// benchmark harness so both read one routine — a second copy of this loop
+        /// is a second place for the stride to go stale.
         /// </summary>
-        public static string TileStatus(VRSLTileCullPass cull, int fixtureCount)
+        public readonly struct TileSummary
         {
-            if (cull == null) return "Tile culling: pass not allocated";
-            if (cull.TileBuffer == null) return "Tile culling: no buffer";
-            if (cull.TileParams.x < 1f || cull.ActiveTileCount <= 0)
-                return "Tile culling: INACTIVE — every pixel iterates all "
-                     + $"{fixtureCount} fixture(s). Is lightCullShader assigned?";
+            /// <summary>False when the cull did not run: no pass, no buffer, or no
+            /// active tiles. Every other field is meaningless then.</summary>
+            public readonly bool  Engaged;
+            public readonly int   Tiles;
+            public readonly float Average;
+            public readonly int   Max;
+            public readonly int   Empty;
+            /// <summary>Tiles at the per-tile cap, where fixtures past it are
+            /// silently dropped.</summary>
+            public readonly int   Capped;
+            public readonly long  Total;
+
+            public TileSummary(bool engaged, int tiles, float average, int max, int empty, int capped, long total)
+            {
+                Engaged = engaged; Tiles = tiles; Average = average;
+                Max = max; Empty = empty; Capped = capped; Total = total;
+            }
+
+            public float EmptyPercent => Tiles > 0 ? 100f * Empty / Tiles : 0f;
+        }
+
+        /// <summary>
+        /// Reads the tile list back. One-shot: this stalls on the GPU, so it belongs
+        /// in a diagnostic or once per benchmark configuration, never on the frame
+        /// path.
+        /// </summary>
+        public static TileSummary SummariseTiles(VRSLTileCullPass cull)
+        {
+            if (cull == null || cull.TileBuffer == null
+             || cull.TileParams.x < 1f || cull.ActiveTileCount <= 0)
+                return new TileSummary(false, 0, 0f, 0, 0, 0, 0);
 
             int stride = VRSLTileCullPass.Stride;
             int tiles  = cull.ActiveTileCount;
 
-            // One-shot readback: fine for a diagnostic, never on the frame path.
             var raw = new uint[tiles * stride];
             cull.TileBuffer.GetData(raw, 0, 0, raw.Length);
 
@@ -122,7 +147,31 @@ namespace VRSL.URP
                 if (count >= VRSLTileCullPass.MaxLightsPerTile) capped++;
             }
 
-            float average = tiles > 0 ? (float)total / tiles : 0f;
+            return new TileSummary(true, tiles, (float)total / tiles, max, empty, capped, total);
+        }
+
+        /// <summary>
+        /// Reads the tile list back and summarises it. Tells you whether culling
+        /// is running at all, how much it's actually saving, and whether the
+        /// per-tile cap is being hit — which silently drops fixtures.
+        /// </summary>
+        public static string TileStatus(VRSLTileCullPass cull, int fixtureCount)
+        {
+            if (cull == null) return "Tile culling: pass not allocated";
+            if (cull.TileBuffer == null) return "Tile culling: no buffer";
+
+            var summary = SummariseTiles(cull);
+            if (!summary.Engaged)
+                return "Tile culling: INACTIVE — every pixel iterates all "
+                     + $"{fixtureCount} fixture(s). Is lightCullShader assigned?";
+
+            int   tiles   = summary.Tiles;
+            long  total   = summary.Total;
+            int   max     = summary.Max;
+            int   capped  = summary.Capped;
+            int   empty   = summary.Empty;
+            float average = summary.Average;
+
             var sb = new StringBuilder();
             if (total == 0)
                 return $"Tile culling: active — {tiles} tiles, but no fixture reached any of "
@@ -137,14 +186,25 @@ namespace VRSL.URP
             return sb.ToString();
         }
 
-        /// <summary>
-        /// Summarises decoded light data. Splits "no data reached the lights"
-        /// from "data is fine, something downstream is eating it" — the two have
-        /// completely different causes and the distinction is not visible on screen.
-        /// </summary>
-        public static string LightDataStatus(GraphicsBuffer lightData, int fixtureCount)
+        /// <summary>How many fixtures are actually emitting, and how brightly. Shared
+        /// by the console diagnostic and the benchmark harness.</summary>
+        public readonly struct EmissionSummary
         {
-            if (lightData == null || fixtureCount == 0) return "Light data: no buffer";
+            public readonly int   Emitting;
+            public readonly int   Total;
+            public readonly float Peak;
+
+            public EmissionSummary(int emitting, int total, float peak)
+            {
+                Emitting = emitting; Total = total; Peak = peak;
+            }
+        }
+
+        /// <summary>One-shot readback of the decoded light data. Stalls the GPU, so
+        /// diagnostics and once-per-configuration only.</summary>
+        public static EmissionSummary SummariseEmission(GraphicsBuffer lightData, int fixtureCount)
+        {
+            if (lightData == null || fixtureCount == 0) return new EmissionSummary(0, 0, 0f);
 
             // Mirrors VRSLLightData: 4 x float4, intensity in colorAndIntensity.w.
             var raw = new Vector4[fixtureCount * 4];
@@ -158,6 +218,27 @@ namespace VRSL.URP
                 if (intensity > 0f) emitting++;
                 if (intensity > peak) peak = intensity;
             }
+            return new EmissionSummary(emitting, fixtureCount, peak);
+        }
+
+        /// <summary>
+        /// Summarises decoded light data. Splits "no data reached the lights"
+        /// from "data is fine, something downstream is eating it" — the two have
+        /// completely different causes and the distinction is not visible on screen.
+        /// </summary>
+        public static string LightDataStatus(GraphicsBuffer lightData, int fixtureCount)
+        {
+            if (lightData == null)
+                return "Light data: NO BUFFER — the decode never allocated one, so this is "
+                     + "upstream of anything to do with fixtures";
+            if (fixtureCount == 0)
+                return "Light data: NO FIXTURES — the manager collected none, so there is "
+                     + "nothing to decode into. Check the fixtures are active and that "
+                     + "RefreshFixtures has run since they were added";
+
+            var summary = SummariseEmission(lightData, fixtureCount);
+            int emitting = summary.Emitting;
+            float peak = summary.Peak;
 
             if (emitting == 0)
                 return $"Light data: 0/{fixtureCount} emitting — ALL DARK: the decode produced "

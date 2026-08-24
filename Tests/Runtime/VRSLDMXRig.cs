@@ -36,6 +36,9 @@ namespace VRSL.URP.Tests
         const string ManagerPrefab = Pkg + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-URP-LightManager-Horizontal.prefab";
         const string FixturePrefab = Pkg + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab";
 
+        /// <summary>The camera's render target, for rows that read the frame back.</summary>
+        public RenderTexture Target => _target;
+
         public VRSL_URPLightManager             Manager { get; private set; }
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
         public readonly List<VRStageLighting_DMX_RealtimeLight> Fixtures = new();
@@ -70,7 +73,14 @@ namespace VRSL.URP.Tests
         public static float RampAt(int channel)
             => VRSL_SyntheticDMXChannelSource.RampValue(channel - 1) / 255f;
 
-        public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true)
+        /// <summary>Render target edge in pixels. The correctness rows only need a
+        /// camera that renders at all, so they take the default; the benchmark rows
+        /// raise it, because per-pixel cost is the thing they are measuring and at
+        /// 256 square there is not enough of it to clear the noise.</summary>
+        public const int TargetSize = 256;
+
+        public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
+                                       int targetSize = TargetSize)
         {
             VRSLDMXRig building = null;
             try
@@ -96,10 +106,15 @@ namespace VRSL.URP.Tests
 
             // A render target, because batch mode has no display to render to and
             // a camera without one produces nothing.
-            rig._target = new RenderTexture(256, 256, 24) { name = "VRSL test target" };
+            rig._target = new RenderTexture(targetSize, targetSize, 24) { name = "VRSL test target" };
             rig._camera = new GameObject("Camera").AddComponent<Camera>();
             rig._camera.transform.SetParent(rig._root.transform, false);
-            rig._camera.transform.position = new Vector3(0f, 2f, -12f);
+            // Aimed across the near end of the truss and down at the floor, so several
+            // beams land somewhere visible. Pointed along the horizon it saw one fixture
+            // and empty space.
+            var eye = new Vector3(6f, 4f, -12f);
+            rig._camera.transform.SetPositionAndRotation(
+                eye, Quaternion.LookRotation(new Vector3(10f, 0f, 4f) - eye, Vector3.up));
             rig._camera.clearFlags      = CameraClearFlags.SolidColor;
             rig._camera.backgroundColor = Color.black;
             rig._camera.targetTexture   = rig._target;
@@ -111,12 +126,32 @@ namespace VRSL.URP.Tests
             // and they would still produce smooth plausible directions while doing it.
             rig._camera.enabled         = false;
 
+            // A floor for the beams to land on.
+            //
+            // Without one the fixtures hung over empty space and the rig rendered an
+            // almost entirely black frame — measured at 0.09% of pixels lit, peak
+            // brightness 59 of 255. Everything downstream inherited that. The volumetric
+            // march ran on a couple of hundred pixels, so its step count was invisible
+            // and what looked like the cost of volumetrics was really the pass's fixed
+            // overhead; clearing the tile cull cost 0.0015 ms because there was nothing
+            // to light either way; and "identical image" rows were comparing two black
+            // rectangles. A rig that renders nothing cannot be asked what rendering
+            // costs.
+            var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
+            floor.name = "Floor";
+            floor.transform.SetParent(rig._root.transform, false);
+            floor.transform.localPosition = new Vector3(fixtures * Spacing * 0.5f, 0f, 0f);
+            floor.transform.localScale    = new Vector3(fixtures * Spacing * 0.2f + 4f, 1f, 6f);
+
             var fixtureSrc = Load<GameObject>(FixturePrefab);
             for (int i = 0; i < fixtures; i++)
             {
                 var go = UnityEngine.Object.Instantiate(fixtureSrc, rig._root.transform);
                 go.name = $"Fixture ({i:000})";
                 go.transform.localPosition = new Vector3(i * Spacing, 5.6f, 0f);
+                // Pointed at the floor, the way a hung fixture is, so its beam lands
+                // somewhere rather than running off to the far plane.
+                go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
                 // Legacy sector mode walks the flat space directly, which is what
                 // every row's prediction assumes. The universe field only exists
                 // on the non-legacy path and is exercised separately.
@@ -242,6 +277,39 @@ namespace VRSL.URP.Tests
         {
             _camera.Render();
         }
+
+        /// <summary>
+        /// Freeze everything that integrates over time, so two captures taken at
+        /// different points in a session render the same frame.
+        ///
+        /// Three things move on their own. Strobe alternates, and the manager's own
+        /// toggle holds every strobing fixture on. Gobo spin is a pure integrator that
+        /// never settles, so two captures a few hundred frames apart have the gobo at a
+        /// different angle. Movement damping converges towards its target rather than
+        /// reaching it, so it never quite arrives either.
+        ///
+        /// <b>Movement is frozen rather than warmed up.</b> Leaving it to settle was
+        /// tried and does not hold: two captures within one run came back identical
+        /// while two captures in different runs differed on 1341 pixels, because
+        /// convergence is asymptotic and any one-frame difference in how the run
+        /// started propagates for ever. Setting both smoothing bounds to zero makes the
+        /// damping term reach its target on the first frame instead, which is exact and
+        /// the same every run.
+        ///
+        /// Without this an image row compares two frames of the same scene at
+        /// different moments and reports a difference that is entirely the clock.
+        /// </summary>
+        public void FreezeForImageCapture()
+        {
+            Manager.disableStrobe = true;
+            foreach (var fixture in Fixtures) fixture.enableGoboSpin = false;
+            // smoothing of 0 gives lerp(previous, target, 1 - pow(0, dt)) = target.
+            Manager.movementSmoothingMax = 0f;
+            Manager.movementSmoothingMin = 0f;
+
+            Manager.MarkConfigDirty();
+        }
+
 
         /// <summary>Frames covering the given span of game time.</summary>
         public static int Frames(float seconds) => Mathf.RoundToInt(seconds / FrameDelta);
