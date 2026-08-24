@@ -58,9 +58,77 @@ namespace VRSL.URP.EditorScripts
                             + "light of any kind to get it.");
             report.AppendLine();
 
+            problems += ValidateCameras(urp, report);
             problems += ValidateRenderers(urp, report);
             problems += ValidateSceneShaders(report);
             return problems;
+        }
+
+        /// <summary>
+        /// Which renderer each camera in the scene actually renders through.
+        ///
+        /// A pipeline asset can carry several renderers with different settings — Basis
+        /// ships priming Forced on its desktop renderer and Disabled on its camera one —
+        /// and a camera picks exactly one. Listing the renderers without saying which
+        /// applies leaves an author to guess, and a camera that overrides nothing takes
+        /// the asset's default silently, so the answer is not visible on the camera
+        /// either.
+        /// </summary>
+        static int ValidateCameras(UniversalRenderPipelineAsset urp, StringBuilder report)
+        {
+            int defaultIndex = 0;
+            var assetSo = new SerializedObject(urp);
+            var defaultProperty = assetSo.FindProperty("m_DefaultRendererIndex");
+            if (defaultProperty != null) defaultIndex = defaultProperty.intValue;
+
+            var cameras = Object.FindObjectsByType<Camera>(
+                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+
+            report.AppendLine("Cameras in this scene:");
+            if (cameras.Length == 0)
+            {
+                report.AppendLine("      NOT CHECKED — the scene has no enabled camera, so "
+                                + "which renderer applies could not be worked out. Open a "
+                                + "scene with your own camera in it for this to mean anything.");
+                report.AppendLine();
+                return 0;
+            }
+
+            var used = new HashSet<int>();
+            foreach (var camera in cameras)
+            {
+                if (camera == null) continue;
+                int index = defaultIndex;
+                string how = "the asset's default";
+
+                var data = camera.GetComponent<UniversalAdditionalCameraData>();
+                if (data != null)
+                {
+                    var so = new SerializedObject(data);
+                    var property = so.FindProperty("m_RendererIndex");
+                    if (property != null && property.intValue >= 0)
+                    {
+                        index = property.intValue;
+                        how = "set on the camera";
+                    }
+                }
+
+                used.Add(index);
+                string name = index >= 0 && index < urp.rendererDataList.Length
+                            && urp.rendererDataList[index] != null
+                            ? urp.rendererDataList[index].name
+                            : "missing";
+                report.AppendLine($"      {camera.name} renders through renderer {index + 1} "
+                                + $"({name}), {how}.");
+            }
+
+            if (used.Count > 1)
+                report.AppendLine("      These cameras do not share a renderer, so the settings "
+                                + "below apply to different ones. Read each against the cameras "
+                                + "that use it.");
+
+            report.AppendLine();
+            return 0;
         }
 
         static int ValidateRenderers(UniversalRenderPipelineAsset urp, StringBuilder report)
@@ -119,10 +187,17 @@ namespace VRSL.URP.EditorScripts
         static int ValidateLayerMask(UniversalRendererData universal, HashSet<int> fixtureLayers,
                                      bool priming, StringBuilder report)
         {
+            var so0 = new SerializedObject(universal);
+            var mask0 = so0.FindProperty("m_OpaqueLayerMask");
             if (fixtureLayers.Count == 0)
             {
-                report.AppendLine("      No VRSL fixtures in the open scene, so the prepass "
-                                + "layer mask was not checked against anything.");
+                // Reported rather than passed over. "Nothing to check" and "checked and
+                // fine" are different answers and only one of them is reassurance.
+                report.AppendLine("      NOT CHECKED — no VRSL fixtures in the open scene. "
+                                + "Opaque layer mask is "
+                                + (mask0 != null ? DescribeMask(mask0.intValue) : "unreadable")
+                                + ". A fixture on a layer outside that, with priming on, does "
+                                + "not draw at all.");
                 return 0;
             }
 
@@ -203,10 +278,15 @@ namespace VRSL.URP.EditorScripts
             }
 
             report.AppendLine("Shaders in this scene:");
+            if (checkedAlready.Count == 0)
+            {
+                report.AppendLine("      NOT CHECKED — no VRSL shaders in the open scene.");
+                return 0;
+            }
             if (missing.Count == 0)
             {
-                report.AppendLine("      Every VRSL shader drawing opaque geometry has both "
-                                + "depth passes.");
+                report.AppendLine($"      All {checkedAlready.Count} VRSL shader(s) here that "
+                                + "draw opaque geometry have both depth passes.");
                 return 0;
             }
 
@@ -232,6 +312,20 @@ namespace VRSL.URP.EditorScripts
                     if (shader.FindPassTagValue(sub, pass, tag) == wanted)
                         return true;
             return false;
+        }
+
+        /// <summary>The layers a mask covers, named rather than as a bit pattern.</summary>
+        static string DescribeMask(int mask)
+        {
+            if (mask == ~0) return "everything";
+            var named = new List<string>();
+            for (int layer = 0; layer < 32; layer++)
+            {
+                if ((mask & (1 << layer)) == 0) continue;
+                string name = LayerMask.LayerToName(layer);
+                named.Add(string.IsNullOrEmpty(name) ? layer.ToString() : name);
+            }
+            return named.Count == 0 ? "nothing" : string.Join(", ", named);
         }
 
         /// <summary>Layers occupied by VRSL fixtures in the open scene.</summary>
