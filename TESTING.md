@@ -44,6 +44,9 @@ run rather than performed by hand:
 or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite builds its own
 rig in code, so it needs neither the profiling sample nor a hand-authored scene.
 
+The **Measurement harness** rows (H1-H6) are in the same assembly and run the same way. They
+measure rather than decode, so they are the slow part of a full run.
+
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
 in the project and holds the Basis integration rows (B7-B9 and B11 below). Those
 play a real stream: the fixtures are hosted at `https://mr.town/vod/`, and `VRSL_TRUSS_FIXTURES`
@@ -153,6 +156,109 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | P2 | — | Diagnostics with fixtures spread across the venue | Average lights/tile well below fixture count |
 | P3 | — | Profiling sample sweep, 10 → 25 → 50 → 100 → 200 | Frametime scales sub-linearly with fixture count |
 | P4 | — | `InsideCones` vs `OutsideCones` camera variants | Inside is the worst case; the gap shows culling working |
+
+### Measurement harness
+
+These judge the instrument rather than the package, and they exist because a measurement
+tool that is trusted and wrong is worse than no tool. **Re-run them after any change to how
+results are read** — that is the change most likely to break them silently.
+
+`VRSLBenchmarkTests` in the suite. They measure, so they are slower than the rest of it and
+they render at 1024 square: at the rig's default 256 there is not enough per-pixel work for
+a real regression to clear the noise, and a row that cannot fail under the fault it is
+looking for is worse than no row.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| H1 | — | **A-M0-1, the null run.** Capture, change nothing, capture again, compare | Every row **unchanged**, and the stated noise floor at or above the spread the two runs actually showed. Judge the guards as much as the verdict: each capture must report the package costing something. A run of zeroes compares as unchanged against anything, so a row of all-zeroes passing is the failure this row exists to catch, not a pass. Measured 2026-08-24 headless: package cost 0.257 and 0.293 ms CPU, delta 0.037 ms against a floor of 0.059 ms |
+| H2 | — | **A-M0-2, the seeded regression.** Same capture with `lightCullShader` cleared | Two halves. The **counter** half must pass anywhere: tile culling reads engaged in the baseline and off in the candidate, and the regression is reported with a counter change explaining it. The **timing** half needs a GPU clock and is `Inconclusive` without one, which is neither a pass nor a failure — see the batch-mode note below. Clearing the cull is a purely GPU regression: it removes a compute dispatch, so on a CPU clock it is marginally *cheaper*, and a CPU-basis verdict of Regressed is impossible rather than merely hard |
+| H3 | — | **A-M0-3.** Three captures of an unchanged scene; measure the spread across all three | The spread must be within a tolerance **declared in code** — 40% of the measured cost, with a 0.05 ms floor for costs too small for a fraction to mean anything. Judged against a declared figure rather than one derived from the same three runs, because a floor taken from the data it adjudicates cannot fail. It is a smoke test for a harness that has stopped working, not a precision certificate: batch mode reproduces poorly and inconsistently, measured at 5.9% of the cost on one run and 33.9% on the next at 48 frames a side. Raising to 160 frames a side brought it to around 10%. Measured 2026-08-24: 0.208, 0.190 and 0.188 ms CPU — a spread of 0.021 ms, which is 10.4% against the 40% allowed. It does get close: another run the same day spread 36.7%, so the tolerance is doing real work rather than sitting far above anything observed |
+| H5 | — | Quality `Standard` against quality `Off` | Two halves again. The **counter** half must pass anywhere: steps per light reads 24 at `Standard` and **0** at `Off`, which is the observable that says the volumetric pass is not being enqueued rather than merely being configured down. Clearing `volumetricShader` alone does not do it — the manager builds its material once and keeps it — so a preset that only cleared the field would report volumetrics off while running them at full cost. The **timing** half needs a GPU clock, direction included. It was briefly asserted on either clock, on the strength of one favourable reading of 0.069 ms against a stated 0.021 — then measured `Off` at 0.207 ms against `Standard` at 0.171, dearer by 0.036, with the counters still saying `Off` enqueued no pass at all. H3 explains it: the run-to-run spread on the CPU clock is around 0.055 ms, wider than the gap, so the sign flips as often as not. **A slim gap plus one confirming observation is not a row** |
+| H6 | — | `VRSLBenchmarkScene.SetActiveFixtures` at each count in the matrix | The manager must collect exactly the count the row claims. The sweep varies fixture count by activating a subset of one truss rather than rebuilding, and the subset is evenly spaced so the spread is identical at every count — taking the first N would cluster them at one end and change lights per tile, which is a counter the sweep reports. Rounding collisions at small counts are how this goes wrong, and it goes wrong silently. Measured 2026-08-24: exact at 10, 25, 50, 100 and 200 |
+| H4 | — | Any capture, first one in the process | Must be **discarded**. A session's opening capture runs pinned at exactly the capture delta — both halves at 16.666 ms with an IQR of 0.03 — so the difference cancels to zero while the counters look perfectly healthy. Idle frames do not clear it and neither does a longer warm-up inside the capture; disposing and rebuilding the rig does, which is why the warm-up is a whole capture taken and thrown away |
+
+### Image regression
+
+Rendered frames compared rather than eyeballed. `VRSLImageRegressionTests` in the suite.
+
+The default comparison is against **this machine's own previous capture**, not a
+committed image: two GPUs do not render identically, so a committed reference is a
+false-failure machine everywhere except where it was made. Committed references are the
+second mode, found through `VRSL_PERF_HOME`, and rows needing one skip with a message
+when it is unset — a row that goes red because an environment variable is missing
+teaches people to ignore red rows.
+
+Captures freeze everything that integrates over time. Strobe alternates, gobo spin never
+settles, and movement damping converges only after a warm-up. Without that freeze a row
+compares two frames of the same scene at different moments and reports a difference that
+is entirely the clock.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| P1 | — | Capture with `lightCullShader` assigned and again with it cleared | **Not one pixel different.** The cull decides which lights a tile iterates, never what they contribute, so any visual change means it is dropping a light that reaches the tile and the frametime saving is being paid for in wrong pixels. Measured 2026-08-24: bit-identical, 0 pixels differing. This is the row that makes the cull trustworthy enough for M3 to build on |
+| I3 | — | **A-M0-4, sensitivity.** Capture a frame, shift it by one pixel, compare | Detected. Measured: max 0.165, 449 pixels differing. Seeded by shifting a real captured frame rather than by a debug keyword in the volumetric shader — the claim is about what the comparator resolves, and this exercises exactly that without adding surface to shipped code |
+| I4 | — | **A-M0-4, specificity.** Capture the same unchanged scene twice | **Identical.** Without this row the sensitivity row above is satisfied by a comparator that calls everything different, which is exactly as useless as one that calls everything the same. Measured: bit-identical, which also says the capture freeze works |
+| I1 | — | Compare against this machine's last capture. **Seed it from the same shape of run you will verify with — a full suite run, normally** | Identical, or the row says what moved and writes the images. The first run on a machine seeds the stored frame and reports inconclusive; delete the stored image to re-seed after an intended change |
+| I2 | — | Compare against the committed reference, `VRSL_PERF_HOME` set | Identical **on the reference machine**. Expect a difference anywhere else and treat it as hardware, not regression. Skips cleanly when the variable is unset |
+
+**A reference frame is only valid for the run shape that seeded it.** Seeding from a
+filtered run and verifying in a full one reports 1341 pixels differing, identically
+every time — deterministic, but a property of what ran first rather than of the
+renderer. The difference is a narrow band at the far edge of the floor and the cause is
+not yet identified; blanking the DMX grid globals and discarding a warm-up capture were
+both tried and changed nothing. Seed and verify the same way and the rows are exact,
+which is what the suite does. Worth chasing before anyone relies on these rows across
+run shapes.
+
+A failing row writes `-expected`, `-actual` and an amplified `-diff` PNG under
+`VRSL-Benchmarks/image-failures/`, because a number cannot distinguish a global
+brightness shift from one wrong beam. The difference is amplified 16× — a real
+regression is often a handful of 8-bit steps, and an unamplified difference image is a
+black rectangle whatever went wrong.
+
+### The headless gate
+
+`.compilecheck/bench.sh` (local, like the other scripts).
+
+```
+bench.sh check                              # the gate: harness + image rows
+bench.sh compare <baseline> <candidate>     # adjudicate two runs, non-zero on regress
+```
+
+**It does not capture a sweep headlessly, on purpose.** Batch mode has no GPU clock, so
+a headless capture produces CPU-basis numbers nobody should quote in a results table.
+Capture from the editor window; adjudicate here. The verdict comes from the same
+`VRSLBaseline.Compare` the window calls, so the two cannot disagree.
+
+`compare` exits 0 when nothing regressed, 1 when something did or the inputs are
+unusable, and 2 when it refuses because the two runs are from different machines —
+refusing rather than failing, since exiting 1 there would train whoever reads the gate
+to pass `-force` by reflex. It fails when the log carries no verdict line, because a
+runner that exits successfully having compared nothing is worse than no runner.
+
+**A sweep measures nothing unless four things are true**, and each was found the hard
+way rather than reasoned out. It must render at a fixed size large enough to have work
+in it — at a Game view's 964x672 the GPU frame did not move at all as lights per tile
+went from 9 to 47. Its DMX source must be assigned to the manager explicitly, because
+the source's own `OnEnable` registration only lands if the manager already claimed the
+singleton. Strobe must be held off, or a random subset of the rig is lit each frame and
+the workload changes between rows. And it must own its scene, or a second manager
+fights it for the singleton. The **Emitting** column in a report is the quickest check
+that all four held: fixtures collected with none emitting means the run measured a dark
+scene, whatever else its numbers say.
+
+**A manager bounce rebuilds what `OnEnable` builds.** Configuring a manager and then
+cycling it off and on silently undoes anything that works by dropping something the
+manager rebuilds — quality `Off` most of all, which measured identical to `Standard`
+until the order was swapped. Configure *after* the bounce, and let a change that needs
+one, like clearing the cull shader, do its own.
+
+**Batch mode has no GPU clock.** `FrameTimingManager` returns a CPU frame time and a GPU
+frame time of exactly zero there, with `enableFrameTimingStats` already on in the host
+project. The harness falls back to the CPU difference, says so in the run's notes, and marks
+every affected row's cost basis `CPU` so a CPU figure is never quoted as a GPU one. Anything
+whose claim is about GPU cost therefore cannot be closed headlessly — run it from the editor
+window or a player.
 
 ### Volumetrics
 
