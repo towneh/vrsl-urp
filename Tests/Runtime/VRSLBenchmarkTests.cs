@@ -379,6 +379,84 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// M3's opening question: what is the existing tile cull actually worth?
+        ///
+        /// Not an acceptance row — it asserts almost nothing, on purpose. M3 is premised
+        /// on <c>lightsInTile x steps x work</c> dominating, and proposes attacking the
+        /// first term by culling cones instead of bounding spheres. Before building that,
+        /// this measures what the cull already saves, so the milestone starts from a
+        /// number rather than from the premise.
+        ///
+        /// It was measured once before at 0.0015 ms and the figure was withdrawn: the rig
+        /// had no floor then, so its beams landed on nothing and it rendered a frame with
+        /// 0.09% of pixels lit. A scene with nothing to light cannot say what culling
+        /// saves. With a floor it renders 62.8% lit, which is why the question is worth
+        /// putting again.
+        ///
+        /// What it does assert is that the comparison was valid — the cull engaged on one
+        /// side and not the other, and it rejected something. The saving itself is logged
+        /// rather than bounded, because nobody yet knows what it should be, and a row
+        /// asserting a number here would encode the guess this exists to replace.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator M3_HowMuchDoesTheTileCullActuallySave()
+        {
+            yield return WarmUpProcess();
+
+            var runs = new List<VRSLBenchmarkRun>();
+            yield return Capture("cull-on", runs);
+            yield return Capture("cull-off", runs, rig =>
+            {
+                // The cull resolves its shader in its constructor and the manager drops
+                // the pass on disable, so clearing the field takes only after a bounce.
+                rig.Manager.lightCullShader = null;
+                rig.Manager.enabled = false;
+                rig.Manager.enabled = true;
+            });
+
+            var on  = runs[0].rows[0];
+            var off = runs[1].rows[0];
+            double floor  = Math.Max(on.timings.Noise, off.timings.Noise);
+            double saving = off.timings.CostMs - on.timings.CostMs;
+
+            Debug.Log($"[M3] cull on  {on.timings.CostMs:F4} ms, "
+                    + $"{on.counters.lightsPerTileAverage:F1} lights/tile avg, "
+                    + $"{on.counters.lightsPerTileMax} max, "
+                    + $"{on.counters.emptyTilePercent:F0}% empty tiles");
+            Debug.Log($"[M3] cull off {off.timings.CostMs:F4} ms, iterating all "
+                    + $"{off.counters.fixtures} fixtures per pixel");
+            Debug.Log($"[M3] saving {saving:F4} ms ({on.timings.CostBasis}) against a floor "
+                    + $"of {floor:F4} ms. "
+                    + (saving > floor
+                       ? "A real saving, so M3 has something to improve on."
+                       : "Inside the noise, so the cull is worth little here and M3's "
+                       + "premise wants checking before the milestone is built."));
+
+            // The comparison has to have been valid, whatever the answer turns out to be.
+            Assert.IsTrue(on.counters.tileCullEngaged,
+                "the baseline capture reports tile culling inactive, so both sides ran "
+              + "unculled and the measurement is of nothing");
+            Assert.IsFalse(off.counters.tileCullEngaged,
+                "clearing lightCullShader left the cull reporting as engaged");
+            Assert.Less(on.counters.lightsPerTileAverage, (float)on.counters.fixtures,
+                $"the cull kept all {on.counters.fixtures} fixtures in the average tile, so "
+              + "it rejected nothing from this viewpoint and there is no saving to measure "
+              + "— a finding about the scene rather than about the cull");
+
+            // The saving is a GPU question and a CPU clock answers it backwards: the cull
+            // costs CPU time to dispatch and saves GPU time per pixel, so on the CPU it
+            // reliably measures as a small loss however well it is working. Batch mode has
+            // no GPU clock, so the number it produces here is not the one M3 needs.
+            if (!on.timings.HasGpu || !off.timings.HasGpu)
+                Assert.Inconclusive(
+                    $"the cull rejected well — {on.counters.lightsPerTileAverage:F1} of "
+                  + $"{on.counters.fixtures} fixtures per tile on average — but what that is "
+                  + "worth is a GPU question and this run has no GPU clock. On the CPU the "
+                  + "sign is inverted by construction, since dispatching the cull costs CPU "
+                  + $"and saves GPU. Observed: {saving:F4} ms CPU. Run it from the editor.");
+        }
+
+        /// <summary>
         /// H6. The sweep varies fixture count by activating a subset of one truss, so
         /// the count a row claims has to be the count the manager actually collected.
         /// Rounding collisions at small counts are the way this goes wrong, and it
