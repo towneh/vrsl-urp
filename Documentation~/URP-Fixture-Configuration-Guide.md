@@ -197,6 +197,24 @@ The supplied URP prefab variants ship without a Static sibling — the Realtime 
 
 ---
 
+## Writing a fixture shader: depth passes
+
+Three things, if you are authoring a shader rather than configuring a project.
+
+1. **A shader that draws in the opaque queue range needs `DepthOnly` and `DepthNormals`
+   passes.** Under depth priming URP draws opaque geometry with an `Equal` depth test
+   against a prepass, so a shader without them, or with them drawing something else, is
+   dropped from the frame entirely.
+2. **Whatever the forward vertex stage does, the depth passes must do too.** Pan and
+   tilt rotation, cone width and range scaling, alpha clipping, and the collapse to
+   degenerate geometry that hides a fixture at zero intensity all count. The package's
+   own moving-head shaders declare their depth passes with the same defines, structs
+   and include chain as their forward pass for exactly this reason — copy that shape.
+3. **No scene light is needed for depth.** It comes from the pipeline.
+
+`VRSL → URP → Validate Renderer Setup` checks the open scene against all of this and
+names anything that would not draw.
+
 ## Runtime API
 
 ```csharp

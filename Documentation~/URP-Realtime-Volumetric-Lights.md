@@ -428,6 +428,35 @@ Uploaded once per frame as global vectors in the volumetric pass `SetRenderFunc`
 
 ---
 
+## Depth requirements
+
+The package reads scene depth in three passes and asks the pipeline for it, which is
+the supported route.
+
+**No light of any kind is required.** Depth is a pipeline setting, not something a
+scene light produces. A room with no lights in it at all still lights surfaces and
+still renders beams. (The Built-in pipeline did need a light present, which is why
+older VRSL had a "depth light" prefab and a requirement toggle. Neither means anything
+here and both are gone.)
+
+**Depth priming may be on or off.** A project is free to choose, and the package is
+correct either way, in Forward and Forward+, with or without MSAA.
+
+**A custom opaque shader has to hold up its end.** With priming on, URP renders a depth
+prepass and then draws opaque geometry with an `Equal` depth test. Any shader whose
+depth passes do not reproduce its forward pass exactly is culled from the frame — not
+drawn wrong, drawn not at all. So a shader rendering in the opaque queue range needs
+`DepthOnly` and `DepthNormals` passes whose vertex stage matches its forward one,
+including any vertex displacement, alpha clipping, or conditional collapse to
+degenerate geometry. That is a URP requirement rather than a VRSL one; every shader
+this package ships already satisfies it.
+
+The symptom when one does not is a fixture body that disappears, which reads as a
+culling or LOD fault rather than a depth one — so it is worth checking rather than
+guessing. **`VRSL → URP → Validate Renderer Setup`** reports the priming mode, whether
+the prepass layer mask covers the layers your fixtures are on, and any VRSL shader in
+the open scene that draws opaque without both depth passes.
+
 ## Render Graph Integration
 
 All passes use the Unity 6 Render Graph API (`RecordRenderGraph`). Resources are imported into the graph as `BufferHandle` / `TextureHandle` with explicit `AccessFlags`, letting URP insert the correct GPU memory barriers and validate dependencies at compile time.

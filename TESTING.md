@@ -381,6 +381,37 @@ every affected row's cost basis `CPU` so a CPU figure is never quoted as a GPU o
 whose claim is about GPU cost therefore cannot be closed headlessly — run it from the editor
 window or a player.
 
+### Depth and priming
+
+The setting that decides these is **Depth Priming Mode** on the active Universal
+Renderer. With it on, URP renders a depth prepass and then draws opaque geometry with
+an `Equal` depth test, so a shader whose depth passes do not reproduce its forward pass
+is culled from the frame entirely — it draws nothing rather than drawing wrong, and the
+symptom reads as a culling or LOD fault.
+
+Basis ships priming `Forced` on its desktop renderer and `Disabled` elsewhere, so both
+are live in one project and both need checking.
+
+Run **`VRSL → URP → Validate Renderer Setup`** first. It reports the priming and
+rendering modes, whether the prepass layer mask covers the layers the scene's fixtures
+are on, and any VRSL shader drawing opaque without both depth passes — which is most of
+D1 to D4 answered before a scene is even entered.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| D1 | Both | Priming `Forced`, Forward+, moving heads under a cue | Every fixture body renders at every pan and tilt, no flicker and no partial geometry. A body that blinks out as it rotates is a depth pass not following the forward one |
+| D2 | Both | Priming `Disabled`, same scene | Identical result |
+| D3 | Both | Priming `Forced`, a fixture faded to black | Its body disappears **and leaves nothing occluding the geometry behind it**. A body that vanishes from colour while still writing depth punches a hole in the scene, which is the fault this row exists for |
+| D4 | Both | Priming `Forced`, MSAA 4x, if the renderer permits both | Identical result |
+| D5 | Both | A scene with no lights at all, of any type | Surfaces still light and beams still render. Depth comes from the pipeline; VRSL needs no light to obtain it, and the old depth-light requirement is gone |
+| D6 | — | `Validate Renderer Setup` on a renderer with priming `Forced` and a prepass layer mask excluding the fixture layer | Reports the mismatch and names the layer. Staying quiet is the failure — this is the configuration where fixtures silently do not draw |
+
+**The AudioLink moving heads are the ones to watch.** Their fixture-mesh shaders took
+their depth passes from URP's Lit shader until this milestone, which was safe only
+because the AudioLink branch of the shared vertex include has its rotation commented
+out. They declare their own now, so re-enabling AudioLink pan and tilt no longer breaks
+them under priming.
+
 ### Volumetrics
 
 | # | Path | Scenario | Expected |
