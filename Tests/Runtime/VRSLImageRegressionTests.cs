@@ -333,13 +333,29 @@ namespace VRSL.URP.Tests
                     "the stored capture is a different size to this frame, so nothing was "
                   + $"compared. Delete it to re-seed at the current size: {path}");
 
-                if (result.Max > VRSLImageCompare.Threshold)
+                // Judged on how much of the frame moved, not on bit-equality.
+                //
+                // A bit-exact bar has now failed twice for reasons that are not
+                // regressions. Depth priming draws opaque geometry with an Equal test
+                // against a prepass, so edge pixels scatter whenever priming state
+                // differs — and the D1/D2 row deliberately changes priming and runs
+                // immediately before these, leaving 159 pixels of 262144 differing at up
+                // to 24 of 255. A real regression is not that shape: a changed shader or
+                // a broken cull moves large contiguous areas.
+                //
+                // The budget is set well above what has been observed as benign (0.06%)
+                // and well below the unexplained run-shape difference (0.51%), which
+                // therefore still fails. That one is a genuine open question and should
+                // stay visible rather than be absorbed by a tolerance.
+                const float EdgeBudget = 0.25f;
+                if (result.DifferingPercent > EdgeBudget)
                 {
                     VRSLImageCompare.WriteImages(EvidenceFolder, "I1-local", previous, frame);
                     Assert.Fail(
-                        $"the frame moved since the last capture on this machine ({result}). "
-                      + "If the change was intended, delete the stored image to re-seed it: "
-                      + $"{path}. Images written to {EvidenceFolder}");
+                        $"{result.DifferingPercent:F2}% of the frame moved since the last "
+                      + $"capture on this machine, past the {EdgeBudget}% allowed for edge "
+                      + $"scatter ({result}). If the change was intended, delete the stored "
+                      + $"image to re-seed it: {path}. Images written to {EvidenceFolder}");
                 }
             }
             finally
