@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -256,6 +256,18 @@ namespace VRSL.URP
 
         void OnEnable()
         {
+            // Awake claims the singleton and OnDisable releases it, but Awake does not
+            // run again on re-enable, so a component toggled off and on would leave
+            // Instance null for the rest of the session and every render pass would
+            // early-out with nothing in the log. Re-claim it here, and only when it is
+            // free, so a second manager that took ownership meanwhile keeps it.
+            if (Instance == null) Instance = this;
+            // A manager that does not own the singleton must not set itself up. Nothing
+            // downstream checks ownership — OnBeginCameraRendering least of all — so a
+            // non-owner that subscribed would enqueue a second set of passes and write
+            // the same shader globals, which is duplicated work and wrong lighting
+            // rather than a harmless spare component.
+            if (Instance != this) return;
             EnsureFallbackBlackRT();
             RefreshFixtures();
             // Allocate the sampling-texture handle eagerly so the compute pass on
@@ -267,6 +279,11 @@ namespace VRSL.URP
 
         void OnDisable()
         {
+            // Released here and not only in OnDestroy. A disabled manager holding the
+            // singleton means a second one enabled afterwards destroys itself in Awake
+            // against an owner that is not running, and it is what makes the guarded
+            // reclaim in OnEnable able to fire at all.
+            if (Instance == this) Instance = null;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;

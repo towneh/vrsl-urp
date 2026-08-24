@@ -421,6 +421,12 @@ namespace VRSL.URP
             // quiet with no error. Re-claim it here, and only when it is free, so a
             // second manager that took ownership meanwhile keeps it.
             if (Instance == null) Instance = this;
+            // A manager that does not own the singleton must not set itself up. Nothing
+            // downstream checks ownership — OnBeginCameraRendering least of all — so a
+            // non-owner that subscribed would enqueue a second set of passes and write
+            // the same shader globals, which is duplicated work and wrong lighting
+            // rather than a harmless spare component.
+            if (Instance != this) return;
             CreateTextureHandles();
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would
@@ -437,6 +443,11 @@ namespace VRSL.URP
 
         void OnDisable()
         {
+            // Released here, not only in OnDestroy. Without it a disabled manager goes on
+            // owning the singleton, so a second one destroys itself in Awake against an
+            // owner that is not running — and the guarded reclaim in OnEnable can never
+            // fire, because Instance is never null for it to claim.
+            if (Instance == this) Instance = null;
             VRStageLighting_DMX_RealtimeLight.ConfigChanged -= OnFixtureConfigChanged;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
