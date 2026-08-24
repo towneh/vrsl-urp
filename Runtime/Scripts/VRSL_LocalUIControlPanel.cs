@@ -161,20 +161,6 @@ namespace VRSL.URP
         }
 
         [SerializeField]
-        private bool _requireDepthLight = true;
-
-        public bool RequireDepthLight
-        {
-            set
-            {
-                _requireDepthLight = value;
-                _CheckDepthLightStatus();
-                _DepthLightStatusReport();
-            }
-            get => _requireDepthLight;
-        }
-
-        [SerializeField]
         private bool _globalDisableStrobe = false;
 
         public bool GlobalDisableStrobe
@@ -621,6 +607,15 @@ namespace VRSL.URP
         }
         SetLensFlareQuality();
     }
+        /// <summary>
+        /// Pushes the volumetric quality keywords onto the materials the panel owns.
+        ///
+        /// It used to carry the depth-light requirement too, which is where the name
+        /// comes from. That was a Built-in RP workaround: a scene needed a light present
+        /// for depth to exist. URP has no such constraint — the package asks the pipeline
+        /// for depth per pass and gets it whether or not the scene contains a light — so
+        /// the requirement is gone and the name is kept only because it is public.
+        /// </summary>
         public void _CheckDepthLightStatus()
         {
 
@@ -630,9 +625,6 @@ namespace VRSL.URP
                 {
                     if(mat == null) continue;
                     mat.SetInt("_PotatoMode", VolumetricNoise ? 0 : 1);
-                    mat.SetInt("_UseDepthLight", RequireDepthLight ? 1 : 0);
-                    if(mat.HasProperty("_UseDepthLight")){
-                    SetKeyword(mat, "_USE_DEPTH_LIGHT", (Mathf.FloorToInt(mat.GetInt("_UseDepthLight"))) == 1 ? true : false);}
                     if(mat.HasProperty("_MAGIC_NOISE_ON_MED")){
                     SetKeyword(mat, "_MAGIC_NOISE_ON_MED", (Mathf.FloorToInt(mat.GetInt("_MAGIC_NOISE_ON_MED"))) == 1 ? true : false);}
                     if(mat.HasProperty("_MAGIC_NOISE_ON_HIGH")){
@@ -641,38 +633,7 @@ namespace VRSL.URP
                     SetKeyword(mat, "_POTATO_MODE_ON", (Mathf.FloorToInt(mat.GetInt("_PotatoMode"))) == 1 ? true : false);}
                 }
             }
-            if(projectionMaterials != null)
-            {
-                foreach(Material mat in projectionMaterials)
-                {
-                    if(mat == null) continue;
-                    mat.SetInt("_UseDepthLight", RequireDepthLight ? 1 : 0);
-                }
-            }
-            if(fixtureMaterials != null)
-            {
-                foreach(Material mat in fixtureMaterials)
-                {
-                    if(mat != null)
-                    {
-                        mat.SetInt("_UseDepthLight", RequireDepthLight ? 1 : 0);
-                        if(mat.HasProperty("_UseDepthLight")){
-                        SetKeyword(mat, "_USE_DEPTH_LIGHT", (Mathf.FloorToInt(mat.GetInt("_UseDepthLight"))) == 1 ? true : false);}
-                    }
-                }
-            }
             
-        }
-        void _DepthLightStatusReport()
-        {
-            // if(_requireDepthLight)
-            // {
-            //     Debug.Log("VRSL Control Panel: Enabling Depth Light Requirement");
-            // }
-            // else
-            // {
-            //     Debug.Log("VRSL Control Panel: Disabling Depth Light Requirement");
-            // }
         }
         
         void EnableCRTS(CustomRenderTexture[] rtArray)
@@ -991,8 +952,6 @@ namespace VRSL.URP
                     SetKeyword(target, "_MAGIC_NOISE_ON_MED", (Mathf.FloorToInt(target.GetInt("_MAGIC_NOISE_ON_MED"))) == 1 ? true : false);}
                     if(target.HasProperty("_MAGIC_NOISE_ON_HIGH")){
                     SetKeyword(target, "_MAGIC_NOISE_ON_HIGH", (Mathf.FloorToInt(target.GetInt("_MAGIC_NOISE_ON_HIGH"))) == 1 ? true : false);}
-                    if(target.HasProperty("_UseDepthLight")){
-                    SetKeyword(target, "_USE_DEPTH_LIGHT", (Mathf.FloorToInt(target.GetInt("_UseDepthLight"))) == 1 ? true : false);}
                     if(target.HasProperty("_PotatoMode")){
                     SetKeyword(target, "_POTATO_MODE_ON", (Mathf.FloorToInt(target.GetInt("_PotatoMode"))) == 1 ? true : false);}
                     if(target.HasProperty("_HQMode")){
@@ -1014,8 +973,6 @@ namespace VRSL.URP
                     SetKeyword(target, "_MAGIC_NOISE_ON_MED", (Mathf.FloorToInt(target.GetInt("_MAGIC_NOISE_ON_MED"))) == 1 ? true : false);}
                     if(target.HasProperty("_MAGIC_NOISE_ON_HIGH")){
                     SetKeyword(target, "_MAGIC_NOISE_ON_HIGH", (Mathf.FloorToInt(target.GetInt("_MAGIC_NOISE_ON_HIGH"))) == 1 ? true : false);}
-                    if(target.HasProperty("_UseDepthLight")){
-                    SetKeyword(target, "_USE_DEPTH_LIGHT", (Mathf.FloorToInt(target.GetInt("_UseDepthLight"))) == 1 ? true : false);}
                     if(target.HasProperty("_PotatoMode")){
                     SetKeyword(target, "_POTATO_MODE_ON", (Mathf.FloorToInt(target.GetInt("_PotatoMode"))) == 1 ? true : false);}
                     if(target.HasProperty("_HQMode")){
@@ -1037,8 +994,6 @@ namespace VRSL.URP
                     SetKeyword(target, "_MAGIC_NOISE_ON_MED", (Mathf.FloorToInt(target.GetInt("_MAGIC_NOISE_ON_MED"))) == 1 ? true : false);}
                     if(target.HasProperty("_MAGIC_NOISE_ON_HIGH")){
                     SetKeyword(target, "_MAGIC_NOISE_ON_HIGH", (Mathf.FloorToInt(target.GetInt("_MAGIC_NOISE_ON_HIGH"))) == 1 ? true : false);}
-                    if(target.HasProperty("_UseDepthLight")){
-                    SetKeyword(target, "_USE_DEPTH_LIGHT", (Mathf.FloorToInt(target.GetInt("_UseDepthLight"))) == 1 ? true : false);}
                     if(target.HasProperty("_PotatoMode")){
                     SetKeyword(target, "_POTATO_MODE_ON", (Mathf.FloorToInt(target.GetInt("_PotatoMode"))) == 1 ? true : false);}
                     if(target.HasProperty("_HQMode")){
