@@ -434,6 +434,14 @@ namespace VRSL.URP
             // the same shader globals, which is duplicated work and wrong lighting
             // rather than a harmless spare component.
             if (Instance != this) return;
+            TakeOwnership();
+        }
+
+        /// <summary>Set up as the manager everything downstream reaches through
+        /// <see cref="Instance"/>. Called on enable, and on being handed the singleton
+        /// by an owner that is standing down.</summary>
+        void TakeOwnership()
+        {
             CreateTextureHandles();
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would
@@ -454,7 +462,8 @@ namespace VRSL.URP
             // owning the singleton, so a second one destroys itself in Awake against an
             // owner that is not running — and the guarded reclaim in OnEnable can never
             // fire, because Instance is never null for it to claim.
-            if (Instance == this) Instance = null;
+            bool wasOwner = Instance == this;
+            if (wasOwner) Instance = null;
             VRStageLighting_DMX_RealtimeLight.ConfigChanged -= OnFixtureConfigChanged;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
@@ -466,7 +475,36 @@ namespace VRSL.URP
             ReleaseBuffers();
             ReleaseChannelBuffers();
             ReleaseTextureHandles();
+
+            // Last, so this one has finished tearing down before another starts
+            // building. Both hold their own buffers, but the shipped state should
+            // never be two managers with resources allocated at once.
+            if (wasOwner) HandOverOwnership();
         }
+        /// <summary>
+        /// Give the singleton to another manager that is still running.
+        ///
+        /// Nothing re-runs <c>OnEnable</c> on a component that is already enabled, so a
+        /// manager that stood down because something else owned the singleton would stay
+        /// stood down for the rest of the session once that owner was switched off. The
+        /// scene would then hold an enabled manager, no owner, and no lighting.
+        /// </summary>
+        void HandOverOwnership()
+        {
+            foreach (var other in FindObjectsByType<VRSL_URPLightManager>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (other == null || other == this || !other.isActiveAndEnabled) continue;
+                // Scene teardown disables every manager in turn. Handing over then would
+                // build buffers on a component that is about to be destroyed, and
+                // allocating during shutdown is where Unity starts logging.
+                if (!other.gameObject.scene.isLoaded) continue;
+                Instance = other;
+                other.TakeOwnership();
+                return;
+            }
+        }
+
 
         // Inspector tweak on any VRStageLighting_DMX_RealtimeLight in the scene.
         // Mark dirty so the next LateUpdate re-uploads the config buffer with the

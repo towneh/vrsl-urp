@@ -70,5 +70,59 @@ namespace VRSL.URP.Tests
                 "the singleton outlived both managers, so every row after this one starts "
               + "against a claim it cannot see");
         }
+
+        /// <summary>
+        /// The owner standing down hands the singleton to a manager that is still running.
+        ///
+        /// A manager enabled while something else owns the singleton stands down, and
+        /// nothing re-runs OnEnable on a component that is already enabled. Without a
+        /// handover it would stay stood down for the rest of the session, so switching
+        /// off the owner would leave the scene with an enabled manager, no owner and no
+        /// lighting.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator StandingDownHandsTheSingletonToAManagerThatIsStillRunning()
+        {
+            Assert.IsNull(VRSL_URPLightManager.Instance,
+                "something outside this row already holds the singleton, so the row cannot "
+              + "tell who claimed it");
+
+            GameObject ownerGo = null, spareGo = null;
+            try
+            {
+                ownerGo = new GameObject("running manager");
+                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+
+                // Inactive first so its Awake sees `enabled` already false, which is how a
+                // component serialised into a scene switched off arrives.
+                spareGo = new GameObject("spare manager");
+                spareGo.SetActive(false);
+                var spare = spareGo.AddComponent<VRSL_URPLightManager>();
+                spare.enabled = false;
+                spareGo.SetActive(true);
+
+                spare.enabled = true;
+                yield return null;
+                Assert.IsTrue(VRSL_URPLightManager.Instance == owner,
+                    "the spare took the singleton from the running manager on being enabled");
+
+                owner.enabled = false;
+                yield return null;
+
+                Assert.IsTrue(VRSL_URPLightManager.Instance == spare,
+                    "the owner stood down and handed the singleton to nobody. The spare is "
+                  + "still enabled and will not get another OnEnable, so the scene has a "
+                  + "manager in it and no light path");
+            }
+            finally
+            {
+                if (ownerGo != null) Object.DestroyImmediate(ownerGo);
+                if (spareGo != null) Object.DestroyImmediate(spareGo);
+            }
+
+            Assert.IsNull(VRSL_URPLightManager.Instance,
+                "the singleton outlived both managers, so every row after this one starts "
+              + "against a claim it cannot see");
+        }
     }
 }

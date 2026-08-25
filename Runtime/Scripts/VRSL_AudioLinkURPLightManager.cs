@@ -275,6 +275,14 @@ namespace VRSL.URP
             // the same shader globals, which is duplicated work and wrong lighting
             // rather than a harmless spare component.
             if (Instance != this) return;
+            TakeOwnership();
+        }
+
+        /// <summary>Set up as the manager everything downstream reaches through
+        /// <see cref="Instance"/>. Called on enable, and on being handed the singleton
+        /// by an owner that is standing down.</summary>
+        void TakeOwnership()
+        {
             EnsureFallbackBlackRT();
             RefreshFixtures();
             // Allocate the sampling-texture handle eagerly so the compute pass on
@@ -290,7 +298,8 @@ namespace VRSL.URP
             // singleton means a second one enabled afterwards destroys itself in Awake
             // against an owner that is not running, and it is what makes the guarded
             // reclaim in OnEnable able to fire at all.
-            if (Instance == this) Instance = null;
+            bool wasOwner = Instance == this;
+            if (wasOwner) Instance = null;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;
@@ -302,7 +311,36 @@ namespace VRSL.URP
             ReleaseAudioLinkHandle();
             ReleaseSamplingTextureHandle();
             ReleaseFallbackBlackRT();
+
+            // Last, so this one has finished tearing down before another starts
+            // building. Both hold their own buffers, but the shipped state should
+            // never be two managers with resources allocated at once.
+            if (wasOwner) HandOverOwnership();
         }
+        /// <summary>
+        /// Give the singleton to another manager that is still running.
+        ///
+        /// Nothing re-runs <c>OnEnable</c> on a component that is already enabled, so a
+        /// manager that stood down because something else owned the singleton would stay
+        /// stood down for the rest of the session once that owner was switched off. The
+        /// scene would then hold an enabled manager, no owner, and no lighting.
+        /// </summary>
+        void HandOverOwnership()
+        {
+            foreach (var other in FindObjectsByType<VRSL_AudioLinkURPLightManager>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (other == null || other == this || !other.isActiveAndEnabled) continue;
+                // Scene teardown disables every manager in turn. Handing over then would
+                // build buffers on a component that is about to be destroyed, and
+                // allocating during shutdown is where Unity starts logging.
+                if (!other.gameObject.scene.isLoaded) continue;
+                Instance = other;
+                other.TakeOwnership();
+                return;
+            }
+        }
+
 
         void OnDestroy()
         {
