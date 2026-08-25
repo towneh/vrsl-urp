@@ -514,6 +514,12 @@ namespace VRSL.URP
                 if (!other.gameObject.scene.isLoaded) continue;
                 Instance = other;
                 other.ChannelSource = source;
+                // Moved, not copied. A source detaches by looking its manager up through
+                // Instance, so it would only ever clear the new owner's reference — and a
+                // copy left here is typed as the interface, which does not compare null the
+                // way a component-typed reference to a destroyed object does. This manager
+                // taking the singleton back later would publish from it instead of stopping.
+                ChannelSource = null;
                 other.TakeOwnership();
                 // Published immediately rather than left to the successor's next
                 // LateUpdate. TakeOwnership binds a one-word channel buffer, and the
