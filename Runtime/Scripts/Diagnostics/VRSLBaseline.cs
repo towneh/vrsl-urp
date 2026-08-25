@@ -112,6 +112,11 @@ namespace VRSL.URP
         {
             if (baseline == null || candidate == null)
                 throw new ArgumentNullException(baseline == null ? nameof(baseline) : nameof(candidate));
+            if (baseline.environment == null || candidate.environment == null)
+                throw new ArgumentException(
+                    "a run with no environment block cannot be compared: the machine it was "
+                  + "captured on is what decides whether the numbers mean anything. The file "
+                  + "is not one this wrote, or it is truncated.");
 
             var comparison = new VRSLComparison
             {
@@ -126,7 +131,24 @@ namespace VRSL.URP
             }
 
             var baseRows = new Dictionary<string, VRSLBenchmarkRow>();
-            foreach (var row in baseline.rows) baseRows[row.config.Key] = row;
+            foreach (var row in baseline.rows)
+            {
+                if (row?.config == null)
+                    throw new ArgumentException(
+                        "a baseline row has no configuration, so there is nothing to match a "
+                      + "candidate row against. The file is not one this wrote, or it is "
+                      + "truncated.");
+                // Refused rather than swallowed. A sweep writes one row per configuration,
+                // so a duplicate key is a file that has been merged or edited by hand — and
+                // letting the last one win silently leaves the verdict counts disagreeing
+                // with the matrix the report prints beside them.
+                if (baseRows.ContainsKey(row.config.Key))
+                    throw new ArgumentException(
+                        $"the baseline has more than one row for {row.config.Key}. A sweep "
+                      + "writes one row per configuration, so this file has been merged or "
+                      + "edited; comparing it would report fewer rows than it contains.");
+                baseRows[row.config.Key] = row;
+            }
 
             // The floor cannot sit below the spread the runs actually showed, so a
             // stored figure from a quieter day is raised to meet them rather than
@@ -223,6 +245,16 @@ namespace VRSL.URP
                 into.Add($"empty tiles {before.emptyTilePercent:F1}% → {after.emptyTilePercent:F1}%");
             if (before.stepsPerLight != after.stepsPerLight)
                 into.Add($"steps/light {before.stepsPerLight} → {after.stepsPerLight}");
+            // Emitting is the counter that says whether anything was lit at all, so a run
+            // that went dark has to read as a counter change rather than as a quiet one.
+            if (before.emittingFixtures != after.emittingFixtures)
+                into.Add($"emitting {before.emittingFixtures} → {after.emittingFixtures}");
+            if (before.channelCount != after.channelCount)
+                into.Add($"channels {before.channelCount} → {after.channelCount}");
+            if (before.activeTiles != after.activeTiles)
+                into.Add($"active tiles {before.activeTiles} → {after.activeTiles}");
+            if (Math.Abs(before.peakIntensity - after.peakIntensity) > 0.01f)
+                into.Add($"peak intensity {before.peakIntensity:F2} → {after.peakIntensity:F2}");
             if (before.cappedTiles != after.cappedTiles)
                 into.Add($"capped tiles {before.cappedTiles} → {after.cappedTiles}");
             if (before.tileCullEngaged != after.tileCullEngaged)
