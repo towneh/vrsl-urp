@@ -22,9 +22,25 @@ namespace VRSL.URP.Tests
         const int ImageSize    = 512;
         const int WarmUpFrames = 120;
 
-        /// <summary>Render a frame with the renderer's priming set as given.</summary>
-        static IEnumerator CaptureAtPriming(DepthPrimingMode mode, System.Action<Texture2D> onCaptured)
+        /// <summary>
+        /// Render a frame with every Universal Renderer's priming set as given, and hand
+        /// back the frame together with whatever else the caller wants sampled while the
+        /// rig is still standing.
+        ///
+        /// <paramref name="whileStanding"/> runs before the rig is disposed. Anything
+        /// asked about the scene after this coroutine returns is being asked of a torn
+        /// down one, which is how a row ends up proving nothing.
+        /// </summary>
+        static IEnumerator CaptureAtPriming(DepthPrimingMode mode,
+                                            System.Action<Texture2D> onCaptured,
+                                            System.Action whileStanding = null)
         {
+            var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
+            foreach (var r in Renderers()) restore[r] = r.depthPrimingMode;
+            foreach (var r in restore.Keys) r.depthPrimingMode = mode;
+
+            try
+            {
             using var rig = VRSLDMXRig.Build(targetSize: ImageSize);
             rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
             rig.Manager.enabled = false;
@@ -37,7 +53,14 @@ namespace VRSL.URP.Tests
                 rig.RenderFrame();
             }
 
+            whileStanding?.Invoke();
             onCaptured(VRSLImageCompare.Read(rig.Target));
+            }
+            finally
+            {
+                foreach (var pair in restore)
+                    if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
+            }
         }
 
         /// <summary>Every Universal Renderer on the active pipeline asset.</summary>
@@ -90,6 +113,12 @@ namespace VRSL.URP.Tests
 
                 foreach (var r in renderers) r.depthPrimingMode = DepthPrimingMode.Forced;
                 yield return null;
+                // Read back like the Disabled write above. A renderer that clamps or
+                // refuses Forced would leave both captures at Disabled, and the row would
+                // pass on two identical frames having varied nothing.
+                foreach (var r in renderers)
+                    Assert.AreEqual(DepthPrimingMode.Forced, r.depthPrimingMode,
+                        $"'{r.name}' did not accept a priming change, so this row varied nothing");
                 yield return CaptureAtPriming(DepthPrimingMode.Forced, t => forced = t);
 
                 // Neither frame may be empty. A fixture culled by a depth pass that
@@ -163,12 +192,16 @@ namespace VRSL.URP.Tests
         public IEnumerator D5_ASceneWithNoLightsStillRenders()
         {
             Texture2D frame = null;
-            yield return CaptureAtPriming(DepthPrimingMode.Disabled, t => frame = t);
+            Light[] lights = null;
+            yield return CaptureAtPriming(DepthPrimingMode.Disabled, t => frame = t,
+                // Sampled while the rig is up. The rig is disposed when the capture
+                // coroutine ends, so a light it had built would already be gone and the
+                // scan would pass against an empty scene whatever had been there.
+                () => lights = Object.FindObjectsByType<Light>(
+                    FindObjectsInactive.Exclude, FindObjectsSortMode.None));
 
             try
             {
-                var lights = Object.FindObjectsByType<Light>(
-                    FindObjectsInactive.Exclude, FindObjectsSortMode.None);
                 Assert.IsEmpty(lights,
                     "the scene has a light in it, so this row cannot claim that VRSL renders "
                   + "without one. The rig builds no lights; something else added it");
