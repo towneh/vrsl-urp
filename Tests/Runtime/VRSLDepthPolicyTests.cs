@@ -101,6 +101,23 @@ namespace VRSL.URP.Tests
                 Assert.Ignore("No Universal Renderer on the active pipeline asset, so there "
                             + "is no priming setting to vary.");
 
+            // Setting the mode is not the same as URP acting on it. Priming needs a
+            // single-sample target and forward rendering — with MSAA up, or under
+            // Deferred, URP renders as though it were Disabled whatever the field says.
+            // Both captures would then be the same configuration, the images would match,
+            // and the row would pass having varied nothing at all.
+            if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset asset
+             && asset.msaaSampleCount > 1)
+                Assert.Ignore($"MSAA is {asset.msaaSampleCount}x on the active pipeline "
+                            + "asset, and URP does not prime on a multisampled target. Both "
+                            + "captures would render unprimed and match for the wrong reason.");
+
+            foreach (var r in renderers)
+                if (r.renderingMode.ToString().Contains("Deferred"))
+                    Assert.Ignore($"'{r.name}' renders {r.renderingMode}, and URP does not "
+                                + "prime under deferred. Both captures would render unprimed "
+                                + "and match for the wrong reason.");
+
             var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
             foreach (var r in renderers) restore[r] = r.depthPrimingMode;
 

@@ -403,7 +403,7 @@ answered before a scene is even entered.
 | D1 | Both | Priming `Forced`, Forward+, moving heads under a cue | Every fixture body renders at every pan and tilt, no flicker and no partial geometry. A body that blinks out as it rotates is a depth pass not following the forward one |
 | D2 | Both | Priming `Disabled`, same scene | Identical result |
 | D3 | Both | Priming `Forced`, a fixture faded to black | Its body disappears **and leaves nothing occluding the geometry behind it**. A body that vanishes from colour while still writing depth punches a hole in the scene, which is the fault this row exists for |
-| D4 | Both | Priming `Forced`, MSAA 4x, if the renderer permits both | Identical result |
+| D4 | Both | Priming `Forced`, MSAA 4x | Identical result — and note what this row is really asking. **URP does not prime with MSAA on**: it requires a single-sample target, so `Forced` plus MSAA renders as though priming were `Disabled`. The row therefore checks that raising MSAA breaks nothing, not that priming and MSAA work together, and it cannot catch a depth pass that disagrees with its forward pass. D1 is the row that does |
 | D5 | Both | A scene with no lights at all, of any type | Surfaces still light and beams still render. Depth comes from the pipeline; VRSL needs no light to obtain it, and the old depth-light requirement is gone |
 | D6 | — | `Validate Renderer Setup` on a renderer with priming `Forced` and a prepass layer mask excluding the fixture layer | Reports the mismatch and names the layer. Staying quiet is the failure — this is the configuration where fixtures silently do not draw |
 

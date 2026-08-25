@@ -440,7 +440,14 @@ older VRSL had a "depth light" prefab and a requirement toggle. Neither means an
 here and both are gone.)
 
 **Depth priming may be on or off.** A project is free to choose, and the package is
-correct either way, in Forward and Forward+, with or without MSAA.
+correct either way, in Forward and Forward+.
+
+**With MSAA on, priming does not run at all.** URP requires a single-sample target for
+it, so a renderer set to `Forced` with MSAA above 1x renders as though priming were
+`Disabled` — as it does under Deferred, on a camera that is not the first to write depth,
+and on WebGL. That is worth knowing before concluding a shader is fine: a depth pass that
+disagrees with its forward pass costs nothing on an MSAA target and takes the geometry
+away the moment somebody turns MSAA off.
 
 **A custom opaque shader has to hold up its end.** With priming on, URP renders a depth
 prepass and then draws opaque geometry with an `Equal` depth test. Any shader whose
