@@ -300,6 +300,11 @@ namespace VRSL.URP
             double floor = 0.0;
             foreach (var row in b.rows)
             {
+                if (row?.config == null)
+                    throw new ArgumentException(
+                        "a row has no configuration, so the floor derived from these two runs "
+                      + "would be taken from fewer rows than they contain. The file is not one "
+                      + "this wrote, or it is truncated.");
                 if (!byKey.TryGetValue(row.config.Key, out var other)) continue;
 
                 // A row that timed nothing carries a cost of zero, and zero against a
