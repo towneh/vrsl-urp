@@ -15,14 +15,15 @@ The two paths share most authoring concepts; differences are called out per sect
 
 The three URP-only shaders (`Hidden/VRSL-URP/DeferredLighting`, `Hidden/VRSL-URP/VolumetricLighting`, `Hidden/VRSL-URP/SurfaceProperties`) ship at `Runtime/Shaders/Surface/` inside this package. URP is a hard dependency, so the shaders compile unconditionally and the Light Manager menu utilities can resolve them via `Shader.Find` without any sample-import step.
 
-VRSL never reads, mutates, or recommends URP asset / URP renderer asset settings — those belong to your project. The realtime light path is implemented entirely through runtime pass injection and a VRSL-owned surface prepass, so it co-exists with whatever URP renderer configuration the project uses.
+VRSL never mutates URP asset / URP renderer asset settings — those belong to your project. It reads them in one place, `Validate Renderer Setup`, which reports what it finds and says what to change; making the change is yours. The realtime light path is implemented entirely through runtime pass injection and a VRSL-owned surface prepass, so it co-exists with whatever URP renderer configuration the project uses.
 
-Two menu utilities under `VRSL → URP` cover scene-level setup. Both are idempotent — safe to re-run.
+Three menu utilities under `VRSL → URP` cover scene-level setup. All are idempotent — safe to re-run, and the third only ever reads.
 
 | Menu | Effect |
 |---|---|
 | **VRSL → URP → Add Light Manager to Active Scene** | Creates a `VRSL URP Light Manager` GameObject in the active scene with the compute, light-cull, lighting, surface-properties and volumetric shader references assigned. |
 | **VRSL → URP → AudioLink Config → Setup AudioLink Realtime Lights in Scene** | Adds `VRStageLighting_AudioLink_RealtimeLight` to every AudioLink mover spotlight in the active scene and wires up pan/tilt transforms. |
+| **VRSL → URP → Validate Renderer Setup** | Reads the active pipeline asset, its renderers and the open scene, and reports which renderer each camera uses, the rendering and depth-priming modes, whether the prepass layer mask covers the layers your fixtures sit on, and any opaque shader here without both depth passes. **Read-only — it changes nothing.** |
 
 The managers inject their render passes at runtime via `RenderPipelineManager.beginCameraRendering`, so there is no `ScriptableRendererFeature` to add to the URP Renderer asset. This is what lets the package work in environments where users don't author the renderer asset (notably VRChat worlds, where the renderer is owned by the VRChat client).
 

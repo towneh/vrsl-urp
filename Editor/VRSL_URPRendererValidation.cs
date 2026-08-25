@@ -184,8 +184,13 @@ namespace VRSL.URP.EditorScripts
                 report.AppendLine($"      Rendering mode: {universal.renderingMode}");
                 report.AppendLine($"      Depth priming:  {universal.depthPrimingMode}");
 
-                bool priming = universal.depthPrimingMode != DepthPrimingMode.Disabled;
-                if (priming)
+                // Auto is not Forced. URP primes under Auto only when something else in
+                // the frame already requires a depth prepass, so a layer-mask mismatch
+                // there is a thing that may bite rather than one that certainly does, and
+                // reporting it as a failure puts a red line against a scene that renders.
+                bool priming  = universal.depthPrimingMode == DepthPrimingMode.Forced;
+                bool mayPrime = universal.depthPrimingMode == DepthPrimingMode.Auto;
+                if (priming || mayPrime)
                     report.AppendLine("      With priming on, an opaque shader whose depth pass "
                                     + "draws different geometry from its forward pass is "
                                     + "dropped from the frame — as is one with no depth pass "
@@ -193,7 +198,7 @@ namespace VRSL.URP.EditorScripts
                                     + "ships reproduces its forward vertex stage in both its "
                                     + "depth passes; a custom fixture shader here has to too.");
 
-                problems += ValidateLayerMask(universal, fixtureLayers, priming, report);
+                problems += ValidateLayerMask(universal, fixtureLayers, priming, mayPrime, report);
                 report.AppendLine();
             }
 
@@ -212,7 +217,7 @@ namespace VRSL.URP.EditorScripts
         /// in the forward pass rejects every one of its fragments.
         /// </summary>
         static int ValidateLayerMask(UniversalRendererData universal, HashSet<int> fixtureLayers,
-                                     bool priming, StringBuilder report)
+                                     bool priming, bool mayPrime, StringBuilder report)
         {
             // Read through SerializedObject: the opaque layer mask is not public API on
             // every URP version, and a missing field should report rather than throw.
@@ -260,6 +265,17 @@ namespace VRSL.URP.EditorScripts
                                 + "will not draw at all. Add the layer to the mask, or turn "
                                 + "depth priming off.");
                 return 1;
+            }
+
+            if (mayPrime)
+            {
+                report.AppendLine($"      Fixtures are on {layers}, which this renderer's "
+                                + "opaque layer mask excludes, and depth priming is on Auto. "
+                                + "Auto primes only when something else in the frame already "
+                                + "needs a depth prepass, so those fixtures draw until "
+                                + "something asks for one and then stop. Add the layer to the "
+                                + "mask, or set priming to Disabled to settle it either way.");
+                return 0;
             }
 
             report.AppendLine($"      Fixtures are on {layers}, which the opaque layer mask "
