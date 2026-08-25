@@ -183,13 +183,25 @@ namespace VRSL.URP
             ? Math.Max(gpuEnabled.iqr, gpuDisabled.iqr)
             : Math.Max(cpuEnabled.iqr, cpuDisabled.iqr);
 
-        /// <summary>Whether this row measured anything at all. A capture that ran
-        /// over no frames, or over frames nothing timed, produces a row of zeroes
-        /// that compares as unchanged against anything — which is how a harness
-        /// that measures nothing reads as a harness reporting no change.</summary>
+        /// <summary>
+        /// Whether this row measured anything at all. A capture that ran over no frames,
+        /// or over frames nothing timed, produces a row of zeroes that compares as
+        /// unchanged against anything — which is how a harness that measures nothing
+        /// reads as a harness reporting no change.
+        ///
+        /// <b>Both sides, and that is the whole point.</b> Cost is the enabled frame
+        /// minus the disabled one, so a row whose disabled block timed nothing reports
+        /// the entire frame as the package's cost — and the noise term, being the two
+        /// standard errors in quadrature, collapses to the enabled side alone and stays
+        /// small. The row then reads as a huge, confident regression. Everything
+        /// downstream trusts this: the comparison, the derived noise floor, and the
+        /// floor stored for the machine afterwards.
+        /// </summary>
         public bool Measured =>
             (cpuEnabled.samples > 0 || gpuEnabled.samples > 0)
-         && (cpuEnabled.median > 0.0 || gpuEnabled.median > 0.0);
+         && (cpuEnabled.median > 0.0 || gpuEnabled.median > 0.0)
+         && (cpuDisabled.samples > 0 || gpuDisabled.samples > 0)
+         && (cpuDisabled.median > 0.0 || gpuDisabled.median > 0.0);
 
         /// <summary>
         /// Whether this row's difference means anything at all.
