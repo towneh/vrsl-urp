@@ -252,6 +252,13 @@ namespace VRSL.URP
             foreach (var row in b.rows)
             {
                 if (!byKey.TryGetValue(row.config.Key, out var other)) continue;
+
+                // A row that timed nothing carries a cost of zero, and zero against a
+                // real cost is a disagreement the size of that cost. Adopting that as
+                // the floor would swallow every regression the floor exists to catch —
+                // and it is stored and reused, so a single null run carrying one
+                // unmeasured row would go on doing so until somebody derived a new one.
+                if (!row.timings.Measured || !other.timings.Measured) continue;
                 floor = Math.Max(floor, Math.Abs(row.timings.CostMs - other.timings.CostMs));
                 floor = Math.Max(floor, row.timings.Noise);
                 floor = Math.Max(floor, other.timings.Noise);
