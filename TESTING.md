@@ -394,8 +394,9 @@ are live in one project and both need checking.
 
 Run **`VRSL → URP → Validate Renderer Setup`** first. It reports the priming and
 rendering modes, whether the prepass layer mask covers the layers the scene's fixtures
-are on, and any VRSL shader drawing opaque without both depth passes — which is most of
-D1 to D4 answered before a scene is even entered.
+are on, and any shader drawing opaque without both depth passes, whether this package
+ships it or a fixture in the scene carries a custom one — which is most of D1 to D4
+answered before a scene is even entered.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|

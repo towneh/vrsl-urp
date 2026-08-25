@@ -58,9 +58,13 @@ namespace VRSL.URP.EditorScripts
                             + "light of any kind to get it.");
             report.AppendLine();
 
-            problems += ValidateCameras(urp, report);
-            problems += ValidateRenderers(urp, report);
-            problems += ValidateSceneShaders(report);
+            // One traversal for both checks below: each walks every MonoBehaviour in the
+            // scene looking for fixtures, and a show scene is not a small one.
+            var fixtureRenderers = FixtureRenderers();
+
+            var used = ValidateCameras(urp, report);
+            problems += ValidateRenderers(urp, used, fixtureRenderers, report);
+            problems += ValidateSceneShaders(fixtureRenderers, report);
             return problems;
         }
 
@@ -74,7 +78,8 @@ namespace VRSL.URP.EditorScripts
         /// the asset's default silently, so the answer is not visible on the camera
         /// either.
         /// </summary>
-        static int ValidateCameras(UniversalRenderPipelineAsset urp, StringBuilder report)
+        static HashSet<int> ValidateCameras(UniversalRenderPipelineAsset urp,
+                                           StringBuilder report)
         {
             int defaultIndex = 0;
             var assetSo = new SerializedObject(urp);
@@ -91,7 +96,7 @@ namespace VRSL.URP.EditorScripts
                                 + "which renderer applies could not be worked out. Open a "
                                 + "scene with your own camera in it for this to mean anything.");
                 report.AppendLine();
-                return 0;
+                return new HashSet<int>();
             }
 
             var used = new HashSet<int>();
@@ -128,13 +133,18 @@ namespace VRSL.URP.EditorScripts
                                 + "that use it.");
 
             report.AppendLine();
-            return 0;
+            return used;
         }
 
-        static int ValidateRenderers(UniversalRenderPipelineAsset urp, StringBuilder report)
+        /// <param name="used">Renderer indices the open scene's enabled cameras resolve
+        /// to, empty where that could not be worked out. Used to annotate, not to scope:
+        /// a mirror or portal camera created at runtime is in no scene at edit time, and
+        /// a renderer nothing here selects is still the one it will pick.</param>
+        static int ValidateRenderers(UniversalRenderPipelineAsset urp, HashSet<int> used,
+                                     HashSet<Renderer> fixtureRenderers, StringBuilder report)
         {
             int problems = 0;
-            var fixtureLayers = FixtureLayers();
+            var fixtureLayers = FixtureLayers(fixtureRenderers);
 
             int index = 0;
             bool sawAny = false;
@@ -145,6 +155,11 @@ namespace VRSL.URP.EditorScripts
                 sawAny = true;
 
                 report.AppendLine($"Renderer {index}: {data.name}");
+                if (used.Count > 0 && !used.Contains(index - 1))
+                    report.AppendLine("      No enabled camera in the open scene renders "
+                                    + "through this one. Still worth reading: a mirror or a "
+                                    + "portal camera made at runtime is in no scene now, and "
+                                    + "it picks a renderer the same way.");
 
                 if (data is not UniversalRendererData universal)
                 {
@@ -162,9 +177,10 @@ namespace VRSL.URP.EditorScripts
                 if (priming)
                     report.AppendLine("      With priming on, an opaque shader whose depth pass "
                                     + "draws different geometry from its forward pass is "
-                                    + "dropped from the frame. Every shader this package ships "
-                                    + "reproduces its forward vertex stage in its depth passes; "
-                                    + "a custom fixture shader in this scene has to as well.");
+                                    + "dropped from the frame — as is one with no depth pass "
+                                    + "for the prepass that ran. Every shader this package "
+                                    + "ships reproduces its forward vertex stage in both its "
+                                    + "depth passes; a custom fixture shader here has to too.");
 
                 problems += ValidateLayerMask(universal, fixtureLayers, priming, report);
                 report.AppendLine();
@@ -243,28 +259,43 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>
-        /// Package shaders in the scene that render opaque and are missing a depth pass.
+        /// Shaders in the scene that render opaque and are missing a depth pass.
         ///
         /// The opaque range is where the prepass runs, so a shader below 2500 without
         /// both passes is the failure this milestone is about. Above it, the prepass
         /// never invokes them and their absence means nothing.
+        ///
+        /// A shader qualifies by being one this package ships, or by being on a renderer
+        /// under a VRSL fixture. The second case is the one worth having: a fixture whose
+        /// mesh is drawn by a custom shader disappears under priming exactly as a package
+        /// one would, and the package cannot fix that shader but can say which it is.
+        /// Everything else in the scene is left alone — an avatar with a broken depth pass
+        /// is a real fault, but it is not this menu item's to report.
         /// </summary>
-        static int ValidateSceneShaders(StringBuilder report)
+        static int ValidateSceneShaders(HashSet<Renderer> onFixtures, StringBuilder report)
         {
             const int OpaqueEnd = 2500;
-            var checkedAlready = new HashSet<Shader>();
+            var seen    = new HashSet<Shader>();
             var missing = new List<string>();
+            int examined = 0;
 
             foreach (var renderer in Object.FindObjectsByType<Renderer>(
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (renderer == null) continue;
+                bool onFixture = onFixtures.Contains(renderer);
                 foreach (var material in renderer.sharedMaterials)
                 {
                     var shader = material != null ? material.shader : null;
-                    if (shader == null || !checkedAlready.Add(shader)) continue;
-                    if (!shader.name.StartsWith("VRSL")) continue;
+                    if (shader == null) continue;
+                    bool ours = shader.name.StartsWith("VRSL");
+                    if (!ours && !onFixture) continue;
                     if (material.renderQueue > OpaqueEnd) continue;
+                    // Counted after the filters, not before. Adding every shader in the
+                    // scene to the set would make the pass line below quote a number that
+                    // has nothing to do with what was examined.
+                    if (!seen.Add(shader)) continue;
+                    examined++;
 
                     bool depthOnly    = HasPass(shader, "DepthOnly");
                     bool depthNormals = HasPass(shader, "DepthNormals");
@@ -273,27 +304,48 @@ namespace VRSL.URP.EditorScripts
                     string absent = !depthOnly && !depthNormals ? "DepthOnly and DepthNormals"
                                   : !depthOnly                  ? "DepthOnly"
                                                                 : "DepthNormals";
-                    missing.Add($"{shader.name} (queue {material.renderQueue}, no {absent})");
+                    missing.Add($"{shader.name} (queue {material.renderQueue}, no {absent}), "
+                              + (ours ? "shipped with this package"
+                                      : "on a VRSL fixture in this scene"));
                 }
             }
 
             report.AppendLine("Shaders in this scene:");
-            if (checkedAlready.Count == 0)
+            if (examined == 0)
             {
-                report.AppendLine("      NOT CHECKED — no VRSL shaders in the open scene.");
+                report.AppendLine("      NOT CHECKED — nothing here draws opaque geometry with "
+                                + "a VRSL shader, and no VRSL fixture carries a custom one.");
                 return 0;
             }
             if (missing.Count == 0)
             {
-                report.AppendLine($"      All {checkedAlready.Count} VRSL shader(s) here that "
-                                + "draw opaque geometry have both depth passes.");
+                report.AppendLine($"      All {examined} shader(s) examined draw opaque geometry "
+                                + "and have both depth passes.");
                 return 0;
             }
 
             foreach (string entry in missing)
                 report.AppendLine($"FAIL  {entry}. It draws in the opaque range, so under depth "
-                                + "priming it will be culled from the frame.");
+                                + "priming it can be culled from the frame. Which prepass "
+                                + "priming tests against depends on whether anything in the "
+                                + "frame asks URP for a normals texture, so both passes are "
+                                + "needed to be safe in any project.");
             return missing.Count;
+        }
+
+        /// <summary>Renderers below a VRSL fixture in the open scene.</summary>
+        static HashSet<Renderer> FixtureRenderers()
+        {
+            var found = new HashSet<Renderer>();
+            foreach (var fixture in Object.FindObjectsByType<MonoBehaviour>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (fixture == null) continue;
+                if (!fixture.GetType().Name.StartsWith("VRStageLighting")) continue;
+                foreach (var renderer in fixture.GetComponentsInChildren<Renderer>(true))
+                    if (renderer != null) found.Add(renderer);
+            }
+            return found;
         }
 
         /// <summary>
@@ -329,18 +381,11 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>Layers occupied by VRSL fixtures in the open scene.</summary>
-        static HashSet<int> FixtureLayers()
+        static HashSet<int> FixtureLayers(HashSet<Renderer> fixtureRenderers)
         {
             var layers = new HashSet<int>();
-            foreach (var fixture in Object.FindObjectsByType<MonoBehaviour>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
-            {
-                if (fixture == null) continue;
-                string type = fixture.GetType().Name;
-                if (!type.StartsWith("VRStageLighting")) continue;
-                foreach (var renderer in fixture.GetComponentsInChildren<Renderer>(true))
-                    if (renderer != null) layers.Add(renderer.gameObject.layer);
-            }
+            foreach (var renderer in fixtureRenderers)
+                if (renderer != null) layers.Add(renderer.gameObject.layer);
             return layers;
         }
     }
