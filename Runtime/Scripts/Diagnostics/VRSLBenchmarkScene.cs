@@ -36,6 +36,8 @@ namespace VRSL.URP
 
         public const string RootName   = "VRSL Benchmark Scene";
         public const string CameraName = "Benchmark Camera";
+        /// <summary>Looked up by name to activate a subset, so it is not a literal.</summary>
+        public const string TrussName  = "Truss";
 
         /// <summary>The largest count in the matrix. The truss is built at this size
         /// and everything smaller is a subset of it.</summary>
@@ -265,7 +267,7 @@ namespace VRSL.URP
             if (source == null)
                 throw new System.InvalidOperationException($"Fixture prefab not found: {FixturePrefab}");
 
-            var truss = new GameObject("Truss");
+            var truss = new GameObject(TrussName);
             truss.transform.SetParent(root.transform, false);
 
             for (int i = 0; i < MaxFixtures; i++)
@@ -376,7 +378,7 @@ namespace VRSL.URP
         /// exactly that before it was found.</returns>
         public static int SetActiveFixtures(GameObject root, int count)
         {
-            var truss = root != null ? root.transform.Find("Truss") : null;
+            var truss = root != null ? root.transform.Find(TrussName) : null;
             if (truss == null) return 0;
 
             int total = truss.childCount;
