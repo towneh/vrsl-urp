@@ -491,6 +491,12 @@ namespace VRSL.URP
         /// </summary>
         void HandOverOwnership()
         {
+            // The source published to this manager by name, so it goes across with the
+            // singleton. Left behind, the new owner starts with none and its first
+            // UploadChannels stops publishing — and the source's own OnDisable, which
+            // looks the manager up through Instance, would no longer recognise itself
+            // and would leave a dangling reference behind on this one.
+            var source = ChannelSource;
             foreach (var other in FindObjectsByType<VRSL_URPLightManager>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
             {
@@ -500,6 +506,7 @@ namespace VRSL.URP
                 // allocating during shutdown is where Unity starts logging.
                 if (!other.gameObject.scene.isLoaded) continue;
                 Instance = other;
+                other.ChannelSource = source;
                 other.TakeOwnership();
                 return;
             }
@@ -518,6 +525,13 @@ namespace VRSL.URP
 
         void LateUpdate()
         {
+            // Ownership gate, same rule OnEnable applies to setting up. Nothing below
+            // checks it, and UploadChannels with no source reaches StopPublishing, which
+            // rebinds the channel buffer and zeroes the channel-count global. A manager
+            // that is enabled but does not own the singleton would therefore blank the
+            // owner's DMX data every frame, with no error and no visible cause.
+            if (Instance != this) return;
+
             if (_configDirty)
             {
                 UploadFixtureConfigs();

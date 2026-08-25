@@ -87,11 +87,19 @@ namespace VRSL.URP.Tests
                 "something outside this row already holds the singleton, so the row cannot "
               + "tell who claimed it");
 
-            GameObject ownerGo = null, spareGo = null;
+            GameObject ownerGo = null, spareGo = null, sourceGo = null;
             try
             {
                 ownerGo = new GameObject("running manager");
                 var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+
+                // Attached after the owner claims, because a source publishes to
+                // whichever manager holds the singleton when it is enabled.
+                sourceGo = new GameObject("channel source");
+                var source = sourceGo.AddComponent<VRSL_SyntheticDMXChannelSource>();
+                Assert.IsTrue(ReferenceEquals(owner.ChannelSource, source),
+                    "the source did not attach to the owner, so this row cannot say whether "
+                  + "a handover carries one");
 
                 // Inactive first so its Awake sees `enabled` already false, which is how a
                 // component serialised into a scene switched off arrives.
@@ -113,11 +121,19 @@ namespace VRSL.URP.Tests
                     "the owner stood down and handed the singleton to nobody. The spare is "
                   + "still enabled and will not get another OnEnable, so the scene has a "
                   + "manager in it and no light path");
+
+                Assert.IsTrue(ReferenceEquals(spare.ChannelSource, source),
+                    "the singleton moved and the channel source did not follow it. The new "
+                  + "owner publishes nothing, and the source cannot recognise itself through "
+                  + "Instance to detach later");
             }
             finally
             {
-                if (ownerGo != null) Object.DestroyImmediate(ownerGo);
-                if (spareGo != null) Object.DestroyImmediate(spareGo);
+                // The source first: its OnDisable looks the manager up through Instance
+                // and detaches only if it still recognises itself there.
+                if (sourceGo != null) Object.DestroyImmediate(sourceGo);
+                if (ownerGo != null)  Object.DestroyImmediate(ownerGo);
+                if (spareGo != null)  Object.DestroyImmediate(spareGo);
             }
 
             Assert.IsNull(VRSL_URPLightManager.Instance,
