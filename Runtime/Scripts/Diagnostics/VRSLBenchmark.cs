@@ -103,7 +103,6 @@ namespace VRSL.URP
             VRSLBenchmarkSettings settings, Action onFrame = null, VRSLBenchmarkRun run = null)
         {
             if (s_sessionWarmedUp) yield break;
-            s_sessionWarmedUp = true;
 
             settings ??= new VRSLBenchmarkSettings();
             using var frames = new FrameSampler();
@@ -163,6 +162,12 @@ namespace VRSL.URP
                 + "drifting when measurement started, so treat every figure here as provisional. "
                 + "Something outside the package is still doing work: in a Basis project the "
                 + "client's own startup runs for roughly a thousand frames.");
+
+            // Set once the warm-up has actually happened, rather than on entry. An
+            // enumerator that is built and never pumped, or abandoned partway when play
+            // mode ends, has warmed nothing up — and a session marked done sends the
+            // next capture straight into the opening cadence this exists to absorb.
+            s_sessionWarmedUp = true;
         }
 
         /// <summary>Make the next capture pay for a session warm-up again. For a
