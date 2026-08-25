@@ -386,6 +386,10 @@ namespace VRSL.URP.EditorScripts
                         + "otherwise it drifts down to whatever the calmest pair gave and the "
                         + "false verdicts come back. Use Reset if this machine has genuinely "
                         + "changed.";
+                    // Out, and back in on a fresh Layout pass. Setting the summary adds
+                    // sections the layout pass for this event never counted, and IMGUI
+                    // matches the control sequence across passes rather than tolerating it.
+                    GUIUtility.ExitGUI();
                 }
             }
 
@@ -395,6 +399,7 @@ namespace VRSL.URP.EditorScripts
                     VRSLPerfFloor.Clear(gpu);
                     Summary = $"Noise floor for {gpu} cleared. Compare two identical runs to "
                             + "establish it again.";
+                    GUIUtility.ExitGUI();
                 }
 
             EditorGUILayout.HelpBox(
