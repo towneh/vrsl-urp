@@ -55,6 +55,8 @@
 
 ### Fixed
 
+- A light manager that is switched off in the inspector no longer takes the singleton and stops the running one from working. `Awake` runs on a disabled component whose GameObject is active, while `OnEnable` and `OnDisable` never do, so a claim made there was never released: the manager that was actually running found the singleton taken, destroyed itself as a duplicate, and the scene lit nothing with no error in the Console. Neither manager now claims it until it is enabled, and both release it when they are switched off again. Affects any scene carrying a spare manager parked switched off.
+
 - `VRSL_AudioLinkURPLightManager` re-claims the singleton when it is enabled, so a manager switched off and on again keeps working. `Awake` claimed it and `OnDisable` released it, but `Awake` does not run a second time, so the component's `Instance` stayed null for the rest of the session and every render pass silently early-outed — the AudioLink light path stopped with nothing in the Console to say why. The DMX manager already did this; the two now behave the same way.
 
 - The VRSL logo is back at the top of every inspector that draws the package header. It was loaded through `Resources.Load`, which only ever searches folders named `Resources`, and the package's one copy of the logo does not live in one, so the lookup returned null and each of those inspectors reserved a blank 140-pixel strip instead. It now loads by asset path, with a search by name behind it so an embedded or relocated copy of the package still resolves, and a header with no logo to draw takes no space at all.

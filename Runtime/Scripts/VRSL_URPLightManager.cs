@@ -407,6 +407,13 @@ namespace VRSL.URP
         // ── Lifecycle ─────────────────────────────────────────────────────────
         void Awake()
         {
+            // A component that starts switched off still gets Awake, but never OnEnable
+            // or OnDisable — so a claim made here would never be released, and the
+            // manager that is actually running would destroy itself as a duplicate
+            // against an owner that does nothing. Awake runs only on an active
+            // GameObject, so `enabled` on its own is the whole condition.
+            if (!enabled) return;
+
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
         }

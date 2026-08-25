@@ -124,6 +124,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | C3 | D | Moving head, pan and tilt channels | Beam aims correctly; fine channels smooth the motion |
 | C4 | A | AudioLink scene with audio playing | Fixtures react to their band; `bandMultiplier` changes sensitivity, not peak |
 | C5 | — | Fixture faded to black with dimmer up | Light fully extinguishes, no residual glow |
+| C6 | — | `VRSLManagerLifecycleTests` in the suite: a manager switched off in the inspector loads beside a running one | The running one owns the singleton and drives the light path. A switched-off component still gets `Awake` but never `OnEnable` or `OnDisable`, so a claim made there is never released and the running manager destroys itself as a duplicate — a scene with a manager in it, no lighting, and nothing in the Console |
 
 ### Surface accuracy
 
