@@ -157,6 +157,12 @@ namespace VRSL.URP
 
             foreach (var row in candidate.rows)
             {
+                if (row?.config == null)
+                    throw new ArgumentException(
+                        "a candidate row has no configuration, so there is nothing to match it "
+                      + "against the baseline with. The file is not one this wrote, or it is "
+                      + "truncated.");
+
                 var entry = new VRSLRowComparison { config = row.config };
 
                 if (!baseRows.TryGetValue(row.config.Key, out var before))
@@ -278,7 +284,18 @@ namespace VRSL.URP
         public static double DeriveNoiseFloor(VRSLBenchmarkRun a, VRSLBenchmarkRun b)
         {
             var byKey = new Dictionary<string, VRSLBenchmarkRow>();
-            foreach (var row in a.rows) byKey[row.config.Key] = row;
+            foreach (var row in a.rows)
+            {
+                // Refused rather than skipped. The floor is the largest disagreement, so a
+                // row quietly dropped can only make it smaller — which is the direction that
+                // hides regressions, and the same failure the Measured guard below exists for.
+                if (row?.config == null)
+                    throw new ArgumentException(
+                        "a row has no configuration, so the floor derived from these two runs "
+                      + "would be taken from fewer rows than they contain. The file is not one "
+                      + "this wrote, or it is truncated.");
+                byKey[row.config.Key] = row;
+            }
 
             double floor = 0.0;
             foreach (var row in b.rows)
