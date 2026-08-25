@@ -140,5 +140,70 @@ namespace VRSL.URP.Tests
                 "the singleton outlived both managers, so every row after this one starts "
               + "against a claim it cannot see");
         }
+
+        /// <summary>
+        /// A manager left switched on beside the owner must not touch the shader globals.
+        ///
+        /// Per-frame work is the owner's alone, and nothing inside it checks that.
+        /// <c>UploadChannels</c> on a manager with no source of its own reaches
+        /// <c>StopPublishing</c>, which zeroes the channel-count global every frame and
+        /// rebinds the channel buffer once — so the spare would blank the owner's DMX
+        /// data with nothing in the Console, and which of the two LateUpdates ran last
+        /// would decide what survived.
+        ///
+        /// <b>What this row pins is the mechanism, not the picture.</b> It reads the
+        /// global the spare would write. The rig's channel readback binds the owner's own
+        /// buffer explicitly, so it cannot see a global being taken over, and the visible
+        /// consequence in a scene is still worth an eye.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ASpareManagerDoesNotBlankTheOwnersChannelCount()
+        {
+            var rig = VRSLDMXRig.Build();
+            GameObject spareGo = null;
+            try
+            {
+                yield return rig.Step(4);
+                rig.Calibrate();
+                rig.Source.pattern   = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
+                rig.Source.universes = 4;
+                yield return rig.Step(3);
+
+                int published = rig.Manager.ChannelCount;
+                Assert.Greater(published, 0,
+                    "the rig's own manager published nothing, so this row has no owner to "
+                  + "protect and would pass against anything");
+
+                int global = Shader.PropertyToID("_VRSLU_DMXChannelCount");
+                Assert.AreEqual(published, Shader.GetGlobalInt(global),
+                    "the owner did not put its channel count in the global, so the global is "
+                  + "not the observable this row thinks it is");
+
+                // Built inactive and enabled afterwards: that is the only way a manager
+                // reaches an enabled non-owner state, and it is the state this guards.
+                spareGo = new GameObject("spare manager");
+                spareGo.SetActive(false);
+                var spare = spareGo.AddComponent<VRSL_URPLightManager>();
+                spare.enabled = false;
+                spareGo.SetActive(true);
+                spare.enabled = true;
+                Assert.IsTrue(VRSL_URPLightManager.Instance == rig.Manager,
+                    "the spare took the singleton, so this row is no longer about a spare");
+
+                yield return rig.Step(3);
+
+                Assert.AreEqual(published, Shader.GetGlobalInt(global),
+                    "a manager that does not own the singleton zeroed the channel-count "
+                  + "global. Every fixture shader reads that, so the rig is dark and nothing "
+                  + "in the Console says why");
+                Assert.AreEqual(published, rig.Manager.ChannelCount,
+                    "the owner stopped publishing while a spare was in the scene");
+            }
+            finally
+            {
+                if (spareGo != null) Object.DestroyImmediate(spareGo);
+                rig.Dispose();
+            }
+        }
     }
 }
