@@ -479,13 +479,20 @@ namespace VRSL.URP
             // Last, so this one has finished tearing down before another starts
             // building. Both hold their own buffers, but the shipped state should
             // never be two managers with resources allocated at once.
-            // ReleaseChannelBuffers frees the channel buffer without touching the
-            // count global, so between here and whatever comes next the global says
-            // there are channels to read and the buffer they point into is gone. A
-            // successor rebinds both; with nobody to hand to, the count is the half
-            // that has to be put back.
+            // ReleaseChannelBuffers frees the channel buffer and leaves the globals
+            // describing it, so without this the count says there are channels to read
+            // and the binding points at a buffer that has gone. A successor replaces
+            // both; with nobody to hand to, both have to be put back here.
+            //
+            // Nothing in the package reads either global today — the compute is bound
+            // per dispatch and the render pass sets the count on its own command buffer
+            // — so this is about not leaving a loaded trap for the first shader that
+            // does, rather than about a fault anyone can see now.
             if (wasOwner && !HandOverOwnership())
+            {
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
+                Shader.SetGlobalBuffer(s_DMXChannels, (GraphicsBuffer)null);
+            }
         }
         /// <summary>
         /// Give the singleton to another manager that is still running.
@@ -546,10 +553,11 @@ namespace VRSL.URP
         void LateUpdate()
         {
             // Ownership gate, same rule OnEnable applies to setting up. Nothing below
-            // checks it, and UploadChannels with no source reaches StopPublishing, which
-            // rebinds the channel buffer and zeroes the channel-count global. A manager
-            // that is enabled but does not own the singleton would therefore blank the
-            // owner's DMX data every frame, with no error and no visible cause.
+            // checks it: UploadChannels with no source of its own reaches StopPublishing
+            // and rewrites the shader globals, and AdvanceState sets parameters on the
+            // compute asset both managers share and dispatches its kernels. A manager
+            // that is enabled but does not own the singleton has no business doing either,
+            // and which of the two LateUpdates ran last would decide what stood.
             if (Instance != this) return;
 
             if (_configDirty)

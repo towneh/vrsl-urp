@@ -146,15 +146,18 @@ namespace VRSL.URP.Tests
         ///
         /// Per-frame work is the owner's alone, and nothing inside it checks that.
         /// <c>UploadChannels</c> on a manager with no source of its own reaches
-        /// <c>StopPublishing</c>, which zeroes the channel-count global every frame and
-        /// rebinds the channel buffer once — so the spare would blank the owner's DMX
-        /// data with nothing in the Console, and which of the two LateUpdates ran last
-        /// would decide what survived.
+        /// <c>StopPublishing</c>, which rewrites the shader globals every frame; and
+        /// <c>AdvanceState</c> sets parameters on the compute asset both managers share
+        /// and dispatches its kernels. Which of the two LateUpdates ran last would decide
+        /// what stood.
         ///
-        /// <b>What this row pins is the mechanism, not the picture.</b> It reads the
-        /// global the spare would write. The rig's channel readback binds the owner's own
-        /// buffer explicitly, so it cannot see a global being taken over, and the visible
-        /// consequence in a scene is still worth an eye.
+        /// <b>What this row pins is one write, not a rendered consequence.</b> It reads
+        /// the channel-count global because that is cheap and unambiguous to observe.
+        /// Nothing in the package reads that global today — the compute is bound per
+        /// dispatch and the render pass sets the count on its own command buffer — so a
+        /// spare left running is a manager writing shared state it does not own, rather
+        /// than a demonstrated dark rig. The compute-asset half is the part that could
+        /// bite, and it has no row.
         /// </summary>
         [UnityTest]
         public IEnumerator ASpareManagerDoesNotBlankTheOwnersChannelCount()
@@ -193,9 +196,10 @@ namespace VRSL.URP.Tests
                 yield return rig.Step(3);
 
                 Assert.AreEqual(published, Shader.GetGlobalInt(global),
-                    "a manager that does not own the singleton zeroed the channel-count "
-                  + "global. Every fixture shader reads that, so the rig is dark and nothing "
-                  + "in the Console says why");
+                    "a manager that does not own the singleton rewrote the channel-count "
+                  + "global. Nothing reads that global today, so this is the cheap "
+                  + "observable rather than the harm: the same LateUpdate also drives the "
+                  + "compute asset both managers share");
                 Assert.AreEqual(published, rig.Manager.ChannelCount,
                     "the owner stopped publishing while a spare was in the scene");
             }
