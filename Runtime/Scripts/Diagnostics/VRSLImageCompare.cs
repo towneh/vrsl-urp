@@ -68,6 +68,10 @@ namespace VRSL.URP
         /// The camera must already have rendered this frame; this does not render it.
         /// Keeping the two apart matters because a row wants the frame at a specific
         /// frame index after warm-up, and rendering here would quietly add one.
+        ///
+        /// <para>The caller owns the returned texture and must <c>DestroyImmediate</c> it.
+        /// Unity does not collect the native side, so a run that reads many frames holds
+        /// every one of them for the rest of the editor session.</para>
         /// </summary>
         public static Texture2D Read(RenderTexture target)
         {
@@ -220,7 +224,13 @@ namespace VRSL.URP
 
         public static string LocalPath(string name) => Path.Combine(LocalFolder, $"{name}.png");
 
-        /// <summary>Load a stored image, or null when there is not one yet.</summary>
+        /// <summary>
+        /// Load a stored image, or null when there is not one yet.
+        ///
+        /// <para>The caller owns the returned texture and must <c>DestroyImmediate</c> it.
+        /// Unity does not collect the native side, so a run that reads many frames holds
+        /// every one of them for the rest of the editor session.</para>
+        /// </summary>
         public static Texture2D Load(string path)
         {
             if (string.IsNullOrEmpty(path) || !File.Exists(path)) return null;
@@ -246,6 +256,10 @@ namespace VRSL.URP
         /// keyword in shipped code and a variant to compile, for a test's benefit; the
         /// claim being made is about the comparator's sensitivity, and this exercises
         /// exactly that on real rendered content.
+        ///
+        /// <para>The caller owns the returned texture and must <c>DestroyImmediate</c> it.
+        /// Unity does not collect the native side, so a run that reads many frames holds
+        /// every one of them for the rest of the editor session.</para>
         /// </summary>
         public static Texture2D ShiftedByOnePixel(Texture2D source)
         {
