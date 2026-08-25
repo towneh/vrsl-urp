@@ -93,6 +93,20 @@ namespace VRSL.URP.EditorScripts
             }
 
             EditorApplication.EnterPlaymode();
+
+            // EnterPlaymode does not always enter — compile errors refuse it outright, and
+            // it says nothing when it does. The job would then sit in SessionState until
+            // the author next pressed play themselves, and be picked up there: an analysis
+            // measuring their scene and leaving play mode without anybody asking.
+            EditorApplication.delayCall += () =>
+            {
+                if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+                if (PendingJob == VRSLPerfJob.None) return;
+                SessionState.SetInt(JobKey, 0);
+                SessionState.SetString(ErrorKey,
+                    "The editor did not enter play mode, so nothing was measured. Compile "
+                  + "errors stop it; the Console will have them.");
+            };
         }
 
         static void OnPlayModeChanged(PlayModeStateChange change)
