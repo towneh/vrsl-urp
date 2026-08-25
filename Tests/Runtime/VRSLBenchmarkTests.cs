@@ -42,14 +42,6 @@ namespace VRSL.URP.Tests
             blocks       = 5,
         };
 
-        /// <summary>
-        /// Capture one configuration on a freshly built rig and hand back the run.
-        ///
-        /// The rig is rebuilt per capture rather than reused, so the two halves of a
-        /// null run are as independent as two separate sessions would be. Reusing it
-        /// would let a warmed pool flatter the second capture and turn a real drift
-        /// into an apparent match.
-        /// </summary>
         /// <summary>Set once the process has thrown a full capture away. See
         /// <see cref="WarmUpProcess"/>.</summary>
         static bool s_processWarmedUp;
@@ -86,6 +78,14 @@ namespace VRSL.URP.Tests
                     + $"{discard[0].rows[0].timings.cpuEnabled} enabled");
         }
 
+        /// <summary>
+        /// Capture one configuration on a freshly built rig and hand back the run.
+        ///
+        /// The rig is rebuilt per capture rather than reused, so the two halves of a
+        /// null run are as independent as two separate sessions would be. Reusing it
+        /// would let a warmed pool flatter the second capture and turn a real drift
+        /// into an apparent match.
+        /// </summary>
         static IEnumerator Capture(string label, List<VRSLBenchmarkRun> into,
                                    System.Action<VRSLDMXRig> configure = null,
                                    bool judge = true)
