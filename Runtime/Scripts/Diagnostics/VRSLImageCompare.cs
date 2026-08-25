@@ -46,7 +46,13 @@ namespace VRSL.URP
                 DifferingPixels = differing; TotalPixels = total; SizeMismatch = mismatch;
             }
 
-            public float DifferingPercent => TotalPixels > 0 ? 100f * DifferingPixels / TotalPixels : 0f;
+            /// <summary>
+            /// Share of the frame that moved, and 100 when the two images are different
+            /// sizes. Nothing was compared in that case, and zero would read to a caller
+            /// judging on this alone as though nothing had changed.
+            /// </summary>
+            public float DifferingPercent => SizeMismatch ? 100f
+                : TotalPixels > 0 ? 100f * DifferingPixels / TotalPixels : 0f;
 
             public override string ToString() => SizeMismatch
                 ? "images are different sizes"

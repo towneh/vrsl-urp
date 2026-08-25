@@ -214,6 +214,13 @@ namespace VRSL.URP.Tests
                 var result = VRSLImageCompare.Compare(previous, frame);
                 Debug.Log($"[I1] against previous local capture: {result}");
 
+                // Said separately from the budget below, which would otherwise report a
+                // mismatch as the whole frame having moved. The cause is almost always a
+                // changed capture size rather than anything in the picture.
+                Assert.IsFalse(result.SizeMismatch,
+                    "the stored capture is a different size to this frame, so nothing was "
+                  + $"compared. Delete it to re-seed at the current size: {path}");
+
                 if (result.Max > VRSLImageCompare.Threshold)
                 {
                     VRSLImageCompare.WriteImages(EvidenceFolder, "I1-local", previous, frame);
