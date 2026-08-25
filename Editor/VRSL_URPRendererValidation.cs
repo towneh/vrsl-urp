@@ -214,24 +214,23 @@ namespace VRSL.URP.EditorScripts
         static int ValidateLayerMask(UniversalRendererData universal, HashSet<int> fixtureLayers,
                                      bool priming, StringBuilder report)
         {
-            var so0 = new SerializedObject(universal);
-            var mask0 = so0.FindProperty("m_OpaqueLayerMask");
+            // Read through SerializedObject: the opaque layer mask is not public API on
+            // every URP version, and a missing field should report rather than throw.
+            var so = new SerializedObject(universal);
+            var maskProperty = so.FindProperty("m_OpaqueLayerMask");
             if (fixtureLayers.Count == 0)
             {
                 // Reported rather than passed over. "Nothing to check" and "checked and
                 // fine" are different answers and only one of them is reassurance.
                 report.AppendLine("      NOT CHECKED — no VRSL fixtures in the open scene. "
                                 + "Opaque layer mask is "
-                                + (mask0 != null ? DescribeMask(mask0.intValue) : "unreadable")
+                                + (maskProperty != null ? DescribeMask(maskProperty.intValue)
+                                                        : "unreadable")
                                 + ". A fixture on a layer outside that, with priming on, does "
                                 + "not draw at all.");
                 return 0;
             }
 
-            // Read through SerializedObject: the opaque layer mask is not public API on
-            // every URP version, and a missing field should report rather than throw.
-            var so = new SerializedObject(universal);
-            var maskProperty = so.FindProperty("m_OpaqueLayerMask");
             if (maskProperty == null)
             {
                 report.AppendLine("      Could not read this renderer's opaque layer mask, so "
@@ -299,7 +298,7 @@ namespace VRSL.URP.EditorScripts
                 {
                     var shader = material != null ? material.shader : null;
                     if (shader == null) continue;
-                    bool ours = shader.name.StartsWith("VRSL");
+                    bool ours = IsPackageShader(shader.name);
                     if (!ours && !onFixture) continue;
                     // -1 means the material takes the shader's queue rather than
                     // overriding it, and comparing that against the opaque ceiling lets
@@ -352,6 +351,18 @@ namespace VRSL.URP.EditorScripts
                                 + "needed to be safe in any project.");
             return missing.Count;
         }
+
+        /// <summary>
+        /// Whether this package ships the shader, by name.
+        ///
+        /// The shipped names are not all one shape — <c>VRSL-URP/...</c> for the fixture
+        /// and projection shaders, <c>Hidden/VRSL-URP/...</c> for the passes, and one
+        /// <c>AudioLink/VRSL-URP Linear Interpolator</c> — so the distinctive part is the
+        /// token rather than any prefix. Erring wide is the safe direction here: a false
+        /// match only means a shader gets checked and its finding labelled ours, while a
+        /// false miss skips one of our own shaders that is not on a fixture.
+        /// </summary>
+        static bool IsPackageShader(string name) => name.Contains("VRSL-URP");
 
         /// <summary>Renderers below a VRSL fixture in the open scene.</summary>
         static HashSet<Renderer> FixtureRenderers()
