@@ -155,7 +155,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
-| P1 | — | Clear `lightCullShader`, compare | Identical image, worse frametime. Any visual change means the cull is wrong |
+| P1 | — | Clear `lightCullShader`, compare | Identical image, worse frametime. Any visual change means the cull is wrong. The pixel half of this claim is the P1 row in **Image regression**, which is the same P1 — one claim, measured two ways |
 | P2 | — | Diagnostics with fixtures spread across the venue | Average lights/tile well below fixture count |
 | P3 | — | Profiling sample sweep, 10 → 25 → 50 → 100 → 200 | Frametime scales sub-linearly with fixture count |
 | P4 | — | `InsideCones` vs `OutsideCones` camera variants | Inside is the worst case; the gap shows culling working |
@@ -198,10 +198,10 @@ is entirely the clock.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
-| P1 | — | Capture with `lightCullShader` assigned and again with it cleared | **Not one pixel different.** The cull decides which lights a tile iterates, never what they contribute, so any visual change means it is dropping a light that reaches the tile and the frametime saving is being paid for in wrong pixels. Measured 2026-08-24: bit-identical, 0 pixels differing. This is the row that makes the cull trustworthy enough for M3 to build on |
+| P1 | — | Capture with `lightCullShader` assigned and again with it cleared | **Not one pixel different.** The cull decides which lights a tile iterates, never what they contribute, so any visual change means it is dropping a light that reaches the tile and the frametime saving is being paid for in wrong pixels. Measured 2026-08-24: bit-identical, 0 pixels differing. This is the row that makes the cull trustworthy enough for M3 to build on. This is the image half of P1 in **Cost and culling**, not a second row that happens to share the name |
 | I3 | — | **A-M0-4, sensitivity.** Capture a frame, shift it by one pixel, compare | Detected. Measured: max 0.165, 449 pixels differing. Seeded by shifting a real captured frame rather than by a debug keyword in the volumetric shader — the claim is about what the comparator resolves, and this exercises exactly that without adding surface to shipped code |
 | I4 | — | **A-M0-4, specificity.** Capture the same unchanged scene twice | **Identical.** Without this row the sensitivity row above is satisfied by a comparator that calls everything different, which is exactly as useless as one that calls everything the same. Measured: bit-identical, which also says the capture freeze works |
-| I1 | — | Compare against this machine's last capture. **Seed it from the same shape of run you will verify with — a full suite run, normally** | Identical, or the row says what moved and writes the images. The first run on a machine seeds the stored frame and reports inconclusive; delete the stored image to re-seed after an intended change |
+| I1 | — | Compare against this machine's last capture. **Seed it from the same shape of run you will verify with — a full suite run, normally** | At most **0.25%** of the frame differing, which is the budget the row allows for the edge scatter depth priming leaves behind and nothing larger — the 0.51% run-shape difference below therefore still fails. A size mismatch is refused separately, since it means nothing was compared rather than that nothing moved. Past the budget the row says what moved and writes the images. The first run on a machine seeds the stored frame and reports inconclusive; delete the stored image to re-seed after an intended change |
 | I2 | — | Compare against the committed reference, `VRSL_PERF_HOME` set | Identical **on the reference machine**. Expect a difference anywhere else and treat it as hardware, not regression. Skips cleanly when the variable is unset |
 
 **A reference frame is only valid for the run shape that seeded it.** Seeding from a
