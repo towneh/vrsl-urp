@@ -202,11 +202,15 @@ namespace VRSL.URP.EditorScripts
                 if (GUILayout.Button("Analyse This Scene", GUILayout.Height(36)))
                     Run(VRSLPerfJob.AnalyseScene);
 
-            _refreshHz = EditorGUILayout.IntField(
+            // Clamped at the field. The budget arithmetic downstream already floors the
+            // divisor, so a zero here does not divide by nothing — it reaches the report
+            // as a verdict about fitting a 0 Hz frame, which is a sentence nobody can act
+            // on. The value is remembered between sessions, so it would keep saying it.
+            _refreshHz = Mathf.Clamp(EditorGUILayout.IntField(
                 new GUIContent("Frame rate to aim for",
                     "The summary says whether your scene fits in a frame at this rate. "
                   + "90 is typical for desktop VR, 60 for a flatscreen game."),
-                _refreshHz);
+                _refreshHz), 1, 1000);
 
             if (EditorApplication.isPlayingOrWillChangePlaymode)
                 EditorGUILayout.HelpBox("Measuring — it will leave play mode by itself when "
