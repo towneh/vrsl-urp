@@ -1,3 +1,6 @@
+// VRSLImageCompare is editor-only, and this assembly builds for players too, so
+// these rows compile only where their helper exists.
+#if UNITY_EDITOR
 using System.Collections;
 using System.IO;
 using NUnit.Framework;
@@ -275,3 +278,5 @@ namespace VRSL.URP.Tests
         }
     }
 }
+
+#endif
