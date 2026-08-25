@@ -81,7 +81,10 @@ namespace VRSL.URP.EditorScripts
         static HashSet<int> ValidateCameras(UniversalRenderPipelineAsset urp,
                                            StringBuilder report)
         {
-            int defaultIndex = 0;
+            // -1 for "could not be read". Reporting renderer 1 instead would be a
+            // guess presented in the same shape as an answer, on the one question this
+            // block exists to settle.
+            int defaultIndex = -1;
             var assetSo = new SerializedObject(urp);
             var defaultProperty = assetSo.FindProperty("m_DefaultRendererIndex");
             if (defaultProperty != null) defaultIndex = defaultProperty.intValue;
@@ -118,8 +121,16 @@ namespace VRSL.URP.EditorScripts
                     }
                 }
 
+                if (index < 0)
+                {
+                    report.AppendLine($"      {camera.name}: NOT CHECKED — the renderer "
+                                    + "index could not be read from the pipeline asset, so "
+                                    + "which renderer this camera uses is unknown.");
+                    continue;
+                }
+
                 used.Add(index);
-                string name = index >= 0 && index < urp.rendererDataList.Length
+                string name = index < urp.rendererDataList.Length
                             && urp.rendererDataList[index] != null
                             ? urp.rendererDataList[index].name
                             : "missing";
@@ -290,7 +301,12 @@ namespace VRSL.URP.EditorScripts
                     if (shader == null) continue;
                     bool ours = shader.name.StartsWith("VRSL");
                     if (!ours && !onFixture) continue;
-                    if (material.renderQueue > OpaqueEnd) continue;
+                    // -1 means the material takes the shader's queue rather than
+                    // overriding it, and comparing that against the opaque ceiling lets
+                    // every transparent shader through and reports the queue as -1.
+                    int queue = material.renderQueue >= 0 ? material.renderQueue
+                                                          : shader.renderQueue;
+                    if (queue > OpaqueEnd) continue;
                     // Counted after the filters, not before. Adding every shader in the
                     // scene to the set would make the pass line below quote a number that
                     // has nothing to do with what was examined.
@@ -298,13 +314,17 @@ namespace VRSL.URP.EditorScripts
                     examined++;
 
                     bool depthOnly    = HasPass(shader, "DepthOnly");
-                    bool depthNormals = HasPass(shader, "DepthNormals");
+                    // Either tag satisfies the depth-normals prepass: URP draws it with
+                    // both, and one of its branches draws DepthNormalsOnly alone. This
+                    // package's own VRSLSurfacePrepass matches the same pair.
+                    bool depthNormals = HasPass(shader, "DepthNormals")
+                                     || HasPass(shader, "DepthNormalsOnly");
                     if (depthOnly && depthNormals) continue;
 
                     string absent = !depthOnly && !depthNormals ? "DepthOnly and DepthNormals"
                                   : !depthOnly                  ? "DepthOnly"
                                                                 : "DepthNormals";
-                    missing.Add($"{shader.name} (queue {material.renderQueue}, no {absent}), "
+                    missing.Add($"{shader.name} (queue {queue}, no {absent}), "
                               + (ours ? "shipped with this package"
                                       : "on a VRSL fixture in this scene"));
                 }
