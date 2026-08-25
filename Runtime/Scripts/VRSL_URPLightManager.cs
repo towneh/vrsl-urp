@@ -480,19 +480,20 @@ namespace VRSL.URP
             // building. Both hold their own buffers, but the shipped state should
             // never be two managers with resources allocated at once.
             // ReleaseChannelBuffers frees the channel buffer and leaves the globals
-            // describing it, so without this the count says there are channels to read
-            // and the binding points at a buffer that has gone. A successor replaces
-            // both; with nobody to hand to, both have to be put back here.
+            // describing it, so without this the count goes on saying there are channels
+            // to read. A successor replaces both; with nobody to hand to, the count is
+            // what gets put back.
             //
-            // Nothing in the package reads either global today — the compute is bound
-            // per dispatch and the render pass sets the count on its own command buffer
-            // — so this is about not leaving a loaded trap for the first shader that
-            // does, rather than about a fault anyone can see now.
+            // The count is the guard, and the binding is deliberately left alone. There
+            // is no way to unbind a global buffer that does not mean holding a live one
+            // past teardown, and a buffer nothing releases is a warning at every domain
+            // reload — a worse trade than the thing it protects against, since nothing in
+            // the package reads either global today: the compute is bound per dispatch
+            // and the render pass sets the count on its own command buffer. A consumer
+            // that ever does read them must check the count first, which is the contract
+            // the compute already keeps.
             if (wasOwner && !HandOverOwnership())
-            {
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
-                Shader.SetGlobalBuffer(s_DMXChannels, (GraphicsBuffer)null);
-            }
         }
         /// <summary>
         /// Give the singleton to another manager that is still running.
