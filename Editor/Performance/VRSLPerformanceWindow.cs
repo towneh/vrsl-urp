@@ -96,6 +96,12 @@ namespace VRSL.URP.EditorScripts
         /// </summary>
         void TryPickUpResult()
         {
+            // Layout only. Setting Summary adds whole sections to the result panel, and
+            // IMGUI counts the controls a Layout pass laid out against the ones every
+            // later event draws — picking the result up mid-repaint changes the count
+            // and the window throws instead of drawing.
+            if (Event.current != null && Event.current.type != EventType.Layout) return;
+
             string error = VRSLSweepRunner.LastError;
             string path  = VRSLSweepRunner.ResultPath;
             if (string.IsNullOrEmpty(error) && string.IsNullOrEmpty(path)) return;
