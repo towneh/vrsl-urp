@@ -479,7 +479,13 @@ namespace VRSL.URP
             // Last, so this one has finished tearing down before another starts
             // building. Both hold their own buffers, but the shipped state should
             // never be two managers with resources allocated at once.
-            if (wasOwner) HandOverOwnership();
+            // ReleaseChannelBuffers frees the channel buffer without touching the
+            // count global, so between here and whatever comes next the global says
+            // there are channels to read and the buffer they point into is gone. A
+            // successor rebinds both; with nobody to hand to, the count is the half
+            // that has to be put back.
+            if (wasOwner && !HandOverOwnership())
+                Shader.SetGlobalInt(s_DMXChannelCount, 0);
         }
         /// <summary>
         /// Give the singleton to another manager that is still running.
@@ -489,7 +495,8 @@ namespace VRSL.URP
         /// stood down for the rest of the session once that owner was switched off. The
         /// scene would then hold an enabled manager, no owner, and no lighting.
         /// </summary>
-        void HandOverOwnership()
+        /// <returns>Whether another manager took it on.</returns>
+        bool HandOverOwnership()
         {
             // The source published to this manager by name, so it goes across with the
             // singleton. Left behind, the new owner starts with none and its first
@@ -508,8 +515,15 @@ namespace VRSL.URP
                 Instance = other;
                 other.ChannelSource = source;
                 other.TakeOwnership();
-                return;
+                // Published immediately rather than left to the successor's next
+                // LateUpdate. TakeOwnership binds a one-word channel buffer, and the
+                // count global still holds the outgoing manager's figure until
+                // something publishes — a frame rendered in that window reads a real
+                // channel count out of a buffer that has one word in it.
+                other.UploadChannels();
+                return true;
             }
+            return false;
         }
 
 
