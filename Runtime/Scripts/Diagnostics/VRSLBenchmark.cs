@@ -116,7 +116,11 @@ namespace VRSL.URP
             double previous = 0.0;
             bool settled = false;
 
-            while (rendered < settings.settleCeilingFrames)
+            // Never below the warm-up budget. A ceiling under it would stop the loop
+            // before the frames it exists to spend had been spent, and the session would
+            // still be marked warm at the end.
+            int ceiling = Math.Max(settings.settleCeilingFrames, settings.warmUpFrames);
+            while (rendered < ceiling)
             {
                 yield return null;
                 onFrame?.Invoke();
@@ -448,6 +452,10 @@ namespace VRSL.URP
         /// Yields <c>null</c> once per frame. The caller owns the
         /// <see cref="DeterminismScope"/> so a sweep can hold one across a whole
         /// matrix rather than churning it per row.
+        ///
+        /// <c>run</c> is required, unlike the optional-looking one on
+        /// <see cref="WarmUpSession"/>: this writes notes into it as it goes, and a null
+        /// would throw partway through a capture with the managers already toggled.
         /// </summary>
         public static IEnumerator CaptureRow(
             VRSLBenchmarkSettings settings,
