@@ -181,19 +181,7 @@ namespace VRSL.URP.EditorScripts
                 // the size of a window, and so the Game view's own rendering is out of the
                 // frame being timed — but it is a live allocation, and a yield break past
                 // it leaks one for the rest of the editor session.
-                var target = new RenderTexture(
-                    VRSLBenchmarkScene.CaptureWidth, VRSLBenchmarkScene.CaptureHeight, 24)
-                { name = "VRSL sweep target" };
-                camera.targetTexture = target;
-
-                // Every rendering camera runs the whole VRSL pass chain, so a second one
-                // doubles the cost and the counters describe whichever rendered last.
-                int cameras = VRSLBenchmarkScene.RenderingCameraCount();
-                if (cameras > 1)
-                    run.Note($"{cameras} cameras are rendering to the screen, not just the "
-                           + "sweep's own. Every VRSL pass runs once per camera, so these "
-                           + "figures are of all of them together and the counters describe "
-                           + "whichever rendered last.");
+                RenderTexture target = null;
 
                 // From here the manager is held at a preset and a render texture is live,
                 // so every exit runs through the finally below — a coroutine abandoned
@@ -208,9 +196,27 @@ namespace VRSL.URP.EditorScripts
                 // the finally nor Finish — the ExitingPlayMode handler above reports that
                 // case instead.
                 bool completed = false;
-                var quality = VRSLQualityPreset.Session.Begin(manager);
+                VRSLQualityPreset.Session quality = null;
                 try
                 {
+                // Allocated inside the try, and first. The finally below is the only
+                // thing that gives the target back, so anything that can throw has to
+                // sit after it rather than between it and the try.
+                target = new RenderTexture(
+                    VRSLBenchmarkScene.CaptureWidth, VRSLBenchmarkScene.CaptureHeight, 24)
+                { name = "VRSL sweep target" };
+                camera.targetTexture = target;
+
+                // Every rendering camera runs the whole VRSL pass chain, so a second one
+                // doubles the cost and the counters describe whichever rendered last.
+                int cameras = VRSLBenchmarkScene.RenderingCameraCount();
+                if (cameras > 1)
+                    run.Note($"{cameras} cameras are rendering to the screen, not just the "
+                           + "sweep's own. Every VRSL pass runs once per camera, so these "
+                           + "figures are of all of them together and the counters describe "
+                           + "whichever rendered last.");
+
+                quality = VRSLQualityPreset.Session.Begin(manager);
                 using var determinism = new VRSLBenchmark.DeterminismScope(settings);
 
                 var warm = VRSLBenchmark.WarmUpSession(settings, null, run);
@@ -269,7 +275,7 @@ namespace VRSL.URP.EditorScripts
                 }
                 finally
                 {
-                    quality.Restore();
+                    quality?.Restore();
                     camera.targetTexture = null;
                     if (target != null) { target.Release(); DestroyImmediate(target); }
                     // Leaving play mode discards the sweep's scene, but the directional
@@ -313,9 +319,10 @@ namespace VRSL.URP.EditorScripts
                 // the author's own scene, so a level left behind is a change to their
                 // scene rather than to a throwaway one.
                 bool completed = false;
-                var quality = VRSLQualityPreset.Session.Begin(manager);
+                VRSLQualityPreset.Session quality = null;
                 try
                 {
+                quality = VRSLQualityPreset.Session.Begin(manager);
                 using var determinism = new VRSLBenchmark.DeterminismScope(settings);
 
                 var warm = VRSLBenchmark.WarmUpSession(settings, null, run);
@@ -345,7 +352,7 @@ namespace VRSL.URP.EditorScripts
                 }
                 finally
                 {
-                    quality.Restore();
+                    quality?.Restore();
                     if (!completed)
                         Finish(null, "The analysis stopped before it finished. The Console "
                                    + "holds the exception; nothing was written.");
