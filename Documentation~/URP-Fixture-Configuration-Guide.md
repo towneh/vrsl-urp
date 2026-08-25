@@ -201,10 +201,14 @@ The supplied URP prefab variants ship without a Static sibling — the Realtime 
 
 Three things, if you are authoring a shader rather than configuring a project.
 
-1. **A shader that draws in the opaque queue range needs `DepthOnly` and `DepthNormals`
-   passes.** Under depth priming URP draws opaque geometry with an `Equal` depth test
-   against a prepass, so a shader without them, or with them drawing something else, is
-   dropped from the frame entirely.
+1. **A shader that draws in the opaque queue range needs a `DepthOnly` pass and a
+   `DepthNormals` one.** Under depth priming URP draws opaque geometry with an `Equal`
+   depth test against a prepass, so a shader that wrote no depth there, or wrote
+   different depth, is dropped from the frame entirely. Both passes, because URP runs
+   one prepass or the other depending on whether anything in the frame has asked it for
+   a normals texture — screen-space ambient occlusion and screen-space decals both
+   do — and priming tests against whichever one ran. A shader carrying both is correct
+   in either project.
 2. **Whatever the forward vertex stage does, the depth passes must do too.** Pan and
    tilt rotation, cone width and range scaling, alpha clipping, and the collapse to
    degenerate geometry that hides a fixture at zero intensity all count. The package's

@@ -448,8 +448,12 @@ depth passes do not reproduce its forward pass exactly is culled from the frame 
 drawn wrong, drawn not at all. So a shader rendering in the opaque queue range needs
 `DepthOnly` and `DepthNormals` passes whose vertex stage matches its forward one,
 including any vertex displacement, alpha clipping, or conditional collapse to
-degenerate geometry. That is a URP requirement rather than a VRSL one; every shader
-this package ships already satisfies it.
+degenerate geometry. Both of them: URP runs one prepass or the other depending on
+whether anything in the frame has asked it for a normals texture — screen-space
+ambient occlusion and screen-space decals both do — and priming tests against
+whichever one ran, so a shader with only `DepthOnly` is fine until the project turns
+SSAO on. That is a URP requirement rather than a VRSL one; every shader this package
+ships already satisfies it.
 
 The symptom when one does not is a fixture body that disappears, which reads as a
 culling or LOD fault rather than a depth one — so it is worth checking rather than
