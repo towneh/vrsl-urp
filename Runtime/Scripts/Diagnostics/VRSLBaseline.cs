@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 
 namespace VRSL.URP
@@ -99,6 +100,34 @@ namespace VRSL.URP
     /// </summary>
     public static class VRSLBaseline
     {
+        /// <summary>
+        /// The committed run for the reference machine, or null.
+        ///
+        /// Found through <c>VRSL_PERF_HOME</c>, the same way the reference frames are,
+        /// so a consuming project that holds neither takes no special path.
+        ///
+        /// <para>Defaulting a comparison to this is safe even though GPU timings do not
+        /// travel between machines, because <see cref="Compare"/> refuses on an
+        /// environment mismatch. Anywhere but the machine that produced it the answer is
+        /// a refusal naming the difference, not a wrong number — which is why this can be
+        /// a default where a committed reference image cannot.</para>
+        /// </summary>
+        public static string ReferencePath
+        {
+            get
+            {
+                string home = Environment.GetEnvironmentVariable("VRSL_PERF_HOME");
+                if (string.IsNullOrEmpty(home)) return null;
+                string path = Path.Combine(home, "baseline.json");
+                return File.Exists(path) ? path : null;
+            }
+        }
+
+        /// <summary>Where the reference would be, named whether or not it is there, so a
+        /// message can say which path was looked at rather than only that one failed.</summary>
+        public static string ReferenceHome =>
+            Environment.GetEnvironmentVariable("VRSL_PERF_HOME");
+
         /// <summary>
         /// Compare a run against a baseline, row by row.
         ///

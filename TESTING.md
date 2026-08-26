@@ -44,8 +44,9 @@ run rather than performed by hand:
 or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite builds its own
 rig in code, so it needs neither the profiling sample nor a hand-authored scene.
 
-The **Measurement harness** rows (H1-H6) are in the same assembly and run the same way. They
-measure rather than decode, so they are the slow part of a full run.
+The **Measurement harness** rows (H1-H7) are in the same assembly and run the same way. Most
+measure rather than decode, so they are the slow part of a full run; H7 is a plain unit row
+and costs nothing.
 
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
 in the project and holds the Basis integration rows (B7-B9 and B11 below). Those
@@ -179,6 +180,7 @@ looking for is worse than no row.
 | H4 | — | Any capture, first one in the process | Must be **discarded**. A session's opening capture runs pinned at exactly the capture delta — both halves at 16.669 ms with an IQR of 0.02, against a 16.667 ms capture delta — so the difference cancels to zero while the counters look perfectly healthy. Idle frames do not clear it and neither does a longer warm-up inside the capture; disposing and rebuilding the rig does, which is why the warm-up is a whole capture taken and thrown away |
 | H5 | — | Quality `Standard` against quality `Off` | Two halves again. The **counter** half must pass anywhere: steps per light reads 24 at `Standard` and **0** at `Off`, which is the observable that says the volumetric pass is not being enqueued rather than merely being configured down. Clearing `volumetricShader` alone does not do it — the manager builds its material once and keeps it — so a preset that only cleared the field would report volumetrics off while running them at full cost. The **timing** half needs a GPU clock, direction included. It was briefly asserted on either clock, on the strength of one favourable reading of 0.069 ms against a stated 0.021 — then measured `Off` at 0.207 ms against `Standard` at 0.171, dearer by 0.036, with the counters still saying `Off` enqueued no pass at all. H3 explains it: the run-to-run spread on the CPU clock is around 0.055 ms, wider than the gap, so the sign flips as often as not. **A slim gap plus one confirming observation is not a row** |
 | H6 | — | `VRSLBenchmarkScene.SetActiveFixtures` at each count in the matrix | The manager must collect exactly the count the row claims. The sweep varies fixture count by activating a subset of one truss rather than rebuilding, and the subset is evenly spaced so the spread is identical at every count — taking the first N would cluster them at one end and change lights per tile, which is a counter the sweep reports. Rounding collisions at small counts are how this goes wrong, and it goes wrong silently. Measured 2026-08-24: exact at 10, 25, 50, 100 and 200 |
+| H7 | — | `VRSLBaseline.ReferencePath` with `VRSL_PERF_HOME` unset, set to a folder holding no `baseline.json`, and set to one that does | Null, null, then the path. The middle case is the one worth having: a consuming project may set the variable for the reference frames alone, and returning the path regardless turns that into "no such run" further down, which sends the reader looking for a file rather than for a baseline they never had. The rows restore the variable in teardown, not at the end of the row — it is process-wide and the image rows read it too, so a row that failed part way through would otherwise leave I2 pointed at a temporary folder for the rest of the session |
 
 ### Image regression
 
