@@ -405,6 +405,7 @@ namespace VRSL.URP
 
             public int Count => _managers.Count;
             public VRSL_URPLightManager Dmx { get; private set; }
+            public VRSL_AudioLinkURPLightManager AudioLink { get; private set; }
 
             public static ManagerSet Find()
             {
@@ -413,7 +414,7 @@ namespace VRSL.URP
                 if (dmx != null) { set.Track(dmx); set.Dmx = dmx; }
 
                 var al = VRSL_AudioLinkURPLightManager.Instance;
-                if (al != null) set.Track(al);
+                if (al != null) { set.Track(al); set.AudioLink = al; }
                 return set;
             }
 
@@ -595,39 +596,66 @@ namespace VRSL.URP
 
         static void ReadCounters(ManagerSet managers, VRSLCounters counters, VRSLBenchmarkRun run)
         {
-            var dmx = managers.Dmx;
-            if (dmx == null) return;
+            var dmx       = managers.Dmx;
+            var audioLink = managers.AudioLink;
+            if (dmx == null && audioLink == null) return;
 
-            counters.fixtures = dmx.FixtureCount;
+            // Reading the DMX manager alone left every counter at its default on an
+            // AudioLink scene, and the summary presents defaults as findings: it
+            // reported no fixtures and told the author to assign a cull shader while
+            // the cull was running and the per-pass table said so. Silence would have
+            // been better than that; either is worse than reading the manager present.
+            counters.fixtures = (dmx != null ? dmx.FixtureCount : 0)
+                              + (audioLink != null ? audioLink.FixtureCount : 0);
+
+            // Whichever path is present, DMX first where both are. The tile and step
+            // figures below describe one cull pass and one volumetric material, and
+            // merging two of each would produce an average of two different scenes.
+            bool useDmx = dmx != null;
 
             // Zero when the volumetric pass is not being enqueued at all, rather than
             // whatever the step field still says. The manager only enqueues the pass
             // where it holds a volumetric material, so a scene with volumetrics off
             // would otherwise report the step count of a march it never runs — a
             // counter that stays plausible while describing nothing.
-            counters.stepsPerLight = dmx.VolumetricMaterial != null
-                                   ? dmx.volumetricStepCount
-                                   : 0;
+            counters.stepsPerLight =
+                useDmx ? (dmx.VolumetricMaterial != null ? dmx.volumetricStepCount : 0)
+                       : (audioLink.VolumetricMaterial != null ? audioLink.volumetricStepCount : 0);
 
-            counters.channelCount = dmx.ChannelCount;
+            // DMX channels are a DMX concept. Zero on an AudioLink scene is the honest
+            // answer rather than a missing one.
+            counters.channelCount = dmx != null ? dmx.ChannelCount : 0;
 
-            var emission = VRSLDiagnostics.SummariseEmission(dmx.LightDataBuffer, dmx.FixtureCount);
+            var emission = useDmx
+                ? VRSLDiagnostics.SummariseEmission(dmx.LightDataBuffer, dmx.FixtureCount)
+                : VRSLDiagnostics.SummariseEmission(audioLink.LightDataBuffer, audioLink.FixtureCount);
             counters.emittingFixtures = emission.Emitting;
             counters.peakIntensity    = emission.Peak;
+
+            if (dmx != null && audioLink != null)
+                run.Note("Both light paths are in this scene. The fixture count is both of "
+                       + "them; the tile, emission and volumetric figures describe the DMX "
+                       + "path only, because averaging two cull passes would describe "
+                       + "neither.");
 
             // The failure this exists to make loud: a scene where nothing is lit still
             // renders, still fills a report, and still produces differences that look
             // like measurements. Every one of them is of an empty frame.
             if (emission.Total > 0 && emission.Emitting == 0)
-                run.Note($"{counters.fixtures} fixture(s) collected and NONE of them are "
+                run.Note($"{emission.Total} fixture(s) on the "
+                       + (useDmx ? "DMX" : "AudioLink") + " path and NONE of them are "
                        + "emitting, so this configuration measured an unlit scene. "
-                       + (dmx.ChannelCount > 0
+                       + (!useDmx
+                          ? "Nothing is driving the AudioLink bands, so every fixture reads "
+                          + "zero — play audio into AudioLink before quoting these figures."
+                          : dmx.ChannelCount > 0
                           ? "A channel source is publishing, so the values are reaching the "
                           + "buffer but not the fixtures — check the patch."
                           : "No channel source is publishing and the CRT decode chain has "
                           + "nothing feeding it, so every channel reads zero."));
 
-            var tiles = VRSLDiagnostics.SummariseTiles(dmx.TileCullPass);
+            var tiles = VRSLDiagnostics.SummariseTiles(useDmx ? dmx.TileCullPass
+                                                              : audioLink.TileCullPass);
             counters.tileCullEngaged      = tiles.Engaged;
             counters.activeTiles          = tiles.Tiles;
             counters.lightsPerTileAverage = tiles.Average;
