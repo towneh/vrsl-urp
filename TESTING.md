@@ -250,6 +250,15 @@ refusing rather than failing, since exiting 1 there would train whoever reads th
 to pass `-force` by reflex. It fails when the log carries no verdict line, because a
 runner that exits successfully having compared nothing is worse than no runner.
 
+**A refusal emits a verdict line too**, reading zero rows, with the `REFUSED` line above it
+saying why. It has to: the script tests for the verdict line *before* it tests for
+`REFUSED`, so a refusal that stayed silent would be reported as exit 1 with "nothing was
+compared" and read as a regression. Worth a hand check whenever that path changes, because
+no automated row covers it — the entry point ends in `EditorApplication.Exit`. Compare the
+committed reference against a copy of itself with `environment.graphicsDevice` altered:
+expect `REFUSED`, a zero-row verdict line, and **exit 2**. This is the ordinary outcome of
+the defaulted form on any machine that is not the reference machine, not an edge case.
+
 **A sweep measures nothing unless four things are true**, and each was found the hard
 way rather than reasoned out. It must render at a fixed size large enough to have work
 in it — at a Game view's 964x672 the GPU frame did not move at all as lights per tile

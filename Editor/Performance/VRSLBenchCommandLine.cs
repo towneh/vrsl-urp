@@ -82,6 +82,13 @@ namespace VRSL.URP.EditorScripts
                                  + $"machines or configurations: {comparison.environmentMismatch}. "
                                  + "Pass -force to compare anyway, knowing the deltas are "
                                  + "partly hardware.");
+                    // Emitted here too, so that every invocation that reaches a comparison
+                    // ends with a verdict line whatever the outcome. It reads zero rows,
+                    // which is what a refusal did: the line above says why. Without it the
+                    // script's "no verdict line, so nothing was compared" check fires
+                    // first and reports exit 1, turning a refusal into a regression — and
+                    // that check sits ahead of the one that looks for REFUSED.
+                    Debug.Log("[VRSL bench] " + comparison.VerdictLine);
                     exit = 2;
                     return;
                 }
