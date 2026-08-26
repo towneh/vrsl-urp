@@ -202,10 +202,15 @@ namespace VRSL.URP.EditorScripts
                 var run = NewRun("analyse-scene");
                 run.Note($"Frame budget judged against {refreshHz} Hz.");
 
-                var manager = VRSL_URPLightManager.Instance;
-                if (manager == null)
+                // Either path, or both. Asking only for the DMX manager told an author
+                // with an AudioLink rig that the package was costing them nothing, on a
+                // scene full of VRSL fixtures — and R-M0-13 says this works on any scene
+                // they have open.
+                var dmx       = VRSL_URPLightManager.Instance;
+                var audioLink = VRSL_AudioLinkURPLightManager.Instance;
+                if (dmx == null && audioLink == null)
                 {
-                    Finish(null, "There is no VRSL DMX light manager in this scene, so the "
+                    Finish(null, "There is no VRSL light manager in this scene, so the "
                                + "package is not costing anything here.");
                     yield break;
                 }
@@ -221,7 +226,7 @@ namespace VRSL.URP.EditorScripts
                 VRSLQualityPreset.Session quality = null;
                 try
                 {
-                quality = VRSLQualityPreset.Session.Begin(manager);
+                quality = VRSLQualityPreset.Session.Begin(dmx, audioLink);
                 using var determinism = new VRSLBenchmark.DeterminismScope(settings);
 
                 var warm = VRSLBenchmark.WarmUpSession(settings, null, run);
@@ -235,7 +240,11 @@ namespace VRSL.URP.EditorScripts
                     var config = new VRSLRowConfig
                     {
                         scene         = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name,
-                        fixtureCount  = manager.FixtureCount,
+                        // Summed, because a scene carrying both paths lights its surfaces
+                        // from both and reporting one manager's share would understate what
+                        // the row measured.
+                        fixtureCount  = (dmx != null ? dmx.FixtureCount : 0)
+                                      + (audioLink != null ? audioLink.FixtureCount : 0),
                         cameraVariant = "SceneCamera",
                         quality       = level.ToString(),
                     };

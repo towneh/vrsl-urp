@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VRSL.URP
@@ -15,7 +16,10 @@ namespace VRSL.URP
     ///
     /// <c>internal</c> on purpose, and it stays that way. It is not a settings API,
     /// nothing outside the harness should reach it, and making it public would leave
-    /// a second way to set quality behind after M1 lands the first.
+    /// a second way to set quality behind after M1 lands the first. That is also why
+    /// the two managers are reached through a private shape below rather than through
+    /// a shared interface on them: an interface would be public surface added for the
+    /// harness's benefit, and M1 is about to give both of them the real one.
     /// </summary>
     static class VRSLQualityPreset
     {
@@ -29,7 +33,7 @@ namespace VRSL.URP
         public static readonly Level[] All = { Level.Off, Level.Standard, Level.High };
 
         /// <summary>
-        /// A manager held at a series of levels, and put back afterwards.
+        /// One manager, held at a series of levels and put back afterwards.
         ///
         /// Stateful rather than a static <c>Apply</c>, and it has to be. Turning
         /// volumetrics off means clearing the shader as well as dropping the material
@@ -44,9 +48,8 @@ namespace VRSL.URP
         /// levels then measured identically, which looks like a preset doing nothing
         /// rather than one doing too much.
         /// </summary>
-        public sealed class Session
+        abstract class Target
         {
-            VRSL_URPLightManager _manager;
             Shader _volumetricShader;
             int    _stepCount;
             bool   _useNoise;
@@ -54,27 +57,43 @@ namespace VRSL.URP
             int    _contactSteps;
             float  _contactDistance;
             float  _contactThickness;
-            bool   _disableStrobe;
+            bool   _strobeHeld;
 
-            public static Session Begin(VRSL_URPLightManager manager)
+            public abstract Behaviour Component          { get; }
+            public abstract Shader    VolumetricShader   { get; set; }
+            public abstract Material  VolumetricMaterial { get; }
+            public abstract int       StepCount          { get; set; }
+            public abstract bool      UseNoise           { get; set; }
+            public abstract float     ContactStrength    { get; set; }
+            public abstract int       ContactSteps       { get; set; }
+            public abstract float     ContactDistance    { get; set; }
+            public abstract float     ContactThickness   { get; set; }
+
+            /// <summary>Every strobing fixture held fully on, where the manager has such
+            /// a switch. The AudioLink path strobes off the audio rather than off a DMX
+            /// channel and has no equivalent, so this is a no-op there rather than
+            /// something to fake.</summary>
+            public virtual bool StrobeHeld { get => false; set { } }
+
+            /// <summary>Ask for the config to be re-uploaded. The AudioLink manager has
+            /// no dirty flag — it reads these fields as it goes — so it needs nothing
+            /// here.</summary>
+            public virtual void MarkDirty() { }
+
+            /// <summary>A destroyed manager compares null through the Unity operator, and
+            /// a scene can be torn down mid-session.</summary>
+            public bool Alive => Component != null;
+
+            public void Capture()
             {
-                // Apply and Restore both tolerate a null manager, so Begin has to as well
-                // — otherwise the one entry point throws while the two that follow it are
-                // carefully defensive.
-                if (manager == null) return new Session();
-
-                var session = new Session
-                {
-                    _manager           = manager,
-                    _volumetricShader  = manager.volumetricShader,
-                    _stepCount         = manager.volumetricStepCount,
-                    _useNoise          = manager.volumetricUseNoise,
-                    _contactStrength   = manager.contactShadowStrength,
-                    _contactSteps      = manager.contactShadowSteps,
-                    _contactDistance   = manager.contactShadowDistance,
-                    _contactThickness  = manager.contactShadowThickness,
-                    _disableStrobe     = manager.disableStrobe,
-                };
+                _volumetricShader = VolumetricShader;
+                _stepCount        = StepCount;
+                _useNoise         = UseNoise;
+                _contactStrength  = ContactStrength;
+                _contactSteps     = ContactSteps;
+                _contactDistance  = ContactDistance;
+                _contactThickness = ContactThickness;
+                _strobeHeld       = StrobeHeld;
 
                 // Strobing fixtures alternate, so at any instant a random subset of the
                 // rig is lit and the workload changes frame to frame. Measured
@@ -82,25 +101,21 @@ namespace VRSL.URP
                 // emitting across three consecutive configurations of the same subset,
                 // and lights per tile followed them. Holding every strobing fixture on
                 // is what makes a configuration mean one thing.
-                manager.disableStrobe = true;
-                return session;
+                StrobeHeld = true;
             }
 
-            /// <summary>Put the manager at a level.</summary>
             public void Apply(Level level)
             {
-                if (_manager == null) return;
-
                 if (level == Level.Off)
                 {
-                    _manager.contactShadowStrength = 0f;
+                    ContactStrength = 0f;
 
                     // Both, and neither alone is enough. Clearing the shader leaves the
                     // material the manager already built, and the pass is enqueued on
                     // the material. Dropping the material lasts only until the next
                     // OnEnable, which builds a fresh one off the shader.
-                    _manager.volumetricShader = null;
-                    var material = _manager.VolumetricMaterial;
+                    VolumetricShader = null;
+                    var material = VolumetricMaterial;
                     // Destroy rather than DestroyImmediate: this runs in play mode, and the
                     // material is one this manager built rather than an asset. Destruction
                     // is deferred to the end of the frame, which is fine because every
@@ -108,71 +123,154 @@ namespace VRSL.URP
                     // reading a counter — verified by H5, which sees zero volumetric steps
                     // at Off. Remove that settle and this becomes a race.
                     if (material != null) Object.Destroy(material);
-                    _manager.MarkConfigDirty();
+                    MarkDirty();
                     return;
                 }
 
                 // Coming back from Off: the shader reference was thrown away, so put it
                 // back before bouncing, or there is nothing to build a material from.
-                if (_manager.VolumetricMaterial == null)
+                if (VolumetricMaterial == null)
                 {
-                    _manager.volumetricShader = _volumetricShader;
-                    if (_volumetricShader != null) Bounce(_manager);
+                    VolumetricShader = _volumetricShader;
+                    if (_volumetricShader != null) Bounce();
                 }
 
                 switch (level)
                 {
                     case Level.Standard:
-                        _manager.volumetricStepCount    = 24;
-                        _manager.volumetricUseNoise     = true;
-                        _manager.contactShadowStrength  = 1f;
-                        _manager.contactShadowSteps     = 8;
-                        _manager.contactShadowDistance  = 1.5f;
-                        _manager.contactShadowThickness = 0.5f;
+                        StepCount        = 24;
+                        UseNoise         = true;
+                        ContactStrength  = 1f;
+                        ContactSteps     = 8;
+                        ContactDistance  = 1.5f;
+                        ContactThickness = 0.5f;
                         break;
 
                     case Level.High:
-                        _manager.volumetricStepCount    = 40;
-                        _manager.volumetricUseNoise     = true;
-                        _manager.contactShadowStrength  = 1f;
-                        _manager.contactShadowSteps     = 16;
-                        _manager.contactShadowDistance  = 2.5f;
-                        _manager.contactShadowThickness = 0.35f;
+                        StepCount        = 40;
+                        UseNoise         = true;
+                        ContactStrength  = 1f;
+                        ContactSteps     = 16;
+                        ContactDistance  = 2.5f;
+                        ContactThickness = 0.35f;
                         break;
                 }
 
-                _manager.MarkConfigDirty();
+                MarkDirty();
+            }
+
+            public void RestoreSaved()
+            {
+                VolumetricShader = _volumetricShader;
+                StepCount        = _stepCount;
+                UseNoise         = _useNoise;
+                ContactStrength  = _contactStrength;
+                ContactSteps     = _contactSteps;
+                ContactDistance  = _contactDistance;
+                ContactThickness = _contactThickness;
+                StrobeHeld       = _strobeHeld;
+
+                if (_volumetricShader != null && VolumetricMaterial == null) Bounce();
+                MarkDirty();
+            }
+
+            /// <summary>Off and on again, which is what rebuilds the passes and the
+            /// materials. The manager re-claims the singleton on enable, so this is safe
+            /// mid-session — it was not always.</summary>
+            void Bounce()
+            {
+                var component = Component;
+                if (component == null) return;
+                bool was = component.enabled;
+                component.enabled = false;
+                component.enabled = true;
+                component.enabled = was;
+            }
+        }
+
+        sealed class DmxTarget : Target
+        {
+            readonly VRSL_URPLightManager _m;
+            public DmxTarget(VRSL_URPLightManager m) => _m = m;
+
+            public override Behaviour Component          => _m;
+            public override Shader    VolumetricShader   { get => _m.volumetricShader;       set => _m.volumetricShader = value; }
+            public override Material  VolumetricMaterial => _m.VolumetricMaterial;
+            public override int       StepCount          { get => _m.volumetricStepCount;    set => _m.volumetricStepCount = value; }
+            public override bool      UseNoise           { get => _m.volumetricUseNoise;     set => _m.volumetricUseNoise = value; }
+            public override float     ContactStrength    { get => _m.contactShadowStrength;  set => _m.contactShadowStrength = value; }
+            public override int       ContactSteps       { get => _m.contactShadowSteps;     set => _m.contactShadowSteps = value; }
+            public override float     ContactDistance    { get => _m.contactShadowDistance;  set => _m.contactShadowDistance = value; }
+            public override float     ContactThickness   { get => _m.contactShadowThickness; set => _m.contactShadowThickness = value; }
+            public override bool      StrobeHeld         { get => _m.disableStrobe;          set => _m.disableStrobe = value; }
+            public override void      MarkDirty()        => _m.MarkConfigDirty();
+        }
+
+        sealed class AudioLinkTarget : Target
+        {
+            readonly VRSL_AudioLinkURPLightManager _m;
+            public AudioLinkTarget(VRSL_AudioLinkURPLightManager m) => _m = m;
+
+            public override Behaviour Component          => _m;
+            public override Shader    VolumetricShader   { get => _m.volumetricShader;       set => _m.volumetricShader = value; }
+            public override Material  VolumetricMaterial => _m.VolumetricMaterial;
+            public override int       StepCount          { get => _m.volumetricStepCount;    set => _m.volumetricStepCount = value; }
+            public override bool      UseNoise           { get => _m.volumetricUseNoise;     set => _m.volumetricUseNoise = value; }
+            public override float     ContactStrength    { get => _m.contactShadowStrength;  set => _m.contactShadowStrength = value; }
+            public override int       ContactSteps       { get => _m.contactShadowSteps;     set => _m.contactShadowSteps = value; }
+            public override float     ContactDistance    { get => _m.contactShadowDistance;  set => _m.contactShadowDistance = value; }
+            public override float     ContactThickness   { get => _m.contactShadowThickness; set => _m.contactShadowThickness = value; }
+        }
+
+        /// <summary>
+        /// Every light manager in the scene, held at a series of levels and put back
+        /// afterwards.
+        ///
+        /// A set rather than one manager, because a scene may carry both paths. Holding
+        /// quality on the DMX manager alone there leaves the AudioLink volumetrics
+        /// running at every level, so the <c>Off</c> capture is not off and the split
+        /// between beams and surface lighting gets measured against a baseline that
+        /// still has beams in it.
+        /// </summary>
+        public sealed class Session
+        {
+            readonly List<Target> _targets = new();
+
+            public static Session Begin(VRSL_URPLightManager manager) => Begin(manager, null);
+
+            public static Session Begin(VRSL_URPLightManager dmx,
+                                        VRSL_AudioLinkURPLightManager audioLink)
+            {
+                // Apply and Restore both tolerate an empty set, so Begin has to as well —
+                // otherwise the one entry point throws while the two that follow it are
+                // carefully defensive.
+                var session = new Session();
+                session.Add(dmx != null ? new DmxTarget(dmx) : null);
+                session.Add(audioLink != null ? new AudioLinkTarget(audioLink) : null);
+                return session;
+            }
+
+            void Add(Target target)
+            {
+                if (target == null || !target.Alive) return;
+                target.Capture();
+                _targets.Add(target);
+            }
+
+            /// <summary>Put every manager at a level.</summary>
+            public void Apply(Level level)
+            {
+                foreach (var target in _targets)
+                    if (target.Alive) target.Apply(level);
             }
 
             /// <summary>Put everything back as it was found. A level left behind would
             /// quietly change the scene the author saved.</summary>
             public void Restore()
             {
-                if (_manager == null) return;
-                _manager.volumetricShader        = _volumetricShader;
-                _manager.volumetricStepCount     = _stepCount;
-                _manager.volumetricUseNoise      = _useNoise;
-                _manager.contactShadowStrength   = _contactStrength;
-                _manager.contactShadowSteps      = _contactSteps;
-                _manager.contactShadowDistance   = _contactDistance;
-                _manager.contactShadowThickness  = _contactThickness;
-                _manager.disableStrobe           = _disableStrobe;
-
-                if (_volumetricShader != null && _manager.VolumetricMaterial == null)
-                    Bounce(_manager);
-                _manager.MarkConfigDirty();
+                foreach (var target in _targets)
+                    if (target.Alive) target.RestoreSaved();
             }
-        }
-
-        /// <summary>Off and on again, which is what rebuilds the passes and the
-        /// materials. The manager re-claims the singleton on enable, so this is safe
-        /// mid-session — it was not always.</summary>
-        static void Bounce(VRSL_URPLightManager manager)
-        {
-            bool was = manager.enabled;
-            manager.enabled = false;
-            manager.enabled = true;
-            manager.enabled = was;
         }
     }
 }
