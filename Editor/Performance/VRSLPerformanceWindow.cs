@@ -422,7 +422,16 @@ namespace VRSL.URP.EditorScripts
 
         void CompareWithBaseline()
         {
-            string basePath = EditorUtility.OpenFilePanel("Baseline run.json", "", "json");
+            // Opened where the committed reference lives when there is one, so the
+            // comparison people actually want is a click rather than a walk up the tree.
+            // Still a picker rather than a substitution: this is where somebody chooses
+            // two runs deliberately, and quietly supplying one would make the button mean
+            // something other than its label. The headless entry point is the one that
+            // defaults, because nobody is there to choose.
+            string reference = VRSLBaseline.ReferencePath;
+            string startIn   = reference != null ? Path.GetDirectoryName(reference) : "";
+
+            string basePath = EditorUtility.OpenFilePanel("Baseline run.json", startIn, "json");
             if (string.IsNullOrEmpty(basePath)) return;
             string candidatePath = EditorUtility.OpenFilePanel("Run to compare", Path.GetDirectoryName(basePath), "json");
             if (string.IsNullOrEmpty(candidatePath)) return;
