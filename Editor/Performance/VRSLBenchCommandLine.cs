@@ -23,7 +23,9 @@ namespace VRSL.URP.EditorScripts
         /// Compare a baseline against a candidate and exit non-zero if any row
         /// regressed.
         ///
-        /// <c>-baseline &lt;path&gt; -candidate &lt;path&gt;</c>, each a run.json.
+        /// <c>-candidate &lt;path&gt;</c> is the run under test.
+        /// <c>-baseline &lt;path&gt;</c> is what to judge it against; omitted, the committed
+        /// reference is used, which is what lets this gate a branch unattended.
         /// <c>-force</c> compares across mismatched hardware and says so on every row.
         /// <c>-out &lt;path&gt;</c> writes the markdown comparison.
         /// </summary>
@@ -37,12 +39,32 @@ namespace VRSL.URP.EditorScripts
                 string outPath       = Argument("-out");
                 bool   force         = HasFlag("-force");
 
-                if (basePath == null || candidatePath == null)
+                if (candidatePath == null)
                 {
-                    Debug.LogError("[VRSL bench] FAIL — needs -baseline <run.json> and "
-                                 + "-candidate <run.json>.");
+                    Debug.LogError("[VRSL bench] FAIL — needs -candidate <run.json>.");
                     return;
                 }
+
+                // No hardware check is needed before falling back: Compare refuses on an
+                // environment mismatch, so on a machine that did not produce the reference
+                // the answer is a refusal naming the difference, not a fabricated delta.
+                bool defaulted = basePath == null;
+                if (defaulted) basePath = VRSLBaseline.ReferencePath;
+
+                if (basePath == null)
+                {
+                    string home = VRSLBaseline.ReferenceHome;
+                    Debug.LogError("[VRSL bench] FAIL — no -baseline given and no committed "
+                                 + "reference to fall back on. "
+                                 + (string.IsNullOrEmpty(home)
+                                        ? "VRSL_PERF_HOME is not set."
+                                        : $"VRSL_PERF_HOME is {home}, which holds no baseline.json.")
+                                 + " Set it to the programme folder, or pass -baseline <run.json>.");
+                    return;
+                }
+
+                if (defaulted)
+                    Debug.Log($"[VRSL bench] no -baseline given, using the reference: {basePath}");
 
                 var baseline  = Read(basePath);
                 var candidate = Read(candidatePath);

@@ -227,8 +227,17 @@ black rectangle whatever went wrong.
 
 ```
 bench.sh check                              # the gate: harness + image rows
-bench.sh compare <baseline> <candidate>     # adjudicate two runs, non-zero on regress
+bench.sh compare <candidate>                # judge against the committed reference
+bench.sh compare <baseline> <candidate>     # adjudicate two named runs
 ```
+
+**With no baseline named, the committed reference is used**, resolved from
+`$VRSL_PERF_HOME/baseline.json` the same way the reference frames are, so a gate needs no
+path anybody has to remember. That default is safe on a machine that did not produce the
+reference: `Compare` refuses on an environment mismatch, so the answer there is a refusal
+naming the difference and exit 2, not a fabricated delta. With the variable unset, or set
+to a folder holding no `baseline.json`, `compare` fails and names the folder it looked in
+rather than comparing against nothing.
 
 **It does not capture a sweep headlessly, on purpose.** Batch mode has no GPU clock, so
 a headless capture produces CPU-basis numbers nobody should quote in a results table.
