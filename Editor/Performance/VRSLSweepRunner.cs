@@ -438,22 +438,40 @@ namespace VRSL.URP.EditorScripts
             // Every tile holding every fixture means the cull is saving nothing from
             // this viewpoint, which is a far more useful thing to know than the
             // milliseconds beside it.
-            if (current.counters.tileCullEngaged && current.counters.fixtures > 1
-             && current.counters.lightsPerTileAverage >= current.counters.fixtures - 0.5f)
+            // Against the count the coverage figure is actually over, not the scene's.
+            // They differ only in a scene carrying both light paths, where the average
+            // comes from one cull pass: compared against the total it reads low and
+            // this branch can never fire, on precisely the scenes with most to skip.
+            int  measured = current.counters.MeasuredFixtures;
+            bool mixed    = current.counters.MixedPaths;
+
+            if (current.counters.tileCullEngaged && measured > 1
+             && current.counters.lightsPerTileAverage >= measured - 0.5f)
                 text.AppendLine($"From this camera angle every part of the screen is lit by all "
-                              + $"{current.counters.fixtures} fixtures at once. VRSL normally skips "
+                              + $"{measured} fixtures at once. VRSL normally skips "
                               + "fixtures that cannot reach a given part of the screen, and here "
                               + "there are none to skip, so this view is the worst case. Pointing "
                               + "the camera at less of the rig, or spreading the fixtures further "
                               + "apart, costs less.");
 
             text.AppendLine($"{current.counters.fixtures} fixtures. On average each part of the "
-                          + $"screen is lit by {current.counters.lightsPerTileAverage:F1} of them at "
-                          + "once, which is what the cost above mostly follows"
+                          + $"screen is lit by {current.counters.lightsPerTileAverage:F1} "
+                          + (mixed ? $"of the {measured} DMX ones" : "of them")
+                          + " at once, which is what the cost above mostly follows"
                           + (current.counters.tileCullEngaged
                              ? "."
                              : ". Tile culling is NOT running, so every pixel is paying for every "
                              + "fixture — assign lightCullShader on the manager."));
+
+            // Said here rather than left to a run note: notes only reach this summary
+            // on an unusable run, so on every run worth reading the mixed basis would
+            // be invisible. The measured path is the DMX one whenever both are present
+            // — that precedence is set where the counters are read.
+            if (mixed)
+                text.AppendLine("This scene has both light paths in it. The coverage and emission "
+                              + "figures describe the DMX fixtures; the AudioLink ones are in the "
+                              + "count above and measured separately, because averaging two "
+                              + "culls would describe neither.");
 
             if (current.counters.cappedTiles > 0)
                 text.AppendLine($"{current.counters.cappedTiles} tile(s) are over the per-tile light "

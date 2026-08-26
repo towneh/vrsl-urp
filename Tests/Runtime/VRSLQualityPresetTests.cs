@@ -114,6 +114,35 @@ namespace VRSL.URP.Tests
             Assert.IsFalse(dmx.disableStrobe, "and puts the author's setting back");
         }
 
+        /// <summary>
+        /// Which fixture count the coverage figure divides by.
+        ///
+        /// Row H9 of TESTING.md.
+        /// </summary>
+        [Test]
+        public void CoverageIsReadAgainstThePathItWasMeasuredOn()
+        {
+            // One light path: the two counts agree and nothing is qualified.
+            var single = new VRSLCounters { fixtures = 12, measuredPathFixtures = 12 };
+            Assert.AreEqual(12, single.MeasuredFixtures);
+            Assert.IsFalse(single.MixedPaths);
+
+            // Both paths: the coverage average came off one cull pass, so it divides
+            // by that path's fixtures. Reading it against the scene total reports
+            // less coverage than was measured, and the worst-case branch keyed off
+            // that comparison can never fire.
+            var both = new VRSLCounters { fixtures = 20, measuredPathFixtures = 8 };
+            Assert.AreEqual(8, both.MeasuredFixtures);
+            Assert.IsTrue(both.MixedPaths);
+
+            // A run recorded before the field existed deserialises to zero. It has to
+            // fall back to the scene count, or every old run reports a denominator of
+            // nothing and reads as a scene with no fixtures in it.
+            var old = new VRSLCounters { fixtures = 15, measuredPathFixtures = 0 };
+            Assert.AreEqual(15, old.MeasuredFixtures);
+            Assert.IsFalse(old.MixedPaths, "an absent field is not a mixed scene");
+        }
+
         [Test]
         public void NoManagersAtAllIsToleratedRatherThanThrown()
         {

@@ -250,7 +250,18 @@ namespace VRSL.URP
     [Serializable]
     public class VRSLCounters
     {
+        /// <summary>Fixtures in the scene, every light path counted.</summary>
         public int   fixtures;
+        /// <summary>Fixtures on the path the tile, emission and volumetric figures
+        /// below describe.
+        ///
+        /// The same as <see cref="fixtures"/> wherever a scene carries one light
+        /// path, which is nearly all of them. It differs only when a scene has both,
+        /// and there it is the denominator those figures actually have: a coverage
+        /// average taken from one cull pass, read against a count that includes the
+        /// other path's fixtures, reports less coverage than was measured and can
+        /// never reach the worst case.</summary>
+        public int   measuredPathFixtures;
         public float lightsPerTileAverage;
         public int   lightsPerTileMax;
         public float emptyTilePercent;
@@ -272,6 +283,25 @@ namespace VRSL.URP
         public bool normalsReuseEngaged;
         /// <summary>Set by M3. False until then, same caveat.</summary>
         public bool depthBoundEngaged;
+
+        /// <summary>
+        /// The count the coverage and emission figures are over.
+        /// </summary>
+        /// <remarks>
+        /// Falls back to <see cref="fixtures"/> when the field is absent, which is
+        /// what a run recorded before it existed deserialises to. Reading the raw
+        /// field at a call site instead makes every old run report a coverage
+        /// denominator of zero.
+        /// </remarks>
+        public int MeasuredFixtures => measuredPathFixtures > 0 ? measuredPathFixtures : fixtures;
+
+        /// <summary>
+        /// Whether the figures over one light path are being reported beside a
+        /// fixture count over more than one, which happens only in a scene carrying
+        /// both. A reader told this can divide the two; a reader not told cannot,
+        /// and the ratio reads low without saying why.
+        /// </summary>
+        public bool MixedPaths => MeasuredFixtures != fixtures;
     }
 
     /// <summary>Supporting detail, never the headline. Merged passes make these

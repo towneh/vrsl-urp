@@ -613,6 +613,11 @@ namespace VRSL.URP
             // merging two of each would produce an average of two different scenes.
             bool useDmx = dmx != null;
 
+            // The denominator those figures actually have, recorded beside them.
+            // Without it a reader holds a coverage average over one path and a
+            // fixture count over both, with nothing saying the two do not divide.
+            counters.measuredPathFixtures = useDmx ? dmx.FixtureCount : audioLink.FixtureCount;
+
             // Zero when the volumetric pass is not being enqueued at all, rather than
             // whatever the step field still says. The manager only enqueues the pass
             // where it holds a volumetric material, so a scene with volumetrics off
