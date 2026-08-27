@@ -1,12 +1,18 @@
-// Editor-only in full: it loads package prefabs through the AssetDatabase, which a
-// player has no equivalent of. It lives in the runtime assembly regardless, because
-// the suite reaches it and the test assembly does not reference the editor one — the
-// same arrangement the PlayMode rig uses for the same reason.
-#if UNITY_EDITOR
+// Building the sweep's scene is editor-only: it loads package prefabs through the
+// AssetDatabase, which a player has no equivalent of. Driving a scene that has already
+// been built is not, because the standard sweep runs in a built player as well as in
+// the editor — so the members a running sweep calls sit outside the guard below and the
+// builder sits inside it.
+//
+// The file is in the runtime assembly either way, because the suite reaches it and the
+// test assembly does not reference the editor one — the same arrangement the PlayMode
+// rig uses for the same reason.
 using System.Collections.Generic;
+using UnityEngine;
+#if UNITY_EDITOR
 using UnityEditor;
 using UnityEditor.SceneManagement;
-using UnityEngine;
+#endif
 
 namespace VRSL.URP
 {
@@ -73,6 +79,7 @@ namespace VRSL.URP
         public const int CaptureWidth  = 1920;
         public const int CaptureHeight = 1080;
 
+#if UNITY_EDITOR
         /// <summary>
         /// Usable 13-channel sectors per universe.
         ///
@@ -319,6 +326,7 @@ namespace VRSL.URP
             camera.tag             = "MainCamera";
             PoseCamera(camera, CameraVariant.InsideCones);
         }
+#endif
 
         /// <summary>Put the camera where a variant says. Called per configuration at
         /// runtime, which is why it takes a camera rather than finding one.</summary>
@@ -403,4 +411,3 @@ namespace VRSL.URP
         }
     }
 }
-#endif
