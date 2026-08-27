@@ -152,6 +152,123 @@ namespace VRSL.URP
         /// for. Empty when the GUID resolves to nothing.</summary>
         public static string PathOf(VRSLWiringField field) =>
             field == null ? "" : AssetDatabase.GUIDToAssetPath(field.Guid);
+
+        /// <summary>The table for a manager, or null for anything else.</summary>
+        public static VRSLWiringField[] FieldsFor(Object manager) => manager switch
+        {
+            VRSL_URPLightManager          => Dmx,
+            VRSL_AudioLinkURPLightManager => AudioLink,
+            _                             => null,
+        };
+
+        /// <summary>
+        /// Fill every empty wiring field on a manager.
+        ///
+        /// <b>Empty ones only.</b> R-M7-3: a value an author set is theirs, however
+        /// unusual it looks, and a resolver that enforced opinions would be a worse
+        /// problem than the one it fixes. This fills gaps and nothing else.
+        /// </summary>
+        /// <returns>What it changed, and what it could not.</returns>
+        public static VRSLWiringResult Resolve(Object manager)
+        {
+            var result = new VRSLWiringResult();
+            var fields = FieldsFor(manager);
+            if (fields == null) return result;
+
+            // Through SerializedObject rather than by assigning the field: it registers
+            // the undo, marks the object dirty, and writes a prefab override the way the
+            // inspector would. Setting the field directly does none of the three, and the
+            // change would be lost on the next reload without anything saying so.
+            var so = new SerializedObject(manager);
+            foreach (var field in fields)
+            {
+                var prop = so.FindProperty(field.Field);
+                // Pinned by a row, so this is a table that has drifted rather than a
+                // condition to expect. Skipped rather than thrown: one stale entry should
+                // not stop the other nine being filled.
+                if (prop == null) { result.Unresolved.Add(field); continue; }
+                if (prop.objectReferenceValue != null) continue;
+
+                var asset = Load(field);
+                if (asset == null) { result.Unresolved.Add(field); continue; }
+
+                prop.objectReferenceValue = asset;
+                result.Filled.Add(field);
+            }
+            so.ApplyModifiedProperties();
+            return result;
+        }
+
+        /// <summary>
+        /// What is empty on a manager right now, without changing anything.
+        ///
+        /// Separate from <see cref="Resolve"/> because the inspector draws every repaint
+        /// and resolution must not run per repaint — an AssetDatabase search per frame in
+        /// a large project is its own kind of unusable.
+        /// </summary>
+        public static List<VRSLWiringField> Empty(Object manager)
+        {
+            var empty  = new List<VRSLWiringField>();
+            var fields = FieldsFor(manager);
+            if (fields == null) return empty;
+
+            var so = new SerializedObject(manager);
+            foreach (var field in fields)
+            {
+                var prop = so.FindProperty(field.Field);
+                if (prop == null || prop.objectReferenceValue == null) empty.Add(field);
+            }
+            return empty;
+        }
+    }
+
+    /// <summary>What a resolve changed, and what it could not.</summary>
+    class VRSLWiringResult
+    {
+        public readonly List<VRSLWiringField> Filled     = new();
+        public readonly List<VRSLWiringField> Unresolved = new();
+
+        public bool ChangedAnything => Filled.Count > 0;
+
+        /// <summary>
+        /// What to tell the author, in the register R-M7-5 asks for: what they would
+        /// have seen, then which field it was.
+        ///
+        /// Reported rather than done in silence, because a manager that quietly fixes
+        /// itself is one whose author never learns their scene was wrong.
+        /// </summary>
+        public string Describe()
+        {
+            var text = new System.Text.StringBuilder();
+            if (Filled.Count > 0)
+            {
+                text.AppendLine($"Filled in {Filled.Count} setting(s) that were empty:");
+                foreach (var f in Filled)
+                    text.AppendLine($"  • {Capitalise(f.Consequence)} ({f.Field}).");
+            }
+            if (Unresolved.Count > 0)
+            {
+                if (Filled.Count > 0) text.AppendLine();
+                text.AppendLine($"{Unresolved.Count} could not be filled in, and this is what "
+                              + "you will see:");
+                foreach (var f in Unresolved)
+                    text.AppendLine($"  • {Capitalise(f.Consequence)} ({f.Field}). Looked "
+                                  + $"for {PathOrMissing(f)}.");
+            }
+            if (text.Length == 0) text.Append("Everything was already set up.");
+            return text.ToString().TrimEnd();
+        }
+
+        static string PathOrMissing(VRSLWiringField field)
+        {
+            string path = VRSLWiring.PathOf(field);
+            return string.IsNullOrEmpty(path)
+                 ? "an asset that is not in this project any more"
+                 : path;
+        }
+
+        static string Capitalise(string s) =>
+            string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
     }
 }
 #endif

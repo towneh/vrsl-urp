@@ -1,7 +1,9 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace VRSL.URP.Tests
@@ -66,6 +68,55 @@ namespace VRSL.URP.Tests
                   + "not have. A rename compiles everywhere else and leaves this field "
                   + "unresolvable in silence.");
             }
+        }
+
+        [Test]
+        public void ResolveFillsEmptyFieldsAndLeavesAnAuthorsOwnAlone()
+        {
+            var go = new GameObject("wiring row");
+            go.SetActive(false);   // no Awake, so the manager never claims the singleton
+            try
+            {
+                var manager = go.AddComponent<VRSL_URPLightManager>();
+
+                // A deliberate override: the wrong asset for this field, which is exactly
+                // what R-M7-3 protects. Resolution that "knows better" would replace it,
+                // and an author who set something unusual on purpose would find it
+                // silently undone.
+                var somebodyElses = VRSLWiring.Load(FieldNamed("dmxSpinTimerTexture"));
+                manager.dmxMainTexture = (RenderTexture)somebodyElses;
+
+                var result = VRSLWiring.Resolve(manager);
+
+                Assert.AreSame(somebodyElses, manager.dmxMainTexture,
+                    "resolution overwrote a field the author had set");
+                Assert.That(result.Filled.Select(f => f.Field),
+                    Does.Not.Contain("dmxMainTexture"),
+                    "a field that was already set was reported as filled");
+
+                // Everything else was empty and should now be the package's own asset.
+                Assert.IsEmpty(result.Unresolved,
+                    "nothing should be unresolvable in a project that has this package: "
+                  + string.Join(", ", result.Unresolved.Select(f => f.Field)));
+                Assert.AreEqual(VRSLWiring.Dmx.Length - 1, result.Filled.Count,
+                    "every empty field should have been filled exactly once");
+                foreach (var field in VRSLWiring.Dmx)
+                    Assert.IsNotNull(new SerializedObject(manager).FindProperty(field.Field)
+                                        .objectReferenceValue,
+                        $"{field.Field} is still empty after a resolve");
+
+                // Idempotent: a second pass has nothing left to do, so a repair an author
+                // presses twice does not report ten changes it did not make.
+                var again = VRSLWiring.Resolve(manager);
+                Assert.IsFalse(again.ChangedAnything, "a second resolve changed something");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        static VRSLWiringField FieldNamed(string name)
+        {
+            foreach (var f in VRSLWiring.Dmx) if (f.Field == name) return f;
+            throw new AssertionException($"no wiring field called {name}");
         }
 
         [Test]
