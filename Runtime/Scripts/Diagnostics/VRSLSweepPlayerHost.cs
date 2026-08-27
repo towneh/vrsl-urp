@@ -54,7 +54,29 @@ namespace VRSL.URP
 
             var outcome = new VRSLSweepOutcome();
             var job     = VRSLSweepJob.Run(outcome, Stamp);
-            while (job.MoveNext()) yield return job.Current;
+
+            // Stepped by hand so a throw can be caught. A coroutine that dies of an
+            // exception simply stops, and this one is the only thing that ever quits:
+            // the player would sit there with a window open, having written nothing and
+            // returned no exit code, blocking whatever launched it until somebody kills
+            // it. That is the one failure an unattended run cannot report for itself.
+            while (true)
+            {
+                bool moved;
+                try
+                {
+                    moved = job.MoveNext();
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError($"[VRSL sweep] FAIL — the sweep threw: {e}");
+                    Quit(1);
+                    yield break;
+                }
+
+                if (!moved) break;
+                yield return job.Current;
+            }
 
             if (outcome.run == null)
             {

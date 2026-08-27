@@ -166,14 +166,25 @@ namespace VRSL.URP.EditorScripts
             {
                 var outcome = new VRSLSweepOutcome();
                 var job     = VRSLSweepJob.Run(outcome, StampEnvironment);
-                while (job.MoveNext()) yield return job.Current;
-
-                // A result and a reason are the only two things the job reports, and
-                // neither would leave the window polling for one that is not coming.
-                Finish(outcome.run,
-                       outcome.error ?? (outcome.run == null
-                           ? "The sweep reported neither a result nor a reason."
-                           : null));
+                try
+                {
+                    while (job.MoveNext()) yield return job.Current;
+                }
+                finally
+                {
+                    // Reached on a throw as well, and it has to be. The job's own finally
+                    // records the reason but lets the exception through, so without this
+                    // the exception leaves the coroutine before Finish: play mode never
+                    // ends and the window polls for a result that is not coming. The
+                    // inline loop this replaced called Finish from its own finally.
+                    //
+                    // A result and a reason are the only two things the job reports, and
+                    // neither would leave the window waiting.
+                    Finish(outcome.run,
+                           outcome.error ?? (outcome.run == null
+                               ? "The sweep reported neither a result nor a reason."
+                               : null));
+                }
             }
 
             /// <summary>
