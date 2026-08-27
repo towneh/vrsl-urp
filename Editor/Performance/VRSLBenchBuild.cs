@@ -33,11 +33,36 @@ namespace VRSL.URP.EditorScripts
         [MenuItem("VRSL/URP/Performance/Build Sweep Player")]
         static void BuildFromMenu()
         {
+            // Asked here rather than in Build, which the headless path also calls: a modal
+            // prompt would hang a batch run with nobody there to answer it. Build replaces
+            // the open scene outright and NewScene does not prompt, so without this an
+            // author loses unsaved work to a menu item that says nothing about scenes.
+            // Returns false only on Cancel, and shows no dialog when nothing is dirty.
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+
             string folder = EditorUtility.SaveFolderPanel(
                 "Where to put the sweep player", "", "VRSL-Sweep-Player");
             if (string.IsNullOrEmpty(folder)) return;
 
-            string exe = Build(folder, out string failure);
+            string restore = EditorSceneManager.GetActiveScene().path;
+            string exe;
+            string failure;
+            try
+            {
+                exe = Build(folder, out failure);
+            }
+            finally
+            {
+                // The scratch scene is deleted on the way out, so leaving it open would
+                // leave the author looking at a scene asset that no longer exists. In the
+                // finally because a build that throws strands them there just as surely as
+                // one that succeeds.
+                if (string.IsNullOrEmpty(restore))
+                    EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+                else
+                    EditorSceneManager.OpenScene(restore, OpenSceneMode.Single);
+            }
+
             if (exe == null) EditorUtility.DisplayDialog("Sweep player", failure, "OK");
             else EditorUtility.RevealInFinder(exe);
         }
