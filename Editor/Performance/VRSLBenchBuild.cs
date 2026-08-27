@@ -56,7 +56,9 @@ namespace VRSL.URP.EditorScripts
                 // The scratch scene is deleted on the way out, so leaving it open would
                 // leave the author looking at a scene asset that no longer exists. In the
                 // finally because a build that throws strands them there just as surely as
-                // one that succeeds.
+                // one that succeeds. The active scene only: a multi-scene setup comes back
+                // as one scene, and the prompt above is what makes sure none of it is lost
+                // rather than merely unloaded.
                 if (string.IsNullOrEmpty(restore))
                     EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
                 else
