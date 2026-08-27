@@ -25,12 +25,14 @@ namespace VRSL.URP.Tests
                 var asset = VRSLWiring.Load(field);
                 if (asset == null) { missing.Add($"{field.Field} ({field.Guid})"); continue; }
 
-                // Inside this package, not merely somewhere. A GUID that resolved to the
-                // legacy package's identically-named copy would load fine and be the
-                // precise fault the GUID table exists to prevent.
+                // Inside this package, not merely somewhere that loads. A GUID resolving
+                // to the legacy package's identically-named copy would load perfectly
+                // well and be the precise fault the table exists to prevent, and so
+                // would one that had drifted onto a stray asset in the host project.
                 string path = VRSLWiring.PathOf(field);
-                Assert.That(path, Does.Contain("town.mr.vrsl-urp").Or.StartWith("Assets/"),
-                    $"{field.Field} resolved to {path}, which is not this package");
+                Assert.That(path, Does.StartWith(VRSLWiring.PackageRoot),
+                    $"{field.Field} resolved to '{path}', which is not inside "
+                  + VRSLWiring.PackageRoot);
             }
 
             // Named together rather than one at a time: a GUID regeneration moves every

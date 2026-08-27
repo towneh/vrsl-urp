@@ -48,6 +48,13 @@ namespace VRSL.URP
     /// </summary>
     static class VRSLWiring
     {
+        /// <summary>Where this package's assets live in the AssetDatabase, including when
+        /// it is referenced by a local <c>file:</c> path — Unity surfaces those under
+        /// <c>Packages/</c> like any other. One spelling, so a row checking that
+        /// resolution stayed inside the package and the resolver itself cannot disagree
+        /// about what "inside" means.</summary>
+        public const string PackageRoot = "Packages/town.mr.vrsl-urp/";
+
         /// <summary>
         /// The DMX manager's ten. Every one has a single correct value, none of them can
         /// be worked out by an author, and each fails without an error.
