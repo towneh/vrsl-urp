@@ -235,6 +235,15 @@ namespace VRSL.URP
         public sealed class Session
         {
             readonly List<Target> _targets = new();
+#if UNITY_EDITOR
+            /// <summary>
+            /// Automatic wiring resolution, held off for these managers while the session
+            /// runs. Quality Off works by emptying <c>volumetricShader</c> and bouncing
+            /// the manager, and resolution fills empty wiring on enable — without the
+            /// hold the shader comes straight back and Off silently stops working.
+            /// </summary>
+            readonly List<System.IDisposable> _noAutoResolve = new();
+#endif
 
             public static Session Begin(VRSL_URPLightManager manager) => Begin(manager, null);
 
@@ -247,6 +256,10 @@ namespace VRSL.URP
                 var session = new Session();
                 session.Add(dmx != null ? new DmxTarget(dmx) : null);
                 session.Add(audioLink != null ? new AudioLinkTarget(audioLink) : null);
+#if UNITY_EDITOR
+                if (dmx != null)       session._noAutoResolve.Add(VRSLWiring.SuppressAutoResolve(dmx));
+                if (audioLink != null) session._noAutoResolve.Add(VRSLWiring.SuppressAutoResolve(audioLink));
+#endif
                 return session;
             }
 
@@ -270,6 +283,14 @@ namespace VRSL.URP
             {
                 foreach (var target in _targets)
                     if (target.Alive) target.RestoreSaved();
+#if UNITY_EDITOR
+                // After the targets, so the restored shader is in place before resolution
+                // is allowed to look again. A session that is never restored — the
+                // benchmark rows open one on a manager they then destroy — leaves its
+                // hold behind, which is why the hold is per manager and dies with it.
+                foreach (var hold in _noAutoResolve) hold.Dispose();
+                _noAutoResolve.Clear();
+#endif
             }
         }
     }

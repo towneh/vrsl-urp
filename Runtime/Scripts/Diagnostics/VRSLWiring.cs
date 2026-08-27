@@ -199,6 +199,78 @@ namespace VRSL.URP
             return result;
         }
 
+        /// <summary>Entity ids, not references: a hold on a manager that is later
+        /// destroyed must not keep the object alive, and an id can be compared without
+        /// touching a dead one.</summary>
+        static readonly HashSet<EntityId> s_suppressed = new();
+
+        /// <summary>Whether automatic resolution is currently held off for this
+        /// manager.</summary>
+        public static bool AutoResolveSuppressed(Object manager) =>
+            manager != null && s_suppressed.Contains(manager.GetEntityId());
+
+        /// <summary>
+        /// Hold automatic resolution off for one manager, for the life of the scope.
+        ///
+        /// It has to be holdable, and the reason is concrete. M0's quality preset turns
+        /// volumetrics off by emptying <c>volumetricShader</c> and bouncing the manager —
+        /// that emptied field is the mechanism, not a fault — and resolution fills empty
+        /// wiring on enable. Without a hold the two fight: the shader comes straight
+        /// back, the pass runs at full cost, and the counters still report it gone
+        /// because they read the level rather than the field.
+        ///
+        /// <b>Per manager rather than process-wide, and that distinction is load
+        /// bearing.</b> A global hold was tried first and a caller that legitimately
+        /// never released it — the benchmark rows open a session on a manager they are
+        /// about to destroy, so restoring fields on it is pointless — left automatic
+        /// resolution dead for every later row in the process. It failed silently, which
+        /// is the exact class of fault this milestone exists to remove. Scoped to one
+        /// manager, a leak dies with that manager.
+        /// </summary>
+        public static System.IDisposable SuppressAutoResolve(Object manager) =>
+            new Suppression(manager);
+
+        sealed class Suppression : System.IDisposable
+        {
+            readonly EntityId _id;
+            bool _released;
+
+            public Suppression(Object manager)
+            {
+                _id = manager != null ? manager.GetEntityId() : default;
+                if (_id != default) s_suppressed.Add(_id);
+            }
+
+            public void Dispose()
+            {
+                if (_released || _id == default) return;
+                _released = true;
+                s_suppressed.Remove(_id);
+            }
+        }
+
+        /// <summary>
+        /// Resolution as a manager's enable calls it.
+        ///
+        /// Says what it filled, rather than fixing the scene in silence. The risk this
+        /// milestone carries is that a manager which quietly repairs itself is one whose
+        /// author never learns their scene was wrong, and one line in the Console when
+        /// something was actually empty is the cheapest answer to it. Nothing is logged
+        /// on the ordinary case where there was nothing to do.
+        /// </summary>
+        public static void ResolveOnEnable(Object manager)
+        {
+            if (AutoResolveSuppressed(manager)) return;
+
+            var result = Resolve(manager);
+            if (!result.ChangedAnything) return;
+
+            Debug.Log($"[VRSL] Set up {result.Filled.Count} empty setting(s) on "
+                    + $"{manager.name}. Without them: "
+                    + string.Join("; ", result.Filled.ConvertAll(f => f.Consequence)) + ".",
+                      manager);
+        }
+
         /// <summary>
         /// What is empty on a manager right now, without changing anything.
         ///

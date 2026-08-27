@@ -275,6 +275,11 @@ namespace VRSL.URP
             // the same shader globals, which is duplicated work and wrong lighting
             // rather than a harmless spare component.
             if (Instance != this) return;
+#if UNITY_EDITOR
+            // Before TakeOwnership, which builds this manager's materials from these
+            // fields and then keeps them.
+            VRSLWiring.ResolveOnEnable(this);
+#endif
             TakeOwnership();
         }
 
