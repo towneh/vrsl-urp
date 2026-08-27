@@ -481,7 +481,7 @@ namespace VRSL.URP.EditorScripts
                     comparison = VRSLBaseline.Compare(baseline, candidate, force: true);
                 }
 
-                string folder = VRSLPerfReport.Folder("comparison");
+                string folder = VRSLBenchmarkReport.Folder("comparison");
                 File.WriteAllText(Path.Combine(folder, "comparison.md"), VRSLBaseline.ToMarkdown(comparison));
                 Folder = folder;
 
