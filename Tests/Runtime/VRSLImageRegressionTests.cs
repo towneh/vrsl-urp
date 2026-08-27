@@ -108,6 +108,97 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// A-M7-1. A manager with every wiring field cleared repairs itself and renders
+        /// the same image as one wired by the prefab.
+        ///
+        /// This is the row M7 lives or dies on, and it is the only one that can make the
+        /// claim. Comparing GUIDs proves resolution picked the assets the table names;
+        /// it cannot prove the table names the right ones. Rendering proves it, because
+        /// a wrong asset in any of the ten shows up — the wrong compute lights nothing,
+        /// the wrong lighting shader puts nothing on surfaces, the wrong prepass makes
+        /// every surface flat grey.
+        ///
+        /// Bounced twice on purpose. Clearing takes effect only after a bounce, since
+        /// the cull resolves its shader in its constructor and the manager builds its
+        /// volumetric material once and keeps it; and the resolved values need a second
+        /// bounce for the same reason. Without the first, the row would compare two
+        /// correctly wired managers and pass whatever resolution did.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator A_M7_1_AClearedManagerRepairsItselfAndRendersIdentically()
+        {
+            Texture2D wired = null, repaired = null;
+            yield return CaptureFrame(null, t => wired = t);
+            yield return CaptureFrame(rig =>
+            {
+                var so = new UnityEditor.SerializedObject(rig.Manager);
+                foreach (var field in VRSLWiring.Dmx)
+                    so.FindProperty(field.Field).objectReferenceValue = null;
+                so.ApplyModifiedProperties();
+
+                // Clearing the fields is not enough, and this row passed with a
+                // deliberately wrong shader until it did this. The manager builds its
+                // lighting and volumetric materials once, from whatever the fields held
+                // at the time, and never drops them — so both survived every bounce, the
+                // capture kept rendering through the prefab's own materials, and the row
+                // could not see resolution's answer at all. Destroying them makes the
+                // manager's references fake-null so the next enable rebuilds from
+                // whatever resolution put back.
+                DropMaterials(rig.Manager);
+
+                rig.Manager.enabled = false;
+                rig.Manager.enabled = true;
+
+                var result = VRSLWiring.Resolve(rig.Manager);
+                Debug.Log($"[A-M7-1] {result.Describe()}");
+                Assert.IsEmpty(result.Unresolved,
+                    "resolution left something empty, so this row would be comparing a "
+                  + "half-wired manager rather than a repaired one");
+
+                DropMaterials(rig.Manager);
+                rig.Manager.enabled = false;
+                rig.Manager.enabled = true;
+            }, t => repaired = t);
+
+            try
+            {
+                var result = VRSLImageCompare.Compare(wired, repaired);
+                Debug.Log($"[A-M7-1] prefab wiring vs repaired: {result}");
+
+                Assert.IsFalse(result.SizeMismatch, "the two captures came back different sizes");
+
+                if (result.Max > VRSLImageCompare.Threshold)
+                {
+                    VRSLImageCompare.WriteImages(EvidenceFolder, "A-M7-1-wiring", wired, repaired);
+                    Assert.Fail(
+                        $"a repaired manager renders differently from a wired one ({result}). "
+                      + "Resolution picked assets, but not the same ones the prefab uses — "
+                      + "which is the fault this milestone would otherwise introduce, since "
+                      + "a manager wired to the wrong assets fails exactly as silently as one "
+                      + $"nobody wired. Images written to {EvidenceFolder}");
+                }
+            }
+            finally
+            {
+                if (wired != null)    Object.DestroyImmediate(wired);
+                if (repaired != null) Object.DestroyImmediate(repaired);
+            }
+        }
+
+        /// <summary>
+        /// Destroy the materials the manager built, so its next enable builds them again
+        /// from whatever the shader fields hold now.
+        ///
+        /// DestroyImmediate rather than Destroy: a test advances frames itself and the
+        /// deferred destruction would land after the bounce that is meant to see it.
+        /// </summary>
+        static void DropMaterials(VRSL_URPLightManager manager)
+        {
+            if (manager.LightingMaterial   != null) Object.DestroyImmediate(manager.LightingMaterial);
+            if (manager.VolumetricMaterial != null) Object.DestroyImmediate(manager.VolumetricMaterial);
+        }
+
+        /// <summary>
         /// A-M0-4, the sensitivity half. The comparison has to catch a one-pixel
         /// offset in real rendered content, which is the fault the criterion names.
         ///
