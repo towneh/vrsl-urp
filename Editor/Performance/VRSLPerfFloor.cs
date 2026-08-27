@@ -14,20 +14,38 @@ namespace VRSL.URP.EditorScripts
     /// precisions of 0.08 to 0.26, and five rows were reported as improved or
     /// regressed when nothing had changed.
     ///
-    /// Kept per GPU, because a floor is a property of the machine and carrying one
-    /// across hardware would be worse than having none. Kept in EditorPrefs rather
-    /// than in the package, which ships to users and has no business holding one
-    /// machine's timings.
+    /// Kept per GPU and per context, because a floor is a property of the machine and
+    /// of how it was measured — carrying one across hardware, or across the gap between
+    /// an editor capture and a built player, would be worse than having none. Kept in
+    /// EditorPrefs rather than in the package, which ships to users and has no business
+    /// holding one machine's timings.
     /// </summary>
     static class VRSLPerfFloor
     {
         const string Prefix = "VRSL.Perf.Floor.";
 
-        static string Key(string gpu) => Prefix + (string.IsNullOrEmpty(gpu) ? "unknown" : gpu);
+        /// <summary>
+        /// Filed per GPU <b>and</b> per context, because an editor floor and a player
+        /// floor are two different measurements of two different things and neither
+        /// describes the other.
+        ///
+        /// The editor's key is the bare GPU name, which is the shape already in
+        /// EditorPrefs: appending the context to both would silently discard a floor
+        /// somebody measured properly, and a floor is only established by a null run
+        /// nobody wants to repeat.
+        /// </summary>
+        static string Key(string gpu, string context)
+        {
+            string device = string.IsNullOrEmpty(gpu) ? "unknown" : gpu;
+            return string.IsNullOrEmpty(context) || context == "Editor"
+                 ? Prefix + device
+                 : Prefix + context + "." + device;
+        }
 
         /// <summary>The stored floor in milliseconds, or 0 when none has been
-        /// established for this GPU.</summary>
-        public static double Get(string gpu) => EditorPrefs.GetFloat(Key(gpu), 0f);
+        /// established for this GPU in this context.</summary>
+        public static double Get(string gpu, string context) =>
+            EditorPrefs.GetFloat(Key(gpu, context), 0f);
 
         /// <summary>
         /// Raise the floor to cover a newly observed disagreement, never lower it.
@@ -41,17 +59,18 @@ namespace VRSL.URP.EditorScripts
         ///
         /// Returns the floor now in force, which is not always what was passed in.
         /// </summary>
-        public static double Raise(string gpu, double milliseconds)
+        public static double Raise(string gpu, string context, double milliseconds)
         {
-            double floor = System.Math.Max(Get(gpu), milliseconds);
-            EditorPrefs.SetFloat(Key(gpu), (float)floor);
+            double floor = System.Math.Max(Get(gpu, context), milliseconds);
+            EditorPrefs.SetFloat(Key(gpu, context), (float)floor);
             return floor;
         }
 
         /// <summary>Forget this machine's floor, so the next measurement establishes it
         /// from scratch. For a machine that has genuinely changed — different drivers,
         /// something noisy uninstalled — rather than for a run that came out flattering.</summary>
-        public static void Clear(string gpu) => EditorPrefs.DeleteKey(Key(gpu));
+        public static void Clear(string gpu, string context) =>
+            EditorPrefs.DeleteKey(Key(gpu, context));
 
         /// <summary>
         /// The largest disagreement across a comparison, which is what a null run's

@@ -317,6 +317,11 @@ namespace VRSL.URP
         /// <summary>"Editor" or "Player". A report that does not say which invites an
         /// editor number being quoted in a results table.</summary>
         public string context             = "";
+
+        /// <summary>What <see cref="context"/> would say if this were captured now.
+        /// Anything filed per context — a noise floor, for one — needs the same answer
+        /// outside a run as inside one.</summary>
+        public static string LocalContext => Application.isEditor ? "Editor" : "Player";
         /// <summary>Filled by the editor front end. Empty in a player, which has no
         /// package folder to read and no git to ask.</summary>
         public string packageVersion      = "";
@@ -353,7 +358,7 @@ namespace VRSL.URP
                 graphicsDevice = SystemInfo.graphicsDeviceName,
                 graphicsApi    = SystemInfo.graphicsDeviceType.ToString(),
                 graphicsDriver = SystemInfo.graphicsDeviceVersion,
-                context        = Application.isEditor ? "Editor" : "Player",
+                context        = LocalContext,
                 screenWidth    = Screen.width,
                 screenHeight   = Screen.height,
                 // Defaults to the screen, which is right for anything measuring whatever

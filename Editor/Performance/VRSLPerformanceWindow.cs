@@ -27,6 +27,9 @@ namespace VRSL.URP.EditorScripts
         // serialised: losing it to a domain reload costs one button press.
         VRSLComparison _lastComparison;
         string         _lastComparisonGpu;
+        /// <summary>Whether the runs behind that comparison were captured in the editor
+        /// or in a built player, which is half of the key a floor is filed under.</summary>
+        string         _lastComparisonContext;
         /// <summary>Whether the compared runs were captured on this machine at all.</summary>
         bool           _lastComparisonLocal;
 
@@ -315,9 +318,16 @@ namespace VRSL.URP.EditorScripts
             string gpu = string.IsNullOrEmpty(_lastComparisonGpu)
                        ? SystemInfo.graphicsDeviceName
                        : _lastComparisonGpu;
-            double stored = VRSLPerfFloor.Get(gpu);
+            // A floor measured in the editor does not describe a built player, so the
+            // section works on whichever the last comparison was of, and on the editor
+            // until there has been one.
+            string context = string.IsNullOrEmpty(_lastComparisonContext)
+                           ? VRSLBenchmarkEnvironment.LocalContext
+                           : _lastComparisonContext;
+            double stored = VRSLPerfFloor.Get(gpu, context);
 
-            EditorGUILayout.LabelField(gpu, EditorStyles.miniLabel);
+            EditorGUILayout.LabelField($"{gpu} ({context.ToLowerInvariant()} runs)",
+                                       EditorStyles.miniLabel);
 
             // Editable as well as adopted. A floor is measured, not invented, but the
             // measurement lives in two sweeps that get deleted like any other output —
@@ -338,8 +348,8 @@ namespace VRSL.URP.EditorScripts
                 stored);
             if (System.Math.Abs(typed - stored) > 1e-6 && typed >= 0.0)
             {
-                VRSLPerfFloor.Clear(gpu);
-                if (typed > 0.0) VRSLPerfFloor.Raise(gpu, typed);
+                VRSLPerfFloor.Clear(gpu, context);
+                if (typed > 0.0) VRSLPerfFloor.Raise(gpu, context, typed);
                 stored = typed;
             }
 
@@ -375,7 +385,7 @@ namespace VRSL.URP.EditorScripts
 
                 if (GUILayout.Button(label))
                 {
-                    double now = VRSLPerfFloor.Raise(gpu, largest);
+                    double now = VRSLPerfFloor.Raise(gpu, context, largest);
                     Summary = largest > stored
                         ? $"Noise floor for {gpu} raised to {now:F3} ms, from the largest "
                         + "disagreement across that comparison. Sweeps from now on carry it, and "
@@ -396,7 +406,7 @@ namespace VRSL.URP.EditorScripts
             using (new EditorGUI.DisabledScope(stored <= 0.0))
                 if (GUILayout.Button("Reset this machine's floor"))
                 {
-                    VRSLPerfFloor.Clear(gpu);
+                    VRSLPerfFloor.Clear(gpu, context);
                     Summary = $"Noise floor for {gpu} cleared. Compare two identical runs to "
                             + "establish it again.";
                     GUIUtility.ExitGUI();
@@ -441,9 +451,10 @@ namespace VRSL.URP.EditorScripts
             // them standing would leave the adopt button offering a floor from a
             // comparison the summary no longer describes. Cancelling a picker returns
             // above this line, so backing out changes nothing.
-            _lastComparison      = null;
-            _lastComparisonGpu   = null;
-            _lastComparisonLocal = false;
+            _lastComparison        = null;
+            _lastComparisonGpu     = null;
+            _lastComparisonContext = null;
+            _lastComparisonLocal   = false;
 
             try
             {
@@ -462,7 +473,7 @@ namespace VRSL.URP.EditorScripts
                 // machine has since been measured at would mean re-capturing perfectly
                 // good results to benefit from it.
                 string comparingGpu = candidate.environment.graphicsDevice;
-                double machineFloor = VRSLPerfFloor.Get(comparingGpu);
+                double machineFloor = VRSLPerfFloor.Get(comparingGpu, candidate.environment.context);
                 bool   borrowed     = machineFloor > 0.0
                                    && baseline.noiseFloorMs <= 0.0
                                    && candidate.noiseFloorMs <= 0.0;
@@ -496,6 +507,10 @@ namespace VRSL.URP.EditorScripts
                 // `forced` does not answer it: two runs copied from CI agree with each
                 // other perfectly and neither happened here.
                 _lastComparisonGpu   = SystemInfo.graphicsDeviceName;
+                // The candidate's context, not the editor's: comparing two player runs
+                // from this machine establishes a player floor, and filing it under the
+                // editor would leave every player sweep still carrying zero.
+                _lastComparisonContext = candidate.environment.context;
                 _lastComparisonLocal = candidate.environment.graphicsDevice
                                      == SystemInfo.graphicsDeviceName;
 

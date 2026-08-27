@@ -271,7 +271,8 @@ namespace VRSL.URP.EditorScripts
                 // something honest to judge against. Zero when none has been
                 // established, and the window says so rather than quietly falling back
                 // to a figure that reads better than reality.
-                run.noiseFloorMs = VRSLPerfFloor.Get(run.environment.graphicsDevice);
+                run.noiseFloorMs = VRSLPerfFloor.Get(run.environment.graphicsDevice,
+                                                    run.environment.context);
             }
 
             void Finish(VRSLBenchmarkRun run, string error)
