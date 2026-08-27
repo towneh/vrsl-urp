@@ -2,6 +2,7 @@
 // these rows compile only where their helper exists.
 #if UNITY_EDITOR
 using System.Collections;
+using System.Linq;
 using System.IO;
 using NUnit.Framework;
 using UnityEngine;
@@ -149,11 +150,21 @@ namespace VRSL.URP.Tests
                 rig.Manager.enabled = false;
                 rig.Manager.enabled = true;
 
+                // Explicit for now because nothing resolves automatically yet — that is
+                // the next step of the milestone. **When it lands this call comes out**,
+                // or the row repairs the manager itself and passes while the automatic
+                // path is broken, which is precisely the fault it would then be claiming
+                // to cover.
                 var result = VRSLWiring.Resolve(rig.Manager);
                 Debug.Log($"[A-M7-1] {result.Describe()}");
-                Assert.IsEmpty(result.Unresolved,
-                    "resolution left something empty, so this row would be comparing a "
-                  + "half-wired manager rather than a repaired one");
+
+                // Asked of the manager rather than taken from the resolver's own report,
+                // so the check survives that call being removed: whatever did the
+                // resolving, nothing may be left empty.
+                var empty = VRSLWiring.Empty(rig.Manager);
+                Assert.IsEmpty(empty.Select(f => f.Field),
+                    "the manager still has empty wiring, so this row would be comparing a "
+                  + "half-wired manager against a wired one rather than a repaired one");
 
                 DropMaterials(rig.Manager);
                 rig.Manager.enabled = false;
