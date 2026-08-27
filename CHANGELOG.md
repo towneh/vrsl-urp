@@ -57,6 +57,9 @@
 
 ### Fixed
 
+- The three DMX light-manager prefabs now ship with their strobe timer texture assigned. The field arrived after those prefabs were last saved, so it deserialised as empty in every scene built from them — and empty is only safe in a scene that never strobes. The StrobeOutput CustomRenderTexture's decode shader samples that texture to work out the strobe gate, so where strobe was used the whole rig could go dark rather than merely stop flashing, with nothing in the Console to say why. Scenes that already assigned it by hand are unaffected. Re-saving the prefabs also wrote out fourteen fields that had been left implicit — contact shadows, strobe frequencies, movement smoothing and the rest — each at the value the script already defaulted to, so nothing else about them changed.
+
+
 - A light manager that is switched off in the inspector no longer takes the singleton and stops the running one from working. `Awake` runs on a disabled component whose GameObject is active, while `OnEnable` and `OnDisable` never do, so a claim made there was never released: the manager that was actually running found the singleton taken, destroyed itself as a duplicate, and the scene lit nothing with no error in the Console. Neither manager now claims it until it is enabled, and both release it when they are switched off again. Affects any scene carrying a spare manager parked switched off.
 
 - `VRSL_AudioLinkURPLightManager` re-claims the singleton when it is enabled, so a manager switched off and on again keeps working. `Awake` claimed it and `OnDisable` released it, but `Awake` does not run a second time, so the component's `Instance` stayed null for the rest of the session and every render pass silently early-outed — the AudioLink light path stopped with nothing in the Console to say why. The DMX manager already did this; the two now behave the same way.
