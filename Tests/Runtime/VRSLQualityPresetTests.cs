@@ -141,6 +141,33 @@ namespace VRSL.URP.Tests
             var old = new VRSLCounters { fixtures = 15, measuredPathFixtures = 0 };
             Assert.AreEqual(15, old.MeasuredFixtures);
             Assert.IsFalse(old.MixedPaths, "an absent field is not a mixed scene");
+
+            // And that fallback is why a zero must never be written by a scene that has
+            // a path worth measuring: read back, it is indistinguishable from the run
+            // above. The guard belongs where the path is chosen, not here — see
+            // AnEmptyManagerIsNotTheMeasuredPath.
+        }
+
+        [Test]
+        public void AnEmptyManagerIsNotTheMeasuredPath()
+        {
+            // One path present: it is the measured one whether or not it holds anything,
+            // because there is no other to name.
+            Assert.IsTrue(VRSLBenchmark.MeasureDmxPath(true, 0, false), "DMX alone, empty");
+            Assert.IsTrue(VRSLBenchmark.MeasureDmxPath(true, 9, false), "DMX alone");
+            Assert.IsFalse(VRSLBenchmark.MeasureDmxPath(false, 0, true), "AudioLink alone");
+
+            // Both present and both populated: DMX wins, so one cull pass is described
+            // rather than an average of two.
+            Assert.IsTrue(VRSLBenchmark.MeasureDmxPath(true, 9, true), "both, DMX populated");
+
+            // Both present and the DMX one empty. This is the row: selecting it writes a
+            // measured-path count of zero, and zero is exactly what a run too old to carry
+            // the field deserialises to — so the scene reads as single-path and the
+            // AudioLink coverage gets divided by the AudioLink count with nothing saying
+            // it was measured over a path holding no fixtures at all.
+            Assert.IsFalse(VRSLBenchmark.MeasureDmxPath(true, 0, true),
+                           "an empty DMX manager beside a populated AudioLink one");
         }
 
         [Test]

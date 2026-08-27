@@ -456,7 +456,9 @@ namespace VRSL.URP.EditorScripts
 
             text.AppendLine($"{current.counters.fixtures} fixtures. On average each part of the "
                           + $"screen is lit by {current.counters.lightsPerTileAverage:F1} "
-                          + (mixed ? $"of the {measured} DMX ones" : "of them")
+                          + (mixed
+                             ? $"of the {measured} {current.counters.MeasuredPathName} ones"
+                             : "of them")
                           + " at once, which is what the cost above mostly follows"
                           + (current.counters.tileCullEngaged
                              ? "."
@@ -465,13 +467,19 @@ namespace VRSL.URP.EditorScripts
 
             // Said here rather than left to a run note: notes only reach this summary
             // on an unusable run, so on every run worth reading the mixed basis would
-            // be invisible. The measured path is the DMX one whenever both are present
-            // — that precedence is set where the counters are read.
+            // be invisible. Which path it was comes from the run rather than from
+            // restating the precedence rule here, which could disagree with the counters
+            // that applied it — a manager with no fixtures is not the measured path even
+            // when it is the DMX one.
             if (mixed)
+            {
+                string path  = current.counters.MeasuredPathName;
+                string other = path == "DMX" ? "AudioLink" : "DMX";
                 text.AppendLine("This scene has both light paths in it. The coverage and emission "
-                              + "figures describe the DMX fixtures; the AudioLink ones are in the "
-                              + "count above and measured separately, because averaging two "
+                              + $"figures describe the {path} fixtures; the {other} ones are in "
+                              + "the count above and measured separately, because averaging two "
                               + "culls would describe neither.");
+            }
 
             if (current.counters.cappedTiles > 0)
                 text.AppendLine($"{current.counters.cappedTiles} tile(s) are over the per-tile light "

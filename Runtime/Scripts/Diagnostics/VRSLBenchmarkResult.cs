@@ -296,6 +296,21 @@ namespace VRSL.URP
         public int MeasuredFixtures => measuredPathFixtures > 0 ? measuredPathFixtures : fixtures;
 
         /// <summary>
+        /// Which light path the figures above are over — "DMX" or "AudioLink".
+        ///
+        /// Recorded rather than inferred from the precedence rule, so a report cannot
+        /// name one path while the counters were read off the other. Empty on a run
+        /// captured before this existed, which reads as "not recorded" rather than as a
+        /// path with no name.
+        /// </summary>
+        public string measuredPath = "";
+
+        /// <summary>The path the figures are over, or a plain description when a run is
+        /// too old to have recorded one.</summary>
+        public string MeasuredPathName =>
+            string.IsNullOrEmpty(measuredPath) ? "measured" : measuredPath;
+
+        /// <summary>
         /// Whether the figures over one light path are being reported beside a
         /// fixture count over more than one, which happens only in a scene carrying
         /// both. A reader told this can divide the two; a reader not told cannot,

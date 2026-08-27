@@ -594,6 +594,27 @@ namespace VRSL.URP
             onComplete?.Invoke(row);
         }
 
+        /// <summary>
+        /// Which of the light paths present the counters describe.
+        ///
+        /// DMX first where both are, because the tile and step figures below come off one
+        /// cull pass and one volumetric material and merging two of each would average two
+        /// different scenes.
+        ///
+        /// <b>A manager holding no fixtures is not the path to describe.</b> Every figure
+        /// it gives is zero, and a zero measured-path count cannot be told downstream from
+        /// a run too old to have recorded one — both fall back to the scene total. So a
+        /// scene carrying both managers with its DMX one empty would report AudioLink
+        /// coverage of 0.0 against the AudioLink fixture count, and read as a single-path
+        /// scene where the two divide. That is the fault this selection exists to prevent,
+        /// arriving through the one door the first fix left open, and it has to be shut
+        /// here: once a zero is written, nothing further down can distinguish it.
+        ///
+        /// A single empty manager still wins, because there is no other path to name.
+        /// </summary>
+        internal static bool MeasureDmxPath(bool hasDmx, int dmxFixtures, bool hasAudioLink) =>
+            hasDmx && (!hasAudioLink || dmxFixtures > 0);
+
         static void ReadCounters(ManagerSet managers, VRSLCounters counters, VRSLBenchmarkRun run)
         {
             var dmx       = managers.Dmx;
@@ -611,12 +632,19 @@ namespace VRSL.URP
             // Whichever path is present, DMX first where both are. The tile and step
             // figures below describe one cull pass and one volumetric material, and
             // merging two of each would produce an average of two different scenes.
-            bool useDmx = dmx != null;
+            bool useDmx = MeasureDmxPath(dmx != null, dmx != null ? dmx.FixtureCount : 0,
+                                         audioLink != null);
 
             // The denominator those figures actually have, recorded beside them.
             // Without it a reader holds a coverage average over one path and a
             // fixture count over both, with nothing saying the two do not divide.
             counters.measuredPathFixtures = useDmx ? dmx.FixtureCount : audioLink.FixtureCount;
+
+            // Named rather than left to be inferred. A reader of the summary should not
+            // have to know the precedence rule to know which path a coverage figure is
+            // over, and a summary that restates the rule can disagree with the counters
+            // that applied it.
+            counters.measuredPath = useDmx ? "DMX" : "AudioLink";
 
             // Zero when the volumetric pass is not being enqueued at all, rather than
             // whatever the step field still says. The manager only enqueues the pass
@@ -637,11 +665,15 @@ namespace VRSL.URP
             counters.emittingFixtures = emission.Emitting;
             counters.peakIntensity    = emission.Peak;
 
-            if (dmx != null && audioLink != null)
+            // The same condition the counters are judged by, rather than a second
+            // statement of it: a note fired on "both managers exist" describes a path
+            // that contributed nothing when one of them is empty, and would have to be
+            // kept in step with the selection above by hand.
+            if (counters.MixedPaths)
                 run.Note("Both light paths are in this scene. The fixture count is both of "
-                       + "them; the tile, emission and volumetric figures describe the DMX "
-                       + "path only, because averaging two cull passes would describe "
-                       + "neither.");
+                       + "them; the tile, emission and volumetric figures describe the "
+                       + counters.measuredPath + " path only, because averaging two cull "
+                       + "passes would describe neither.");
 
             // The failure this exists to make loud: a scene where nothing is lit still
             // renders, still fills a report, and still produces differences that look
