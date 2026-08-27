@@ -334,10 +334,21 @@ namespace VRSL.URP
             "unknown";
 #endif
 
+        /// <summary>
+        /// The two values <see cref="context"/> takes.
+        ///
+        /// Named because a noise floor is filed under one of them, and the editor cannot
+        /// ask <see cref="LocalContext"/> for "Player" — it would answer "Editor". Two
+        /// spellings of the same word would file a floor under one key and read it back
+        /// under another, which reports a floor of zero and no error at all.
+        /// </summary>
+        public const string EditorContext = "Editor";
+        public const string PlayerContext = "Player";
+
         /// <summary>What <see cref="context"/> would say if this were captured now.
         /// Anything filed per context — a noise floor, for one — needs the same answer
         /// outside a run as inside one.</summary>
-        public static string LocalContext => Application.isEditor ? "Editor" : "Player";
+        public static string LocalContext => Application.isEditor ? EditorContext : PlayerContext;
         /// <summary>Filled by the editor front end. Empty in a player, which has no
         /// package folder to read and no git to ask.</summary>
         public string packageVersion      = "";

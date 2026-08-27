@@ -37,7 +37,7 @@ namespace VRSL.URP.EditorScripts
         static string Key(string gpu, string context)
         {
             string device = string.IsNullOrEmpty(gpu) ? "unknown" : gpu;
-            return string.IsNullOrEmpty(context) || context == "Editor"
+            return string.IsNullOrEmpty(context) || context == VRSLBenchmarkEnvironment.EditorContext
                  ? Prefix + device
                  : Prefix + context + "." + device;
         }

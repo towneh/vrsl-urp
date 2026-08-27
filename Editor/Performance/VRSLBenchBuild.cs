@@ -198,7 +198,8 @@ namespace VRSL.URP.EditorScripts
             // so a player carried to another machine leaves it behind rather than
             // judging that machine against this one.
             host.noiseFloorGpu = SystemInfo.graphicsDeviceName;
-            host.noiseFloorMs  = VRSLPerfFloor.Get(host.noiseFloorGpu, "Player");
+            host.noiseFloorMs  = VRSLPerfFloor.Get(
+                host.noiseFloorGpu, VRSLBenchmarkEnvironment.PlayerContext);
         }
 
         static string Argument(string name)
