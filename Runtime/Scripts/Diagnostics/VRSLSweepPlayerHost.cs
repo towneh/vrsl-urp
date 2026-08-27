@@ -107,8 +107,12 @@ namespace VRSL.URP
         void Stamp(VRSLBenchmarkRun run)
         {
             run.environment = VRSLBenchmarkEnvironment.Capture();
-            run.environment.packageVersion = packageVersion;
-            run.environment.gitCommit      = gitCommit;
+            // Only when there is something to say. These are a fallback for two fields a
+            // player cannot resolve for itself, not an override of what Capture found —
+            // today it finds nothing for either, and writing an empty string over an
+            // empty string is harmless, but the precedence is the part worth pinning.
+            if (!string.IsNullOrEmpty(packageVersion)) run.environment.packageVersion = packageVersion;
+            if (!string.IsNullOrEmpty(gitCommit))      run.environment.gitCommit      = gitCommit;
 
             if (noiseFloorMs > 0.0 && run.environment.graphicsDevice == noiseFloorGpu)
                 run.noiseFloorMs = noiseFloorMs;
