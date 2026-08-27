@@ -43,6 +43,12 @@ namespace VRSL.URP
 
         IEnumerator Start()
         {
+            // Unity throttles a player whose window is not focused, and a sweep measuring
+            // throttled frames measures the throttle. Set here rather than in the build
+            // step, which would mean writing to the host project's Player Settings for a
+            // property a player can simply set for itself.
+            Application.runInBackground = true;
+
             string output = Argument(OutputArgument);
             if (!string.IsNullOrEmpty(output)) VRSLBenchmarkReport.OutputRoot = output;
 
