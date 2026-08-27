@@ -318,6 +318,22 @@ namespace VRSL.URP
         /// editor number being quoted in a results table.</summary>
         public string context             = "";
 
+        /// <summary>"Mono" or "IL2CPP". CPU-side figures are not interchangeable
+        /// between the two, and a player can be built either way from one project.
+        /// Empty on a run captured before this was recorded.</summary>
+        public string scriptingBackend    = "";
+
+        /// <summary>What <see cref="scriptingBackend"/> would say for the assembly this
+        /// is compiled into.</summary>
+        public static string LocalScriptingBackend =>
+#if ENABLE_IL2CPP
+            "IL2CPP";
+#elif ENABLE_MONO
+            "Mono";
+#else
+            "unknown";
+#endif
+
         /// <summary>What <see cref="context"/> would say if this were captured now.
         /// Anything filed per context — a noise floor, for one — needs the same answer
         /// outside a run as inside one.</summary>
@@ -359,6 +375,7 @@ namespace VRSL.URP
                 graphicsApi    = SystemInfo.graphicsDeviceType.ToString(),
                 graphicsDriver = SystemInfo.graphicsDeviceVersion,
                 context        = LocalContext,
+                scriptingBackend = LocalScriptingBackend,
                 screenWidth    = Screen.width,
                 screenHeight   = Screen.height,
                 // Defaults to the screen, which is right for anything measuring whatever
@@ -410,6 +427,12 @@ namespace VRSL.URP
             if (msaaSamples         != other.msaaSamples)         { difference = $"MSAA: {msaaSamples}x vs {other.msaaSamples}x"; return false; }
             if (xrActive            != other.xrActive)            { difference = $"XR: {xrActive} vs {other.xrActive}"; return false; }
             if (context             != other.context)             { difference = $"context: {context} vs {other.context}"; return false; }
+            // Empty means a run captured before this was recorded, which is not the
+            // same as a run that disagrees — refusing on it would invalidate every
+            // stored baseline for a field neither of them was ever asked about.
+            if (!string.IsNullOrEmpty(scriptingBackend) && !string.IsNullOrEmpty(other.scriptingBackend)
+             && scriptingBackend != other.scriptingBackend)
+            { difference = $"scripting backend: {scriptingBackend} vs {other.scriptingBackend}"; return false; }
             if (captureWidth != other.captureWidth || captureHeight != other.captureHeight)
             {
                 difference = $"render size: {captureWidth}x{captureHeight} vs "
@@ -420,7 +443,8 @@ namespace VRSL.URP
         }
 
         public string Summary =>
-            $"{graphicsDevice} ({graphicsApi}), Unity {unityVersion}, {context}, "
+            $"{graphicsDevice} ({graphicsApi}), Unity {unityVersion}, {context}"
+          + (string.IsNullOrEmpty(scriptingBackend) ? ", " : $"/{scriptingBackend}, ")
           + $"{renderPipelineAsset}/{renderer}, depth priming {depthPrimingMode}, "
           + $"MSAA {msaaSamples}x, XR {(xrActive ? "on" : "off")}";
     }

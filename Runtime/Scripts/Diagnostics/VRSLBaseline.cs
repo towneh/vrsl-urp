@@ -501,6 +501,8 @@ namespace VRSL.URP
             sb.AppendLine($"| Driver | {env.graphicsDriver} |");
             sb.AppendLine($"| Editor | {env.unityVersion} |");
             sb.AppendLine($"| Platform | {env.platform} |");
+            if (!string.IsNullOrEmpty(env.scriptingBackend))
+                sb.AppendLine($"| Scripting backend | {env.scriptingBackend} |");
             sb.AppendLine($"| Pipeline asset | {env.renderPipelineAsset} |");
             sb.AppendLine($"| Renderer | {env.renderer} |");
             sb.AppendLine($"| Depth priming | {env.depthPrimingMode} |");
