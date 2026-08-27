@@ -227,6 +227,7 @@ black rectangle whatever went wrong.
 
 ```
 bench.sh check                              # the gate: harness + image rows
+bench.sh sweep [<dir>]                      # build a player, capture the matrix in it
 bench.sh compare <candidate>                # judge against the committed reference
 bench.sh compare <baseline> <candidate>     # adjudicate two named runs
 ```
@@ -239,10 +240,23 @@ naming the difference and exit 2, not a fabricated delta. With the variable unse
 to a folder holding no `baseline.json`, `compare` fails and names the folder it looked in
 rather than comparing against nothing.
 
-**It does not capture a sweep headlessly, on purpose.** Batch mode has no GPU clock, so
-a headless capture produces CPU-basis numbers nobody should quote in a results table.
-Capture from the editor window; adjudicate here. The verdict comes from the same
-`VRSLBaseline.Compare` the window calls, so the two cannot disagree.
+**The editor's batch mode never captures a sweep, on purpose.** It has no GPU clock, so a
+capture taken there produces CPU-basis numbers nobody should quote in a results table.
+`sweep` gets one by building a standalone player and running the matrix inside it, which
+is what R-M0-6 asks for and the only way to a GPU-basis matrix nobody has to sit through.
+The capture loop is shared with the editor window, and the verdict comes from the same
+`VRSLBaseline.Compare` the window calls, so none of the three can disagree.
+
+The build is the slow half and is incremental afterwards, so a before-and-after costs one
+full build and one quick one. `VRSL_BENCH_PLAYER=<exe>` skips the build entirely, which is
+what a second capture of an unchanged package wants. Only the build needs the editor
+closed; the player holds no project lock, so a capture can run beside an open editor.
+
+**A player run and an editor run are never compared.** `Matches` refuses on `context`, so
+the two form separate lineages with separate noise floors, and `baseline.json` — an editor
+run — is refused by a player candidate rather than reported against it. That is the
+intended behaviour, not a gap: the difference between them is exactly what R-M0-6 exists
+to keep visible.
 
 `compare` exits 0 when nothing regressed, 1 when something did or the inputs are
 unusable, and 2 when it refuses because the two runs are from different machines —

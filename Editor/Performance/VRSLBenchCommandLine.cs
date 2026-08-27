@@ -133,6 +133,90 @@ namespace VRSL.URP.EditorScripts
             }
         }
 
+        /// <summary>
+        /// Adopt a noise floor from a null run, headlessly.
+        ///
+        /// A run carrying no floor has every row judged against its own standard error,
+        /// which reads two to three times better than the machine reproduces — the first
+        /// player null run here reported six regressions and seven improvements with
+        /// nothing changed between the two captures. Without this the only way to fix
+        /// that is a button in the editor window, which a gate has nobody to press.
+        ///
+        /// <c>-baseline</c> and <c>-candidate</c> are the two runs of the null pair. The
+        /// same guards the window applies apply here: never from a forced comparison,
+        /// whose deltas are partly two machines differing, and never from runs captured
+        /// somewhere else. A floor is raised and never lowered, so a wrong one survives
+        /// until somebody resets it and masks real regressions the whole time.
+        /// </summary>
+        public static void AdoptFloorFromCommandLine()
+        {
+            int exit = 1;
+            try
+            {
+                string basePath      = Argument("-baseline");
+                string candidatePath = Argument("-candidate");
+                if (basePath == null || candidatePath == null)
+                {
+                    Debug.LogError("[VRSL bench] FAIL — needs -baseline <run.json> and "
+                                 + "-candidate <run.json>, two captures with nothing changed "
+                                 + "between them.");
+                    return;
+                }
+
+                var baseline  = Read(basePath);
+                var candidate = Read(candidatePath);
+                if (baseline == null || candidate == null) return;
+
+                var comparison = VRSLBaseline.Compare(baseline, candidate, force: false);
+                if (comparison.Refused)
+                {
+                    Debug.LogError("[VRSL bench] FAIL — those two runs are from different "
+                                 + $"machines or configurations: {comparison.environmentMismatch}. "
+                                 + "A null run has to be two captures of the same thing.");
+                    return;
+                }
+                if (comparison.rows.Count == 0)
+                {
+                    Debug.LogError("[VRSL bench] FAIL — nothing was compared, so there is no "
+                                 + "disagreement to adopt.");
+                    return;
+                }
+
+                // Filed under the local device, because that is the key a later build reads
+                // back. Whether the runs describe this machine is the separate question the
+                // check below answers: two runs copied from elsewhere agree with each other
+                // perfectly and neither happened here.
+                string gpu = SystemInfo.graphicsDeviceName;
+                if (candidate.environment.graphicsDevice != gpu)
+                {
+                    Debug.LogError($"[VRSL bench] FAIL — those runs were captured on "
+                                 + $"'{candidate.environment.graphicsDevice}' and this is "
+                                 + $"'{gpu}'. A floor is a property of the machine.");
+                    return;
+                }
+
+                string context = candidate.environment.context;
+                double largest = VRSLPerfFloor.LargestDisagreement(comparison);
+                double now     = VRSLPerfFloor.Raise(gpu, context, largest);
+
+                Debug.Log($"[VRSL bench] FLOOR: {gpu} / {context} is {now:F3} ms"
+                        + (largest < now
+                           ? $" — that pair disagreed by {largest:F3} ms, which the floor "
+                           + "already covered. A floor is raised by the worst disagreement "
+                           + "seen, never lowered by a quiet run."
+                           : ", from the largest disagreement across that pair."));
+                exit = 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[VRSL bench] FAIL — {e.Message}");
+            }
+            finally
+            {
+                EditorApplication.Exit(exit);
+            }
+        }
+
         static VRSLBenchmarkRun Read(string path)
         {
             if (!File.Exists(path))
