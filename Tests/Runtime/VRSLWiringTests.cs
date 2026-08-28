@@ -232,6 +232,58 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// A-M7-3. An override survives the paths that resolution now runs on.
+        ///
+        /// Entering play mode enables the manager, and leaving it enables the edit-mode
+        /// one again — so "survives a play-mode round trip" is, mechanically, "survives
+        /// the enable path and a deferred validate". Both run resolution, both are
+        /// exercised here, and a partial repair is the realistic case: other fields empty
+        /// and needing filling, one field set deliberately and not to be touched.
+        ///
+        /// The round trip proper stays a hand row. A PlayMode test is already in play
+        /// mode and cannot leave it, and Unity discards play-mode scene edits on exit
+        /// regardless, so the thing a test can honestly assert is what is asserted here.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AnOverrideSurvivesEveryPathThatResolves()
+        {
+            var go = new GameObject("override row");
+            go.SetActive(false);
+            try
+            {
+                var manager = go.AddComponent<VRSL_URPLightManager>();
+
+                // Deliberately the wrong asset for this field, and deliberately alone in
+                // being set: everything else is empty and wants filling, which is what a
+                // repair on a real scene looks like.
+                var somebodyElses = (RenderTexture)VRSLWiring.Load(FieldNamed("dmxSpinTimerTexture"));
+                var so = new SerializedObject(manager);
+                foreach (var field in VRSLWiring.Dmx)
+                    so.FindProperty(field.Field).objectReferenceValue = null;
+                so.FindProperty("dmxMainTexture").objectReferenceValue = somebodyElses;
+                so.ApplyModifiedProperties();
+
+                // The enable path, which is what entering and leaving play mode runs.
+                go.SetActive(true);
+                yield return null;
+                Assert.AreSame(somebodyElses, manager.dmxMainTexture,
+                    "enabling the manager overwrote a field the author had set");
+
+                // And the validate path, deferred, which is what an inspector edit runs.
+                VRSLWiring.ResolveOnValidate(manager);
+                for (int i = 0; i < 10; i++) yield return null;
+                Assert.AreSame(somebodyElses, manager.dmxMainTexture,
+                    "a validate pass overwrote a field the author had set");
+
+                // The rest was still filled, or the override was preserved by resolution
+                // never running at all — which would pass this row for the wrong reason.
+                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                    "nothing else was filled, so this row never exercised resolution");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        /// <summary>
         /// A-M7-2. Resolution is by identity, so an identically-named asset elsewhere in
         /// the project cannot be picked instead.
         ///
