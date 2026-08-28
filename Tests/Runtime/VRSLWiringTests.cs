@@ -220,10 +220,11 @@ namespace VRSL.URP.Tests
                     "resolution ran during OnValidate rather than after it, which is where "
                   + "import and mid-edit serialisation live");
 
-                // The next editor tick. delayCall fires on the editor's own loop, which
-                // keeps running under a PlayMode test.
-                for (int i = 0; i < 10 && VRSLWiring.Empty(manager).Count > 0; i++)
-                    yield return null;
+                // The next editor tick, driven rather than waited for: delayCall does
+                // not fire inside a batch-mode play-mode test, so waiting on it would
+                // test Unity's scheduler and nothing of ours.
+                VRSLWiring.FlushPending(manager);
+                yield return null;
 
                 Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
                     "emptying a field in the inspector left it empty");
@@ -286,8 +287,10 @@ namespace VRSL.URP.Tests
 
                 // And the validate path, deferred, which is what an inspector edit runs.
                 VRSLWiring.ResolveOnValidate(manager);
-                for (int i = 0; i < 10 && VRSLWiring.Empty(manager).Count > 0; i++)
-                    yield return null;
+                Assert.IsNotEmpty(VRSLWiring.Empty(manager),
+                    "validate resolved synchronously rather than queueing");
+                VRSLWiring.FlushPending(manager);
+                yield return null;
 
                 Assert.AreSame(somebodyElses, manager.dmxMainTexture,
                     "a validate pass overwrote a field the author had set");

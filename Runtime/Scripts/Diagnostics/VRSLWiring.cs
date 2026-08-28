@@ -317,13 +317,34 @@ namespace VRSL.URP
             if (!s_pending.Add(id)) return;
 
             var target = manager;
-            EditorApplication.delayCall += () =>
-            {
-                s_pending.Remove(id);
-                // Destroyed between the edit and the tick, which is ordinary: undoing the
-                // add of a component queues this and then removes the object.
-                if (target != null) ResolveOnEnable(target);
-            };
+            EditorApplication.delayCall += () => RunPending(id, target);
+        }
+
+        /// <summary>
+        /// Do the work <see cref="ResolveOnValidate"/> queued.
+        ///
+        /// Separate from the scheduling so a row can drive it. <c>delayCall</c> does not
+        /// fire inside a batch-mode play-mode test — measured, two rows sat waiting ten
+        /// frames for a pass that never came — so a row that waited on it would be
+        /// testing Unity's scheduler rather than any of this. What is worth testing is
+        /// that validate queues rather than resolving under the inspector's feet, and
+        /// that the queued pass fills what was empty. Both are here; the one line that
+        /// hands this to the next editor tick is Unity's contract.
+        /// </summary>
+        internal static void RunPending(EntityId id, Object target)
+        {
+            s_pending.Remove(id);
+            // Destroyed between the edit and the tick, which is ordinary: undoing the
+            // add of a component queues this and then removes the object.
+            if (target != null) ResolveOnEnable(target);
+        }
+
+        /// <summary>Drive whatever <see cref="ResolveOnValidate"/> queued for this
+        /// manager, as the next editor tick would. For rows, and for nothing else.</summary>
+        internal static void FlushPending(Object manager)
+        {
+            if (manager == null) return;
+            RunPending(manager.GetEntityId(), manager);
         }
 
         /// <summary>
