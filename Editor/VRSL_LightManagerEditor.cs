@@ -75,9 +75,21 @@ namespace VRSL.URP.EditorScripts
             // warning that never goes away is one nobody reads by the third time.
             if (faults.Count == 0)
             {
+                // The consequences are whole clauses — "strobe does nothing", "no beams
+                // in the air" — so they read as a list of what is currently true, not as
+                // a phrase to hang off "set up, with".
                 EditorGUILayout.LabelField(
-                    "Set up, with " + Join(choices.Select(f => f.Consequence)) + ".",
+                    "Set up. Currently switched off, which is a choice you can make: "
+                  + Join(choices.Select(f => f.Consequence)) + ".",
                     EditorStyles.wordWrappedMiniLabel);
+
+                // Offered here as well as on the menu, because the author who wants one of
+                // these back should not have to know where it lives to find it.
+                if (GUILayout.Button("Turn these on"))
+                {
+                    Repair(targets);
+                    GUIUtility.ExitGUI();
+                }
                 return;
             }
 
