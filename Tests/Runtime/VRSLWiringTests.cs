@@ -1,10 +1,12 @@
 #if UNITY_EDITOR
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace VRSL.URP.Tests
 {
@@ -111,6 +113,90 @@ namespace VRSL.URP.Tests
                 Assert.IsFalse(again.ChangedAnything, "a second resolve changed something");
             }
             finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void TheInnerOfTwoHoldsDoesNotReleaseTheOuter()
+        {
+            var go = new GameObject("hold row");
+            go.SetActive(false);
+            try
+            {
+                var manager = go.AddComponent<VRSL_URPLightManager>();
+                Assert.IsFalse(VRSLWiring.AutoResolveSuppressed(manager));
+
+                var outer = VRSLWiring.SuppressAutoResolve(manager);
+                using (VRSLWiring.SuppressAutoResolve(manager))
+                    Assert.IsTrue(VRSLWiring.AutoResolveSuppressed(manager));
+
+                // The claim. Held as a set rather than a count, the inner scope closing
+                // would have released the outer one's hold too — and the next bounce
+                // would refill a field the outer holder had emptied on purpose, which is
+                // how quality Off comes back on while its counters say it is gone.
+                Assert.IsTrue(VRSLWiring.AutoResolveSuppressed(manager),
+                    "the inner scope released the outer scope's hold");
+
+                outer.Dispose();
+                Assert.IsFalse(VRSLWiring.AutoResolveSuppressed(manager),
+                    "the last hold did not release");
+
+                // Disposing twice must not drop a hold it no longer owns.
+                outer.Dispose();
+                using (VRSLWiring.SuppressAutoResolve(manager))
+                    Assert.IsTrue(VRSLWiring.AutoResolveSuppressed(manager),
+                        "a double dispose released somebody else's hold");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [UnityTest]
+        public IEnumerator AManagerHandedTheSingletonResolvesItsOwnWiring()
+        {
+            // Two managers in a loaded scene: the first owns the singleton, the second
+            // stands by unwired. Disabling the owner hands ownership over by calling the
+            // standby's TakeOwnership directly, which never goes through OnEnable — so a
+            // resolver hooked there would leave this manager building its materials and
+            // passes from empty fields, which is the whole failure the milestone is about.
+            var ownerGo   = new GameObject("wiring owner");
+            var standbyGo = new GameObject("wiring standby");
+            try
+            {
+                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+                yield return null;
+
+                // Added while switched off, because Awake destroys an enabled duplicate
+                // outright: `if (Instance != null && Instance != this) Destroy(this)`.
+                // A component that is off when Awake runs returns early instead and
+                // survives, and switching it on afterwards leaves it enabled and not the
+                // owner — which is the only state a handover has anything to hand to.
+                standbyGo.SetActive(false);
+                var standby = standbyGo.AddComponent<VRSL_URPLightManager>();
+                standby.enabled = false;
+                standbyGo.SetActive(true);
+                standby.enabled = true;
+                yield return null;
+                Assert.IsTrue(standby != null, "the standby manager destroyed itself");
+
+                // Emptied after it came up, so the standby is genuinely unwired at the
+                // moment ownership arrives.
+                var so = new SerializedObject(standby);
+                foreach (var field in VRSLWiring.Dmx)
+                    so.FindProperty(field.Field).objectReferenceValue = null;
+                so.ApplyModifiedProperties();
+                Assert.IsNotEmpty(VRSLWiring.Empty(standby), "the standby should start unwired");
+
+                owner.enabled = false;
+                yield return null;
+
+                Assert.IsEmpty(VRSLWiring.Empty(standby).Select(f => f.Field),
+                    "a manager handed the singleton set itself up without resolving its "
+                  + "wiring first, so its materials and passes were built from empty fields");
+            }
+            finally
+            {
+                Object.DestroyImmediate(standbyGo);
+                Object.DestroyImmediate(ownerGo);
+            }
         }
 
         static VRSLWiringField FieldNamed(string name)

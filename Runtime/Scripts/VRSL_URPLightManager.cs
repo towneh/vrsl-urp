@@ -434,13 +434,6 @@ namespace VRSL.URP
             // the same shader globals, which is duplicated work and wrong lighting
             // rather than a harmless spare component.
             if (Instance != this) return;
-#if UNITY_EDITOR
-            // Before TakeOwnership, which builds the lighting and volumetric materials
-            // from these very fields and then keeps them: resolving afterwards would fill
-            // the fields correctly and leave the manager rendering through materials built
-            // from the empty ones.
-            VRSLWiring.ResolveOnEnable(this);
-#endif
             TakeOwnership();
         }
 
@@ -449,6 +442,15 @@ namespace VRSL.URP
         /// by an owner that is standing down.</summary>
         void TakeOwnership()
         {
+#if UNITY_EDITOR
+            // First, and in TakeOwnership rather than OnEnable, because this is not
+            // only reached from there: an owner standing down hands the singleton to
+            // another running manager by calling this directly. That manager would
+            // otherwise set itself up from whatever wiring it had, and everything
+            // below builds the materials and passes from those fields.
+            VRSLWiring.ResolveOnEnable(this);
+#endif
+
             CreateTextureHandles();
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would

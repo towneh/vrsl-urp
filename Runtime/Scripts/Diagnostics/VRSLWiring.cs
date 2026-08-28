@@ -199,15 +199,21 @@ namespace VRSL.URP
             return result;
         }
 
-        /// <summary>Entity ids, not references: a hold on a manager that is later
-        /// destroyed must not keep the object alive, and an id can be compared without
-        /// touching a dead one.</summary>
-        static readonly HashSet<EntityId> s_suppressed = new();
+        /// <summary>
+        /// How many holds each manager has, keyed by entity id.
+        ///
+        /// Entity ids rather than references, so a hold on a manager that is later
+        /// destroyed neither keeps it alive nor has to touch a dead one. <b>Counted
+        /// rather than a set</b>, because two scopes on one manager are possible and a
+        /// set would let the first release the second's hold — quality Off would then
+        /// come back on at the next bounce, which is the fault the hold exists to stop.
+        /// </summary>
+        static readonly Dictionary<EntityId, int> s_suppressed = new();
 
         /// <summary>Whether automatic resolution is currently held off for this
         /// manager.</summary>
         public static bool AutoResolveSuppressed(Object manager) =>
-            manager != null && s_suppressed.Contains(manager.GetEntityId());
+            manager != null && s_suppressed.ContainsKey(manager.GetEntityId());
 
         /// <summary>
         /// Hold automatic resolution off for one manager, for the life of the scope.
@@ -238,14 +244,19 @@ namespace VRSL.URP
             public Suppression(Object manager)
             {
                 _id = manager != null ? manager.GetEntityId() : default;
-                if (_id != default) s_suppressed.Add(_id);
+                if (_id == default) return;
+                s_suppressed.TryGetValue(_id, out int held);
+                s_suppressed[_id] = held + 1;
             }
 
             public void Dispose()
             {
+                // Guarded because a scope disposed twice would drop somebody else's hold.
                 if (_released || _id == default) return;
                 _released = true;
-                s_suppressed.Remove(_id);
+                if (!s_suppressed.TryGetValue(_id, out int held)) return;
+                if (held <= 1) s_suppressed.Remove(_id);
+                else           s_suppressed[_id] = held - 1;
             }
         }
 
@@ -263,12 +274,16 @@ namespace VRSL.URP
             if (AutoResolveSuppressed(manager)) return;
 
             var result = Resolve(manager);
-            if (!result.ChangedAnything) return;
+            if (!result.ChangedAnything && result.Unresolved.Count == 0) return;
 
-            Debug.Log($"[VRSL] Set up {result.Filled.Count} empty setting(s) on "
-                    + $"{manager.name}. Without them: "
-                    + string.Join("; ", result.Filled.ConvertAll(f => f.Consequence)) + ".",
-                      manager);
+            // A warning when something is still empty, because the author will see it go
+            // wrong and nothing else is going to tell them. An unresolvable field used to
+            // pass in silence here: nothing was filled, so nothing was said, and a manager
+            // whose assets are missing entirely said the least of all.
+            string message = $"[VRSL] Wiring on {manager.name}:"
+                           + System.Environment.NewLine + result.Describe();
+            if (result.Unresolved.Count > 0) Debug.LogWarning(message, manager);
+            else                             Debug.Log(message, manager);
         }
 
         /// <summary>
