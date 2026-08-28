@@ -418,6 +418,12 @@ namespace VRSL.URP
             Instance = this;
         }
 
+        #if UNITY_EDITOR
+        /// <summary>Fill any wiring an author has emptied. Deferred to the next
+        /// editor tick — see VRSLWiring.ResolveOnValidate for why.</summary>
+        void OnValidate() => VRSLWiring.ResolveOnValidate(this);
+        #endif
+
         void OnEnable()
         {
             // Awake claims the singleton and OnDisable releases it, but Awake does not

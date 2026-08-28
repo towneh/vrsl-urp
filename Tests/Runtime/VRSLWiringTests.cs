@@ -199,6 +199,38 @@ namespace VRSL.URP.Tests
             }
         }
 
+        [UnityTest]
+        public IEnumerator EmptyingAFieldInTheInspectorFillsItBackIn()
+        {
+            var go = new GameObject("validate row");
+            go.SetActive(false);
+            try
+            {
+                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var so = new SerializedObject(manager);
+                foreach (var field in VRSLWiring.Dmx)
+                    so.FindProperty(field.Field).objectReferenceValue = null;
+                so.ApplyModifiedProperties();
+
+                // What the inspector does after an edit. The object stays inactive, so
+                // nothing here is the enable path doing the work instead.
+                VRSLWiring.ResolveOnValidate(manager);
+
+                Assert.IsNotEmpty(VRSLWiring.Empty(manager),
+                    "resolution ran during OnValidate rather than after it, which is where "
+                  + "import and mid-edit serialisation live");
+
+                // The next editor tick. delayCall fires on the editor's own loop, which
+                // keeps running under a PlayMode test.
+                for (int i = 0; i < 10 && VRSLWiring.Empty(manager).Count > 0; i++)
+                    yield return null;
+
+                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                    "emptying a field in the inspector left it empty");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
         static VRSLWiringField FieldNamed(string name)
         {
             foreach (var f in VRSLWiring.Dmx) if (f.Field == name) return f;

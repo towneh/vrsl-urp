@@ -286,6 +286,46 @@ namespace VRSL.URP
             else                             Debug.Log(message, manager);
         }
 
+        /// <summary>Managers with a deferred resolve already queued, so a burst of
+        /// OnValidate calls — dragging any slider on the component sends one per
+        /// change — schedules one pass rather than dozens.</summary>
+        static readonly HashSet<EntityId> s_pending = new();
+
+        /// <summary>
+        /// Resolution as a manager's OnValidate calls it.
+        ///
+        /// Enable covers a scene loading and a component being switched on; this covers
+        /// the author who empties a field in the inspector and would otherwise have to
+        /// know to reload the scene.
+        ///
+        /// <b>Deferred, and not merely as a precaution.</b> OnValidate runs during
+        /// import and deserialisation, where reaching into the AssetDatabase is not
+        /// something to do — and it also runs while the inspector is mid-edit, where
+        /// writing the object back underneath the control being dragged is its own kind
+        /// of rude. The next editor tick is late enough for both.
+        ///
+        /// <b>Scene objects only.</b> A prefab asset gets OnValidate on import, and
+        /// resolving there would rewrite assets — this package's own shipped prefabs
+        /// among them — as a side effect of opening a project. An author who wants a
+        /// prefab repaired can ask for it.
+        /// </summary>
+        public static void ResolveOnValidate(Object manager)
+        {
+            if (manager == null || EditorUtility.IsPersistent(manager)) return;
+
+            var id = manager.GetEntityId();
+            if (!s_pending.Add(id)) return;
+
+            var target = manager;
+            EditorApplication.delayCall += () =>
+            {
+                s_pending.Remove(id);
+                // Destroyed between the edit and the tick, which is ordinary: undoing the
+                // add of a component queues this and then removes the object.
+                if (target != null) ResolveOnEnable(target);
+            };
+        }
+
         /// <summary>
         /// What is empty on a manager right now, without changing anything.
         ///
