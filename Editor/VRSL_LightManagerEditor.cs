@@ -166,11 +166,15 @@ namespace VRSL.URP.EditorScripts
         [MenuItem("VRSL/URP/Repair Manager Wiring")]
         static void RepairSelected()
         {
-            var managers = Object.FindObjectsByType<MonoBehaviour>(
-                                     FindObjectsInactive.Include, FindObjectsSortMode.None)
-                                 .Where(m => VRSLWiring.FieldsFor(m) != null)
-                                 .Cast<Object>()
-                                 .ToList();
+            // Asked for by type rather than by scanning every MonoBehaviour in the scene
+            // and filtering. The scan reported no managers in a scene that plainly had
+            // one, and it was the wrong shape anyway: a large scene has thousands of
+            // components and two of them can be asked for directly.
+            var managers = new List<Object>();
+            managers.AddRange(Object.FindObjectsByType<VRSL_URPLightManager>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None));
+            managers.AddRange(Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None));
 
             if (managers.Count == 0)
             {
