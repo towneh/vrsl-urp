@@ -231,6 +231,58 @@ namespace VRSL.URP.Tests
             finally { Object.DestroyImmediate(go); }
         }
 
+        /// <summary>
+        /// A-M7-2. Resolution is by identity, so an identically-named asset elsewhere in
+        /// the project cannot be picked instead.
+        ///
+        /// The requirement is about coexisting with <c>com.acchosen.vr-stage-lighting</c>,
+        /// which ships CustomRenderTextures with exactly these names. Rather than gate
+        /// this on that package being installed — it is not, here, so the row would
+        /// compile out and prove nothing — it stages the fault itself: a decoy asset with
+        /// the same name, which makes a name search genuinely ambiguous. That is the
+        /// mechanism under test, and staging it is more controlled than installing a
+        /// package and hoping it collides.
+        /// </summary>
+        [Test]
+        public void AnIdenticallyNamedAssetElsewhereIsNotPickedInstead()
+        {
+            var field = FieldNamed("dmxMainTexture");
+            string wanted = VRSLWiring.PathOf(field);
+            string name   = System.IO.Path.GetFileNameWithoutExtension(wanted);
+
+            const string folder = "Assets/VRSL-WiringDecoy";
+            string decoyPath = $"{folder}/{name}.asset";
+            try
+            {
+                if (!AssetDatabase.IsValidFolder(folder))
+                    AssetDatabase.CreateFolder("Assets", "VRSL-WiringDecoy");
+                AssetDatabase.CreateAsset(
+                    new CustomRenderTexture(4, 4) { name = name }, decoyPath);
+                AssetDatabase.Refresh();
+
+                // The row is worthless unless the decoy really does collide, so check
+                // that first: a name search has to be ambiguous now, or resolution had
+                // nothing to get wrong and passing means nothing.
+                var byName = AssetDatabase.FindAssets($"\"{name}\"");
+                Assert.Greater(byName.Length, 1,
+                    "the decoy did not collide by name, so this row proves nothing");
+
+                var resolved = VRSLWiring.Load(field);
+                Assert.IsNotNull(resolved, "resolution found nothing at all");
+                Assert.AreEqual(wanted, AssetDatabase.GetAssetPath(resolved),
+                    "resolution picked an identically-named asset from outside this "
+                  + "package — which is what a project with the legacy package installed "
+                  + "looks like, and a manager wired to its decode chain reports green on "
+                  + "every diagnostic while every channel reads zero");
+            }
+            finally
+            {
+                AssetDatabase.DeleteAsset(decoyPath);
+                AssetDatabase.DeleteAsset(folder);
+                AssetDatabase.Refresh();
+            }
+        }
+
         static VRSLWiringField FieldNamed(string name)
         {
             foreach (var f in VRSLWiring.Dmx) if (f.Field == name) return f;
