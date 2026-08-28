@@ -269,16 +269,30 @@ namespace VRSL.URP.Tests
                 Assert.AreSame(somebodyElses, manager.dmxMainTexture,
                     "enabling the manager overwrote a field the author had set");
 
+                // Checked here rather than only at the end. Asserting once, after both
+                // paths, cannot tell which of them did the work — remove the enable hook
+                // and the validate pass below would fill everything and the row would
+                // still pass, while the path it names went untested.
+                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                    "enabling the manager did not fill the fields that were empty");
+
+                // Emptied again so the validate path has something of its own to do, and
+                // never the overridden field: the claim is that a repair leaves it alone
+                // while repairing around it.
+                var other = VRSLWiring.Dmx.First(f => f.Field != "dmxMainTexture");
+                var again = new SerializedObject(manager);
+                again.FindProperty(other.Field).objectReferenceValue = null;
+                again.ApplyModifiedProperties();
+
                 // And the validate path, deferred, which is what an inspector edit runs.
                 VRSLWiring.ResolveOnValidate(manager);
-                for (int i = 0; i < 10; i++) yield return null;
+                for (int i = 0; i < 10 && VRSLWiring.Empty(manager).Count > 0; i++)
+                    yield return null;
+
                 Assert.AreSame(somebodyElses, manager.dmxMainTexture,
                     "a validate pass overwrote a field the author had set");
-
-                // The rest was still filled, or the override was preserved by resolution
-                // never running at all — which would pass this row for the wrong reason.
                 Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
-                    "nothing else was filled, so this row never exercised resolution");
+                    $"a validate pass did not fill {other.Field} back in");
             }
             finally { Object.DestroyImmediate(go); }
         }
@@ -302,12 +316,21 @@ namespace VRSL.URP.Tests
             string wanted = VRSLWiring.PathOf(field);
             string name   = System.IO.Path.GetFileNameWithoutExtension(wanted);
 
-            const string folder = "Assets/VRSL-WiringDecoy";
+            // A name nothing else can already be using. A fixed one risks colliding with
+            // a folder somebody already has, and the cleanup below deletes the folder
+            // whole — which would take their assets with it. This row is not worth
+            // anybody losing work over.
+            string leaf   = "VRSL-WiringDecoy-" + System.Guid.NewGuid().ToString("N");
+            string folder = "Assets/" + leaf;
             string decoyPath = $"{folder}/{name}.asset";
+            bool mine = false;
             try
             {
-                if (!AssetDatabase.IsValidFolder(folder))
-                    AssetDatabase.CreateFolder("Assets", "VRSL-WiringDecoy");
+                Assert.IsFalse(AssetDatabase.IsValidFolder(folder), "the decoy folder already exists");
+                AssetDatabase.CreateFolder("Assets", leaf);
+                mine = AssetDatabase.IsValidFolder(folder);
+                Assert.IsTrue(mine, "could not create the decoy folder");
+
                 AssetDatabase.CreateAsset(
                     new CustomRenderTexture(4, 4) { name = name }, decoyPath);
                 AssetDatabase.Refresh();
@@ -329,9 +352,14 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                AssetDatabase.DeleteAsset(decoyPath);
-                AssetDatabase.DeleteAsset(folder);
-                AssetDatabase.Refresh();
+                // Only the folder this row made. Deleting one it merely found would take
+                // whatever else was in it.
+                if (mine)
+                {
+                    AssetDatabase.DeleteAsset(decoyPath);
+                    AssetDatabase.DeleteAsset(folder);
+                    AssetDatabase.Refresh();
+                }
             }
         }
 
