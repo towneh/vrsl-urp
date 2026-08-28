@@ -154,9 +154,17 @@ namespace VRSL.URP.Tests
                 // four that document a meaning when empty — no tile culling, no surface
                 // prepass, no beams, no strobe timing — are a choice an author is allowed
                 // to make, so they are offered rather than forced.
-                Assert.IsEmpty(VRSLWiring.Empty(rig.Manager).Where(f => !f.Optional)
-                                         .Select(f => f.Field),
+                var afterEnable = VRSLWiring.Empty(rig.Manager);
+                Assert.IsEmpty(afterEnable.Where(f => !f.Optional).Select(f => f.Field),
                     "enabling the manager left a mandatory field empty");
+
+                // And the other half of that claim, which the line above cannot make:
+                // the optional ones must still be empty. Without this the row would pass
+                // just as happily if enabling filled everything, and the whole point of
+                // holding those back is that it does not.
+                Assert.AreEqual(VRSLWiring.Dmx.Count(f => f.Optional),
+                                afterEnable.Count(f => f.Optional),
+                    "enabling the manager filled a field that is only filled on request");
 
                 // Then the repair an author presses, which is what fills the rest. Both
                 // paths are exercised, and the capture needs all ten or it would be

@@ -125,14 +125,17 @@ namespace VRSL.URP.EditorScripts
         void DrawFold(VRSLWiringField[] fields)
         {
             Folded = EditorGUILayout.Foldout(
-                Folded, "Assets this uses — filled in automatically", true);
+                Folded, "Assets this uses — the required ones fill in automatically", true);
             if (!Folded) return;
 
             using (new EditorGUI.IndentLevelScope())
             {
                 EditorGUILayout.LabelField(
-                    "Set for you when the scene loads. Change one only if you mean to; "
-                  + "anything you set is left alone.", EditorStyles.wordWrappedMiniLabel);
+                    "The required ones are set when the scene loads. The rest stay empty "
+                  + "until you ask for them, because empty means something on those — no "
+                  + "tile culling, no surface prepass, no beams, no strobe timing. "
+                  + "Anything you set yourself is left alone.",
+                    EditorStyles.wordWrappedMiniLabel);
 
                 foreach (var field in fields)
                 {
