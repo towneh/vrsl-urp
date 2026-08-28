@@ -50,7 +50,7 @@ namespace VRSL.URP
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
-        [Header("Contact Shadows")]
+        [Header("Shadows where something stands in a beam")]
         [Range(0f, 1f)]
         [Tooltip("Screen-space contact shadows. 0 disables them and compiles the trace out. "
                + "Each light marches the depth buffer from the lit pixel towards the fixture, "
@@ -79,7 +79,6 @@ namespace VRSL.URP
                + "background would shadow everything in front of it.")]
         public float contactShadowThickness = 0.5f;
 
-        [Header("Volumetric")]
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
                + "The volumetric raymarch pass runs whenever this is assigned — there is no "
                + "separate enable toggle since the URP prefab path has no legacy mesh-cone "
@@ -87,6 +86,7 @@ namespace VRSL.URP
                + "to 0 instead.")]
         public Shader volumetricShader;
 
+        [Header("Beams in the air")]
         [Tooltip("Render resolution for the raymarch. Half is half-res with bilateral upsample "
                + "(default; right for live VR). Full runs the raymarch at the camera target "
                + "resolution and additively blends — ~4× per-pixel cost, no upsample artefacts, "
@@ -108,27 +108,30 @@ namespace VRSL.URP
         public float volumetricDensity = 0.1f;
 
         [Range(-0.95f, 0.95f)]
-        [Tooltip("Henyey–Greenstein anisotropy. 0 = isotropic; positive values brighten when "
-               + "looking down the beam; negative values back-scatter.")]
+        [Tooltip("Which way the haze throws light. 0 looks the same from anywhere. Positive "
+               + "makes a beam flare when you look along it, towards the fixture — the "
+               + "cinematic one. Negative brightens it from behind instead. Henyey–Greenstein "
+               + "anisotropy, if you want to look it up.")]
         public float volumetricAnisotropy = 0.2f;
 
-        [Tooltip("Colour tint applied to the accumulated in-scattering. White = no tint.")]
+        [Tooltip("Tints the beams themselves, on top of whatever colour the fixture is "
+               + "sending. White leaves them alone.")]
         [ColorUsage(showAlpha: false, hdr: false)]
         public Color volumetricTint = Color.white;
 
         [Range(0f, 8f)]
-        [Tooltip("Global intensity multiplier for the volumetric contribution. Multiplies on "
-               + "top of the per-light intensity already encoded in _VRSLLights.")]
+        [Tooltip("How strong the beams are, all of them at once, on top of what each fixture "
+               + "is already doing. Drop it to 0 to take the beams out of the air without "
+               + "touching the light landing on surfaces.")]
         public float volumetricIntensity = 1f;
 
-        [Tooltip("Couple density and tint to URP scene fog. When on, density is multiplied by "
-               + "unity_FogParams.x (the scene fog coefficient) and tint by unity_FogColor — so "
-               + "raising scene fog density brightens the shafts and turning fog off hides them. "
-               + "When off, the manager's density and tint values are used directly. Most useful "
-               + "when the project drives haze level globally from a URP VolumeProfile.")]
+        [Tooltip("Let the scene's own fog drive the haze. On, adding fog thickens the beams "
+               + "and turning fog off hides them, so one control does the whole venue — useful "
+               + "where the fog is already animated. Off, the density and tint here are what "
+               + "you get.")]
         public bool coupleToSceneFog = false;
 
-        [Header("Volumetric — Modulated Density")]
+        [Header("Haze that varies across the beam")]
         [Tooltip("Multiply density by 3D world-space noise to approximate dusty stage haze. "
                + "When off, the noise code is compiled out of the shader and there is no cost. "
                + "Adds roughly 5–10% to the raymarch pass on desktop VR when on.")]
@@ -148,12 +151,12 @@ namespace VRSL.URP
                + "1 = density drops to zero in the darkest patches.")]
         public float volumetricNoiseStrength = 0.7f;
 
-        [Header("Gobo Wheel")]
+        [Header("Gobo patterns")]
         [Tooltip("Gobo textures shared by all AudioLink fixtures. Packed into a Texture2DArray. "
                + "Each fixture selects a slot via its Gobo Index field. -1 = no gobo (open beam).")]
         public Texture2D[] goboTextures;
 
-        [Header("Color Sampling")]
+        [Header("Where the colours come from")]
         [Tooltip("Scene-wide texture sampled by every AudioLink fixture in ColorTexture / "
                + "ColorTextureTraditional color modes. Mirrors the legacy AudioLink Static "
                + "approach where _SamplingTexture sat on the fixture material rather than per "
@@ -163,7 +166,7 @@ namespace VRSL.URP
                + "to AudioLink's _AudioTexture atlas.")]
         public Texture samplingTexture;
 
-        [Header("Cameras")]
+        [Header("Mirrors and camera props")]
         [Tooltip("How VRSL treats cameras that render into a texture rather than to the "
                + "player's view — mirrors, portals, camera props. Full lights them like the "
                + "main view, which is the default because beams in a mirror are a large part "
