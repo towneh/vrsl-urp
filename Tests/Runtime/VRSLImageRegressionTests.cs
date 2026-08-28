@@ -150,12 +150,22 @@ namespace VRSL.URP.Tests
                 rig.Manager.enabled = false;
                 rig.Manager.enabled = true;
 
-                // Nothing repairs the manager here on purpose. The bounce above is the
-                // whole mechanism under test: enabling it runs resolution, and a row that
-                // called the resolver itself would pass while that path was broken.
-                //
-                // Asked of the manager rather than of a resolver's report, for the same
-                // reason — whatever did the resolving, nothing may be left empty.
+                // The enable path fills what must never be empty, and nothing else. The
+                // four that document a meaning when empty — no tile culling, no surface
+                // prepass, no beams, no strobe timing — are a choice an author is allowed
+                // to make, so they are offered rather than forced.
+                Assert.IsEmpty(VRSLWiring.Empty(rig.Manager).Where(f => !f.Optional)
+                                         .Select(f => f.Field),
+                    "enabling the manager left a mandatory field empty");
+
+                // Then the repair an author presses, which is what fills the rest. Both
+                // paths are exercised, and the capture needs all ten or it would be
+                // comparing a scene with no volumetrics against one that has them.
+                VRSLWiring.Resolve(rig.Manager, includeOptional: true);
+                DropMaterials(rig.Manager);
+                rig.Manager.enabled = false;
+                rig.Manager.enabled = true;
+
                 var empty = VRSLWiring.Empty(rig.Manager);
                 Assert.IsEmpty(empty.Select(f => f.Field),
                     "the manager still has empty wiring, so this row would be comparing a "

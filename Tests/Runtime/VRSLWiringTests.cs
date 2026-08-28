@@ -100,12 +100,19 @@ namespace VRSL.URP.Tests
                 Assert.IsEmpty(result.Unresolved,
                     "nothing should be unresolvable in a project that has this package: "
                   + string.Join(", ", result.Unresolved.Select(f => f.Field)));
-                Assert.AreEqual(VRSLWiring.Dmx.Length - 1, result.Filled.Count,
-                    "every empty field should have been filled exactly once");
-                foreach (var field in VRSLWiring.Dmx)
-                    Assert.IsNotNull(new SerializedObject(manager).FindProperty(field.Field)
-                                        .objectReferenceValue,
-                        $"{field.Field} is still empty after a resolve");
+                // The mandatory ones, minus the overridden field. The four that document
+                // a meaning when empty are not filled unless somebody asks.
+                int expected = VRSLWiring.Dmx.Count(f => !f.Optional) - 1;
+                Assert.AreEqual(expected, result.Filled.Count,
+                    "every empty field that should be filled was not filled exactly once");
+                Assert.IsEmpty(Required(VRSLWiring.Empty(manager)),
+                    "a mandatory field is still empty after a resolve");
+
+                // And asking fills the rest, which is what the repair button does.
+                var asked = VRSLWiring.Resolve(manager, includeOptional: true);
+                Assert.IsNotEmpty(asked.Filled, "asking did not fill the optional fields");
+                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                    "something was still empty after an explicit repair");
 
                 // Idempotent: a second pass has nothing left to do, so a repair an author
                 // presses twice does not report ten changes it did not make.
@@ -188,7 +195,7 @@ namespace VRSL.URP.Tests
                 owner.enabled = false;
                 yield return null;
 
-                Assert.IsEmpty(VRSLWiring.Empty(standby).Select(f => f.Field),
+                Assert.IsEmpty(Required(VRSLWiring.Empty(standby)),
                     "a manager handed the singleton set itself up without resolving its "
                   + "wiring first, so its materials and passes were built from empty fields");
             }
@@ -226,7 +233,7 @@ namespace VRSL.URP.Tests
                 VRSLWiring.FlushPending(manager);
                 yield return null;
 
-                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                Assert.IsEmpty(Required(VRSLWiring.Empty(manager)),
                     "emptying a field in the inspector left it empty");
             }
             finally { Object.DestroyImmediate(go); }
@@ -274,13 +281,13 @@ namespace VRSL.URP.Tests
                 // paths, cannot tell which of them did the work — remove the enable hook
                 // and the validate pass below would fill everything and the row would
                 // still pass, while the path it names went untested.
-                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                Assert.IsEmpty(Required(VRSLWiring.Empty(manager)),
                     "enabling the manager did not fill the fields that were empty");
 
                 // Emptied again so the validate path has something of its own to do, and
                 // never the overridden field: the claim is that a repair leaves it alone
                 // while repairing around it.
-                var other = VRSLWiring.Dmx.First(f => f.Field != "dmxMainTexture");
+                var other = VRSLWiring.Dmx.First(f => f.Field != "dmxMainTexture" && !f.Optional);
                 var again = new SerializedObject(manager);
                 again.FindProperty(other.Field).objectReferenceValue = null;
                 again.ApplyModifiedProperties();
@@ -294,7 +301,7 @@ namespace VRSL.URP.Tests
 
                 Assert.AreSame(somebodyElses, manager.dmxMainTexture,
                     "a validate pass overwrote a field the author had set");
-                Assert.IsEmpty(VRSLWiring.Empty(manager).Select(f => f.Field),
+                Assert.IsEmpty(Required(VRSLWiring.Empty(manager)),
                     $"a validate pass did not fill {other.Field} back in");
             }
             finally { Object.DestroyImmediate(go); }
@@ -365,6 +372,12 @@ namespace VRSL.URP.Tests
                 }
             }
         }
+
+        /// <summary>The names of the fields that must never be left empty. The optional
+        /// four are a choice, so a row asserting "nothing is empty" would be asserting
+        /// that the choice cannot be made.</summary>
+        static IEnumerable<string> Required(IEnumerable<VRSLWiringField> fields) =>
+            fields.Where(f => !f.Optional).Select(f => f.Field);
 
         static VRSLWiringField FieldNamed(string name)
         {

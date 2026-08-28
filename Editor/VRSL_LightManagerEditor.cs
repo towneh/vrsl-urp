@@ -61,10 +61,23 @@ namespace VRSL.URP.EditorScripts
             var missing = fields
                 .Where(f => serializedObject.FindProperty(f.Field) is { objectReferenceValue: null })
                 .ToList();
+            var faults = missing.Where(f => !f.Optional).ToList();
+            var choices = missing.Where(f => f.Optional).ToList();
 
             if (missing.Count == 0)
             {
                 EditorGUILayout.LabelField("Set up and ready.", EditorStyles.miniLabel);
+                return;
+            }
+
+            // An empty optional field is a choice, not a fault, so it is stated rather
+            // than warned about — this is the author who turned tile culling off, and a
+            // warning that never goes away is one nobody reads by the third time.
+            if (faults.Count == 0)
+            {
+                EditorGUILayout.LabelField(
+                    "Set up, with " + Join(choices.Select(f => f.Consequence)) + ".",
+                    EditorStyles.wordWrappedMiniLabel);
                 return;
             }
 
@@ -73,9 +86,9 @@ namespace VRSL.URP.EditorScripts
             // than a count: two missing settings can go wrong in two unrelated ways, and
             // "2 settings are missing" tells nobody which of their problems this is.
             var text = new System.Text.StringBuilder(
-                missing.Count == 1 ? "Something is missing, and this is what you will see:"
-                                   : "Some things are missing, and this is what you will see:");
-            foreach (var f in missing)
+                faults.Count == 1 ? "Something is missing, and this is what you will see:"
+                                  : "Some things are missing, and this is what you will see:");
+            foreach (var f in faults)
                 text.Append("\n  • ").Append(Capitalise(f.Consequence)).Append(" (").Append(f.Field).Append(").");
 
             EditorGUILayout.HelpBox(text.ToString(), MessageType.Warning);
@@ -136,7 +149,9 @@ namespace VRSL.URP.EditorScripts
                 // No Undo.RecordObject here: Resolve writes through SerializedObject,
                 // which registers its own undo. Recording as well would put two entries
                 // on the stack for one repair, so undoing it would take two presses.
-                var result = VRSLWiring.Resolve(manager);
+                // Everything, optional fields included: this is somebody asking, which
+                // is exactly the case those are held back from the automatic path for.
+                var result = VRSLWiring.Resolve(manager, includeOptional: true);
                 touched++;
                 report.Append(manager.name).Append(": ").AppendLine(result.Describe()).AppendLine();
             }
@@ -146,6 +161,16 @@ namespace VRSL.URP.EditorScripts
                 touched == 0 ? "Nothing selected that has wiring to set up."
                              : report.ToString().TrimEnd(),
                 "OK");
+        }
+
+        /// <summary>"a and b", "a, b and c" — a list an author reads rather than one a
+        /// programmer joins.</summary>
+        static string Join(IEnumerable<string> parts)
+        {
+            var all = parts.ToList();
+            if (all.Count == 0) return "";
+            if (all.Count == 1) return all[0];
+            return string.Join(", ", all.Take(all.Count - 1)) + " and " + all[^1];
         }
 
         static string Capitalise(string s) =>

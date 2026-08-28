@@ -33,6 +33,18 @@ namespace VRSL.URP
         /// than instead of it.
         /// </summary>
         public string Consequence;
+
+        /// <summary>
+        /// Whether empty is a choice rather than a fault.
+        ///
+        /// Four of these document "leave empty" in their own tooltips — it disables tile
+        /// culling, skips the surface prepass, or says this scene does not strobe — and
+        /// quality Off works by emptying the volumetric shader. Filling those in
+        /// automatically would take a documented capability away and make an author's
+        /// deliberate clear impossible to express. They are offered by a repair and never
+        /// forced.
+        /// </summary>
+        public bool Optional;
     }
 
     /// <summary>
@@ -74,7 +86,7 @@ namespace VRSL.URP
             // Optional only in a scene that never strobes: the StrobeOutput CRT's decode
             // shader samples this, so where strobe is used a missing one takes the whole
             // rig dark rather than merely stopping the flash.
-            new() { Field = "dmxStrobeTimerTexture",
+            new() { Optional = true, Field = "dmxStrobeTimerTexture",
                     Guid  = "e6641cd38ad1a21be3425ab43ecc2506",
                     Consequence = "every fixture goes dark wherever strobe is used" },
             new() { Field = "dmxSpinTimerTexture",
@@ -83,17 +95,17 @@ namespace VRSL.URP
             new() { Field = "computeShader",
                     Guid  = "213d3149ed0cbc73835aee17d5180332",
                     Consequence = "nothing lights at all" },
-            new() { Field = "lightCullShader",
+            new() { Optional = true, Field = "lightCullShader",
                     Guid  = "5f41dc4adb8e42f8937cb0064c39ea17",
                     Consequence = "the picture is right and every pixel pays for every "
                                 + "fixture on screen" },
             new() { Field = "lightingShader",
                     Guid  = "d8c757279dc0dc7ff544149ea9f3e897",
                     Consequence = "no light lands on surfaces" },
-            new() { Field = "surfacePropertiesShader",
+            new() { Optional = true, Field = "surfacePropertiesShader",
                     Guid  = "5e926720f16a403487984bfa2578e36f",
                     Consequence = "every surface lights as flat grey, whatever colour it is" },
-            new() { Field = "volumetricShader",
+            new() { Optional = true, Field = "volumetricShader",
                     Guid  = "ee4b25e5a146ba8b36ed731b36047774",
                     Consequence = "no beams in the air" },
         };
@@ -112,17 +124,17 @@ namespace VRSL.URP
             new() { Field = "computeShader",
                     Guid  = "b62eba04b10a6cc19700ff31693a9066",
                     Consequence = "nothing lights at all" },
-            new() { Field = "lightCullShader",
+            new() { Optional = true, Field = "lightCullShader",
                     Guid  = "5f41dc4adb8e42f8937cb0064c39ea17",
                     Consequence = "the picture is right and every pixel pays for every "
                                 + "fixture on screen" },
             new() { Field = "lightingShader",
                     Guid  = "d8c757279dc0dc7ff544149ea9f3e897",
                     Consequence = "no light lands on surfaces" },
-            new() { Field = "surfacePropertiesShader",
+            new() { Optional = true, Field = "surfacePropertiesShader",
                     Guid  = "5e926720f16a403487984bfa2578e36f",
                     Consequence = "every surface lights as flat grey, whatever colour it is" },
-            new() { Field = "volumetricShader",
+            new() { Optional = true, Field = "volumetricShader",
                     Guid  = "ee4b25e5a146ba8b36ed731b36047774",
                     Consequence = "no beams in the air" },
         };
@@ -169,7 +181,7 @@ namespace VRSL.URP
         /// problem than the one it fixes. This fills gaps and nothing else.
         /// </summary>
         /// <returns>What it changed, and what it could not.</returns>
-        public static VRSLWiringResult Resolve(Object manager)
+        public static VRSLWiringResult Resolve(Object manager, bool includeOptional = false)
         {
             var result = new VRSLWiringResult();
             var fields = FieldsFor(manager);
@@ -188,6 +200,9 @@ namespace VRSL.URP
                 // not stop the other nine being filled.
                 if (prop == null) { result.Unresolved.Add(field); continue; }
                 if (prop.objectReferenceValue != null) continue;
+                // Left alone unless asked for. Empty means something on these, so filling
+                // one automatically would undo a choice rather than fix a mistake.
+                if (field.Optional && !includeOptional) continue;
 
                 var asset = Load(field);
                 if (asset == null) { result.Unresolved.Add(field); continue; }
