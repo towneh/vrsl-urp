@@ -76,5 +76,68 @@ namespace VRSL.URP.Tests
             Assert.IsNull(VRSLBaseline.ReferencePath);
             Assert.AreEqual(_temp, VRSLBaseline.ReferenceHome);
         }
+
+        [Test]
+        public void AMachineIsResolvedByItsOwnFileAndFallsBackWhenItHasNone()
+        {
+            Environment.SetEnvironmentVariable(Variable, _temp);
+            File.WriteAllText(Path.Combine(_temp, "baseline.json"), "{}");
+
+            string mine = Path.Combine(_temp, "baselines",
+                                       VRSLBaseline.ReferenceFileName("Test GPU 9000", "Player"));
+            Directory.CreateDirectory(Path.GetDirectoryName(mine)!);
+            File.WriteAllText(mine, "{}");
+
+            Assert.AreEqual(mine, VRSLBaseline.ReferenceFor("Test GPU 9000", "Player"),
+                "a machine with a file of its own did not get it");
+
+            // The same GPU in the other lineage has no file, so it falls back rather than
+            // reading the player's numbers as though they were the editor's.
+            Assert.AreEqual(Path.Combine(_temp, "baseline.json"),
+                            VRSLBaseline.ReferenceFor("Test GPU 9000", "Editor"),
+                "a lineage with no file of its own did not fall back");
+        }
+
+        /// <summary>
+        /// The context is read out of a candidate run.json rather than being a constant,
+        /// so it is input. Without reducing it, a context naming a traversal walks out of
+        /// the baselines folder and picks whatever JSON it lands on — and the answer is a
+        /// comparison against a file nobody chose, not an error.
+        /// </summary>
+        [Test]
+        public void AHostileContextCannotReachOutsideTheBaselinesFolder()
+        {
+            Environment.SetEnvironmentVariable(Variable, _temp);
+
+            // Somewhere a traversal would land, holding something that would load.
+            string outside = Path.Combine(_temp, "outside.json");
+            File.WriteAllText(outside, "{}");
+
+            foreach (string hostile in new[]
+                     { "../outside", @"..\outside", "/etc/passwd", "..", "a/../../outside" })
+            {
+                string name = VRSLBaseline.ReferenceFileName("gpu", hostile);
+                Assert.That(name, Does.Not.Contain("/").And.Not.Contain("\\"),
+                    $"'{hostile}' left a path separator in the file name");
+                Assert.That(name, Does.Not.Contain(".."),
+                    $"'{hostile}' left a traversal in the file name");
+                Assert.AreEqual(name, Path.GetFileName(name),
+                    $"'{hostile}' produced more than one path segment");
+
+                // And end to end: it must never resolve to the file outside the folder.
+                Assert.AreNotEqual(outside, VRSLBaseline.ReferenceFor("gpu", hostile),
+                    $"'{hostile}' reached a file outside the baselines folder");
+            }
+        }
+
+        [Test]
+        public void AnEmptyGpuOrContextStillNamesAFile()
+        {
+            // Both halves come from a stored run, and a run written before a field
+            // existed carries it empty. That must name a file rather than throw or
+            // produce something a filesystem refuses.
+            Assert.AreEqual("unknown-Editor.json", VRSLBaseline.ReferenceFileName(null, null));
+            Assert.AreEqual("unknown-Player.json", VRSLBaseline.ReferenceFileName("", "Player"));
+        }
     }
 }

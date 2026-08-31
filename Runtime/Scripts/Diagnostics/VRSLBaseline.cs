@@ -146,17 +146,31 @@ namespace VRSL.URP
         /// The file a machine's own reference would be under, as a name a filesystem
         /// accepts: GPU names carry spaces and can carry characters Windows refuses in a
         /// path, and a reference nobody can save is not a reference.
+        ///
+        /// <para><b>Both halves are reduced, and that is the point.</b> The context
+        /// reaching here came out of a candidate <c>run.json</c> the caller was handed,
+        /// so it is input rather than a constant: a context of <c>../../elsewhere</c>
+        /// would otherwise walk straight out of the baselines folder and pick whatever
+        /// JSON it found. Reducing rather than allow-listing the two known contexts keeps
+        /// a third one working the day somebody adds it — an unknown context gets a file
+        /// of its own, which is right, instead of quietly reading the editor's.</para>
         /// </summary>
         public static string ReferenceFileName(string gpu, string context)
         {
-            string device = string.IsNullOrEmpty(gpu) ? "unknown" : gpu;
-            var name = new StringBuilder(device.Length);
-            foreach (char c in device)
-                name.Append(char.IsLetterOrDigit(c) ? c : '-');
-
             string lineage = string.IsNullOrEmpty(context)
                            ? VRSLBenchmarkEnvironment.EditorContext : context;
-            return $"{name}-{lineage}.json";
+            return $"{Reduce(gpu, "unknown")}-{Reduce(lineage, "unknown")}.json";
+        }
+
+        /// <summary>Letters and digits, everything else a dash, so the result is one path
+        /// segment on any filesystem and cannot be a separator or a traversal.</summary>
+        static string Reduce(string value, string whenEmpty)
+        {
+            if (string.IsNullOrEmpty(value)) value = whenEmpty;
+            var name = new StringBuilder(value.Length);
+            foreach (char c in value)
+                name.Append(char.IsLetterOrDigit(c) ? c : '-');
+            return name.ToString();
         }
 
         /// <summary>Where the reference would be, named whether or not it is there, so a
