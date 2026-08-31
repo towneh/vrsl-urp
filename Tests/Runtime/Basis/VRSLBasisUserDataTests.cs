@@ -15,7 +15,7 @@ namespace VRSL.URP.Tests
     /// The fixture carries VRSL's Ramp pattern, so every channel is a known
     /// function of its flat address; slot s of universe u holds (u * 520 + s) % 251,
     /// universes 0-3 on every frame and universe 4 from frame 90. It is hosted at
-    /// https://mr.town/vod/, and <c>VRSL_TRUSS_FIXTURES</c> points these rows at a
+    /// https://www.mr.town/vod/, and <c>VRSL_TRUSS_FIXTURES</c> points these rows at a
     /// local directory or another URL base instead.
     ///
     /// Rows B7 to B11 in TESTING.md.
@@ -27,7 +27,7 @@ namespace VRSL.URP.Tests
         const int    Frames            = 300;
         const float  RealSecondsLimit  = 40f;
 
-        const string HostedFixtures = "https://mr.town/vod";
+        const string HostedFixtures = "https://www.mr.town/vod";
 
         static string Fixture(string name)
         {

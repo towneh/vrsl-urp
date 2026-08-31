@@ -55,8 +55,19 @@ two are judged by looking at an inspector, and W12 is a player comparison throug
 
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
 in the project and holds the Basis integration rows (B7-B9 and B11 below). Those
-play a real stream: the fixtures are hosted at `https://mr.town/vod/`, and `VRSL_TRUSS_FIXTURES`
-(a directory or a URL base) points the rows somewhere else. `tests.sh` runs both assemblies.
+play a real stream: the fixtures are hosted at `https://www.mr.town/vod/`, and
+`VRSL_TRUSS_FIXTURES` (a directory or a URL base) points the rows somewhere else.
+`tests.sh` runs both assemblies.
+
+**The five Truss fixtures are not on that host yet** (checked 2026-08-31: the `/vod/`
+lane serves, `drip.mp4` returns 200, and all five of `truss-dmx-ramp.ts`,
+`truss-dmx-ramp-damaged.ts`, `truss-dmx-ramp-stripped.ts`,
+`truss-dmx-ramp-transcoded.ts` and `vrsl-dmx-marching.ts` return 404). They were
+generated after that host was set up and only ever landed on the other one, so **these
+rows fail on a 404 until somebody copies them across** — the sources are in
+`BasisApps/basis-truss-dmx-fixture/`, about 910 KB each. Nothing else needs changing
+when they arrive. Point `VRSL_TRUSS_FIXTURES` at a local directory holding them to run
+the rows meanwhile.
 
 The rows are still written out in full below, because they are the specification the tests
 implement and because a failure message is only useful next to the claim it belongs to. Do

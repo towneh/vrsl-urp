@@ -28,7 +28,7 @@ namespace VRSL.URP.Tests
     ///
     /// Rows N23 to N26 in TESTING.md. The fixture is 1920x1080 at 30 fps with
     /// the grid strip 1920x208 at y=864 and three universes. It is hosted at
-    /// https://mr.town/vod/, and <c>VRSL_TRUSS_FIXTURES</c> points these rows
+    /// https://www.mr.town/vod/, and <c>VRSL_TRUSS_FIXTURES</c> points these rows
     /// at a local directory or another URL base instead.
     /// </summary>
     class VRSLBasisDmxOverVideoTests : VRSLDMXTest
@@ -40,7 +40,7 @@ namespace VRSL.URP.Tests
         const int    Modulus    = 251;
         const float  RealSecondsLimit = 40f;
 
-        const string HostedFixtures = "https://mr.town/vod";
+        const string HostedFixtures = "https://www.mr.town/vod";
 
         // The strip is 1920x208 at y=864 in a 1920x1080 frame, and the RAW grid
         // RT is 13 cells wide where the strip is 13 cells tall, so the framing
