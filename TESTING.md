@@ -416,6 +416,26 @@ mismatch.
 | D5 | Both | A scene with no lights at all, of any type | Surfaces still light and beams still render. Depth comes from the pipeline; VRSL needs no light to obtain it, and the old depth-light requirement is gone |
 | D6 | — | **Suite, passed 2026-08-31 on its first run.** `VRSLDepthPolicyReport.LayerMaskVerdict` across five masks: a fixture layer excluded under priming `Forced`, the same mask with priming off, the layer included, no fixtures at all, and an unreadable mask | The first fails and **names the layer** — "a layer is excluded" leaves an author to find which of thirty-two. The other four are what make it mean anything: priming off is reported without counting against the verdict, an including mask reports nothing so a check that flagged everything cannot pass, no fixtures reads `NOT CHECKED` rather than as a clean bill, and an unreadable mask reports instead of throwing or quietly passing. **Automated rather than done by hand**: reaching the same verdict through the menu item needs a real `UniversalRendererData` carrying a real mask, which means editing the consuming project's pipeline asset, and this package does not change a project's renderer settings even briefly |
 
+**A-M2-4, no measurable frame-time change.** `bench.sh sweep` on `main` (`04e8774`) and
+again on the branch, RTX 3090, IL2CPP player, 1920x1080, priming Forced, 30 configurations:
+**29 unchanged, 1 improved, 0 regressed**, exit 0.
+
+**Read the pass as a confirmation and the structure as the evidence**, because two figures
+in that run are artefacts rather than findings. The one row marked improved is 10 fixtures
+/ OutsideCones / High at -1.747 ms, and nothing in this milestone can make a DMX scene 52%
+faster — it is run-to-run spread on a row whose neighbours sit around 2 to 3 ms. And
+10 / InsideCones / Off reports +545.9%, which is 0.372 ms measured against a 0.068 ms base:
+a percentage of almost nothing. Both movements are inside the 1.086 ms floor.
+
+What decides it is that **the sweep builds a DMX-only scene**
+(`VRSL-DMX-Mover-Spotlight-H-13CH-URP`, no AudioLink anywhere in `VRSLBenchmarkScene`),
+and every runtime line this milestone adds is either AudioLink or not in a player at all:
+the two fixture-mesh shaders that gained depth passes are AudioLink and never loaded here,
+`VRSLDepthPolicyReport` is wholly inside `#if UNITY_EDITOR`, the control-panel change
+removes code rather than adding it, and the scene edits are to the example scenes, which
+the sweep does not use. There is nothing in a DMX player frame for this milestone to have
+slowed down.
+
 **The AudioLink moving heads are the ones to watch.** Their fixture-mesh shaders took
 their depth passes from URP's Lit shader until this milestone, which was safe only
 because the AudioLink branch of the shared vertex include has its rotation commented
