@@ -181,6 +181,7 @@ namespace VRSL.URP.EditorScripts
                                      HashSet<Renderer> fixtureRenderers, StringBuilder report)
         {
             int problems = 0;
+            int msaaSamples = urp.msaaSampleCount;
             var fixtureLayers = FixtureLayers(fixtureRenderers);
 
             int index = 0;
@@ -223,6 +224,23 @@ namespace VRSL.URP.EditorScripts
                                     + "for the prepass that ran. Every shader this package "
                                     + "ships reproduces its forward vertex stage in both its "
                                     + "depth passes; a custom fixture shader here has to too.");
+
+                // Two facts side by side leave the reader to know the interaction, and the
+                // interaction is not fixed: URP's own predicate declines to prime on a
+                // multisampled target, and a project is free to ship a URP without that
+                // condition. Basis does. So the honest report names both readings and says
+                // which one applies is a property of the URP installed here, rather than
+                // asserting a behaviour that depends on somebody else's source.
+                if ((priming || mayPrime) && msaaSamples > 1)
+                    report.AppendLine($"      MSAA is {msaaSamples}x, and whether priming runs "
+                                    + "at all then depends on the URP this project resolves. "
+                                    + "Stock URP declines to prime on a multisampled target, "
+                                    + "so priming would be inert and these settings would "
+                                    + "render as though it were Disabled. A project shipping "
+                                    + "its own URP may have removed that condition, and then "
+                                    + "priming really is running here. Read "
+                                    + "UniversalRendererRenderGraph if it matters which — a "
+                                    + "URP under Packages/ wins over the registry one.");
 
                 problems += ValidateLayerMask(universal, fixtureLayers, priming, mayPrime, report);
                 report.AppendLine();
@@ -391,6 +409,14 @@ namespace VRSL.URP.EditorScripts
                                 + "priming tests against depends on whether anything in the "
                                 + "frame asks URP for a normals texture, so both passes are "
                                 + "needed to be safe in any project.");
+            // Said once, at the end, because the alternative is somebody switching the
+            // object off, running this again, seeing the same line and concluding the
+            // command is stale. Switched-off objects are counted on purpose: one gets
+            // switched back on, and a report that went quiet would have hidden the fault
+            // rather than fixed it.
+            report.AppendLine("      Objects switched off in the scene are included above. "
+                            + "Disabling one will not clear its line — the shader is still "
+                            + "in this scene and still draws the moment it comes back.");
             return missing.Count;
         }
 
