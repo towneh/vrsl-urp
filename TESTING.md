@@ -421,11 +421,19 @@ again on the branch, RTX 3090, IL2CPP player, 1920x1080, priming Forced, 30 conf
 **29 unchanged, 1 improved, 0 regressed**, exit 0.
 
 **Read the pass as a confirmation and the structure as the evidence**, because two figures
-in that run are artefacts rather than findings. The one row marked improved is 10 fixtures
-/ OutsideCones / High at -1.747 ms, and nothing in this milestone can make a DMX scene 52%
-faster — it is run-to-run spread on a row whose neighbours sit around 2 to 3 ms. And
-10 / InsideCones / Off reports +545.9%, which is 0.372 ms measured against a 0.068 ms base:
-a percentage of almost nothing. Both movements are inside the 1.086 ms floor.
+in that run are artefacts rather than findings, and they are artefacts for different reasons.
+
+10 / InsideCones / Off reports **+545.9%**, which is 0.372 ms measured against a 0.068 ms
+base — a percentage of almost nothing, and a movement comfortably **inside** the 1.086 ms
+floor. It is reported `Unchanged`, and the percentage is the only alarming thing about it.
+
+The row marked improved is 10 / OutsideCones / High at **-1.747 ms**, and that one is
+**outside the floor** — which is exactly why the harness flagged it rather than calling it
+unchanged. It is not dismissed for being small. It is dismissed because nothing in this
+milestone can make a DMX scene 52% faster, and its neighbours in the same column sit at 2
+to 3 ms, so the 3.339 ms it started from is the outlier. Run-to-run spread at ten fixtures
+is wide enough to clear the floor on its own, which is worth knowing before reading any
+single improved row here as a result.
 
 What decides it is that **the sweep builds a DMX-only scene**
 (`VRSL-DMX-Mover-Spotlight-H-13CH-URP`, no AudioLink anywhere in `VRSLBenchmarkScene`),
