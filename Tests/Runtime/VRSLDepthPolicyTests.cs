@@ -101,23 +101,16 @@ namespace VRSL.URP.Tests
                 Assert.Ignore("No Universal Renderer on the active pipeline asset, so there "
                             + "is no priming setting to vary.");
 
-            // Setting the mode is not the same as URP acting on it. Priming needs a
-            // single-sample target and forward rendering — with MSAA up, or under
-            // Deferred, URP renders as though it were Disabled whatever the field says.
-            // Both captures would then be the same configuration, the images would match,
-            // and the row would pass having varied nothing at all.
-            if (GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset asset
-             && asset.msaaSampleCount > 1)
-                Assert.Ignore($"MSAA is {asset.msaaSampleCount}x on the active pipeline "
-                            + "asset, and URP does not prime on a multisampled target. Both "
-                            + "captures would render unprimed and match for the wrong reason.");
-
-            foreach (var r in renderers)
-                if (r.renderingMode.ToString().Contains("Deferred"))
-                    Assert.Ignore($"'{r.name}' renders {r.renderingMode}, and URP does not "
-                                + "prime under deferred. Both captures would render unprimed "
-                                + "and match for the wrong reason.");
-
+            // Setting the mode is not the same as URP acting on it, and whether it acts
+            // is deliberately NOT predicted here. The conditions are pipeline-source
+            // dependent: stock URP refuses to prime on a multisampled target, and a
+            // project is free to ship a URP that does not — Basis vendors one with that
+            // guard removed, so a row that skipped on MSAA opted out of the exact
+            // configuration its consumers run. Guessing wrong in that direction is worse
+            // than not guessing, because the row goes quiet rather than red.
+            //
+            // So both captures are taken unconditionally and the evidence that priming
+            // varied is read off the frames themselves, below.
             var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
             foreach (var r in renderers) restore[r] = r.depthPrimingMode;
 
@@ -149,6 +142,32 @@ namespace VRSL.URP.Tests
 
                 var result = VRSLImageCompare.Compare(disabled, forced);
                 Debug.Log($"[D1/D2] Disabled vs Forced: {result}");
+
+                // Did priming actually change anything? Under working priming URP draws
+                // opaque geometry with an Equal test against a prepass, and the two vertex
+                // transforms are separate evaluations of the same maths, so a scatter of
+                // edge pixels always differs. Measured at 615 of 262144 on this scene.
+                //
+                // Two bit-identical frames therefore mean priming did not vary, and the
+                // row has compared one configuration with itself. That is reported rather
+                // than passed: an unvaried comparison agrees perfectly, which is the same
+                // shape as a clean pass and tells you nothing. Inconclusive, not a
+                // failure — nothing is known to be wrong, only unproven.
+                if (result.DifferingPercent <= 0f)
+                {
+                    int msaa = GraphicsSettings.currentRenderPipeline
+                                   is UniversalRenderPipelineAsset a ? a.msaaSampleCount : 0;
+                    var modes = string.Join(", ", renderers.ConvertAll(r =>
+                                    $"'{r.name}' {r.renderingMode}"));
+                    Assert.Inconclusive(
+                        "the two captures are bit-identical, so depth priming did not "
+                      + "actually vary and this row compared one configuration with "
+                      + "itself. URP declines to prime under several conditions and which "
+                      + "ones depend on the URP a project ships. Candidates here — MSAA is "
+                      + $"{msaa}x on the pipeline asset, and the renderers report {modes}. "
+                      + "Deferred never primes; a multisampled target does not in stock "
+                      + "URP, though a project may ship one patched to allow it.");
+                }
 
                 // Judged on whether geometry disappeared, not on bit-equality.
                 //
