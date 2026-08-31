@@ -48,6 +48,9 @@ The **Measurement harness** rows (H1-H9) are in the same assembly and run the sa
 measure rather than decode, so they are the slow part of a full run; H7 is a plain unit row
 and costs nothing, as are H8 and H9.
 
+The **Wiring** rows (W1-W9) and the **Image regression** ones are in it too. The wiring
+rows are editor-only and cost nothing; W10 and W11 are hand rows and are marked as such.
+
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
 in the project and holds the Basis integration rows (B7-B9 and B11 below). Those
 play a real stream: the fixtures are hosted at `https://mr.town/vod/`, and `VRSL_TRUSS_FIXTURES`
@@ -161,6 +164,43 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | P3 | — | Profiling sample sweep, 10 → 25 → 50 → 100 → 200 | Frametime scales sub-linearly with fixture count |
 | P4 | — | `InsideCones` vs `OutsideCones` camera variants | Inside is the worst case; the gap shows culling working |
 
+### Wiring
+
+`VRSLWiringTests` in the suite. These are about the assets a light manager points at —
+the computes, shaders, decode textures and gobos it needs before it can light anything.
+A manager whose fields are empty comes up dark and reports nothing wrong: the passes
+run, the counters look healthy, and nothing appears on screen.
+
+Ten of those fields are on the DMX manager and five on the AudioLink one. **Six of the
+ten are mandatory and fill themselves in; four are offered rather than forced.**
+`lightCullShader`, `surfacePropertiesShader`, `dmxStrobeTimerTexture` and
+`volumetricShader` each document a meaning when empty — no tile culling, no surface
+prepass, no strobe timing, no beams — and quality `Off` works by emptying the last of
+them. Resolution that filled all ten would take four documented capabilities away and
+make a deliberate clear impossible, so enable and validate fill the mandatory six, and
+the repair button and the menu item fill everything, because that is somebody asking.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| W1 | — | Every GUID in the wiring table, loaded and its path checked | All eleven resolve, and every one to a path inside this package. Eleven rather than fifteen because the two managers share four assets between them and the table is walked by asset identity. A GUID that has drifted onto the legacy package's identically-named copy loads perfectly well and is the exact fault the table exists to prevent. Reported together rather than one at a time: a GUID regeneration moves every asset at once, and a row that stops at the first reads as one broken field rather than as a table that no longer describes anything |
+| W2 | — | Every field name in the table, against the manager it names | Present on the manager. The table addresses fields by name, so a rename compiles cleanly everywhere else and stops resolution dead without saying so |
+| W3 | — | Resolve a manager with one field deliberately pointed at the wrong asset and the rest empty | The override is untouched and is not reported as filled; every mandatory field is filled exactly once; nothing is unresolvable. Then `includeOptional` fills the remaining four, which is what the repair button does, and a second pass changes nothing — a repair pressed twice must not report ten changes it did not make |
+| W4 | — | Two nested holds on auto-resolution, the inner one released first | The outer hold survives. Held as a set, not a count: the inner scope releasing the outer one's hold would let the next bounce refill a field the outer holder emptied on purpose, which is how quality `Off` comes back on while its counters still say it is gone. Disposing the same hold twice must not drop somebody else's |
+| W5 | — | Two managers, the owner switched off so ownership passes to an unwired standby | The standby's mandatory fields are filled by the time it sets itself up. **The handover path never goes through `OnEnable`** — an owner standing down calls the successor's `TakeOwnership` directly — so a resolver hooked only there leaves this manager building its materials and passes from empty fields |
+| W6 | — | Empty every field through `SerializedObject`, then run the validate pass | Still empty immediately afterwards, filled on the next editor tick. Resolution is deferred on purpose, because `OnValidate` is also where import and mid-edit serialisation live. The tick is driven rather than waited for: `EditorApplication.delayCall` does not fire inside a batch-mode play-mode test, so waiting on it would test Unity's scheduler and nothing of ours |
+| W7 | — | **A-M7-3.** An override on one field, the rest empty, through the enable path and then the deferred validate path | The override survives both, and each path fills what was empty. **Asserted after each path rather than once at the end** — a single assertion cannot tell which path did the work, so removing the enable hook would leave the validate pass filling everything and the row still passing while the path it names went untested |
+| W8 | — | **A-M7-2.** A decoy asset with the same name as a wiring target, elsewhere in the project | Resolution picks this package's copy, by asset identity rather than by name. The row checks the decoy genuinely collides before it judges anything: if a name search is not ambiguous, resolution had nothing to get wrong and passing means nothing. It stages the collision rather than gating on `com.acchosen.vr-stage-lighting` being installed, because a gated row in a project without that package compiles out and proves nothing |
+| W9 | — | Every consequence string in the table, once per distinct asset | Names what the author will see, not what is null. A consequence that repeats its own field name, or that talks about being null, is the diagnostic this milestone replaces — and is easy to write by accident when adding a field |
+
+**W10 and W11 are hand rows.** Both are judged by looking at an inspector, and A-M7-5
+says so outright: it is judged by reading the message rather than by the message
+existing. Neither has a home in the suite.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| W10 | — | **A-M7-4.** Select a fresh light manager and look at its inspector | One line, `Set up and ready.`, and a fold closed by default. Opening the fold reaches all ten fields, so an author who wants to point one somewhere else on purpose still can. Then clear one of the four optional fields: the fold closes on a plain sentence saying what is currently switched off — "strobe does nothing", "no beams in the air" — and a **Turn these on** button, because an empty optional field is a choice and a warning that never goes away is one nobody reads by the third time |
+| W11 | — | **A-M7-5.** Clear a mandatory field, then clear one whose asset is no longer in the project at all | The first gives a warning naming what you will see rather than what is missing — "Every channel reads zero, so nothing lights at all (dmxMainTexture)" — and a **Set these up for me** button. The second cannot be repaired, and must say so in the same register, ending "Looked for an asset that is not in this project any more". A list, never a count: two missing settings go wrong in two unrelated ways, and "2 settings are missing" tells nobody which of their problems this is |
+
 ### Measurement harness
 
 These judge the instrument rather than the package, and they exist because a measurement
@@ -217,6 +257,7 @@ is entirely the clock.
 | I4 | — | **A-M0-4, specificity.** Capture the same unchanged scene twice | **Identical.** Without this row the sensitivity row above is satisfied by a comparator that calls everything different, which is exactly as useless as one that calls everything the same. Measured: bit-identical, which also says the capture freeze works |
 | I1 | — | Compare against this machine's last capture. **Seed it from the same shape of run you will verify with — a full suite run, normally** | At most **0.25%** of the frame differing, which is the budget the row allows for the edge scatter depth priming leaves behind and nothing larger — the 0.51% run-shape difference below therefore still fails. A size mismatch is refused separately, since it means nothing was compared rather than that nothing moved. Past the budget the row says what moved and writes the images. The first run on a machine seeds the stored frame and reports inconclusive; delete the stored image to re-seed after an intended change |
 | I2 | — | Compare against the committed reference, `VRSL_PERF_HOME` set | Identical **on the reference machine**. Expect a difference anywhere else and treat it as hardware, not regression. Skips cleanly when the variable is unset |
+| I5 | — | **A-M7-1.** A manager with every wiring field cleared, bounced so the clear takes effect, repaired, and bounced again | **The same image as one wired by the prefab.** This is the row the milestone lives or dies on, and it is the only one that can make the claim: comparing GUIDs proves resolution picked the assets the table names, never that the table names the right ones. Rendering proves it, because a wrong asset in any of the ten shows — the wrong compute lights nothing, the wrong lighting shader puts nothing on surfaces, the wrong prepass makes every surface flat grey. **Bounced twice on purpose**: the cull resolves its shader in its constructor and the manager builds its volumetric material once and keeps it, so without the first bounce the row compares two correctly wired managers and passes whatever resolution did. Any row that changes a shader field has to drop the cached materials for the same reason |
 
 **A reference frame is only valid for the run shape that seeded it.** Seeding from a
 filtered run and verifying in a full one reports 1341 pixels differing, identically
