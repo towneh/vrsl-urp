@@ -192,14 +192,15 @@ the repair button and the menu item fill everything, because that is somebody as
 | W8 | — | **A-M7-2.** A decoy asset with the same name as a wiring target, elsewhere in the project | Resolution picks this package's copy, by asset identity rather than by name. The row checks the decoy genuinely collides before it judges anything: if a name search is not ambiguous, resolution had nothing to get wrong and passing means nothing. It stages the collision rather than gating on `com.acchosen.vr-stage-lighting` being installed, because a gated row in a project without that package compiles out and proves nothing |
 | W9 | — | Every consequence string in the table, once per distinct asset | Names what the author will see, not what is null. A consequence that repeats its own field name, or that talks about being null, is the diagnostic this milestone replaces — and is easy to write by accident when adding a field |
 
-**W10 and W11 are hand rows.** Both are judged by looking at an inspector, and A-M7-5
-says so outright: it is judged by reading the message rather than by the message
-existing. Neither has a home in the suite.
+**W10 to W12 are hand rows.** W10 and W11 are judged by looking at an inspector, and
+A-M7-5 says so outright: it is judged by reading the message rather than by the message
+existing. W12 is a player comparison through `bench.sh`, and the suite runs in the editor.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
 | W10 | — | **A-M7-4.** Select a fresh light manager and look at its inspector | One line, `Set up and ready.`, and a fold closed by default. Opening the fold reaches all ten fields, so an author who wants to point one somewhere else on purpose still can. Then clear one of the four optional fields: the fold closes on a plain sentence saying what is currently switched off — "strobe does nothing", "no beams in the air" — and a **Turn these on** button, because an empty optional field is a choice and a warning that never goes away is one nobody reads by the third time |
 | W11 | — | **A-M7-5.** Clear a mandatory field, then clear one whose asset is no longer in the project at all | The first gives a warning naming what you will see rather than what is missing — "Every channel reads zero, so nothing lights at all (dmxMainTexture)" — and a **Set these up for me** button. The second cannot be repaired, and must say so in the same register, ending "Looked for an asset that is not in this project any more". A list, never a count: two missing settings go wrong in two unrelated ways, and "2 settings are missing" tells nobody which of their problems this is |
+| W12 | — | **A-M7-6.** `bench.sh sweep` on `main` and again on the branch, compared against a floor measured on the same machine | **Every row unchanged.** Measured 2026-08-31, RTX 3090, IL2CPP player, 30 configurations: 30 unchanged, none regressed, largest movement -0.595 ms against a 1.086 ms floor. **Read it as a confirmation, not as the evidence.** A floor that size calls almost anything unchanged, and the structural argument is the stronger one: every line this work adds to the runtime assembly is inside `#if UNITY_EDITOR`, so none of it exists in a player, and the only change that does ship is a prefab's strobe-timer reference in a scene that drives DMX from a channel source and never samples the CRT chain. **Derive the floor on the machine that will judge the comparison** — the committed reference is an RTX 3080 run and is refused here, correctly, rather than compared |
 
 ### Measurement harness
 
