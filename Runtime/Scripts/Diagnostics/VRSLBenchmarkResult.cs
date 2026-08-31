@@ -489,7 +489,13 @@ namespace VRSL.URP
             if (!string.IsNullOrEmpty(scriptingBackend) && !string.IsNullOrEmpty(other.scriptingBackend)
              && scriptingBackend != other.scriptingBackend)
             { difference = $"scripting backend: {scriptingBackend} vs {other.scriptingBackend}"; return false; }
-            if (captureWidth != other.captureWidth || captureHeight != other.captureHeight)
+            // Zero means a run captured before the size was recorded, for the same
+            // reason an empty scripting backend does — and refusing on it invalidated
+            // every stored baseline written before the field existed, including the
+            // committed reference against its own machine.
+            if (captureWidth > 0 && captureHeight > 0
+             && other.captureWidth > 0 && other.captureHeight > 0
+             && (captureWidth != other.captureWidth || captureHeight != other.captureHeight))
             {
                 difference = $"render size: {captureWidth}x{captureHeight} vs "
                            + $"{other.captureWidth}x{other.captureHeight}";

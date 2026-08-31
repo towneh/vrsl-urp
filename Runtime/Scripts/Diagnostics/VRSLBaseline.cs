@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using UnityEngine;
 
 namespace VRSL.URP
 {
@@ -112,15 +113,50 @@ namespace VRSL.URP
         /// a refusal naming the difference, not a wrong number — which is why this can be
         /// a default where a committed reference image cannot.</para>
         /// </summary>
-        public static string ReferencePath
+        public static string ReferencePath => ReferenceFor(
+            SystemInfo.graphicsDeviceName, VRSLBenchmarkEnvironment.LocalContext);
+
+        /// <summary>
+        /// The committed run for a given machine and lineage, or null.
+        ///
+        /// Looks for <c>baselines/&lt;gpu&gt;-&lt;context&gt;.json</c> first and falls back
+        /// to <c>baseline.json</c>, so a project holding only the older single file keeps
+        /// working and a second machine is added by dropping a file in rather than by
+        /// replacing anybody's.
+        ///
+        /// <para>Keyed by GPU <b>and</b> context for the same reason the noise floor is:
+        /// an editor run and a player run are two measurements of two different things
+        /// and neither describes the other. The fallback is safe because
+        /// <see cref="Compare"/> refuses on an environment mismatch — picking the wrong
+        /// file gives a refusal naming the difference, never a wrong number.</para>
+        /// </summary>
+        public static string ReferenceFor(string gpu, string context)
         {
-            get
-            {
-                string home = Environment.GetEnvironmentVariable("VRSL_PERF_HOME");
-                if (string.IsNullOrEmpty(home)) return null;
-                string path = Path.Combine(home, "baseline.json");
-                return File.Exists(path) ? path : null;
-            }
+            string home = Environment.GetEnvironmentVariable("VRSL_PERF_HOME");
+            if (string.IsNullOrEmpty(home)) return null;
+
+            string named = Path.Combine(home, "baselines", ReferenceFileName(gpu, context));
+            if (File.Exists(named)) return named;
+
+            string path = Path.Combine(home, "baseline.json");
+            return File.Exists(path) ? path : null;
+        }
+
+        /// <summary>
+        /// The file a machine's own reference would be under, as a name a filesystem
+        /// accepts: GPU names carry spaces and can carry characters Windows refuses in a
+        /// path, and a reference nobody can save is not a reference.
+        /// </summary>
+        public static string ReferenceFileName(string gpu, string context)
+        {
+            string device = string.IsNullOrEmpty(gpu) ? "unknown" : gpu;
+            var name = new StringBuilder(device.Length);
+            foreach (char c in device)
+                name.Append(char.IsLetterOrDigit(c) ? c : '-');
+
+            string lineage = string.IsNullOrEmpty(context)
+                           ? VRSLBenchmarkEnvironment.EditorContext : context;
+            return $"{name}-{lineage}.json";
         }
 
         /// <summary>Where the reference would be, named whether or not it is there, so a

@@ -45,11 +45,22 @@ namespace VRSL.URP.EditorScripts
                     return;
                 }
 
+                // Read first, because which reference to fall back on is a question about
+                // the run being judged rather than about the process doing the judging. A
+                // player run compared from inside the editor would otherwise be matched
+                // against the editor lineage and refused for a difference nobody made.
+                var candidate = Read(candidatePath);
+                if (candidate == null) return;
+
                 // No hardware check is needed before falling back: Compare refuses on an
                 // environment mismatch, so on a machine that did not produce the reference
                 // the answer is a refusal naming the difference, not a fabricated delta.
                 bool defaulted = basePath == null;
-                if (defaulted) basePath = VRSLBaseline.ReferencePath;
+                if (defaulted)
+                    basePath = candidate.environment == null
+                             ? VRSLBaseline.ReferencePath
+                             : VRSLBaseline.ReferenceFor(candidate.environment.graphicsDevice,
+                                                         candidate.environment.context);
 
                 if (basePath == null)
                 {
@@ -66,9 +77,8 @@ namespace VRSL.URP.EditorScripts
                 if (defaulted)
                     Debug.Log($"[VRSL bench] no -baseline given, using the reference: {basePath}");
 
-                var baseline  = Read(basePath);
-                var candidate = Read(candidatePath);
-                if (baseline == null || candidate == null) return;
+                var baseline = Read(basePath);
+                if (baseline == null) return;
 
                 var comparison = VRSLBaseline.Compare(baseline, candidate, force);
 
