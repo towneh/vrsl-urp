@@ -3,6 +3,7 @@
 #if UNITY_EDITOR
 using System.Collections;
 using System.Collections.Generic;
+using System.Text;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -248,6 +249,76 @@ namespace VRSL.URP.Tests
                 AssertLit(frame, "a scene with no lights");
             }
             finally { if (frame != null) Object.DestroyImmediate(frame); }
+        }
+
+        /// <summary>
+        /// D6. A prepass layer mask that excludes a fixture's layer is reported, and the
+        /// layer is named.
+        ///
+        /// This is the configuration where fixtures silently do not draw at all, so the
+        /// failure this row guards against is the command staying quiet — which is why
+        /// the negative half is here too. A check that reports a mismatch on every mask
+        /// would satisfy the first assertion alone and be worthless.
+        ///
+        /// Written against the verdict rather than against a renderer on purpose. Reaching
+        /// it through the menu item means a UniversalRendererData with a real mask on it,
+        /// which means editing the consuming project's pipeline asset — and this package
+        /// does not change a project's renderer settings even for a moment. What the row
+        /// claims is a property of the decision, and the decision is a pure function.
+        /// </summary>
+        [Test]
+        public void D6_AnExcludedFixtureLayerIsReportedAndNamed()
+        {
+            const int FixtureLayer = 9;
+            var onLayer = new List<int> { FixtureLayer };
+            string named = LayerMask.LayerToName(FixtureLayer);
+            named = string.IsNullOrEmpty(named) ? $"layer {FixtureLayer}"
+                                                : $"{named} ({FixtureLayer})";
+
+            // Priming Forced, layer excluded: the fixtures do not draw, so this must fail
+            // loudly and name which layer to add.
+            var report = new StringBuilder();
+            int problems = VRSLDepthPolicyReport.LayerMaskVerdict(
+                ~0 & ~(1 << FixtureLayer), onLayer, priming: true, mayPrime: false, report);
+            Assert.AreEqual(1, problems, $"a fixture on {named} with the prepass excluding "
+                          + "that layer and priming Forced is the configuration where "
+                          + "fixtures silently do not draw, and it was not reported");
+            StringAssert.Contains("FAIL", report.ToString());
+            StringAssert.Contains(named, report.ToString(),
+                "the report has to name the layer. 'A layer is excluded' leaves an author "
+              + "to find which of thirty-two it was");
+
+            // Same mask, priming off: real but not biting, so it is said without being
+            // counted against the verdict.
+            report = new StringBuilder();
+            problems = VRSLDepthPolicyReport.LayerMaskVerdict(
+                ~0 & ~(1 << FixtureLayer), onLayer, priming: false, mayPrime: false, report);
+            Assert.AreEqual(0, problems, "priming is off, so an excluded layer is not yet a "
+                          + "fault and must not be counted as one");
+            StringAssert.Contains(named, report.ToString());
+
+            // The layer included. Without this half, a verdict that flagged every mask
+            // would pass everything above.
+            report = new StringBuilder();
+            problems = VRSLDepthPolicyReport.LayerMaskVerdict(
+                ~0, onLayer, priming: true, mayPrime: false, report);
+            Assert.AreEqual(0, problems, "the mask covers the fixture layer, so there is "
+                          + "nothing to report");
+            StringAssert.DoesNotContain("FAIL", report.ToString());
+
+            // No fixtures found is not the same answer as a mask that checks out, and
+            // reporting it as a pass is reassurance nobody earned.
+            report = new StringBuilder();
+            VRSLDepthPolicyReport.LayerMaskVerdict(
+                ~0, new List<int>(), priming: true, mayPrime: false, report);
+            StringAssert.Contains("NOT CHECKED", report.ToString());
+
+            // Unreadable is a third answer again — the mask field moving between URP
+            // versions must report, not throw and not quietly pass.
+            report = new StringBuilder();
+            VRSLDepthPolicyReport.LayerMaskVerdict(
+                null, onLayer, priming: true, mayPrime: false, report);
+            StringAssert.Contains("Could not read", report.ToString());
         }
 
         /// <summary>Percentage of the frame carrying any light at all.</summary>

@@ -265,67 +265,14 @@ namespace VRSL.URP.EditorScripts
         {
             // Read through SerializedObject: the opaque layer mask is not public API on
             // every URP version, and a missing field should report rather than throw.
+            // Null carries "could not be read" through to the verdict, which treats it as
+            // unchecked rather than as any particular mask.
             var so = new SerializedObject(universal);
             var maskProperty = so.FindProperty("m_OpaqueLayerMask");
-            if (fixtureLayers.Count == 0)
-            {
-                // Reported rather than passed over. "Nothing to check" and "checked and
-                // fine" are different answers and only one of them is reassurance.
-                report.AppendLine("      NOT CHECKED — no VRSL fixtures in the open scene. "
-                                + "Opaque layer mask is "
-                                + (maskProperty != null ? DescribeMask(maskProperty.intValue)
-                                                        : "unreadable")
-                                + ". A fixture on a layer outside that, with priming on, does "
-                                + "not draw at all.");
-                return 0;
-            }
+            int? mask = maskProperty != null ? maskProperty.intValue : (int?)null;
 
-            if (maskProperty == null)
-            {
-                report.AppendLine("      Could not read this renderer's opaque layer mask, so "
-                                + "it was not checked. Confirm by hand that it includes the "
-                                + "layers your fixtures sit on.");
-                return 0;
-            }
-
-            int mask = maskProperty.intValue;
-            var excluded = new List<string>();
-            foreach (int layer in fixtureLayers)
-                if ((mask & (1 << layer)) == 0)
-                    excluded.Add($"{LayerMask.LayerToName(layer)} ({layer})");
-
-            if (excluded.Count == 0)
-            {
-                report.AppendLine("      Opaque layer mask covers every layer the scene's "
-                                + "fixtures are on.");
-                return 0;
-            }
-
-            string layers = string.Join(", ", excluded);
-            if (priming)
-            {
-                report.AppendLine($"FAIL  Fixtures are on {layers}, which this renderer's opaque "
-                                + "layer mask excludes, and depth priming is on. Those fixtures "
-                                + "will not draw at all. Add the layer to the mask, or turn "
-                                + "depth priming off.");
-                return 1;
-            }
-
-            if (mayPrime)
-            {
-                report.AppendLine($"      Fixtures are on {layers}, which this renderer's "
-                                + "opaque layer mask excludes, and depth priming is on Auto. "
-                                + "Auto primes only when something else in the frame already "
-                                + "needs a depth prepass, so those fixtures draw until "
-                                + "something asks for one and then stop. Add the layer to the "
-                                + "mask, or set priming to Disabled to settle it either way.");
-                return 0;
-            }
-
-            report.AppendLine($"      Fixtures are on {layers}, which the opaque layer mask "
-                            + "excludes. Harmless while depth priming is off, and those "
-                            + "fixtures disappear the moment it is turned on.");
-            return 0;
+            return VRSLDepthPolicyReport.LayerMaskVerdict(
+                mask, fixtureLayers, priming, mayPrime, report);
         }
 
         /// <summary>
@@ -466,19 +413,6 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>The layers a mask covers, named rather than as a bit pattern.</summary>
-        static string DescribeMask(int mask)
-        {
-            if (mask == ~0) return "everything";
-            var named = new List<string>();
-            for (int layer = 0; layer < 32; layer++)
-            {
-                if ((mask & (1 << layer)) == 0) continue;
-                string name = LayerMask.LayerToName(layer);
-                named.Add(string.IsNullOrEmpty(name) ? layer.ToString() : name);
-            }
-            return named.Count == 0 ? "nothing" : string.Join(", ", named);
-        }
-
         /// <summary>Layers occupied by VRSL fixtures in the open scene.</summary>
         static HashSet<int> FixtureLayers(HashSet<Renderer> fixtureRenderers)
         {
