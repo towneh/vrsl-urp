@@ -49,7 +49,9 @@ measure rather than decode, so they are the slow part of a full run; H7 is a pla
 and costs nothing, as are H8 and H9.
 
 The **Wiring** rows (W1-W9) and the **Image regression** ones are in it too. The wiring
-rows are editor-only and cost nothing; W10 and W11 are hand rows and are marked as such.
+rows are editor-only and cost nothing. W10 to W12 are hand rows and are marked as such:
+two are judged by looking at an inspector, and W12 is a player comparison through
+`bench.sh`.
 
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
 in the project and holds the Basis integration rows (B7-B9 and B11 below). Those

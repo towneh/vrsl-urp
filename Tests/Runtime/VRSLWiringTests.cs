@@ -86,6 +86,10 @@ namespace VRSL.URP.Tests
                 // and an author who set something unusual on purpose would find it
                 // silently undone.
                 var somebodyElses = VRSLWiring.Load(FieldNamed("dmxSpinTimerTexture"));
+                Assert.IsFalse(FieldNamed("dmxMainTexture").Optional,
+                    "this row subtracts one from the mandatory count for the overridden "
+                  + "field, so it fails by one if that field is ever made optional - and "
+                  + "the failure would name resolution rather than the table");
                 manager.dmxMainTexture = (RenderTexture)somebodyElses;
 
                 var result = VRSLWiring.Resolve(manager);
@@ -223,7 +227,10 @@ namespace VRSL.URP.Tests
                 // nothing here is the enable path doing the work instead.
                 VRSLWiring.ResolveOnValidate(manager);
 
-                Assert.IsNotEmpty(VRSLWiring.Empty(manager),
+                // The mandatory subset, not every field: the optional four are never
+                // filled by this path, so judging all ten would leave the assertion
+                // non-empty whether or not the resolve was deferred.
+                Assert.IsNotEmpty(Required(VRSLWiring.Empty(manager)),
                     "resolution ran during OnValidate rather than after it, which is where "
                   + "import and mid-edit serialisation live");
 
@@ -294,7 +301,7 @@ namespace VRSL.URP.Tests
 
                 // And the validate path, deferred, which is what an inspector edit runs.
                 VRSLWiring.ResolveOnValidate(manager);
-                Assert.IsNotEmpty(VRSLWiring.Empty(manager),
+                Assert.IsNotEmpty(Required(VRSLWiring.Empty(manager)),
                     "validate resolved synchronously rather than queueing");
                 VRSLWiring.FlushPending(manager);
                 yield return null;
