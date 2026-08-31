@@ -277,7 +277,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8816076597849164941, guid: 49912180c2c2cec3d31d578111f9c053, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -786,7 +787,8 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 180.00002
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3780291163875738184, guid: c95416bf6eef62f2a394420e7f9eb36d, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -829,6 +831,8 @@ MonoBehaviour:
     AssetBundleName: BasisSceneRoot
     AssetBundleDescription: Scene "BasisSceneRoot"
     AssetBundleIcon: {fileID: 0}
+    Tags: []
+    ContentGroupId: 
   SpawnPoint: {fileID: 340738736}
   RespawnHeight: -100
   RespawnCheckTimer: 0.1
@@ -1323,7 +1327,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: VRSL-DMX-Static-MultiLightBar-V-15CH (CH 410)
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 2939908369052128233, guid: a0940e84628bd52352bbe8a8c7825f32, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -1499,7 +1504,8 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3780291163875738184, guid: c95416bf6eef62f2a394420e7f9eb36d, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -1976,7 +1982,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 5976316599607177699, guid: 97c0bfb4d24415d89174bdeec0068d50, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -2722,7 +2729,8 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3780291163875738184, guid: c95416bf6eef62f2a394420e7f9eb36d, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -2976,7 +2984,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 5976316599607177699, guid: 97c0bfb4d24415d89174bdeec0068d50, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -3066,7 +3075,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8816076597849164941, guid: 49912180c2c2cec3d31d578111f9c053, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -3482,7 +3492,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: VRSL-DMX-Static-MultiLightBar-V-15CH (CH 425)
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 2939908369052128233, guid: a0940e84628bd52352bbe8a8c7825f32, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -3620,7 +3631,8 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 180.00002
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3780291163875738184, guid: c95416bf6eef62f2a394420e7f9eb36d, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -3870,7 +3882,8 @@ PrefabInstance:
       propertyPath: m_Name
       value: VRSL-DMX-Static-MultiLightBar-V-15CH (CH 440)
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 2939908369052128233, guid: a0940e84628bd52352bbe8a8c7825f32, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -3988,7 +4001,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8866345063374979581, guid: 1d6e08d6803e8af6b1c636ef1fdfa3c5, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -4102,7 +4116,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8866345063374979581, guid: 1d6e08d6803e8af6b1c636ef1fdfa3c5, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -4346,7 +4361,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8866345063374979581, guid: 1d6e08d6803e8af6b1c636ef1fdfa3c5, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -4597,7 +4613,8 @@ PrefabInstance:
       propertyPath: publicVariablesUnityEngineObjects.Array.size
       value: 0
       objectReference: {fileID: 0}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 8866345063374979581, guid: 1d6e08d6803e8af6b1c636ef1fdfa3c5, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -4745,6 +4762,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: VRSL-DMX-Static-DiscoBall-V
       objectReference: {fileID: 0}
+    - target: {fileID: 7053024667453560164, guid: 601028a8877b69560ad548ec4a4bce57, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7053024667453560171, guid: 601028a8877b69560ad548ec4a4bce57, type: 3}
       propertyPath: _syncMethod
       value: 1
@@ -4777,7 +4798,8 @@ PrefabInstance:
       propertyPath: serializationData.Prefab
       value: 
       objectReference: {fileID: 7660880176422083061, guid: 601028a8877b69560ad548ec4a4bce57, type: 3}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 7053024667453560171, guid: 601028a8877b69560ad548ec4a4bce57, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []
@@ -4862,7 +4884,8 @@ PrefabInstance:
       propertyPath: serializationData.Prefab
       value: 
       objectReference: {fileID: 7506158748614765239, guid: 91cec4a5ecd89a3b271d226cf9bc78f4, type: 3}
-    m_RemovedComponents: []
+    m_RemovedComponents:
+    - {fileID: 3395647845367448596, guid: 91cec4a5ecd89a3b271d226cf9bc78f4, type: 3}
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
     m_AddedComponents: []

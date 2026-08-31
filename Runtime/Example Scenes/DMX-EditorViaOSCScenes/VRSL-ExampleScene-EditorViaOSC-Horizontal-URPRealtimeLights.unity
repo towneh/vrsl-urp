@@ -4915,7 +4915,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 7053024667453560164, guid: 53bc7bd2ad2eded5995bf4784bb84988, type: 3}
       propertyPath: m_IsActive
-      value: 1
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7053024667453560171, guid: 53bc7bd2ad2eded5995bf4784bb84988, type: 3}
       propertyPath: _syncMethod
