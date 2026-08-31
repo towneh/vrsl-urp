@@ -116,25 +116,26 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>
-        /// The ten fields, behind a fold labelled for who opens it.
+        /// This manager's wiring fields, behind a fold labelled for who opens it. Ten on
+        /// the DMX manager and five on the AudioLink one, so nothing here may quote a
+        /// count or name a field only one of them has.
         ///
         /// Closed by default because an author has no reason to look, and present at all
-        /// because somebody occasionally wants to point one somewhere else on purpose —
+        /// because somebody occasionally wants to point one somewhere else on purpose,
         /// which resolution then leaves alone.
         /// </summary>
         void DrawFold(VRSLWiringField[] fields)
         {
             Folded = EditorGUILayout.Foldout(
-                Folded, "Assets this uses — the required ones fill in automatically", true);
+                Folded, "Assets this uses, and which ones fill in automatically", true);
             if (!Folded) return;
 
             using (new EditorGUI.IndentLevelScope())
             {
                 EditorGUILayout.LabelField(
                     "The required ones are set when the scene loads. The rest stay empty "
-                  + "until you ask for them, because empty means something on those — no "
-                  + "tile culling, no surface prepass, no beams, no strobe timing. "
-                  + "Anything you set yourself is left alone.",
+                  + "until you ask for them, because on those an empty box is how you turn "
+                  + "that feature off. Anything you set yourself is left alone.",
                     EditorStyles.wordWrappedMiniLabel);
 
                 foreach (var field in fields)
@@ -152,11 +153,22 @@ namespace VRSL.URP.EditorScripts
         /// It reports rather than acting in silence: a component that quietly fixes
         /// itself is one whose author never learns their scene was wrong, which is the
         /// first risk this milestone carries.
+        ///
+        /// <para>A dialog only when something could not be filled, because
+        /// <c>EditorUtility.DisplayDialog</c> draws a warning icon whatever the message
+        /// says and there is no API to change it. Reporting a clean repair through one
+        /// puts a warning on a deliberate act that worked, which is exactly the
+        /// choice-against-fault distinction the panel above spends its wording making.
+        /// A clean repair says so in the Console and lets the panel flipping to "set up
+        /// and ready" be the acknowledgement — it is under the cursor that just
+        /// pressed the button. Same split as the automatic path, which warns only when
+        /// something is unresolved.</para>
         /// </summary>
         internal static void Repair(IEnumerable<Object> managers)
         {
             var report = new System.Text.StringBuilder();
             int touched = 0;
+            int stuck   = 0;
 
             foreach (var manager in managers)
             {
@@ -168,14 +180,22 @@ namespace VRSL.URP.EditorScripts
                 // is exactly the case those are held back from the automatic path for.
                 var result = VRSLWiring.Resolve(manager, includeOptional: true);
                 touched++;
+                stuck += result.Unresolved.Count;
                 report.Append(manager.name).Append(": ").AppendLine(result.Describe()).AppendLine();
             }
 
-            EditorUtility.DisplayDialog(
-                "VRSL wiring",
-                touched == 0 ? "Nothing selected that has wiring to set up."
-                             : report.ToString().TrimEnd(),
-                "OK");
+            // Nothing to work on is worth a dialog of its own: the author asked for
+            // something and it did not happen, and there is no panel to watch change.
+            if (touched == 0)
+            {
+                EditorUtility.DisplayDialog(
+                    "VRSL wiring", "Nothing selected that has wiring to set up.", "OK");
+                return;
+            }
+
+            string text = report.ToString().TrimEnd();
+            if (stuck > 0) EditorUtility.DisplayDialog("VRSL wiring", text, "OK");
+            else           Debug.Log("[VRSL] " + text);
         }
 
         /// <summary>"a and b", "a, b and c" — a list an author reads rather than one a

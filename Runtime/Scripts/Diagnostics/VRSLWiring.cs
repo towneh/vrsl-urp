@@ -405,15 +405,19 @@ namespace VRSL.URP
             var text = new System.Text.StringBuilder();
             if (Filled.Count > 0)
             {
-                text.AppendLine($"Filled in {Filled.Count} setting(s) that were empty:");
+                text.AppendLine(Filled.Count == 1
+                    ? "Filled in one setting that was empty:"
+                    : $"Filled in {Filled.Count} settings that were empty:");
                 foreach (var f in Filled)
                     text.AppendLine($"  • {Capitalise(f.Consequence)} ({f.Field}).");
             }
             if (Unresolved.Count > 0)
             {
                 if (Filled.Count > 0) text.AppendLine();
-                text.AppendLine($"{Unresolved.Count} could not be filled in, and this is what "
-                              + "you will see:");
+                text.AppendLine(Unresolved.Count == 1
+                    ? "One setting could not be filled in, and this is what you will see:"
+                    : $"{Unresolved.Count} settings could not be filled in, and this is what "
+                    + "you will see:");
                 foreach (var f in Unresolved)
                     text.AppendLine($"  • {Capitalise(f.Consequence)} ({f.Field}). Looked "
                                   + $"for {PathOrMissing(f)}.");
