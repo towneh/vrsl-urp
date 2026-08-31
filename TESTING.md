@@ -392,11 +392,20 @@ symptom reads as a culling or LOD fault.
 Basis ships priming `Forced` on its desktop renderer and `Disabled` elsewhere, so both
 are live in one project and both need checking.
 
-Run **`VRSL → URP → Validate Renderer Setup`** first. It reports the priming and
-rendering modes, whether the prepass layer mask covers the layers the scene's fixtures
-are on, and any shader drawing opaque without both depth passes, whether this package
-ships it or a fixture in the scene carries a custom one — which is most of D1 to D4
-answered before a scene is even entered.
+Run **`VRSL → URP → Validate Renderer Setup`** first, as an opening diagnostic rather
+than as a substitute for the rows. It reports the priming and rendering modes, whether
+the prepass layer mask covers the layers the scene's fixtures are on, and any shader
+drawing opaque without both depth passes, whether this package ships it or a fixture in
+the scene carries a custom one.
+
+**What it cannot tell you is whether a depth pass that exists is the right one.** It
+reads pass tags, so it settles presence and nothing beyond it: a `DepthOnly` pass whose
+vertex stage displaces differently from its forward pass, clips alpha differently, or
+skips the collapse to degenerate geometry passes this check and is culled from the frame
+anyway. Nor does it reach D3's zero-intensity behaviour, or the MSAA a camera actually
+renders with — it reads the sample count off the pipeline asset, which a camera can
+override. D1 to D4 stay required render checks, and D1 is the one that catches a
+mismatch.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|

@@ -217,8 +217,12 @@ Three things, if you are authoring a shader rather than configuring a project.
    and include chain as their forward pass for exactly this reason — copy that shape.
 3. **No scene light is needed for depth.** It comes from the pipeline.
 
-`VRSL → URP → Validate Renderer Setup` checks the open scene against all of this and
-names anything that would not draw.
+`VRSL → URP → Validate Renderer Setup` is where to start. It names any opaque shader in
+the open scene with a depth pass missing, and any fixture on a layer the prepass
+excludes. It cannot check point 2 above: pass tags say a depth pass is present, never
+that its vertex stage matches the forward one, so a pass that displaces differently or
+clips differently reads as fine there and still vanishes under priming. That one is
+caught by looking at the fixtures with priming on.
 
 ## Runtime API
 
