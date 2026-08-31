@@ -89,15 +89,34 @@ namespace VRSL.URP.EditorScripts
             var defaultProperty = assetSo.FindProperty("m_DefaultRendererIndex");
             if (defaultProperty != null) defaultIndex = defaultProperty.intValue;
 
-            var cameras = Object.FindObjectsByType<Camera>(
+            // FindObjectsInactive.Exclude drops cameras on inactive GameObjects and
+            // nothing else, so a disabled Camera component on an active object survives
+            // it. That camera renders through nothing, and letting it through would put
+            // its renderer into `used` and silence the "no enabled camera picks this one"
+            // line below on a renderer that genuinely nothing selects.
+            var found = Object.FindObjectsByType<Camera>(
                 FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var cameras = new List<Camera>();
+            int switchedOff = 0;
+            foreach (var candidate in found)
+            {
+                if (candidate == null) continue;
+                if (candidate.isActiveAndEnabled) cameras.Add(candidate);
+                else switchedOff++;
+            }
 
             report.AppendLine("Cameras in this scene:");
-            if (cameras.Length == 0)
+            if (cameras.Count == 0)
             {
-                report.AppendLine("      NOT CHECKED — the scene has no enabled camera, so "
-                                + "which renderer applies could not be worked out. Open a "
-                                + "scene with your own camera in it for this to mean anything.");
+                report.AppendLine("      NOT CHECKED — the scene has no camera switched on, "
+                                + "so which renderer applies could not be worked out. "
+                                + (switchedOff > 0
+                                    ? $"There {(switchedOff == 1 ? "is" : "are")} "
+                                    + $"{switchedOff} switched off. Switch one on, or open a "
+                                    + "scene with your own camera in it, for this to mean "
+                                    + "anything."
+                                    : "Open a scene with your own camera in it for this to "
+                                    + "mean anything."));
                 report.AppendLine();
                 return new HashSet<int>();
             }
@@ -105,7 +124,6 @@ namespace VRSL.URP.EditorScripts
             var used = new HashSet<int>();
             foreach (var camera in cameras)
             {
-                if (camera == null) continue;
                 int index = defaultIndex;
                 string how = "the asset's default";
 
@@ -137,6 +155,14 @@ namespace VRSL.URP.EditorScripts
                 report.AppendLine($"      {camera.name} renders through renderer {index + 1} "
                                 + $"({name}), {how}.");
             }
+
+            // Said rather than left out. A camera missing from a block headed "Cameras in
+            // this scene" is a puzzle; one line naming why it is absent is not.
+            if (switchedOff > 0)
+                report.AppendLine($"      {switchedOff} more "
+                                + $"{(switchedOff == 1 ? "camera is" : "cameras are")} "
+                                + "switched off and not counted here. A camera that is off "
+                                + "renders through no renderer.");
 
             if (used.Count > 1)
                 report.AppendLine("      These cameras do not share a renderer, so the settings "
