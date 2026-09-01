@@ -123,6 +123,13 @@ namespace VRSL.URP
             var warm = VRSLBenchmark.WarmUpSession(settings, null, run);
             while (warm.MoveNext()) yield return warm.Current;
             stampEnvironment(run);
+            // The stamp reads the pipeline asset, and a host that rewrites it during
+            // startup can do so after this point — so the recorded MSAA was the host's
+            // latest whim rather than what the rows were measured at. Take it from what
+            // the capture is holding instead. Two halves of one matched pair recorded
+            // 2x and 1x while their VRSL-disabled frames agreed to 0.001 ms, which is
+            // what a stamp disagreeing with its own run looks like.
+            if (determinism.PinnedMsaa > 0) run.environment.msaaSamples = determinism.PinnedMsaa;
             // The size actually rendered, which is not the screen's.
             run.environment.captureWidth  = VRSLBenchmarkScene.CaptureWidth;
             run.environment.captureHeight = VRSLBenchmarkScene.CaptureHeight;
@@ -165,9 +172,12 @@ namespace VRSL.URP
                         // measured here is how long a frame takes.
                         Debug.Log($"[VRSL sweep] {config} ({++done} of {total})");
 
-                        // Again per configuration: a host camera that appears mid-run
-                        // would otherwise own every row after it.
+                        // Again per configuration, both of them: a host camera that
+                        // appears mid-run would otherwise own every row after it, and a
+                        // host that rewrites its pipeline asset mid-run would otherwise
+                        // move MSAA under the capture.
                         VRSLBenchmarkScene.SuppressOtherCameras(camera, suppressed);
+                        determinism.Reassert();
 
                         var capture = VRSLBenchmark.CaptureRow(
                             settings, config, run, expectedTileCamera: camera);

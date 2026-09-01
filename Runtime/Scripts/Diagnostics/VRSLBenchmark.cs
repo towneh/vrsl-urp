@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using Unity.Profiling;
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 namespace VRSL.URP
 {
@@ -194,6 +196,9 @@ namespace VRSL.URP
             readonly int    _vSyncWas;
             readonly int    _targetWas;
             readonly UnityEngine.Random.State _randomWas;
+            readonly UniversalRenderPipelineAsset _urp;
+            readonly int    _msaaWas;
+            readonly float  _capturePinned;
 
             public DeterminismScope(VRSLBenchmarkSettings settings)
             {
@@ -201,12 +206,44 @@ namespace VRSL.URP
                 _vSyncWas   = QualitySettings.vSyncCount;
                 _targetWas  = Application.targetFrameRate;
                 _randomWas  = UnityEngine.Random.state;
+                _urp        = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+                _msaaWas    = _urp != null ? _urp.msaaSampleCount : 0;
 
-                Time.captureDeltaTime      = settings.captureDeltaTime;
+                _capturePinned = settings.captureDeltaTime;
+
+                Time.captureDeltaTime      = _capturePinned;
                 QualitySettings.vSyncCount = 0;
                 Application.targetFrameRate = -1;
                 UnityEngine.Random.InitState(settings.randomSeed);
             }
+
+            /// <summary>
+            /// Put back anything a host has changed under the capture.
+            /// </summary>
+            /// <remarks>
+            /// MSAA is not this scope's to choose — a run measures the project's own
+            /// setting — but it is the scope's to hold still, and a host that rewrites
+            /// its pipeline asset during startup does not respect a value read once.
+            /// Two sweeps an hour apart on one tree came back at 2x and 1x, which
+            /// turned a matched comparison into a pair differing in more than the
+            /// change under test.
+            ///
+            /// Called between configurations for the same reason the camera
+            /// suppression is: what a host does to its own settings does not
+            /// necessarily happen before the matrix starts.
+            /// </remarks>
+            public void Reassert()
+            {
+                Time.captureDeltaTime      = _capturePinned;
+                QualitySettings.vSyncCount = 0;
+                Application.targetFrameRate = -1;
+                if (_urp != null && _msaaWas > 0 && _urp.msaaSampleCount != _msaaWas)
+                    _urp.msaaSampleCount = _msaaWas;
+            }
+
+            /// <summary>The MSAA the capture is holding, so a report states what it
+            /// measured at rather than what the asset happens to say afterwards.</summary>
+            public int PinnedMsaa => _msaaWas;
 
             public void Dispose()
             {
@@ -216,6 +253,7 @@ namespace VRSL.URP
                 QualitySettings.vSyncCount  = _vSyncWas;
                 Application.targetFrameRate = _targetWas;
                 UnityEngine.Random.state    = _randomWas;
+                if (_urp != null && _msaaWas > 0) _urp.msaaSampleCount = _msaaWas;
             }
         }
 
