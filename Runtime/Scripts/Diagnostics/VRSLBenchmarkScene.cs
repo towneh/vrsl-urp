@@ -360,6 +360,56 @@ namespace VRSL.URP
             return transform != null ? transform.GetComponent<Camera>() : null;
         }
 
+        /// <summary>
+        /// Switch off every rendering camera but <paramref name="keep"/>, adding the
+        /// ones switched off to <paramref name="into"/> so they can be put back.
+        /// </summary>
+        /// <remarks>
+        /// Every rendering camera runs the whole VRSL pass chain, so a second one
+        /// makes the timings a sum of two views and leaves the tile counters
+        /// describing whichever rendered last — measured 2026-08-31, where a host's
+        /// own camera owned every counter in a thirty-row sweep while the sweep's
+        /// camera owned every timing it was labelled with.
+        ///
+        /// Call it again between configurations rather than once at the start. A host
+        /// brings its camera up during its own startup, which can land after the
+        /// matrix has begun; that is precisely how this went unnoticed.
+        ///
+        /// Compared by reference, not by name — Unity does not make camera names
+        /// unique, and a host camera sharing this one's name would otherwise be left
+        /// running.
+        /// </remarks>
+        /// <returns>How many this call switched off.</returns>
+        public static int SuppressOtherCameras(Camera keep, List<Camera> into)
+        {
+            int suppressed = 0;
+            foreach (var camera in Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude))
+            {
+                if (camera == null || !camera.enabled) continue;
+                if (ReferenceEquals(camera, keep)) continue;
+                camera.enabled = false;
+                into?.Add(camera);
+                suppressed++;
+            }
+            return suppressed;
+        }
+
+        /// <summary>Put back what <see cref="SuppressOtherCameras"/> switched off.</summary>
+        /// <remarks>
+        /// Unity does not unwind a coroutine when its host is destroyed, so stopping
+        /// play mode by hand never reaches the caller's finally and these stay off.
+        /// That costs nothing: leaving play mode discards the scene's runtime state
+        /// anyway, which is the same reason the directional-light restore is about the
+        /// session rather than about the author's saved scene.
+        /// </remarks>
+        public static void RestoreCameras(List<Camera> suppressed)
+        {
+            if (suppressed == null) return;
+            foreach (var camera in suppressed)
+                if (camera != null) camera.enabled = true;
+            suppressed.Clear();
+        }
+
         /// <summary>Cameras that will actually render this frame. More than the
         /// sweep's own means every pass runs more than once and the cost is of both
         /// views together.</summary>

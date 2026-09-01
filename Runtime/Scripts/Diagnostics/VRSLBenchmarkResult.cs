@@ -389,6 +389,20 @@ namespace VRSL.URP
         /// Empty on a run captured before this was recorded.</summary>
         public string scriptingBackend    = "";
 
+        /// <summary>
+        /// Whether the run had the frame to itself, with nothing else rendering.
+        /// </summary>
+        /// <remarks>
+        /// Every rendering camera runs the whole VRSL pass chain, so a run sharing the
+        /// frame measured more views than the one it is labelled with. False on a run
+        /// captured before this was recorded, which is the same answer such a run
+        /// deserves: it shared the frame or nobody checked, and neither is comparable
+        /// with a run that did not. Unlike the other late fields, this one refuses on
+        /// absence for exactly that reason — what changed is what was measured, not
+        /// just what was written down.
+        /// </remarks>
+        public bool   soleCamera;
+
         /// <summary>What <see cref="scriptingBackend"/> would say for the assembly this
         /// is compiled into.</summary>
         public static string LocalScriptingBackend =>
@@ -504,6 +518,12 @@ namespace VRSL.URP
             if (msaaSamples         != other.msaaSamples)         { difference = $"MSAA: {msaaSamples}x vs {other.msaaSamples}x"; return false; }
             if (xrActive            != other.xrActive)            { difference = $"XR: {xrActive} vs {other.xrActive}"; return false; }
             if (context             != other.context)             { difference = $"context: {context} vs {other.context}"; return false; }
+            if (soleCamera          != other.soleCamera)
+            {
+                difference = $"frame ownership: {(soleCamera ? "the sweep alone" : "shared with other cameras")}"
+                           + $" vs {(other.soleCamera ? "the sweep alone" : "shared with other cameras")}";
+                return false;
+            }
             // Empty means a run captured before this was recorded, which is not the
             // same as a run that disagrees — refusing on it would invalidate every
             // stored baseline for a field neither of them was ever asked about.

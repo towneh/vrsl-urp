@@ -92,6 +92,7 @@ namespace VRSL.URP
             // the finally nor the host — the host reports that case for itself.
             bool completed = false;
             VRSLQualityPreset.Session quality = null;
+            List<Camera> suppressed = null;
             try
             {
             // Allocated inside the try, and first. The finally below is the only
@@ -102,9 +103,18 @@ namespace VRSL.URP
             { name = "VRSL sweep target" };
             camera.targetTexture = target;
 
-            // Counted here and again after the matrix. A host that brings its own
-            // camera up during startup can do it after this point, and a count taken
-            // only here passes on exactly the runs the note is about.
+            // The sweep takes the frame for itself. Every rendering camera runs the
+            // whole VRSL pass chain, so anything else in the frame makes the timings a
+            // sum of two views and leaves the tile counters describing whichever
+            // rendered last — which is what a thirty-row sweep measured on 2026-08-31,
+            // every counter belonging to a host camera nobody posed.
+            //
+            // Done again between configurations, because a host can bring its camera up
+            // after this point. The counts and the two reports below are kept as the
+            // check that it worked: suppressing and then trusting it is the shape of
+            // fault this whole exercise exists to remove.
+            suppressed = new List<Camera>();
+            VRSLBenchmarkScene.SuppressOtherCameras(camera, suppressed);
             int camerasAtStart = VRSLBenchmarkScene.RenderingCameraCount();
 
             quality = VRSLQualityPreset.Session.Begin(manager);
@@ -155,6 +165,10 @@ namespace VRSL.URP
                         // measured here is how long a frame takes.
                         Debug.Log($"[VRSL sweep] {config} ({++done} of {total})");
 
+                        // Again per configuration: a host camera that appears mid-run
+                        // would otherwise own every row after it.
+                        VRSLBenchmarkScene.SuppressOtherCameras(camera, suppressed);
+
                         var capture = VRSLBenchmark.CaptureRow(
                             settings, config, run, expectedTileCamera: camera);
                         while (capture.MoveNext()) yield return capture.Current;
@@ -170,11 +184,26 @@ namespace VRSL.URP
             ReportOtherCameras(run, camerasAtStart);
             ReportTileCamera(run, camera);
 
+            // Recorded from what happened rather than from what was attempted, so a
+            // comparison refuses across the change instead of quietly spanning it: a
+            // run that shared the frame measured more than this one did.
+            run.environment.soleCamera =
+                VRSLBenchmarkScene.RenderingCameraCount() <= 1
+                && AllRowsUsedTheSweepsCamera(run);
+
+            if (suppressed.Count > 0)
+                run.Note($"{suppressed.Count} other camera(s) were switched off for the "
+                       + "matrix, so these figures are of the sweep's own view rather than "
+                       + "of every camera in the frame together. They are put back "
+                       + "afterwards, and a run captured while sharing the frame is not "
+                       + "comparable with this one.");
+
             completed = true;
             }
             finally
             {
                 quality?.Restore();
+                VRSLBenchmarkScene.RestoreCameras(suppressed);
                 camera.targetTexture = null;
                 if (target != null) { target.Release(); UnityEngine.Object.DestroyImmediate(target); }
 #if UNITY_EDITOR
@@ -189,6 +218,17 @@ namespace VRSL.URP
                                   + "the exception; nothing was written.";
             }
             if (completed) outcome.run = run;
+        }
+
+        /// <summary>Whether every row's tile figures came from the sweep's own camera.
+        /// Rows where the cull did not run are not evidence either way and are
+        /// skipped.</summary>
+        static bool AllRowsUsedTheSweepsCamera(VRSLBenchmarkRun run)
+        {
+            foreach (var row in run.rows)
+                if (!string.IsNullOrEmpty(row.counters.tileCamera)
+                 && !row.counters.tileCameraAsExpected) return false;
+            return true;
         }
 
         /// <summary>
