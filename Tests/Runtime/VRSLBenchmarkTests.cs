@@ -255,6 +255,12 @@ namespace VRSL.URP.Tests
 
             // Comfortably past the floor, and the sign says which way.
             var slower = CompareSynthetic(before: 1.000, after: 1.400, floor: floor);
+            // Named separately because Missing is what an unmeasured row reports, and
+            // "expected Regressed, was Missing" says nothing about which of the two runs
+            // was not built properly.
+            Assert.AreNotEqual(VRSLVerdict.Missing, slower.rows[0].verdict,
+                               "the synthetic rows did not compare at all, so this row is "
+                             + "testing its own fixture rather than the verdict logic");
             Assert.AreEqual(VRSLVerdict.Regressed, slower.rows[0].verdict,
                             "0.4 ms slower against a 0.1 ms floor has to read as a regression, "
                           + "or the harness cannot report one at all");
@@ -272,7 +278,12 @@ namespace VRSL.URP.Tests
                             "a move smaller than the floor is jitter, whatever its sign");
 
             // And exactly at it, because a boundary written as <= is a decision.
-            var onTheFloor = CompareSynthetic(before: 1.000, after: 1.100, floor: floor);
+            //
+            // Values chosen so the delta is exact in binary: 1.25 - 1.00 is 0.25 to the
+            // bit, where 1.10 - 1.00 is 0.100000000000000089 and lands the wrong side of
+            // its own floor. That would have made this assertion a test of floating-point
+            // representation rather than of the comparison.
+            var onTheFloor = CompareSynthetic(before: 1.00, after: 1.25, floor: 0.25);
             Assert.AreEqual(VRSLVerdict.Unchanged, onTheFloor.rows[0].verdict,
                             "a delta equal to the floor is not past it");
         }
@@ -293,19 +304,41 @@ namespace VRSL.URP.Tests
                         config   = new VRSLRowConfig { scene = "synthetic", fixtureCount = 1,
                                                        cameraVariant = "InsideCones",
                                                        quality = "Standard" },
-                        timings  = new VRSLTimings
-                        {
-                            packageGpuMs = cost,
-                            packageCpuMs = cost,
-                            gpuEnabled   = new VRSLStat { median = cost, samples = 30 },
-                            cpuEnabled   = new VRSLStat { median = cost, samples = 30 },
-                        },
+                        timings  = Timings(cost),
                         counters = new VRSLCounters(),
                     },
                 },
             };
 
             return VRSLBaseline.Compare(Run(before), Run(after));
+        }
+
+        /// <summary>
+        /// A row measured the way a real capture measures one: both sides sampled, and
+        /// the package's cost the difference between them.
+        /// </summary>
+        /// <remarks>
+        /// Setting the difference directly and leaving the disabled side empty is not a
+        /// shortcut — <c>Measured</c> reports such a row as unmeasured and the
+        /// comparison returns <c>Missing</c> rather than a verdict, which is the guard
+        /// working. Building it the way the capture does is also the only way this stays
+        /// true if the difference is ever derived differently.
+        /// </remarks>
+        static VRSLTimings Timings(double cost)
+        {
+            // What the scene costs without the package. Any value does; a real one keeps
+            // the numbers in the report readable.
+            const double baseFrame = 2.000;
+
+            var timings = new VRSLTimings
+            {
+                gpuEnabled  = new VRSLStat { median = baseFrame + cost, samples = 30 },
+                gpuDisabled = new VRSLStat { median = baseFrame,        samples = 30 },
+                cpuEnabled  = new VRSLStat { median = baseFrame + cost, samples = 30 },
+                cpuDisabled = new VRSLStat { median = baseFrame,        samples = 30 },
+            };
+            timings.ComputeDifference();
+            return timings;
         }
 
         /// <summary>
