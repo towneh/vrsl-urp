@@ -95,6 +95,18 @@ namespace VRSL.URP
         /// The buffer may be larger, since it only ever grows.</summary>
         public int ActiveTileCount { get; private set; }
 
+        /// <summary>
+        /// The camera whose record left the tile buffer in its current state.
+        /// </summary>
+        /// <remarks>
+        /// One pass serves every camera and each record overwrites the last, so a
+        /// readback taken after the frame describes whichever camera rendered last
+        /// rather than whichever one the reader had in mind. Nothing in the numbers
+        /// gives that away — a tile count is a plausible tile count whatever view
+        /// produced it — so anything quoting them should quote this beside them.
+        /// </remarks>
+        public string LastRecordedCamera { get; private set; }
+
 
         /// <summary>Entries per tile in <see cref="TileBuffer"/>: a count followed
         /// by up to <see cref="MaxLightsPerTile"/> indices.</summary>
@@ -169,6 +181,7 @@ namespace VRSL.URP
             // "tiling inactive" rather than a stale grid from another camera.
             TileParams = Vector4.zero;
             ActiveTileCount = 0;
+            LastRecordedCamera = null;
 
             // Keep a buffer allocated even when the cull can't run, so the
             // consuming passes always have something to bind to
@@ -223,6 +236,7 @@ namespace VRSL.URP
 
             TileParams      = new Vector4(tilesX, tilesY, TileSize, MaxLightsPerTile);
             ActiveTileCount = tilesX * tilesY * slices;
+            LastRecordedCamera = camData.camera != null ? camData.camera.name : null;
 
             using var builder = rg.AddComputePass<PassData>("VRSL Tile Light Cull", out var d);
 

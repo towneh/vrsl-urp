@@ -699,6 +699,11 @@ namespace VRSL.URP
             counters.lightsPerTileMax     = tiles.Max;
             counters.emptyTilePercent     = tiles.EmptyPercent;
             counters.cappedTiles          = tiles.Capped;
+            counters.droppedFixtureTilePairs = tiles.Dropped;
+            var cullPass = useDmx ? dmx.TileCullPass : audioLink.TileCullPass;
+            counters.tilesAcross = cullPass != null ? (int)cullPass.TileParams.x : 0;
+            counters.tilesDown   = cullPass != null ? (int)cullPass.TileParams.y : 0;
+            counters.tileCamera  = cullPass != null ? cullPass.LastRecordedCamera : null;
 
             // These two are set by M3 and M4. Recorded as false rather than omitted
             // so the row shape does not change when they land, and noted so a
@@ -707,9 +712,11 @@ namespace VRSL.URP
                    + "M4 and M3 land the accelerations they report.");
 
             if (tiles.Capped > 0)
-                run.Note($"{tiles.Capped} tile(s) hit the {VRSLTileCullPass.MaxLightsPerTile}-light "
-                       + "cap during capture, so some fixtures were dropped for those tiles and "
-                       + "the timings are of a scene that is not drawing everything.");
+                run.Note($"{tiles.Capped} of {tiles.Tiles} tile(s) wanted more than the "
+                       + $"{VRSLTileCullPass.MaxLightsPerTile}-light cap during capture and lost "
+                       + $"{tiles.Dropped} fixture-tile pair(s) to it. Up to {tiles.Max} fixtures "
+                       + "reached a single tile. These timings are of a scene drawing less light "
+                       + "than it was given, so they are not comparable with a run that drew it all.");
         }
     }
 }

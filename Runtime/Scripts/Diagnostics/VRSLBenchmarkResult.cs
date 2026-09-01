@@ -265,10 +265,24 @@ namespace VRSL.URP
         public float lightsPerTileAverage;
         public int   lightsPerTileMax;
         public float emptyTilePercent;
-        /// <summary>Tiles that hit the per-tile cap, where fixtures past it are
-        /// silently dropped.</summary>
+        /// <summary>Tiles that wanted more fixtures than the per-tile cap allows,
+        /// where the ones past it are dropped.</summary>
         public int   cappedTiles;
+        /// <summary>Fixture-tile pairs the cap threw away across the whole frame.
+        /// A count of the light that was asked for and not drawn, so anything above
+        /// zero says this configuration measured a scene rendering less than it was
+        /// given.</summary>
+        public long  droppedFixtureTilePairs;
         public int   activeTiles;
+        /// <summary>Tile grid the figures above are over. Recorded because the tile
+        /// count on its own does not say what was rendered: a run labelled with a
+        /// capture size can still have culled against a different one.</summary>
+        public int   tilesAcross;
+        public int   tilesDown;
+        /// <summary>Camera the tile figures describe. One cull pass serves every
+        /// camera in the frame and the last record wins, so this is the only thing
+        /// that says whether they are about the view the row is labelled with.</summary>
+        public string tileCamera;
         public int   stepsPerLight;
         /// <summary>Fixtures actually emitting light. A configuration where this is
         /// zero measured a dark scene, whatever else its numbers say.</summary>
