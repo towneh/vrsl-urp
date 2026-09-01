@@ -50,8 +50,6 @@ namespace VRSL.URP
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
-        [Header("Shadows where something stands in a beam")]
-        [Range(0f, 1f)]
         [Header("What the package may spend")]
         [Tooltip("How much of the frame VRSL is allowed to use.\n\n"
                + "Standard is what most worlds want. High marches the beams more finely and "
@@ -64,6 +62,8 @@ namespace VRSL.URP
                + "be judged without a profiler.")]
         public VRSLQuality quality = VRSLQuality.Standard;
 
+        [Header("Shadows where something stands in a beam")]
+        [Range(0f, 1f)]
         [Tooltip("Screen-space contact shadows. 0 disables them and compiles the trace out. "
                + "Each light marches the depth buffer from the lit pixel towards the fixture, "
                + "so cost scales with lights-per-tile times step count — the most expensive "
