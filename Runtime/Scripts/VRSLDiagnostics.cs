@@ -105,15 +105,21 @@ namespace VRSL.URP
             public readonly float Average;
             public readonly int   Max;
             public readonly int   Empty;
-            /// <summary>Tiles at the per-tile cap, where fixtures past it are
-            /// silently dropped.</summary>
+            /// <summary>Tiles over the per-tile cap, where fixtures past it are
+            /// dropped.</summary>
             public readonly int   Capped;
+            /// <summary>Fixture-tile pairs the cap threw away, summed over every
+            /// tile. Not a fixture count: one fixture dropped from forty tiles
+            /// counts forty times, because that is the work that went missing.
+            /// Zero is the only value that means nothing was lost.</summary>
+            public readonly long  Dropped;
             public readonly long  Total;
 
-            public TileSummary(bool engaged, int tiles, float average, int max, int empty, int capped, long total)
+            public TileSummary(bool engaged, int tiles, float average, int max, int empty,
+                               int capped, long dropped, long total)
             {
                 Engaged = engaged; Tiles = tiles; Average = average;
-                Max = max; Empty = empty; Capped = capped; Total = total;
+                Max = max; Empty = empty; Capped = capped; Dropped = dropped; Total = total;
             }
 
             public float EmptyPercent => Tiles > 0 ? 100f * Empty / Tiles : 0f;
@@ -124,19 +130,28 @@ namespace VRSL.URP
         /// in a diagnostic or once per benchmark configuration, never on the frame
         /// path.
         /// </summary>
+        /// <remarks>
+        /// Slot 0 of each tile is the count the cull arrived at before the cap, so
+        /// these figures describe what the scene asked for rather than what the
+        /// hardware drew. That is the point: a tile wanting 200 fixtures and drawing
+        /// 64 reports 200 here, and the 136 it lost show up in
+        /// <see cref="TileSummary.Dropped"/>. Clamping first would report a tile at
+        /// its limit and a tile far past it identically.
+        /// </remarks>
         public static TileSummary SummariseTiles(VRSLTileCullPass cull)
         {
             if (cull == null || cull.TileBuffer == null
              || cull.TileParams.x < 1f || cull.ActiveTileCount <= 0)
-                return new TileSummary(false, 0, 0f, 0, 0, 0, 0);
+                return new TileSummary(false, 0, 0f, 0, 0, 0, 0, 0);
 
             int stride = VRSLTileCullPass.Stride;
+            int cap    = VRSLTileCullPass.MaxLightsPerTile;
             int tiles  = cull.ActiveTileCount;
 
             var raw = new uint[tiles * stride];
             cull.TileBuffer.GetData(raw, 0, 0, raw.Length);
 
-            long total = 0;
+            long total = 0, dropped = 0;
             int max = 0, capped = 0, empty = 0;
             for (int t = 0; t < tiles; t++)
             {
@@ -144,10 +159,11 @@ namespace VRSL.URP
                 total += count;
                 if (count > max) max = count;
                 if (count == 0) empty++;
-                if (count >= VRSLTileCullPass.MaxLightsPerTile) capped++;
+                if (count > cap) { capped++; dropped += count - cap; }
             }
 
-            return new TileSummary(true, tiles, (float)total / tiles, max, empty, capped, total);
+            return new TileSummary(true, tiles, (float)total / tiles, max, empty,
+                                   capped, dropped, total);
         }
 
         /// <summary>
@@ -181,8 +197,10 @@ namespace VRSL.URP
                     + $"@ {cull.TileParams.z}px), avg {average:F1} lights/tile, max {max}, "
                     + $"{empty} empty of {fixtureCount} fixture(s)");
             if (capped > 0)
-                sb.Append($"\n  WARNING: {capped} tile(s) hit the {VRSLTileCullPass.MaxLightsPerTile}-light "
-                        + "cap — fixtures past it are dropped for those tiles");
+                sb.Append($"\n  WARNING: {capped} tile(s) want more than the "
+                        + $"{VRSLTileCullPass.MaxLightsPerTile}-light cap and lost "
+                        + $"{summary.Dropped} fixture-tile pair(s), so that light is "
+                        + "not being drawn");
             return sb.ToString();
         }
 

@@ -9,8 +9,15 @@
 // tile's frustum.
 //
 // Buffer layout — one run of VRSL_TileStride() uints per tile:
-//   [0]              light count for the tile (already clamped to the cap)
-//   [1 .. count]     indices into _VRSLLights
+//   [0]              fixtures that reached the tile, NOT clamped to the cap
+//   [1 .. capacity]  indices into _VRSLLights
+//
+// Slot 0 is the honest count, so the difference between it and the cap is how
+// many fixtures the tile dropped — which is the only way a scene losing
+// fixtures can be told apart from one that is fine. Nothing may iterate it
+// directly: past the cap there are no indices behind it, and reading them
+// indexes _VRSLLights out of range. VRSL_LightListCount clamps, and it is the
+// only sanctioned way to read slot 0.
 //
 // Tiles are ordered (eye, y, x), so single-pass instanced VR gets an
 // independent list per eye.
@@ -54,10 +61,15 @@ uint VRSL_TileIndex(float2 uv, uint eyeIndex)
 }
 
 // Number of lights to iterate for this pixel.
+//
+// The clamp is load-bearing, not defensive. Slot 0 records every fixture that
+// reached the tile so the diagnostics can report what was dropped; only the
+// first cap of them have indices written behind them.
 uint VRSL_LightListCount(uint tileIndex, uint totalLightCount)
 {
     if (!VRSL_TilingActive()) return totalLightCount;
-    return _VRSLTileLightIndices[tileIndex * VRSL_TileStride()];
+    return min(_VRSLTileLightIndices[tileIndex * VRSL_TileStride()],
+               VRSL_MaxLightsPerTile());
 }
 
 // Index into _VRSLLights for the given slot of this pixel's list.

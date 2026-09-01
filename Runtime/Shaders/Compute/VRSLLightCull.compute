@@ -181,6 +181,11 @@ void CullLights(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 
     GroupMemoryBarrierWithGroupSync();
 
+    // Unclamped on purpose. Past the cap there is no index behind the count, so
+    // every reader has to clamp — VRSL_LightListCount does — but writing the
+    // clamped figure here would throw away the one number that says a tile is
+    // over its limit, and a scene quietly dropping fixtures reads identically to
+    // one that is fine.
     if (groupIndex == 0)
-        _VRSLTileLightIndicesRW[base] = min(gs_TileLightCount, capacity);
+        _VRSLTileLightIndicesRW[base] = gs_TileLightCount;
 }
