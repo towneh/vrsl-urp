@@ -224,89 +224,88 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// Volumetric steps for the seeded regression. Far above anything shippable, and
-        /// that is the point: this row asks whether the harness reports a regression, so
-        /// the regression wants to be unmistakable rather than realistic.
+        /// A-M0-2. The harness has to be able to say "regressed" at all.
+        ///
+        /// <b>Judged on the comparison rather than on a seeded workload</b>, and the
+        /// history is why. This row used to make the build genuinely worse and look for
+        /// the verdict, which needed a lever big enough to clear the noise floor — and
+        /// in this scene nothing shippable is. Both candidates were measured and
+        /// rejected: clearing the cull cost 0.0015 ms while the counters showed it
+        /// rejecting nine tenths of the per-light work, and quality Standard to High
+        /// cost 0.089 ms against a 0.097 ms floor. With volumetrics off the package
+        /// still costs 2.55 ms, so any lever that only scales volumetrics is scaling a
+        /// twentieth of the total. The row therefore ran on an absurd step count, which
+        /// M1 removed along with every other numeric cost field.
+        ///
+        /// Keeping it would have meant a way to set a step count that exists solely for
+        /// this row — a second path to cost, in the milestone whose whole point is that
+        /// there is one. What the row is actually for is the verdict logic, and that is
+        /// pure arithmetic over two documents: testable exactly, on any clock, without a
+        /// GPU or a workload. It runs on every headless suite now rather than only when
+        /// somebody opens the editor, which is a stronger guarantee than it had.
+        ///
+        /// What is not covered here is a real workload change flowing end to end into a
+        /// verdict. A-M0-7 is that row: it rebuilds with a changed constant and reads
+        /// the sweep, and editing the quality table is still its lever.
         /// </summary>
-        const int RegressedStepCount = 160;
-
-        /// <summary>
-        /// A-M0-2. Make the build deliberately worse and the harness has to say so, on
-        /// the right row, with a counter change that explains it.
-        ///
-        /// <b>Neither lever the specification suggests is measurable in this rig</b>, and
-        /// both were tried on a GPU clock before this one was written:
-        ///
-        /// - Clearing the cull shader cost 0.0015 ms, while the counters showed it
-        ///   working — 5.4 lights per tile with it on, all 50 with it off. Rejecting nine
-        ///   tenths of the per-light work saved nothing measurable.
-        /// - Raising quality Standard to High cost 0.089 ms against a 0.097 ms floor:
-        ///   real, right sign, and under the noise.
-        ///
-        /// Both follow from what this scene actually costs. With volumetrics off the
-        /// package still costs 2.55 ms, so the prepass, cull, compute and lighting pass
-        /// dominate and the whole volumetric pass is 0.127 ms of a 2.68 ms total. Any
-        /// lever that only scales volumetrics is scaling a twentieth of the cost.
-        ///
-        /// So the step count is pushed somewhere no one would ship, which multiplies the
-        /// one term that responds and clears the floor by roughly seven times. It is the
-        /// same knob quality High turns, turned far enough to see.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator A_M0_2_AnExcessiveStepCountIsReportedAsRegressed()
+        [Test]
+        public void A_M0_2_AGenuineSlowdownIsReportedAsRegressed()
         {
-            yield return WarmUpProcess();
+            const double floor = 0.100;
 
-            var runs = new List<VRSLBenchmarkRun>();
-            yield return Capture("steps-shipped", runs);
+            // Comfortably past the floor, and the sign says which way.
+            var slower = CompareSynthetic(before: 1.000, after: 1.400, floor: floor);
+            Assert.AreEqual(VRSLVerdict.Regressed, slower.rows[0].verdict,
+                            "0.4 ms slower against a 0.1 ms floor has to read as a regression, "
+                          + "or the harness cannot report one at all");
+            Assert.IsTrue(slower.AnyRegressed, "and the run-level verdict has to follow the row");
 
-            // Held through the harness's own seam rather than set on the manager: the
-            // numeric step field is gone, and a level is the only thing a scene can say
-            // now. See VRSLQualityLevel.Forced for why the row keeps its own lever.
-            using (VRSLQualityLevel.Force(
-                       VRSLQualityLevel.For(VRSLQuality.Standard).WithMaxSteps(RegressedStepCount)))
+            var faster = CompareSynthetic(before: 1.400, after: 1.000, floor: floor);
+            Assert.AreEqual(VRSLVerdict.Improved, faster.rows[0].verdict,
+                            "the same move the other way is an improvement, not a regression");
+            Assert.IsFalse(faster.AnyRegressed);
+
+            // Inside the floor. This is the half that stops the row above being passed
+            // by something that simply calls everything regressed.
+            var jitter = CompareSynthetic(before: 1.000, after: 1.050, floor: floor);
+            Assert.AreEqual(VRSLVerdict.Unchanged, jitter.rows[0].verdict,
+                            "a move smaller than the floor is jitter, whatever its sign");
+
+            // And exactly at it, because a boundary written as <= is a decision.
+            var onTheFloor = CompareSynthetic(before: 1.000, after: 1.100, floor: floor);
+            Assert.AreEqual(VRSLVerdict.Unchanged, onTheFloor.rows[0].verdict,
+                            "a delta equal to the floor is not past it");
+        }
+
+        /// <summary>Two runs alike in everything but one row's package cost.</summary>
+        static VRSLComparison CompareSynthetic(double before, double after, double floor)
+        {
+            VRSLBenchmarkRun Run(double cost) => new VRSLBenchmarkRun
             {
-                yield return Capture("steps-excessive", runs);
-            }
+                // The same environment on both sides: Compare refuses across a
+                // difference, and a refusal reports no rows at all rather than a verdict.
+                environment  = new VRSLBenchmarkEnvironment(),
+                noiseFloorMs = floor,
+                rows =
+                {
+                    new VRSLBenchmarkRow
+                    {
+                        config   = new VRSLRowConfig { scene = "synthetic", fixtureCount = 1,
+                                                       cameraVariant = "InsideCones",
+                                                       quality = "Standard" },
+                        timings  = new VRSLTimings
+                        {
+                            packageGpuMs = cost,
+                            packageCpuMs = cost,
+                            gpuEnabled   = new VRSLStat { median = cost, samples = 30 },
+                            cpuEnabled   = new VRSLStat { median = cost, samples = 30 },
+                        },
+                        counters = new VRSLCounters(),
+                    },
+                },
+            };
 
-            double floor = Math.Max(runs[0].rows[0].timings.Noise, runs[1].rows[0].timings.Noise);
-            runs[0].noiseFloorMs = floor;
-            runs[1].noiseFloorMs = floor;
-
-            var comparison = VRSLBaseline.Compare(runs[0], runs[1]);
-            Debug.Log($"[A-M0-2] {comparison.VerdictLine}, floor {floor:F4} ms");
-            foreach (var row in comparison.rows) Debug.Log($"[A-M0-2] {row.Describe()}");
-
-            Assert.That(comparison.rows, Is.Not.Empty, "nothing was compared");
-
-            // The counter half, which holds on any clock and is what explains the move.
-            Assert.AreEqual(RegressedStepCount, runs[1].rows[0].counters.stepsPerLight,
-                "the regressed capture is not at the raised step count, so the change did "
-              + "not reach the compute and this row is comparing two identical builds");
-            Assert.AreNotEqual(runs[0].rows[0].counters.stepsPerLight,
-                               runs[1].rows[0].counters.stepsPerLight,
-                "both captures report the same step count");
-
-            foreach (var row in comparison.rows)
-                Assert.That(row.counterChanges, Is.Not.Empty,
-                    "the verdict came with no counter change to explain it, which is "
-                  + "indistinguishable from the machine having drifted");
-
-            // The timing half needs a GPU clock. The extra work is entirely per pixel, so
-            // a CPU clock sees almost none of it.
-            if (!runs[0].rows[0].timings.HasGpu || !runs[1].rows[0].timings.HasGpu)
-                Assert.Inconclusive(
-                    "A-M0-2's timing half needs GPU attribution and this run has none. The "
-                  + "counter half passed, so the step count did reach the compute. Run it "
-                  + $"from the editor or a player. Observed: {comparison.rows[0].Describe()}");
-
-            foreach (var row in comparison.rows)
-                Assert.AreEqual(VRSLVerdict.Regressed, row.verdict,
-                    $"raising the volumetric step count from "
-                  + $"{runs[0].rows[0].counters.stepsPerLight} to {RegressedStepCount} was "
-                  + $"reported as {row.verdict}. That is several times the work in the one "
-                  + $"pass that responds to it, so a harness that cannot see this cannot see "
-                  + $"a regression at all: {row.Describe()}");
+            return VRSLBaseline.Compare(Run(before), Run(after));
         }
 
         /// <summary>

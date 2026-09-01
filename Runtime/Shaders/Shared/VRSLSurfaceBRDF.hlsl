@@ -136,7 +136,11 @@ float VRSL_ContactShadow(float3 posWS, float3 lightDirWS, float distanceToLight,
     float strength = _VRSLContactShadowParams.x;
     if (strength <= 0.0) return 1.0;
 
-    int   stepCount = max(1, (int)_VRSLContactShadowParams.z);
+    // A zero step count means the trace should not run, independently of strength.
+    // Both are zeroed together today; read separately so a caller that zeroes one
+    // does not silently get a one-step trace out of the clamp below.
+    int stepCount = (int)_VRSLContactShadowParams.z;
+    if (stepCount <= 0) return 1.0;
     float traceDist = min(_VRSLContactShadowParams.y, distanceToLight);
     if (traceDist <= 1e-4) return 1.0;
 

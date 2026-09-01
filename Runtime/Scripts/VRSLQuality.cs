@@ -88,52 +88,11 @@ namespace VRSL.URP
         public const float NoiseScrollSpeed = 0.1f;
         public const float NoiseStrength    = 0.7f;
 
-        /// <summary>
-        /// A level forced for every caller, or null. Harness only.
-        /// </summary>
-        /// <remarks>
-        /// Not a settings path and not reachable from a scene: <c>internal</c>, held
-        /// through <see cref="Force"/>'s disposable scope, and null in every build a
-        /// world ships.
-        ///
-        /// It exists because A-M0-2 asks whether the harness reports a regression at
-        /// all, and needs a lever big enough to clear the noise floor to ask it. That
-        /// row measured the two obvious ones first and rejected both: clearing the cull
-        /// cost 0.0015 ms, and Standard to High cost 0.089 ms against a 0.097 ms floor.
-        /// Only an absurd step count moves this scene enough to see, and once the
-        /// numeric fields are gone there is nothing left to set one with. Retiring the
-        /// row instead would leave the harness with no check that it reports regressions.
-        /// </remarks>
-        internal static VRSLQualityLevel? Forced;
-
-        /// <summary>Hold every caller at one level until disposed.</summary>
-        internal static System.IDisposable Force(VRSLQualityLevel level)
-        {
-            var previous = Forced;
-            Forced = level;
-            return new Hold(previous);
-        }
-
-        sealed class Hold : System.IDisposable
-        {
-            readonly VRSLQualityLevel? _previous;
-            public Hold(VRSLQualityLevel? previous) => _previous = previous;
-            public void Dispose() => Forced = _previous;
-        }
-
-        /// <summary>This level with a different step budget, for the same row.</summary>
-        internal VRSLQualityLevel WithMaxSteps(int maxSteps) =>
-            new VRSLQualityLevel(Volumetrics, maxSteps, VolumetricStepSpacing, VolumetricNoise,
-                                 ContactShadows, ContactShadowSteps,
-                                 ContactShadowDistance, ContactShadowThickness);
-
         /// <summary>The costs for a level. Anything unrecognised is Standard,
         /// which is also what a scene deserialising an out-of-range value
         /// gets.</summary>
         public static VRSLQualityLevel For(VRSLQuality quality)
         {
-            if (Forced.HasValue) return Forced.Value;
-
             switch (quality)
             {
                 case VRSLQuality.Off:
