@@ -53,12 +53,25 @@ namespace VRSL.URP
         /// not being drawn as it was authored.
         /// </summary>
         /// <remarks>
+        /// 256 rather than 64, measured. At 64 a two-hundred-fixture rig had every
+        /// tile on screen wanting 195 and drawing 64, losing three quarters of the
+        /// light it was given. Raising it costs what the extra fixtures cost to light
+        /// and nothing else — the measured frame time tracked the honest per-tile
+        /// count divided by the cap, to within a few percent across four
+        /// configurations — so the price is the scene being drawn rather than
+        /// overhead in the cull.
+        ///
+        /// It costs per-tile memory: the buffer is
+        /// tiles x (cap + 1) x 4 bytes, per eye, so a 1080p grid holds about 8 MB and
+        /// a stereo one twice that.
+        /// </remarks>
+        /// <remarks>
         /// This is the only declaration. The cull kernel and the read side take it
         /// as a uniform in <c>w</c> of their tile-params vector rather than
         /// declaring their own, because it decides a buffer stride and three copies
         /// of a stride is a silent-corruption hazard rather than a tidiness one.
         /// </remarks>
-        public const int MaxLightsPerTile = 64;
+        public const int MaxLightsPerTile = 256;
 
         const int TileStride   = MaxLightsPerTile + 1;   // slot 0 holds the count
         const int CullGroupSize = 64;                    // must match [numthreads]

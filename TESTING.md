@@ -98,7 +98,7 @@ Run this first whenever something is dark. It separates causes that look identic
 | `FAILED TO COMPILE` | Shader problem. Nothing downstream matters until it's fixed. |
 | `Light data: 0/N emitting` | Data problem — the decode produced nothing. Rendering is irrelevant. |
 | `Tile culling: INACTIVE` | Falling back to iterating every fixture. Correct, but unbounded in cost. |
-| `hit the 64-light cap` | Fixtures are being silently dropped in dense tiles. |
+| `want more than the ...-light cap` | Fixtures are being dropped in dense tiles, and the note says how much light was lost. |
 | `Surface prepass: normals only` | Everything lights as neutral grey; albedo isn't reaching the BRDF. |
 | `NOT IN PLAY MODE` | Nothing is initialised. Enter play mode; shader assignment is still reported. |
 | `Fixtures: NONE FOUND` | The manager collected nothing on enable — wrong manager for the scene, or fixtures inactive/added since. |

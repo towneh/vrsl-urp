@@ -335,7 +335,7 @@ Both fullscreen passes then iterate the tile's list rather than the whole fixtur
 
 Tile frusta span the camera's full depth range rather than each tile's scene-depth bounds. That costs a little tightness on the surface pass, but keeps one list valid for the volumetric ray (which runs from the camera to the surface) and removes any dependency on the depth texture being ready when the cull runs.
 
-The per-tile cap is 64 fixtures; past that, fixtures are dropped for that tile rather than falling back to the full list. Leaving `lightCullShader` unassigned publishes a zero `_VRSLTileParams`, which both shaders read as "iterate every light" — correct, just without the saving.
+The per-tile cap is 256 fixtures; past that, fixtures are dropped for that tile rather than falling back to the full list. The cull records the count a tile asked for rather than the count it drew, so the diagnostics can report how much light a dense rig is losing — a tile at its limit and a tile far past it would otherwise read identically. Nothing may iterate slot 0 of the tile list directly for that reason; `VRSL_LightListCount` clamps, and there are no indices behind the count past the cap. Leaving `lightCullShader` unassigned publishes a zero `_VRSLTileParams`, which both shaders read as "iterate every light" — correct, just without the saving.
 
 ---
 
