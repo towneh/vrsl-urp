@@ -176,6 +176,13 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | P2 | — | Diagnostics with fixtures spread across the venue | Average lights/tile well below fixture count |
 | P3 | — | Profiling sample sweep, 10 → 25 → 50 → 100 → 200 | Frametime scales sub-linearly with fixture count |
 | P4 | — | `InsideCones` vs `OutsideCones` camera variants | Inside is the worst case; the gap shows culling working |
+| P11 | — | A scene dense enough that a tile wants more fixtures than the per-tile cap allows. Read the tile figures from `VRSL Diagnostics` or a sweep row | Lights per tile reports what the tile **asked for**, above the cap, not the cap itself. The dropped figure is non-zero and says how much light the scene is not drawing. A tile exactly at the cap reports zero dropped, so the two cases are distinguishable |
+
+**Read the tile figures with the camera beside them.** One cull pass serves every
+camera in the frame and each record overwrites the last, so a readback taken after the
+frame describes whichever camera rendered last — which in a host project with its own
+rig is not always the one a row is labelled with. Sweep rows carry `tileCamera` and the
+tile grid for this reason; a figure quoted without them is a figure of an unknown view.
 
 ### Wiring
 
