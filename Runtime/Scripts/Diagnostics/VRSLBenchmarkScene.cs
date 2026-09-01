@@ -380,7 +380,7 @@ namespace VRSL.URP
         /// running.
         /// </remarks>
         /// <returns>How many this call switched off.</returns>
-        public static int SuppressOtherCameras(Camera keep, List<Camera> into)
+        public static int SuppressOtherCameras(Camera keep)
         {
             int suppressed = 0;
             foreach (var camera in Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude))
@@ -388,27 +388,40 @@ namespace VRSL.URP
                 if (camera == null || !camera.enabled) continue;
                 if (ReferenceEquals(camera, keep)) continue;
                 camera.enabled = false;
-                into?.Add(camera);
+                s_Suppressed.Add(camera);
                 suppressed++;
             }
             return suppressed;
         }
 
-        /// <summary>Put back what <see cref="SuppressOtherCameras"/> switched off.</summary>
+        /// <summary>
+        /// What <see cref="SuppressOtherCameras"/> has switched off and owes back.
+        /// </summary>
         /// <remarks>
-        /// Unity does not unwind a coroutine when its host is destroyed, so stopping
-        /// play mode by hand never reaches the caller's finally and these stay off.
-        /// That costs nothing: leaving play mode discards the scene's runtime state
-        /// anyway, which is the same reason the directional-light restore is about the
-        /// session rather than about the author's saved scene.
+        /// Held here rather than by the coroutine that suppressed them, because Unity
+        /// does not unwind a coroutine whose host is disabled or destroyed: its finally
+        /// never runs, and cameras belonging to somebody else's scene would stay off for
+        /// the rest of the play session. Anything with a lifecycle callback that does
+        /// run can put them back from here without having been handed a list.
+        ///
+        /// A static is safe for this and for little else: entering play mode reloads the
+        /// domain before a sweep starts, so the list is always created after the reload
+        /// that would have cleared it, and only one sweep runs at a time.
         /// </remarks>
-        public static void RestoreCameras(List<Camera> suppressed)
+        static readonly List<Camera> s_Suppressed = new();
+
+        /// <summary>Put back every camera <see cref="SuppressOtherCameras"/> switched
+        /// off. Safe to call when none were, and safe to call twice.</summary>
+        public static void RestoreCameras()
         {
-            if (suppressed == null) return;
-            foreach (var camera in suppressed)
+            foreach (var camera in s_Suppressed)
                 if (camera != null) camera.enabled = true;
-            suppressed.Clear();
+            s_Suppressed.Clear();
         }
+
+        /// <summary>How many cameras are currently switched off on the sweep's
+        /// behalf.</summary>
+        public static int SuppressedCameraCount => s_Suppressed.Count;
 
         /// <summary>Cameras that will actually render this frame. More than the
         /// sweep's own means every pass runs more than once and the cost is of both

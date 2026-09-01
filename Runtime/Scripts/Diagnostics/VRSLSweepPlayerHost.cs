@@ -41,6 +41,18 @@ namespace VRSL.URP
         /// itself rather than the caller guessing at a timestamp.</summary>
         internal const string ReportPrefix = "[VRSL sweep] report: ";
 
+        /// <summary>
+        /// Put back any cameras the sweep switched off, whatever happened to the
+        /// coroutine.
+        /// </summary>
+        /// <remarks>
+        /// Unity does not unwind a coroutine when its host is disabled or destroyed, so
+        /// the job's own finally is not reached on that path and the suppression would
+        /// outlive the run. Restoring is idempotent, so this costs nothing on the
+        /// ordinary path where the job has already done it.
+        /// </remarks>
+        void OnDisable() => VRSLBenchmarkScene.RestoreCameras();
+
         IEnumerator Start()
         {
             // Unity throttles a player whose window is not focused, and a sweep measuring

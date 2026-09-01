@@ -92,7 +92,6 @@ namespace VRSL.URP
             // the finally nor the host — the host reports that case for itself.
             bool completed = false;
             VRSLQualityPreset.Session quality = null;
-            List<Camera> suppressed = null;
             try
             {
             // Allocated inside the try, and first. The finally below is the only
@@ -113,8 +112,7 @@ namespace VRSL.URP
             // after this point. The counts and the two reports below are kept as the
             // check that it worked: suppressing and then trusting it is the shape of
             // fault this whole exercise exists to remove.
-            suppressed = new List<Camera>();
-            VRSLBenchmarkScene.SuppressOtherCameras(camera, suppressed);
+            VRSLBenchmarkScene.SuppressOtherCameras(camera);
             int camerasAtStart = VRSLBenchmarkScene.RenderingCameraCount();
 
             quality = VRSLQualityPreset.Session.Begin(manager);
@@ -176,7 +174,7 @@ namespace VRSL.URP
                         // appears mid-run would otherwise own every row after it, and a
                         // host that rewrites its pipeline asset mid-run would otherwise
                         // move MSAA under the capture.
-                        VRSLBenchmarkScene.SuppressOtherCameras(camera, suppressed);
+                        VRSLBenchmarkScene.SuppressOtherCameras(camera);
                         determinism.Reassert();
 
                         var capture = VRSLBenchmark.CaptureRow(
@@ -201,8 +199,8 @@ namespace VRSL.URP
                 VRSLBenchmarkScene.RenderingCameraCount() <= 1
                 && AllRowsUsedTheSweepsCamera(run);
 
-            if (suppressed.Count > 0)
-                run.Note($"{suppressed.Count} other camera(s) were switched off for the "
+            if (VRSLBenchmarkScene.SuppressedCameraCount > 0)
+                run.Note($"{VRSLBenchmarkScene.SuppressedCameraCount} other camera(s) were switched off for the "
                        + "matrix, so these figures are of the sweep's own view rather than "
                        + "of every camera in the frame together. They are put back "
                        + "afterwards, and a run captured while sharing the frame is not "
@@ -213,7 +211,7 @@ namespace VRSL.URP
             finally
             {
                 quality?.Restore();
-                VRSLBenchmarkScene.RestoreCameras(suppressed);
+                VRSLBenchmarkScene.RestoreCameras();
                 camera.targetTexture = null;
                 if (target != null) { target.Release(); UnityEngine.Object.DestroyImmediate(target); }
 #if UNITY_EDITOR

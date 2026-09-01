@@ -150,6 +150,19 @@ namespace VRSL.URP.EditorScripts
         /// capture loop rather than the thing driving it.</summary>
         class Host : MonoBehaviour
         {
+            /// <summary>
+            /// Put back any cameras the sweep switched off, whatever happened to the
+            /// coroutine.
+            /// </summary>
+            /// <remarks>
+            /// Unity does not unwind a coroutine when its host is disabled or
+            /// destroyed, so the job's finally is not reached on that path. Leaving
+            /// play mode would restore them anyway; being abandoned part-way through it
+            /// would not, and that is somebody's own scene with its cameras off.
+            /// Restoring is idempotent.
+            /// </remarks>
+            void OnDisable() => VRSLBenchmarkScene.RestoreCameras();
+
             public void Begin(VRSLPerfJob job, int refreshHz)
             {
                 StartCoroutine(job == VRSLPerfJob.Sweep ? RunSweep() : RunAnalysis(refreshHz));
@@ -488,14 +501,14 @@ namespace VRSL.URP.EditorScripts
             // reader here is deciding what to change about their scene, and "884 tiles
             // at the cap" names neither the consequence nor the action.
             if (current.counters.cappedTiles > 0)
-                text.AppendLine("Some fixtures are not lighting anything from this camera "
-                              + $"angle. Where the view is busiest {current.counters.lightsPerTileMax} "
+                text.AppendLine("Parts of this scene are missing light they should be getting. "
+                              + $"Where the view is busiest {current.counters.lightsPerTileMax} "
                               + "fixtures reach the same part of the screen and VRSL lights it with "
-                              + $"{VRSLTileCullPass.MaxLightsPerTile} of them, so the rest add "
-                              + "nothing there and the scene is not lit the way it was built. "
-                              + "Spreading the fixtures further apart, aiming them at different "
-                              + "parts of the venue, or using fewer of them brings the missing "
-                              + "ones back.");
+                              + $"{VRSLTileCullPass.MaxLightsPerTile} of them, so what the rest "
+                              + "should be adding there is not drawn and the scene is not lit the "
+                              + "way it was built. Spreading the fixtures further apart, aiming them "
+                              + "at different parts of the venue, or using fewer of them brings the "
+                              + "missing light back.");
 
             text.AppendLine();
             foreach (var level in VRSLQualityPreset.All)

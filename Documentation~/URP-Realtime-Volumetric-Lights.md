@@ -329,7 +329,7 @@ shadows disappear at grazing angles; lower it if distant background bleeds shado
 
 ### Tiled light culling
 
-`VRSLLightCull.compute` runs one thread group per 16×16 screen tile per eye. Each group builds its tile's world-space frustum from the same inverse view-projection the fullscreen shaders reconstruct with, tests every active light's bounding sphere against it, and writes the survivors into `_VRSLTileLightIndices` — one run of 65 uints per tile, the first holding the count.
+`VRSLLightCull.compute` runs one thread group per 16×16 screen tile per eye. Each group builds its tile's world-space frustum from the same inverse view-projection the fullscreen shaders reconstruct with, tests every active light's bounding sphere against it, and writes the survivors into `_VRSLTileLightIndices` — one run of `MaxLightsPerTile + 1` uints per tile, 257 at the current cap, the first holding the count.
 
 Both fullscreen passes then iterate the tile's list rather than the whole fixture buffer. The volumetric pass gains the most: a view ray stays inside its screen tile for its whole length, so the list is resolved once and serves every light that pixel marches, rather than each pixel walking every fixture in the scene.
 
