@@ -114,7 +114,10 @@ namespace VRSL.URP
                 d.strobePhaseBuffer   = rg.ImportBuffer(mgr.StrobePhaseBuffer);
                 d.movementBuffer      = rg.ImportBuffer(mgr.MovementBuffer);
                 d.strobeStatic        = mgr.strobeRate == VRSL_URPLightManager.StrobeRate.Dynamic ? 0 : 1;
-                d.strobeFreqs         = new Vector4(mgr.strobeLowFrequency, mgr.strobeMedFrequency,
+                // x is unused: the sub-0.2 rate it carried can never reach the output,
+                // because the same threshold that selects it also holds the fixture fully
+                // on. The vector keeps its shape so the compute's layout is untouched.
+                d.strobeFreqs         = new Vector4(0f, mgr.strobeMedFrequency,
                                                     mgr.strobeHighFrequency, mgr.maxStrobeFrequency);
                 // Sampled here rather than in the shader so both eyes and every mirror
                 // in a frame strobe together; Time.timeSinceLevelLoad is constant across
@@ -321,6 +324,7 @@ namespace VRSL.URP
                 var mgr = VRSL_URPLightManager.Instance;
                 if (mgr == null
                     || mgr.FixtureCount == 0
+                    || !mgr.VolumetricsEnabled
                     || mgr.VolumetricMaterial == null
                     || mgr.LightDataBuffer == null) return;
 
@@ -346,50 +350,6 @@ namespace VRSL.URP
                 BufferHandle tileHandle = bindTileBuffer
                     ? rg.ImportBuffer(cull.TileBuffer)
                     : default;
-
-                if (mgr.VolumetricUseFullRes)
-                {
-                    // Full-res path — single raymarch pass that samples the full
-                    // depth texture and additive-blends onto the camera colour.
-                    // Skips the depth downsample and bilateral upsample passes.
-                    using (var builder = rg.AddRasterRenderPass<RaymarchData>(
-                        "VRSL Vol Raymarch FullRes", out var d))
-                    {
-                        d.material        = mgr.VolumetricMaterial;
-                        d.halfDepth       = TextureHandle.nullHandle;
-                        d.lightDataBuffer = lightDataHandle;
-                        d.lightCount      = mgr.FixtureCount;
-                        d.stepParams      = mgr.VolumetricStepParams;
-                        d.densityParams   = mgr.VolumetricDensityParams;
-                        d.fogTintParams   = mgr.VolumetricFogTintParams;
-                        d.bindTileBuffer  = bindTileBuffer;
-                        d.tileParams      = tileParams;
-                        d.tileLightIndices = tileHandle;
-
-                        builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
-                        builder.UseBuffer(d.lightDataBuffer, AccessFlags.Read);
-                        builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
-                        if (bindTileBuffer)
-                            builder.UseBuffer(d.tileLightIndices, AccessFlags.Read);
-                        builder.AllowGlobalStateModification(true);
-
-                        builder.SetRenderFunc((RaymarchData p, RasterGraphContext ctx) =>
-                        {
-                            var cmd = ctx.cmd;
-                            cmd.SetGlobalBuffer( "_VRSLLights",       p.lightDataBuffer);
-                            cmd.SetGlobalInteger("_VRSLLightCount",   p.lightCount);
-                            cmd.SetGlobalVector( "_VRSLVolStepCount", p.stepParams);
-                            cmd.SetGlobalVector( "_VRSLVolDensity",   p.densityParams);
-                            cmd.SetGlobalVector( "_VRSLVolFogTint",   p.fogTintParams);
-                            cmd.SetGlobalVector( "_VRSLTileParams",   p.tileParams);
-                            if (p.bindTileBuffer)
-                                cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
-                            cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
-                                p.material, 0, 3);
-                        });
-                    }
-                    return;
-                }
 
                 int halfW = Mathf.Max(1, camData.cameraTargetDescriptor.width  / 2);
                 int halfH = Mathf.Max(1, camData.cameraTargetDescriptor.height / 2);

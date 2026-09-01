@@ -1,22 +1,19 @@
 // Raymarched volumetric in-scattering for VRSL URP realtime lights.
 // Runs immediately after VRSLDeferredLighting in the same per-camera schedule, reading the
-// same _VRSLLights StructuredBuffer the surface pass produces. The raymarch
-// itself is shared between two execution modes selected by the manager:
+// same _VRSLLights StructuredBuffer the surface pass produces. Three sub-passes:
 //
-//   Half-res mode (default) — three sub-passes:
-//     Pass 0 — Depth Downsample. Full-res _CameraDepthTexture → half-res depth
-//              (min-depth in linear, max raw value in reversed-Z) so the
-//              raymarch terminates correctly at silhouettes.
-//     Pass 1 — Raymarch (half-res). Half-res in-scattering accumulation along
-//              each pixel's view ray; output is a half-res HDR colour buffer.
-//     Pass 2 — Bilateral Upsample. Edge-aware reconstruction to full resolution,
-//              additive blend onto the camera color target.
+//   Pass 0 — Depth Downsample. Full-res _CameraDepthTexture → half-res depth
+//            (min-depth in linear, max raw value in reversed-Z) so the
+//            raymarch terminates correctly at silhouettes.
+//   Pass 1 — Raymarch. Half-res in-scattering accumulation along each pixel's
+//            view ray; output is a half-res HDR colour buffer.
+//   Pass 2 — Bilateral Upsample. Edge-aware reconstruction to full resolution,
+//            additive blend onto the camera color target.
 //
-//   Full-res mode — single pass:
-//     Pass 3 — Raymarch (full-res additive). Samples _CameraDepthTexture
-//              directly and additive-blends onto the camera color target. ~4×
-//              the per-pixel cost of half-res but no resolution-mismatch
-//              artefacts. Targets cinematic capture and high-perf desktops.
+// The march is half-res and only half-res. The upsample is bilateral, so it
+// rejects taps across a depth discontinuity and holds an edge that a trilinear
+// one would smear — which is what makes the half-res march affordable rather
+// than a compromise.
 Shader "Hidden/VRSL-URP/VolumetricLighting"
 {
     SubShader
@@ -65,7 +62,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
 
             SamplerState sampler_point_clamp;
 
-            // ── Raymarch globals (shared by half-res and full-res passes) ────
+            // ── Raymarch globals ─────────────────────────────────────────────
             StructuredBuffer<VRSLLightData> _VRSLLights;
             uint   _VRSLLightCount;
 
@@ -101,11 +98,10 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             }
 
 
-            // Shared raymarch — accumulate VRSL light in-scattering from the
-            // camera through the pixel out to rawDepth. Returns RGB radiance
-            // with alpha = 0 (so half-res mode can write into a fresh RT and
-            // full-res mode can additive-blend onto camera colour without
-            // disturbing the destination alpha).
+            // Accumulate VRSL light in-scattering from the camera through the
+            // pixel out to rawDepth. Returns RGB radiance with alpha = 0, so the
+            // march can write into a fresh half-res target without disturbing
+            // the destination alpha.
             float4 VRSL_Raymarch(float rawDepth, float2 uv, float2 pixelCS)
             {
             #if UNITY_REVERSED_Z
@@ -445,39 +441,6 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 }
 
                 return sum / max(wSum, 0.0001);
-            }
-            ENDHLSL
-        }
-
-        // ── Pass 3 ───────────────────────────────────────────────────────────
-        // Full-resolution raymarch with additive blend onto the camera colour
-        // target. Samples _CameraDepthTexture directly so no half-res depth
-        // downsample or bilateral upsample is needed — the half-res pipeline's
-        // pass 0 and pass 2 are skipped in full-res mode. Cost is roughly 4×
-        // per-pixel vs the half-res path; chosen by the manager's
-        // VolumetricResolution setting.
-        Pass
-        {
-            Name "VRSL_Vol_RaymarchFullRes"
-            Blend One One
-            ColorMask RGB   // additive light only — never disturb scene alpha
-            ZWrite Off
-            ZTest  Off
-            Cull   Off
-
-            HLSLPROGRAM
-            #pragma vertex   vert
-            #pragma fragment frag
-            #pragma target   4.5
-            #pragma multi_compile _ _VRSL_VOLUMETRIC_NOISE
-            #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
-
-            float4 frag(Varyings i) : SV_Target
-            {
-                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
-
-                float rawDepth = SampleSceneDepth(i.uv);
-                return VRSL_Raymarch(rawDepth, i.uv, i.positionCS.xy);
             }
             ENDHLSL
         }

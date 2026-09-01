@@ -259,8 +259,15 @@ namespace VRSL.URP.Tests
 
             var runs = new List<VRSLBenchmarkRun>();
             yield return Capture("steps-shipped", runs);
-            yield return Capture("steps-excessive", runs,
-                rig => rig.Manager.volumetricStepCount = RegressedStepCount);
+
+            // Held through the harness's own seam rather than set on the manager: the
+            // numeric step field is gone, and a level is the only thing a scene can say
+            // now. See VRSLQualityLevel.Forced for why the row keeps its own lever.
+            using (VRSLQualityLevel.Force(
+                       VRSLQualityLevel.For(VRSLQuality.Standard).WithMaxSteps(RegressedStepCount)))
+            {
+                yield return Capture("steps-excessive", runs);
+            }
 
             double floor = Math.Max(runs[0].rows[0].timings.Noise, runs[1].rows[0].timings.Noise);
             runs[0].noiseFloorMs = floor;
@@ -324,7 +331,7 @@ namespace VRSL.URP.Tests
             var runs = new List<VRSLBenchmarkRun>();
             yield return Capture("quality-standard", runs,
                 rig => VRSLQualityPreset.Session.Begin(rig.Manager)
-                          .Apply(VRSLQualityPreset.Level.Standard));
+                          .Apply(VRSLQuality.Standard));
 
             // Off is captured without the shared judging: the whole point of the level
             // is that it costs less, and it may legitimately cost near enough nothing
@@ -332,7 +339,7 @@ namespace VRSL.URP.Tests
             var offRuns = new List<VRSLBenchmarkRun>();
             yield return Capture("quality-off", offRuns,
                 rig => VRSLQualityPreset.Session.Begin(rig.Manager)
-                          .Apply(VRSLQualityPreset.Level.Off),
+                          .Apply(VRSLQuality.Off),
                 judge: false);
 
             var standard = runs[0].rows[0];

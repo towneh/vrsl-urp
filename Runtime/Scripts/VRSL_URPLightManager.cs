@@ -12,12 +12,6 @@ namespace VRSL.URP
     /// and additively blends the result; ~4× per-pixel cost but no upsample
     /// artefacts, suited to cinematic capture and high-perf desktop targets.
     /// </summary>
-    public enum VolumetricResolution
-    {
-        Half = 0,
-        Full = 1,
-    }
-
     /// <summary>
     /// Singleton manager for the URP realtime light path (DMX data source).
     ///
@@ -73,6 +67,18 @@ namespace VRSL.URP
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
+        [Header("What the package may spend")]
+        [Tooltip("How much of the frame VRSL is allowed to use.\n\n"
+               + "Standard is what most worlds want. High marches the beams more finely and "
+               + "traces shadows further, which costs more per pixel and looks a little "
+               + "cleaner up close. Off keeps surfaces lit but takes the beams out of the "
+               + "air and switches shadows off, which is the cheapest the package gets "
+               + "without removing it.\n\n"
+               + "What each level costs is fixed in code. There is nothing to tune here, on "
+               + "purpose: the numbers this replaced set frame time directly and could not "
+               + "be judged without a profiler.")]
+        public VRSLQuality quality = VRSLQuality.Standard;
+
         [Header("Shadows where something stands in a beam")]
         [Range(0f, 1f)]
         [Tooltip("Screen-space contact shadows. 0 disables them and compiles the trace out. "
@@ -85,22 +91,6 @@ namespace VRSL.URP
                + "occluder just off the edge of the screen.")]
         public float contactShadowStrength = 0f;
 
-        [Range(0.05f, 10f)]
-        [Tooltip("How far along the ray to the fixture the trace runs, in metres. Longer "
-               + "catches larger gaps but spreads the same step count thinner, so thin "
-               + "geometry starts leaking light.")]
-        public float contactShadowDistance = 1.5f;
-
-        [Range(4, 32)]
-        [Tooltip("Depth samples per light. Higher is more reliable on thin occluders and "
-               + "costs linearly.")]
-        public int contactShadowSteps = 8;
-
-        [Range(0.05f, 5f)]
-        [Tooltip("How thick a depth-buffer surface is treated as being, in metres. A depth "
-               + "buffer records surfaces rather than solids, so without this bound distant "
-               + "background would shadow everything in front of it.")]
-        public float contactShadowThickness = 0.5f;
 
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
                + "The volumetric raymarch pass runs whenever this is assigned — there is no "
@@ -110,21 +100,6 @@ namespace VRSL.URP
         public Shader volumetricShader;
 
         [Header("Beams in the air")]
-        [Tooltip("Render resolution for the raymarch. Half is half-res with bilateral upsample "
-               + "(default; right for live VR). Full runs the raymarch at the camera target "
-               + "resolution and additively blends — ~4× per-pixel cost, no upsample artefacts, "
-               + "suited to cinematic capture or high-perf desktop targets.")]
-        public VolumetricResolution volumetricResolution = VolumetricResolution.Half;
-
-        [Range(8, 64)]
-        [Tooltip("Integration steps across each light's span of the view ray. Higher = smoother, "
-               + "more cost; cost scales linearly with this and with lights-per-tile. The span is "
-               + "bounded to the cone rather than the whole ray, so every step lands inside the "
-               + "beam and low counts go further than they otherwise would — 16 is often enough. "
-               + "Raise it for wide cones, long beams or dense haze, where each step covers more "
-               + "distance.")]
-        public int volumetricStepCount = 24;
-
         [Range(0f, 2f)]
         [Tooltip("Base scattering density. Lower = subtler shafts; higher = denser haze. "
                + "Tune relative to scene scale.")]
@@ -154,26 +129,6 @@ namespace VRSL.URP
                + "you get.")]
         public bool coupleToSceneFog = false;
 
-        [Header("Haze that varies across the beam")]
-        [Tooltip("Multiply density by 3D world-space noise to approximate dusty stage haze. "
-               + "When off, the noise code is compiled out of the shader and there is no cost. "
-               + "Adds roughly 5–10% to the raymarch pass on desktop VR when on.")]
-        public bool volumetricUseNoise = true;
-
-        [Range(0.05f, 2f)]
-        [Tooltip("Spatial frequency of the dust noise in world units. Higher = finer patches; "
-               + "lower = larger blobs.")]
-        public float volumetricNoiseScale = 0.3f;
-
-        [Range(0f, 2f)]
-        [Tooltip("Vertical drift speed of the noise in world units per second. 0 = static.")]
-        public float volumetricNoiseScrollSpeed = 0.1f;
-
-        [Range(0f, 1f)]
-        [Tooltip("How strongly the noise modulates density. 0 = clean uniform; "
-               + "1 = density drops to zero in the darkest patches.")]
-        public float volumetricNoiseStrength = 0.7f;
-
         [Header("Gobo patterns")]
         [Tooltip("Gobo textures available to all DMX fixtures. Packed into a shared Texture2DArray. "
                + "DMX channel +11 selects the slot (0 = open/no gobo). Order matches DMX value range.")]
@@ -195,10 +150,33 @@ namespace VRSL.URP
                + "from the right CRTs.")]
         public bool outputDebugLogs = false;
 
-        /// <summary>x = strength, y = trace distance, z = steps, w = thickness.</summary>
-        public Vector4 ContactShadowParams =>
-            new Vector4(contactShadowStrength, contactShadowDistance,
-                        contactShadowSteps, contactShadowThickness);
+        /// <summary>The level this manager is running at.</summary>
+        public VRSLQualityLevel Quality => VRSLQualityLevel.For(quality);
+
+        /// <summary>Whether the volumetric pass should run at all: a level that draws
+        /// beams, and a shader to draw them with. Gates the material and the pass, so
+        /// Off allocates nothing rather than allocating and drawing nothing.</summary>
+        public bool VolumetricsEnabled => Quality.Volumetrics && volumetricShader != null;
+
+        /// <summary>
+        /// x = strength, y = trace distance, z = steps, w = thickness. All zero when the
+        /// trace should not run.
+        /// </summary>
+        /// <remarks>
+        /// Zeroed rather than left with a live step count, because the shader reads a
+        /// step count of 0 as "skip the trace" — tracing and multiplying by a strength of
+        /// zero is the most expensive term in the lighting loop spent on nothing.
+        /// </remarks>
+        public Vector4 ContactShadowParams
+        {
+            get
+            {
+                var level = Quality;
+                if (!level.ContactShadows || contactShadowStrength <= 0f) return Vector4.zero;
+                return new Vector4(contactShadowStrength, level.ContactShadowDistance,
+                                   level.ContactShadowSteps, level.ContactShadowThickness);
+            }
+        }
 
         public enum StrobeRate
         {
@@ -218,11 +196,6 @@ namespace VRSL.URP
                + "material to read. Defaults match the shipped Horizontal material.")]
         public StrobeRate strobeRate = StrobeRate.StaticFrequencies;
 
-        [Tooltip("Static mode: the rate below a channel value of 0.2. Kept to mirror the "
-               + "CRT material, but unreachable: the same 0.2 threshold that selects this "
-               + "rate also holds the fixture fully on, so its phase never reaches the "
-               + "output. Changing it has no effect, in the CRT chain either.")]
-        public float strobeLowFrequency  = 25f;
         [Tooltip("Static mode: the rate between 0.2 and 0.5.")]
         public float strobeMedFrequency  = 45f;
         [Tooltip("Static mode: the rate above 0.5.")]
@@ -318,14 +291,14 @@ namespace VRSL.URP
         // Volumetric shader parameter packing — read by VRSLDMXLightPasses.VolumetricPass
         // each frame and uploaded as global vectors before the raymarch pass.
         public Vector4 VolumetricStepParams =>
-            new Vector4(volumetricStepCount, coupleToSceneFog ? 1f : 0f, 0f, volumetricAnisotropy);
+            new Vector4(Quality.VolumetricMaxSteps, coupleToSceneFog ? 1f : 0f,
+                        0f, volumetricAnisotropy);
         public Vector4 VolumetricDensityParams =>
-            new Vector4(volumetricDensity, volumetricNoiseScale,
-                        volumetricNoiseScrollSpeed, volumetricNoiseStrength);
+            new Vector4(volumetricDensity, VRSLQualityLevel.NoiseScale,
+                        VRSLQualityLevel.NoiseScrollSpeed, VRSLQualityLevel.NoiseStrength);
         public Vector4 VolumetricFogTintParams =>
             new Vector4(volumetricTint.r, volumetricTint.g, volumetricTint.b, volumetricIntensity);
-        public bool VolumetricUseNoise => volumetricUseNoise;
-        public bool VolumetricUseFullRes => volumetricResolution == VolumetricResolution.Full;
+        public bool VolumetricUseNoise => Quality.VolumetricNoise;
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
         // 8 × float4 = 128 bytes
@@ -612,7 +585,10 @@ namespace VRSL.URP
         int _advanceKernel = -1;
         int _strobeKernel  = -1;
 
-        Vector4 StrobeFreqs => new Vector4(strobeLowFrequency, strobeMedFrequency,
+        // x is unused: the sub-0.2 rate it used to carry can never reach the output,
+        // because the same threshold that selects it also holds the fixture fully on.
+        // The vector keeps its shape so the compute's constant layout is untouched.
+        Vector4 StrobeFreqs => new Vector4(0f, strobeMedFrequency,
                                            strobeHighFrequency, maxStrobeFrequency);
 
         void EnsureSpinPhaseBuffer(int channelCount)
@@ -1226,8 +1202,9 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
             sb.AppendLine("  " + VRSLDiagnostics.LightDataStatus(LightDataBuffer, FixtureCount));
             sb.AppendLine("  " + VRSLDiagnostics.TileStatus(TileCullPass, FixtureCount));
-            sb.AppendLine($"  Volumetric mode: {volumetricResolution}");
-            sb.AppendLine($"  Contact shadows: {(contactShadowStrength > 0f ? $"on (strength {contactShadowStrength:F2}, {contactShadowDistance}m, {contactShadowSteps} steps)" : "off")}");
+            var level = Quality;
+            sb.AppendLine($"  Quality: {quality} (volumetrics {(level.Volumetrics ? $"on, {level.VolumetricMaxSteps} max steps" : "off")})");
+            sb.AppendLine($"  Contact shadows: {(ContactShadowParams.x > 0f ? $"on (strength {contactShadowStrength:F2}, {level.ContactShadowDistance}m, {level.ContactShadowSteps} steps)" : "off")}");
             sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
             Debug.Log(sb.ToString(), this);
         }

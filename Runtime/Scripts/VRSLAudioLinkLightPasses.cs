@@ -246,6 +246,7 @@ namespace VRSL.URP
                 var mgr = VRSL_AudioLinkURPLightManager.Instance;
                 if (mgr == null
                     || mgr.FixtureCount == 0
+                    || !mgr.VolumetricsEnabled
                     || mgr.VolumetricMaterial == null
                     || mgr.LightDataBuffer == null) return;
 
@@ -270,50 +271,6 @@ namespace VRSL.URP
                 BufferHandle tileHandle = bindTileBuffer
                     ? rg.ImportBuffer(cull.TileBuffer)
                     : default;
-
-                if (mgr.VolumetricUseFullRes)
-                {
-                    // Full-res path — single raymarch pass that samples the full
-                    // depth texture and additive-blends onto the camera colour.
-                    // Skips the depth downsample and bilateral upsample passes.
-                    using (var builder = rg.AddRasterRenderPass<RaymarchData>(
-                        "VRSL Vol Raymarch FullRes", out var d))
-                    {
-                        d.material        = mgr.VolumetricMaterial;
-                        d.halfDepth       = TextureHandle.nullHandle;
-                        d.lightDataBuffer = lightDataHandle;
-                        d.lightCount      = mgr.FixtureCount;
-                        d.stepParams      = mgr.VolumetricStepParams;
-                        d.densityParams   = mgr.VolumetricDensityParams;
-                        d.fogTintParams   = mgr.VolumetricFogTintParams;
-                        d.bindTileBuffer  = bindTileBuffer;
-                        d.tileParams      = tileParams;
-                        d.tileLightIndices = tileHandle;
-
-                        builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
-                        builder.UseBuffer(d.lightDataBuffer, AccessFlags.Read);
-                        builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
-                        if (bindTileBuffer)
-                            builder.UseBuffer(d.tileLightIndices, AccessFlags.Read);
-                        builder.AllowGlobalStateModification(true);
-
-                        builder.SetRenderFunc((RaymarchData p, RasterGraphContext ctx) =>
-                        {
-                            var cmd = ctx.cmd;
-                            cmd.SetGlobalBuffer( "_VRSLLights",       p.lightDataBuffer);
-                            cmd.SetGlobalInteger("_VRSLLightCount",   p.lightCount);
-                            cmd.SetGlobalVector( "_VRSLVolStepCount", p.stepParams);
-                            cmd.SetGlobalVector( "_VRSLVolDensity",   p.densityParams);
-                            cmd.SetGlobalVector( "_VRSLVolFogTint",   p.fogTintParams);
-                            cmd.SetGlobalVector( "_VRSLTileParams",   p.tileParams);
-                            if (p.bindTileBuffer)
-                                cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
-                            cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
-                                p.material, 0, 3);
-                        });
-                    }
-                    return;
-                }
 
                 int halfW = Mathf.Max(1, camData.cameraTargetDescriptor.width  / 2);
                 int halfH = Mathf.Max(1, camData.cameraTargetDescriptor.height / 2);

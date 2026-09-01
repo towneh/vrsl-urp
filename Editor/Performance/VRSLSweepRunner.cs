@@ -386,9 +386,9 @@ namespace VRSL.URP.EditorScripts
             VRSLBenchmarkRow off = null, standard = null, high = null;
             foreach (var row in run.rows)
             {
-                if (row.config.quality == nameof(VRSLQualityPreset.Level.Off))      off = row;
-                if (row.config.quality == nameof(VRSLQualityPreset.Level.Standard)) standard = row;
-                if (row.config.quality == nameof(VRSLQualityPreset.Level.High))     high = row;
+                if (row.config.quality == nameof(VRSLQuality.Off))      off = row;
+                if (row.config.quality == nameof(VRSLQuality.Standard)) standard = row;
+                if (row.config.quality == nameof(VRSLQuality.High))     high = row;
             }
 
             var current = standard ?? high ?? off;
@@ -513,8 +513,8 @@ namespace VRSL.URP.EditorScripts
             text.AppendLine();
             foreach (var level in VRSLQualityPreset.All)
             {
-                var row = level == VRSLQualityPreset.Level.Off      ? off
-                        : level == VRSLQualityPreset.Level.Standard ? standard
+                var row = level == VRSLQuality.Off      ? off
+                        : level == VRSLQuality.Standard ? standard
                                                                     : high;
                 if (row == null) continue;
                 double levelFrame = row.timings.HasGpu

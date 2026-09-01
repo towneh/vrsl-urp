@@ -692,8 +692,8 @@ namespace VRSL.URP
             // would otherwise report the step count of a march it never runs — a
             // counter that stays plausible while describing nothing.
             counters.stepsPerLight =
-                useDmx ? (dmx.VolumetricMaterial != null ? dmx.volumetricStepCount : 0)
-                       : (audioLink.VolumetricMaterial != null ? audioLink.volumetricStepCount : 0);
+                useDmx ? (dmx.VolumetricsEnabled       ? dmx.Quality.VolumetricMaxSteps : 0)
+                       : (audioLink.VolumetricsEnabled ? audioLink.Quality.VolumetricMaxSteps : 0);
 
             // DMX channels are a DMX concept. Zero on an AudioLink scene is the honest
             // answer rather than a missing one.
