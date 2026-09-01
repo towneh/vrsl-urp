@@ -107,6 +107,19 @@ namespace VRSL.URP
         /// </remarks>
         public string LastRecordedCamera { get; private set; }
 
+        /// <summary>
+        /// The same camera as an object, for a caller asking whether the figures are
+        /// its own.
+        /// </summary>
+        /// <remarks>
+        /// Identity cannot be asked by name: Unity does not make camera names unique,
+        /// so a host camera called what the caller's is called would answer yes. Held
+        /// for reference comparison and never dereferenced — the name above is
+        /// captured at record time precisely so a report can still be written after
+        /// the camera has been destroyed.
+        /// </remarks>
+        public Camera LastRecordedCameraObject { get; private set; }
+
 
         /// <summary>Entries per tile in <see cref="TileBuffer"/>: a count followed
         /// by up to <see cref="MaxLightsPerTile"/> indices.</summary>
@@ -182,6 +195,7 @@ namespace VRSL.URP
             TileParams = Vector4.zero;
             ActiveTileCount = 0;
             LastRecordedCamera = null;
+            LastRecordedCameraObject = null;
 
             // Keep a buffer allocated even when the cull can't run, so the
             // consuming passes always have something to bind to
@@ -236,7 +250,8 @@ namespace VRSL.URP
 
             TileParams      = new Vector4(tilesX, tilesY, TileSize, MaxLightsPerTile);
             ActiveTileCount = tilesX * tilesY * slices;
-            LastRecordedCamera = camData.camera != null ? camData.camera.name : null;
+            LastRecordedCamera       = camData.camera != null ? camData.camera.name : null;
+            LastRecordedCameraObject = camData.camera;
 
             using var builder = rg.AddComputePass<PassData>("VRSL Tile Light Cull", out var d);
 

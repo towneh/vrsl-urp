@@ -283,6 +283,13 @@ namespace VRSL.URP
         /// camera in the frame and the last record wins, so this is the only thing
         /// that says whether they are about the view the row is labelled with.</summary>
         public string tileCamera;
+        /// <summary>Whether that camera is the one the caller said to expect.
+        ///
+        /// False also when the caller named none, so it is only a claim where one did
+        /// — the sweep does, because a row labelled with a camera variant is worthless
+        /// if the figures came from elsewhere. Judged on the camera object rather than
+        /// its name, since Unity does not make names unique.</summary>
+        public bool  tileCameraAsExpected;
         public int   stepsPerLight;
         /// <summary>Fixtures actually emitting light. A configuration where this is
         /// zero measured a dark scene, whatever else its numbers say.</summary>

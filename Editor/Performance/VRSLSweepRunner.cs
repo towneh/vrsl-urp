@@ -252,6 +252,9 @@ namespace VRSL.URP.EditorScripts
                     Debug.Log($"[VRSL analyse] quality {level} "
                             + $"({++done} of {VRSLQualityPreset.All.Length})");
 
+                    // No expected camera: Analyse measures the author's scene and poses
+                    // nothing, so it has no view to claim the tile figures should be of.
+                    // The rows say SceneCamera rather than naming one for the same reason.
                     var capture = VRSLBenchmark.CaptureRow(settings, config, run);
                     while (capture.MoveNext()) yield return capture.Current;
                 }

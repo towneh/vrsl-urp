@@ -463,7 +463,8 @@ namespace VRSL.URP
             VRSLRowConfig         config,
             VRSLBenchmarkRun      run,
             Action<VRSLBenchmarkRow> onComplete = null,
-            Action                onFrame       = null)
+            Action                onFrame       = null,
+            Camera                expectedTileCamera = null)
         {
             settings ??= new VRSLBenchmarkSettings();
             var row = new VRSLBenchmarkRow { config = config ?? new VRSLRowConfig() };
@@ -544,7 +545,7 @@ namespace VRSL.URP
                         if (enabled && block == 0)
                         {
                             managers.SetEnabled(true);
-                            ReadCounters(managers, row.counters, run);
+                            ReadCounters(managers, row.counters, run, expectedTileCamera);
                         }
                     }
                 }
@@ -615,7 +616,8 @@ namespace VRSL.URP
         internal static bool MeasureDmxPath(bool hasDmx, int dmxFixtures, bool hasAudioLink) =>
             hasDmx && (!hasAudioLink || dmxFixtures > 0);
 
-        static void ReadCounters(ManagerSet managers, VRSLCounters counters, VRSLBenchmarkRun run)
+        static void ReadCounters(ManagerSet managers, VRSLCounters counters,
+                                 VRSLBenchmarkRun run, Camera expectedTileCamera)
         {
             var dmx       = managers.Dmx;
             var audioLink = managers.AudioLink;
@@ -704,6 +706,9 @@ namespace VRSL.URP
             counters.tilesAcross = cullPass != null ? (int)cullPass.TileParams.x : 0;
             counters.tilesDown   = cullPass != null ? (int)cullPass.TileParams.y : 0;
             counters.tileCamera  = cullPass != null ? cullPass.LastRecordedCamera : null;
+            counters.tileCameraAsExpected =
+                expectedTileCamera != null && cullPass != null
+                && ReferenceEquals(cullPass.LastRecordedCameraObject, expectedTileCamera);
 
             // These two are set by M3 and M4. Recorded as false rather than omitted
             // so the row shape does not change when they land, and noted so a
