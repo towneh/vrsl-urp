@@ -185,6 +185,20 @@ frame describes whichever camera rendered last — which in a host project with 
 rig is not always the one a row is labelled with. Sweep rows carry `tileCamera` and the
 tile grid for this reason; a figure quoted without them is a figure of an unknown view.
 
+### Quality
+
+`VRSLQualityPresetTests` in the suite covers Q3 to Q5. Q1 and Q2 want a frame capture,
+and Q6 is judged by looking at the inspector.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| Q1 | — | A lit scene at each of `Off`, `Standard` and `High` | Beams in the air at `Standard` and `High` and none at `Off`; surfaces still lit at all three. `High` marches more finely than `Standard`, which is visible on a slow pan across a cone edge and not much else |
+| Q2 | — | `quality = Off`, frame capture | No volumetric render targets allocated and no volumetric pass recorded. Judged in the capture: a pass that runs and draws nothing looks identical on screen |
+| Q3 | — | `contactShadowStrength = 0`, and any strength at `quality = Off` | The trace does not run. The packed step count is 0, which the shader reads as skip — tracing and scaling the result to nothing is the most expensive term in the lighting loop spent for no picture |
+| Q4 | — | `VRSLQualityLevel.For(Standard)` against the defaults the package shipped | Identical: 24 steps, 8 contact steps, 1.5 m, 0.5 m, noise on at 0.3 / 0.1 / 0.7. A scene authored before the quality field opens at `Standard` and costs what it did. An unrecognised level falls back to `Standard` rather than to something that draws nothing |
+| Q5 | — | Both managers at each level | The same step, density, contact and noise parameters from each. A scene carrying both paths must not march at two budgets depending on which manager owns the pass |
+| Q6 | — | Both manager inspectors, **judged by reading them as a world author would** | One quality control, then the look controls it governs. At `Off` those are greyed out rather than gone, with a line saying why — an author who forgot they switched it off should see the controls sitting there, not conclude the package is broken. No numeric cost knob anywhere, and no advanced foldout hiding one |
+
 ### Wiring
 
 `VRSLWiringTests` in the suite. These are about the assets a light manager points at —

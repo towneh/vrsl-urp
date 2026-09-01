@@ -40,12 +40,74 @@ namespace VRSL.URP.EditorScripts
                 EditorGUILayout.Space();
             }
 
-            // Everything that is not wiring, drawn the way it always was.
             var skip = new List<string> { "m_Script" };
             if (fields != null) skip.AddRange(fields.Select(f => f.Field));
+            skip.AddRange(DrawCost());
+
+            // Everything else, drawn the way it always was and in the order it is
+            // declared. A field added later lands here rather than nowhere, which is the
+            // point of drawing the groups above by name and the rest by exclusion.
             DrawPropertiesExcluding(serializedObject, skip.ToArray());
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>Fields whose effect the quality level decides, in the order an
+        /// author meets them.</summary>
+        static readonly string[] LookFields =
+        {
+            "volumetricDensity", "volumetricAnisotropy", "volumetricTint",
+            "volumetricIntensity", "coupleToSceneFog",
+        };
+
+        /// <summary>
+        /// What the package may spend, and the controls that level governs.
+        /// </summary>
+        /// <remarks>
+        /// The look controls are drawn disabled at <c>Off</c> rather than hidden. An
+        /// author who has switched the beams off and forgotten should be able to see the
+        /// density and tint sitting there greyed out, rather than go looking for controls
+        /// that have vanished and conclude the package is broken.
+        ///
+        /// Contact-shadow strength is in the same state for the same reason: <c>Off</c>
+        /// carries no contact shadows, so the strength does nothing whatever it says.
+        /// </remarks>
+        /// <returns>The fields drawn here, so the caller does not draw them twice.</returns>
+        IEnumerable<string> DrawCost()
+        {
+            var quality = serializedObject.FindProperty("quality");
+            if (quality == null) return System.Array.Empty<string>();
+
+            EditorGUILayout.PropertyField(quality);
+
+            bool off = quality.enumValueIndex == (int)VRSLQuality.Off;
+            if (off)
+                EditorGUILayout.LabelField(
+                    "Off, so there are no beams in the air and nothing casts a contact "
+                  + "shadow. The controls below still describe how they would look.",
+                    EditorStyles.wordWrappedMiniLabel);
+
+            var drawn = new List<string> { "quality" };
+            using (new EditorGUI.DisabledScope(off))
+            {
+                foreach (var name in LookFields)
+                {
+                    var property = serializedObject.FindProperty(name);
+                    if (property == null) continue;   // the two managers differ
+                    EditorGUILayout.PropertyField(property);
+                    drawn.Add(name);
+                }
+
+                var strength = serializedObject.FindProperty("contactShadowStrength");
+                if (strength != null)
+                {
+                    EditorGUILayout.PropertyField(strength);
+                    drawn.Add("contactShadowStrength");
+                }
+            }
+
+            EditorGUILayout.Space();
+            return drawn;
         }
 
         /// <summary>
