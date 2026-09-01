@@ -311,7 +311,7 @@ What it does and doesn't cover matters:
 
 - **Covers** near-field occlusion the camera can see — an avatar in a beam shadowing the
   floor at its feet, a prop shadowing the surface it stands on.
-- **Doesn't cover** anything off screen, or beyond `contactShadowDistance`. A wall between a
+- **Doesn't cover** anything off screen, or beyond the level's trace distance. A wall between a
   fixture and a surface across the room casts nothing, and an occluder just outside the
   frame stops shadowing as it leaves. Those need a light-perspective shadow map.
 
@@ -320,12 +320,12 @@ it runs last, only for lights still reaching the pixel after attenuation and the
 is **off by default**. Raise the step count for thin occluders; raise the thickness if
 shadows disappear at grazing angles; lower it if distant background bleeds shadow forward.
 
-| Field | Effect |
-|---|---|
-| `contactShadowStrength` | 0 = off, 1 = fully shadowed where occluded. |
-| `contactShadowDistance` | Trace length in metres along the ray to the fixture. |
-| `contactShadowSteps` | Depth samples per light. Cost is linear in this. |
-| `contactShadowThickness` | How thick a depth-buffer surface is treated as being. |
+`contactShadowStrength` is the only control: 0 is off, 1 is fully shadowed where
+occluded. Trace length, sample count and how thick a depth-buffer surface is treated as
+being all come from the quality level, because each of them sets frame time and none can
+be judged by eye. A strength of 0, and any strength at `Off`, zeroes the packed step
+count — which the shader reads as skip, rather than tracing and scaling the result to
+nothing.
 
 ### Tiled light culling
 
@@ -352,7 +352,7 @@ Each light in the tile's list is integrated over its own span of the view ray ra
 
 Both stages matter, and for different reasons.
 
-Stage 1 decouples step size from scene depth. A shared march divides `volumetricStepCount` across the whole ray, so its step size is set by whatever geometry sits behind the beam rather than by the beam. A cone a few metres away with a wall thirty metres behind it would be crossed in one or two steps.
+Stage 1 decouples step size from scene depth. A shared march divides the step budget across the whole ray, so its step size is set by whatever geometry sits behind the beam rather than by the beam. A cone a few metres away with a wall thirty metres behind it would be crossed in one or two steps.
 
 Stage 2 is what makes the sample budget actually land in the light. A sphere is a poor proxy for a cone: at 20 m range the chord runs to 40 m, it contains the entire backward hemisphere, and everything outside the beam angle. A ray crossing a beam near the lens covers well under a metre of lit space, so without this the great majority of steps sample dark and the few inside carry the whole result. That is large per-pixel quadrature error, and the jitter cannot hide error of that size — it only reshapes it into whatever pattern the dither itself carries, which is how it surfaces visually. The effect is worst near a fixture head, where the cone is narrowest relative to its sphere.
 
@@ -365,17 +365,37 @@ Two consequences worth knowing:
 - Density noise (`_VRSL_VOLUMETRIC_NOISE`) is evaluated per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one noise fetch per light per step.
 - Each light's step size differs, and the accumulation weights by that light's own `stepSize`, so overlapping cones still sum to the same result as marching them together.
 
-Because the span is tight, every step lands inside the beam and `volumetricStepCount` buys far more than it would against an untargeted march. The default is 24, and 16 has held up in practice on a rig of 60° spots at 20 m range. What governs the floor is metres of cone per step rather than the count on its own, so wide cones, long beams and dense haze all want more; a narrow spot needs very few.
+Because the span is tight, every step lands inside the beam and the budget buys far more than it would against an untargeted march. `Standard` spends 24 and `High` 40. What governs the floor is metres of cone per step rather than the count on its own, so wide cones, long beams and dense haze are the cases `High` is for; a narrow spot needs very few.
 
-### Resolution modes
+### Quality levels
 
-`volumetricResolution` on the manager selects:
+`quality` on either manager is the one cost control, and its values are constants in
+`VRSLQuality.cs` rather than serialised fields. Both managers read the same table, so a
+scene carrying both light paths cannot march at two budgets depending on which manager
+owns the pass.
 
-- **Half** (default) — three sub-passes:
-  - Pass 0: depth downsample. Min-depth filter on each 2×2 source quad keeps the half-res depth tight to silhouettes.
-  - Pass 1: half-res jittered raymarch into an `R16G16B16A16_SFloat` half-res RT.
-  - Pass 2: 9-tap bilateral upsample, additive over the camera colour. Taps are weighted by a separable tent centred on the pixel's true sub-texel position within the half-res grid, times a depth term of `1 / (1 + d²)` where `d` is the eye-depth difference over a tolerance proportional to viewing distance.
-- **Full** — single pass at the camera target resolution; samples `_CameraDepthTexture` directly and additive-blends. ~4× per-pixel cost vs Half but no upsample artefacts.
+| Level | Beams | Max steps per light | Noise | Contact shadows | Steps | Distance | Thickness |
+|---|---|---|---|---|---|---|---|
+| `Off` | no | — | — | no | — | — | — |
+| `Standard` | yes | 24 | yes | yes | 8 | 1.5 m | 0.5 m |
+| `High` | yes | 40 | yes | yes | 16 | 2.5 m | 0.35 m |
+
+`Standard` is the default and reproduces what the package shipped before the level
+existed, so a scene authored earlier renders and costs what it did. `Off` records no
+volumetric pass and allocates no volumetric targets, rather than recording one that draws
+nothing.
+
+The march is half-resolution and only half-resolution, in three sub-passes:
+
+- Pass 0: depth downsample. Min-depth filter on each 2×2 source quad keeps the half-res depth tight to silhouettes.
+- Pass 1: half-res jittered raymarch into an `R16G16B16A16_SFloat` half-res RT.
+- Pass 2: 9-tap bilateral upsample, additive over the camera colour. Taps are weighted by a separable tent centred on the pixel's true sub-texel position within the half-res grid, times a depth term of `1 / (1 + d²)` where `d` is the eye-depth difference over a tolerance proportional to viewing distance.
+
+The upsample is bilateral rather than trilinear, which is what makes half-resolution
+affordable instead of a compromise: it rejects taps across a depth discontinuity and so
+holds an edge a trilinear filter would smear. `High` spends its extra budget on step
+count for that reason — against a bilateral upsample, a finer march buys more per unit
+cost than more pixels would.
 
 Two details of the upsample are load-bearing rather than incidental:
 

@@ -71,17 +71,25 @@ The AudioLink manager auto-discovers `_AudioTexture` from the global shader prop
 
 The volumetric pass runs whenever `volumetricShader` is assigned. Inspector fields:
 
+The volumetric pass runs whenever the level draws beams and `volumetricShader` is
+assigned.
+
 | Field | Effect |
 |---|---|
-| `volumetricStepCount` | Integration steps per light, spent across the part of the ray inside that light's own cone (default 24). Cost scales with steps × lights per tile. Because the span is bounded to the cone rather than to the geometry behind it, low counts go further than they would otherwise — 16 holds up on 60° spots at 20 m range. Wide cones, long beams and dense haze want more. |
+| `quality` | What the package may spend: `Off`, `Standard` or `High`. `Off` draws no beams and casts no contact shadows; `Standard` is the default; `High` marches more finely and traces further. What each costs is fixed in code — see the quality table in the pipeline document |
 | `volumetricDensity` | Base scattering density. |
 | `volumetricAnisotropy` | Henyey–Greenstein g (default 0.2; 0 = isotropic; positive forward-scatters). |
 | `volumetricTint` / `volumetricIntensity` | Colour tint and global multiplier. |
-| `volumetricUseNoise` + scale / scroll / strength | Modulated 3D-noise density. Off compiles the noise out (zero cost). |
 | `coupleToSceneFog` | Multiply density by `unity_FogParams.x` and tint by `unity_FogColor` so a URP VolumeProfile drives shaft brightness globally. |
-| `volumetricResolution` | `Half` (default; live VR) or `Full` (cinematic capture; ~4× per-pixel cost). |
 
-To disable the volumetric cones at runtime without touching the shader assignment, drop `volumetricIntensity` to 0.
+Everything above except `quality` changes the look at a fixed price, which is why it is
+still yours to set. Step counts, trace lengths and render resolutions are not: each sets
+frame time directly and none can be judged by eye without a profiler, so they belong to
+the level.
+
+To take the cones out of the air without touching the shader assignment, drop
+`volumetricIntensity` to 0 — or set `quality` to `Off`, which also stops the pass being
+recorded and the targets being allocated.
 
 ---
 

@@ -78,12 +78,12 @@ Removing the upstream package afterwards leaves missing-script slots on the fixt
 | Everything lit a flat neutral grey | `surfacePropertiesShader` unassigned on the manager. Without it there's no albedo capture, so every surface shades as a neutral dielectric. |
 | Nothing lit at all | A fullscreen shader failed to compile — it draws nothing rather than drawing wrong. Run **VRSL → URP → Validate Shaders**. |
 | No volumetric cones | `volumetricShader` unassigned, or `volumetricIntensity` at 0. |
-| Cones show visible stepping | `volumetricStepCount` too low for the beam. Wide cones, long throws and dense haze need more steps than a narrow spot. |
+| Cones show visible stepping | Set `quality` to `High`, which marches more finely. Wide cones, long throws and dense haze show stepping before a narrow spot does. |
 | Fixture bodies dark, but the light they cast works | The manager publishes the DMX grid CRTs itself; check its CRT slots are populated, including `dmxStrobeTimerTexture`. |
 | DMX decodes plausible but wrong values | Channel addressing. Check `use5ChannelMode` matches how the fixture is patched — a 5-channel fixture read as 13-channel picks up its neighbours' channels. |
 | A DMX fixture is half as bright as it used to be | Intended. The dimmer curve now peaks at exactly 1, so `maxIntensity` matches a URP spot light's Intensity. Double `maxIntensity`, or set `curveMod` to 1. |
 | Beams missing in mirrors or camera props | `secondaryCameraMode` on the manager. `Full` lights them like the main view; `SurfaceOnly` drops the raymarch; `Skip` drops both. |
-| Frame time worse than expected | In order: lower `volumetricStepCount`, confirm `volumetricResolution` is `Half`, check `contactShadowStrength` is 0 if you don't need it, and make sure `lightCullShader` is assigned — without it both fullscreen passes iterate every fixture on every pixel. |
+| Frame time worse than expected | In order: drop `quality` to `Standard` or `Off`, check `contactShadowStrength` is 0 if you don't need it, and make sure `lightCullShader` is assigned — without it both fullscreen passes iterate every fixture on every pixel. `VRSL → URP → Performance → Analyse This Scene` answers what the package costs in your own scene. |
 | Par, blinder, laser or discoball bodies wrong in VR | Known issue, see `CHANGELOG.md`. Moving heads, surface lighting and volumetrics are unaffected. |
 
 For benchmarking rather than debugging, **VRSL → Profiling → Import Profiling Sample** brings in a scene builder that generates a deterministic rig of N matched fixtures with a fixed camera pose.

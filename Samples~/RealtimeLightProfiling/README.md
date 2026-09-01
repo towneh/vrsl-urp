@@ -54,8 +54,9 @@ preserved across rebuilds.
   - **InsideCones** — worst case for the URP fullscreen lighting pass since
     many cones overlap per pixel.
   - **OutsideCones** — best case; only a few cones in frame.
-- For URP volumetric resolution / step-count sweeps, edit those fields on the
-  spawned `VRSL URP Light Manager` GameObject between captures.
+- To sweep what the package spends, switch `quality` on the spawned
+  `VRSL URP Light Manager` GameObject between captures. The numeric step and
+  resolution fields it replaced are gone; the levels are the sweep.
 
 ## What is NOT covered
 
