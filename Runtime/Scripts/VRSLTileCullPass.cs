@@ -47,11 +47,17 @@ namespace VRSL.URP
         /// tiles cull tighter at the cost of more groups.</summary>
         public const int TileSize = 16;
 
-        /// <summary>Per-tile cap. Must match VRSL_MAX_LIGHTS_PER_TILE in both
-        /// VRSLLightCull.compute and VRSLTileCulling.hlsl. Fixtures past the cap
-        /// are dropped for that tile; at 64 overlapping fixtures on a 16×16 tile
-        /// the loss is not observable, but it is a hard clamp rather than a
-        /// fallback.</summary>
+        /// <summary>
+        /// Per-tile cap: the most fixtures a single tile can light with. Fixtures
+        /// past it are dropped for that tile, so a rig dense enough to reach it is
+        /// not being drawn as it was authored.
+        /// </summary>
+        /// <remarks>
+        /// This is the only declaration. The cull kernel and the read side take it
+        /// as a uniform in <c>w</c> of their tile-params vector rather than
+        /// declaring their own, because it decides a buffer stride and three copies
+        /// of a stride is a silent-corruption hazard rather than a tidiness one.
+        /// </remarks>
         public const int MaxLightsPerTile = 64;
 
         const int TileStride   = MaxLightsPerTile + 1;   // slot 0 holds the count
@@ -76,7 +82,8 @@ namespace VRSL.URP
         public GraphicsBuffer TileBuffer => _tileBuffer;
 
         /// <summary>
-        /// x = tiles across, y = tiles down, z = tile size in pixels, w = unused.
+        /// x = tiles across, y = tiles down, z = tile size in pixels,
+        /// w = <see cref="MaxLightsPerTile"/>.
         /// x is 0 when the cull did not run for the current camera, which the
         /// shaders read as "iterate every light" so the scene still lights.
         /// Written during this pass's record and read by the lighting and
@@ -87,6 +94,7 @@ namespace VRSL.URP
         /// <summary>Tiles the last record actually dispatched, across all eyes.
         /// The buffer may be larger, since it only ever grows.</summary>
         public int ActiveTileCount { get; private set; }
+
 
         /// <summary>Entries per tile in <see cref="TileBuffer"/>: a count followed
         /// by up to <see cref="MaxLightsPerTile"/> indices.</summary>
@@ -213,7 +221,7 @@ namespace VRSL.URP
                     * Matrix4x4.Inverse(gpuProj) * clipFlip;
             }
 
-            TileParams      = new Vector4(tilesX, tilesY, TileSize, 0f);
+            TileParams      = new Vector4(tilesX, tilesY, TileSize, MaxLightsPerTile);
             ActiveTileCount = tilesX * tilesY * slices;
 
             using var builder = rg.AddComputePass<PassData>("VRSL Tile Light Cull", out var d);
@@ -228,7 +236,7 @@ namespace VRSL.URP
             d.lightData      = rg.ImportBuffer(_source.LightDataBuffer);
             d.tileIndices    = rg.ImportBuffer(_tileBuffer);
             d.lightCount     = _source.FixtureCount;
-            d.cullTileParams = new Vector4(tilesX, tilesY, slices, 0f);
+            d.cullTileParams = new Vector4(tilesX, tilesY, slices, MaxLightsPerTile);
             d.invViewProj    = invViewProj;
             d.tilesX         = tilesX;
             d.tilesY         = tilesY;

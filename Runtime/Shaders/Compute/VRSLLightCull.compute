@@ -15,16 +15,16 @@
 
 #include "../Shared/VRSLLightingLibrary.hlsl"
 
-// Must match VRSLTileCulling.hlsl and VRSL_TileCulling.MaxLightsPerTile.
-#define VRSL_MAX_LIGHTS_PER_TILE 64
-#define VRSL_TILE_STRIDE         (VRSL_MAX_LIGHTS_PER_TILE + 1)
 #define VRSL_CULL_GROUP_SIZE     64
 
 StructuredBuffer<VRSLLightData> _VRSLLights;
 RWStructuredBuffer<uint>        _VRSLTileLightIndicesRW;
 
 uint _VRSLLightCount;
-// x = tiles across, y = tiles down, z = eye/slice count, w = unused.
+// x = tiles across, y = tiles down, z = eye/slice count,
+// w = per-tile light cap. The cap arrives as a uniform so that this kernel, the
+// read side and the pass that allocates the buffer cannot disagree about a
+// number that decides a buffer stride.
 float4 _VRSLCullTileParams;
 // Two separate matrices rather than a float4x4[2]. Matrix arrays in a compute
 // shader's constant buffer are an unreliable corner of the API, and when the
@@ -108,8 +108,9 @@ void CullLights(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
     uint eye = groupId.z;
     if (tx >= tilesX || ty >= tilesY) return;
 
+    uint capacity  = (uint)_VRSLCullTileParams.w;
     uint tileIndex = (eye * tilesY + ty) * tilesX + tx;
-    uint base      = tileIndex * VRSL_TILE_STRIDE;
+    uint base      = tileIndex * (capacity + 1u);
 
     if (groupIndex == 0) gs_TileLightCount = 0;
     GroupMemoryBarrierWithGroupSync();
@@ -174,12 +175,12 @@ void CullLights(uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
 
         uint slot;
         InterlockedAdd(gs_TileLightCount, 1u, slot);
-        if (slot < VRSL_MAX_LIGHTS_PER_TILE)
+        if (slot < capacity)
             _VRSLTileLightIndicesRW[base + 1u + slot] = li;
     }
 
     GroupMemoryBarrierWithGroupSync();
 
     if (groupIndex == 0)
-        _VRSLTileLightIndicesRW[base] = min(gs_TileLightCount, VRSL_MAX_LIGHTS_PER_TILE);
+        _VRSLTileLightIndicesRW[base] = min(gs_TileLightCount, capacity);
 }
