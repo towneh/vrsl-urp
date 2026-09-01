@@ -317,8 +317,10 @@ What it does and doesn't cover matters:
 
 It is the most expensive term in the lighting loop — a depth march per light per pixel — so
 it runs last, only for lights still reaching the pixel after attenuation and the gobo, and
-is **off by default**. Raise the step count for thin occluders; raise the thickness if
-shadows disappear at grazing angles; lower it if distant background bleeds shadow forward.
+is **off by default**. `High` is the setting for thin occluders and for shadows that
+disappear at grazing angles: it traces further and samples more finely than `Standard`.
+If distant background bleeds shadow forward, that is the trace reaching past what it
+should and `Standard` is the shorter one.
 
 `contactShadowStrength` is the only control: 0 is off, 1 is fully shadowed where
 occluded. Trace length, sample count and how thick a depth-buffer surface is treated as

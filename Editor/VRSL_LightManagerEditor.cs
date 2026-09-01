@@ -80,7 +80,12 @@ namespace VRSL.URP.EditorScripts
 
             EditorGUILayout.PropertyField(quality);
 
-            bool off = quality.enumValueIndex == (int)VRSLQuality.Off;
+            // On a multi-selection whose managers disagree, enumValueIndex is one of
+            // them rather than a shared answer — so a single manager at Off would grey
+            // the controls out for every other manager selected with it, and an author
+            // editing several at once would find them uneditable for no visible reason.
+            bool off = !quality.hasMultipleDifferentValues
+                    && quality.enumValueIndex == (int)VRSLQuality.Off;
             if (off)
                 EditorGUILayout.LabelField(
                     "Off, so there are no beams in the air and nothing casts a contact "
