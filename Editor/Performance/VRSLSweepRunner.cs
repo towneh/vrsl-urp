@@ -484,9 +484,18 @@ namespace VRSL.URP.EditorScripts
                               + "culls would describe neither.");
             }
 
+            // Said in what it costs the author rather than in what the cull did. The
+            // reader here is deciding what to change about their scene, and "884 tiles
+            // at the cap" names neither the consequence nor the action.
             if (current.counters.cappedTiles > 0)
-                text.AppendLine($"{current.counters.cappedTiles} tile(s) are over the per-tile light "
-                              + "cap, so some fixtures are being dropped there.");
+                text.AppendLine("Some fixtures are not lighting anything from this camera "
+                              + $"angle. Where the view is busiest {current.counters.lightsPerTileMax} "
+                              + "fixtures reach the same part of the screen and VRSL lights it with "
+                              + $"{VRSLTileCullPass.MaxLightsPerTile} of them, so the rest add "
+                              + "nothing there and the scene is not lit the way it was built. "
+                              + "Spreading the fixtures further apart, aiming them at different "
+                              + "parts of the venue, or using fewer of them brings the missing "
+                              + "ones back.");
 
             text.AppendLine();
             foreach (var level in VRSLQualityPreset.All)

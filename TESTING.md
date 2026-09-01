@@ -177,6 +177,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 | P3 | — | Profiling sample sweep, 10 → 25 → 50 → 100 → 200 | Frametime scales sub-linearly with fixture count |
 | P4 | — | `InsideCones` vs `OutsideCones` camera variants | Inside is the worst case; the gap shows culling working |
 | P11 | — | A scene dense enough that a tile wants more fixtures than the per-tile cap allows. Read the tile figures from `VRSL Diagnostics` or a sweep row | Lights per tile reports what the tile **asked for**, above the cap, not the cap itself. The dropped figure is non-zero and says how much light the scene is not drawing. A tile exactly at the cap reports zero dropped, so the two cases are distinguishable |
+| P12 | — | The same scene through `VRSL → URP → Performance → Analyse This Scene`. **Judged by reading it as a world author would**, not by grepping for a string | The summary says some fixtures are not lighting anything from this camera angle, how many reach the same part of the screen against how many are lit, and what to change — spread them out, aim them elsewhere, or use fewer. It names no tiles and no cap: those describe the cull, and an author cannot act on either |
 
 **Read the tile figures with the camera beside them.** One cull pass serves every
 camera in the frame and each record overwrites the last, so a readback taken after the
