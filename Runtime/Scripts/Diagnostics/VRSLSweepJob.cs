@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VRSL.URP
@@ -103,6 +104,9 @@ namespace VRSL.URP
 
             // Every rendering camera runs the whole VRSL pass chain, so a second one
             // doubles the cost and the counters describe whichever rendered last.
+            // Counted again after the matrix rather than only here: a host that brings
+            // its own camera up during startup can do it after this point, and then
+            // this check passes on a run the note is about.
             int cameras = VRSLBenchmarkScene.RenderingCameraCount();
             if (cameras > 1)
                 run.Note($"{cameras} cameras are rendering to the screen, not just the "
@@ -164,6 +168,12 @@ namespace VRSL.URP
                 }
             }
 
+            // What the counters are actually of. One cull pass serves every camera and
+            // each record overwrites the last, so a readback taken after the frame
+            // describes whichever rendered last — and nothing in a tile figure gives
+            // that away, which is why this is stated rather than left to be noticed.
+            ReportTileCamera(run, camera);
+
             completed = true;
             }
             finally
@@ -183,6 +193,38 @@ namespace VRSL.URP
                                   + "the exception; nothing was written.";
             }
             if (completed) outcome.run = run;
+        }
+
+        /// <summary>
+        /// Say which camera produced the tile figures, and complain when it is not the
+        /// sweep's own.
+        /// </summary>
+        /// <remarks>
+        /// Measured 2026-08-31: in a player every row's counters came from the host's
+        /// <c>Main Camera</c> at a 34x26 grid, while the sweep rendered its own camera
+        /// into a 1920x1080 target that would have been 120x68. The figures were
+        /// plausible throughout, and the camera variant — the axis one of these rows
+        /// exists to separate — never reached them at all.
+        /// </remarks>
+        static void ReportTileCamera(VRSLBenchmarkRun run, Camera own)
+        {
+            string mine  = own != null ? own.name : null;
+            var    names = new HashSet<string>();
+            foreach (var row in run.rows)
+                if (!string.IsNullOrEmpty(row.counters.tileCamera))
+                    names.Add(row.counters.tileCamera);
+
+            if (names.Count == 0) return;
+
+            bool foreign = mine == null || names.Count > 1 || !names.Contains(mine);
+            if (!foreign) return;
+
+            run.Note($"The lights-per-tile figures describe {string.Join(", ", names)}, not "
+                   + $"the sweep's own {mine ?? "camera"}. One cull pass serves every camera "
+                   + "in the frame and the last record wins, so these counters are of a view "
+                   + "this run did not pose — the camera variant on each row did not reach "
+                   + "them. The timings are of every camera together. Treat the tile figures "
+                   + "as being about the other camera's view of this scene.");
         }
     }
 }
