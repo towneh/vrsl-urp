@@ -462,6 +462,14 @@ namespace VRSL.URP
                 _wasEnabled.Add(manager.enabled);
             }
 
+            /// <summary>Ask every manager for one frame of raymarch counters. See
+            /// <see cref="VRSLVolumetricStatsProbe"/> for the two-frame turnaround.</summary>
+            public void RequestVolumetricStats()
+            {
+                if (Dmx       != null) Dmx.VolumetricStats.Request();
+                if (AudioLink != null) AudioLink.VolumetricStats.Request();
+            }
+
             public void SetEnabled(bool on)
             {
                 foreach (var m in _managers) if (m != null) m.enabled = on;
@@ -583,6 +591,15 @@ namespace VRSL.URP
                         if (enabled && block == 0)
                         {
                             managers.SetEnabled(true);
+                            // The march's own counters cost atomics on the frame that
+                            // collects them, so that frame is after the timed window:
+                            // one to write them, one to read them back.
+                            managers.RequestVolumetricStats();
+                            for (int i = 0; i < 2; i++)
+                            {
+                                yield return null;
+                                onFrame?.Invoke();
+                            }
                             ReadCounters(managers, row.counters, run, expectedTileCamera);
                         }
                     }
@@ -694,6 +711,15 @@ namespace VRSL.URP
             counters.stepsPerLight =
                 useDmx ? (dmx.VolumetricsEnabled       ? dmx.Quality.VolumetricMaxSteps : 0)
                        : (audioLink.VolumetricsEnabled ? audioLink.Quality.VolumetricMaxSteps : 0);
+
+            // What the march actually took, where a frame of it was collected. Absent
+            // rather than zero when it was not: a run where the pass never ran, or a
+            // request that no frame answered, must not read as a march of no steps.
+            var volumetric = useDmx ? dmx.VolumetricStats.Last : audioLink.VolumetricStats.Last;
+            counters.volumetricStatsMeasured  = volumetric.Valid && volumetric.Pixels > 0;
+            counters.volumetricStepsPerLight  = counters.volumetricStatsMeasured ? volumetric.StepsPerLight : 0f;
+            counters.volumetricLightsPerPixel = counters.volumetricStatsMeasured ? volumetric.LightsPerPixel : 0f;
+            counters.volumetricSkippedPercent = counters.volumetricStatsMeasured ? volumetric.SkippedFraction * 100f : 0f;
 
             // DMX channels are a DMX concept. Zero on an AudioLink scene is the honest
             // answer rather than a missing one.

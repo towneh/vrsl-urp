@@ -204,6 +204,32 @@ namespace VRSL.URP
             return sb.ToString();
         }
 
+        /// <summary>
+        /// One line on what the raymarch took on its last collected frame, or a
+        /// request for one. The counters cost atomics on the frame that collects
+        /// them and come back a frame later, so the first call after a while
+        /// arms the probe and says so rather than quoting a stale figure.
+        /// </summary>
+        public static string VolumetricMarchStatus(VRSLVolumetricStatsProbe probe, int maxSteps)
+        {
+            const int freshFrames = 300;
+            var last = probe.Last;
+            bool fresh = last.Valid && Time.frameCount - last.Frame < freshFrames;
+            if (!fresh)
+            {
+                probe.Request();
+                return "Volumetric march: counters not collected yet. Run this again in a "
+                     + "moment for steps per light and lights skipped.";
+            }
+            if (last.Pixels == 0)
+                return "Volumetric march: no pixel had a surface behind it on the collected "
+                     + "frame, so nothing was marched. Expected looking at the sky; a fault "
+                     + "if there is geometry in view.";
+            return $"Volumetric march: {last.StepsPerLight:F1} steps per light on average "
+                 + $"(ceiling {maxSteps}), {last.LightsPerPixel:F2} lights marched per pixel, "
+                 + $"{last.SkippedFraction * 100f:F0}% of lights skipped as too faint to see";
+        }
+
         /// <summary>How many fixtures are actually emitting, and how brightly. Shared
         /// by the console diagnostic and the benchmark harness.</summary>
         public readonly struct EmissionSummary

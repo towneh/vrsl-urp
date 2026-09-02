@@ -329,7 +329,18 @@ namespace VRSL.URP
             if (Math.Abs(before.emptyTilePercent - after.emptyTilePercent) > 0.5f)
                 into.Add($"empty tiles {before.emptyTilePercent:F1}% → {after.emptyTilePercent:F1}%");
             if (before.stepsPerLight != after.stepsPerLight)
-                into.Add($"steps/light {before.stepsPerLight} → {after.stepsPerLight}");
+                into.Add($"max steps/light {before.stepsPerLight} → {after.stepsPerLight}");
+            // Only where both runs collected them. A run from before the counters
+            // existed holds zeros, and zero against a real figure is not a change.
+            if (before.volumetricStatsMeasured && after.volumetricStatsMeasured)
+            {
+                if (Math.Abs(before.volumetricStepsPerLight - after.volumetricStepsPerLight) > 0.05f)
+                    into.Add($"steps/light taken {before.volumetricStepsPerLight:F2} → {after.volumetricStepsPerLight:F2}");
+                if (Math.Abs(before.volumetricLightsPerPixel - after.volumetricLightsPerPixel) > 0.05f)
+                    into.Add($"lights marched/pixel {before.volumetricLightsPerPixel:F2} → {after.volumetricLightsPerPixel:F2}");
+                if (Math.Abs(before.volumetricSkippedPercent - after.volumetricSkippedPercent) > 0.5f)
+                    into.Add($"lights skipped {before.volumetricSkippedPercent:F1}% → {after.volumetricSkippedPercent:F1}%");
+            }
             // Emitting is the counter that says whether anything was lit at all, so a run
             // that went dark has to read as a counter change rather than as a quiet one.
             if (before.emittingFixtures != after.emittingFixtures)
@@ -439,8 +450,8 @@ namespace VRSL.URP
                         + "wider. The figure a verdict should actually be judged against comes "
                         + "from a null run on this machine, not from this column.");
             sb.AppendLine();
-            sb.AppendLine("| Fixtures | Emitting | Camera | Quality | Package cost | +- | Basis | GPU frame | CPU frame | Lights/tile | Empty tiles | Source |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| Fixtures | Emitting | Camera | Quality | Package cost | +- | Basis | GPU frame | CPU frame | Lights/tile | Empty tiles | Steps/light | Skipped | Source |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (var row in run.rows)
             {
                 sb.AppendLine(
@@ -455,6 +466,8 @@ namespace VRSL.URP
                   + $"| {row.timings.cpuEnabled.median:F3} ms (IQR {row.timings.cpuEnabled.iqr:F3}) "
                   + $"| {row.counters.lightsPerTileAverage:F1} avg / {row.counters.lightsPerTileMax} max "
                   + $"| {row.counters.emptyTilePercent:F0}% "
+                  + $"| {(row.counters.volumetricStatsMeasured ? $"{row.counters.volumetricStepsPerLight:F1} of {row.counters.stepsPerLight}" : "-")} "
+                  + $"| {(row.counters.volumetricStatsMeasured ? $"{row.counters.volumetricSkippedPercent:F0}%" : "-")} "
                   + $"| {row.timings.source} |");
             }
             sb.AppendLine();

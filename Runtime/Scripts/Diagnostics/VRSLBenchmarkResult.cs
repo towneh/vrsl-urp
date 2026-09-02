@@ -290,7 +290,24 @@ namespace VRSL.URP
         /// if the figures came from elsewhere. Judged on the camera object rather than
         /// its name, since Unity does not make names unique.</summary>
         public bool  tileCameraAsExpected;
+        /// <summary>The level's ceiling on steps per light. The march takes fewer
+        /// wherever a light crosses less of the ray; <see cref="volumetricStepsPerLight"/>
+        /// is what it actually took.</summary>
         public int   stepsPerLight;
+        /// <summary>Whether the three volumetric figures below were collected. A
+        /// run recorded before they existed, or one whose march never ran,
+        /// deserialises to false, and the zeros beside it are then absences rather
+        /// than measurements.</summary>
+        public bool  volumetricStatsMeasured;
+        /// <summary>Average steps taken per light marched, read back from the
+        /// raymarch on one frame of the capture.</summary>
+        public float volumetricStepsPerLight;
+        /// <summary>Average lights marched per half-resolution pixel with a surface
+        /// behind it.</summary>
+        public float volumetricLightsPerPixel;
+        /// <summary>Share of the lights reaching the loop that the visibility bound
+        /// skipped before any stepping, as a percentage.</summary>
+        public float volumetricSkippedPercent;
         /// <summary>Fixtures actually emitting light. A configuration where this is
         /// zero measured a dark scene, whatever else its numbers say.</summary>
         public int   emittingFixtures;

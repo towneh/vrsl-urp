@@ -70,6 +70,14 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             // z = 1 / sample spacing in metres, w = HG anisotropy g
             float4 _VRSLVolStepCount;
 
+            // Diagnostic counters, written only while _VRSLVolCollectStats is set:
+            // one atomic per counter per pixel at the end of the march, so a
+            // frame that collects is not a frame anyone should time. Slots are
+            // pixels marched, lights marched, steps taken, lights skipped by the
+            // visibility bound. Always bound by the pass, collecting or not.
+            RWStructuredBuffer<uint> _VRSLVolStats : register(u1);
+            int _VRSLVolCollectStats;
+
             // Fewest steps a light is marched with, however short its span. One
             // or two samples across a short span alias into dots that swim as
             // the camera moves, which is worse than the cost they save.
@@ -167,6 +175,9 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             #endif
 
                 float3 accumulated = 0;
+                uint   marched     = 0;
+                uint   stepsTaken  = 0;
+                uint   skipped     = 0;
 
                 // The whole view ray for this pixel stays inside one screen
                 // tile, and the tile frustum spans the camera's full depth
@@ -248,6 +259,8 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     int   steps    = clamp((int)ceil(span * invSpacing),
                                            VRSL_MIN_VOL_STEPS, maxSteps);
                     float stepSize = span / steps;
+                    marched    += 1;
+                    stepsTaken += (uint)steps;
 
                     [loop]
                     for (int s = 0; s < steps; s++)
@@ -283,6 +296,14 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
 
                         accumulated += contrib * density * stepSize;
                     }
+                }
+
+                if (_VRSLVolCollectStats != 0)
+                {
+                    InterlockedAdd(_VRSLVolStats[0], 1u);
+                    InterlockedAdd(_VRSLVolStats[1], marched);
+                    InterlockedAdd(_VRSLVolStats[2], stepsTaken);
+                    InterlockedAdd(_VRSLVolStats[3], skipped);
                 }
 
                 float3 result = accumulated * tint * _VRSLVolFogTint.w;

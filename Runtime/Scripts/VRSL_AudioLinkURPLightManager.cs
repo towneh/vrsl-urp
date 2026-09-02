@@ -168,6 +168,10 @@ namespace VRSL.URP
         /// <see cref="VRSLVolumetricNoise"/> on the first frame that needs it.</summary>
         public Texture  VolumetricNoiseTexture => _volumetricNoise;
         Texture _volumetricNoise;
+        /// <summary>Counters from the raymarch, collected on request. Steps per
+        /// light and lights skipped are only observable here: both are designed to
+        /// leave the image alone.</summary>
+        public VRSLVolumetricStatsProbe VolumetricStats { get; } = new();
 
         public Vector4 VolumetricStepParams =>
             new Vector4(Quality.VolumetricMaxSteps, coupleToSceneFog ? 1f : 0f,
@@ -382,6 +386,8 @@ namespace VRSL.URP
                 FixtureCount,
                 Marshal.SizeOf<LightDataStride>());        // 64 bytes
 
+            VolumetricStats.Allocate();
+
             if (computeShader != null)
                 ComputeKernel = computeShader.FindKernel("UpdateLights");
 
@@ -411,6 +417,7 @@ namespace VRSL.URP
             UploadFixtureConfigs();
             TryRefreshAudioLinkHandle();
             TryRefreshSamplingTextureHandle();
+            VolumetricStats.Tick();
         }
 
         void UploadFixtureConfigs()
@@ -567,6 +574,7 @@ namespace VRSL.URP
             FixtureConfigBuffer?.Release(); FixtureConfigBuffer = null;
             LightDataBuffer?.Release();     LightDataBuffer     = null;
             VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
+            VolumetricStats.Dispose();
         }
 
 
@@ -629,6 +637,8 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.TileStatus(TileCullPass, FixtureCount));
             var level = Quality;
             sb.AppendLine($"  Quality: {quality} (volumetrics {(level.Volumetrics ? $"on, {level.VolumetricMaxSteps} max steps" : "off")})");
+            if (VolumetricsEnabled)
+                sb.AppendLine("  " + VRSLDiagnostics.VolumetricMarchStatus(VolumetricStats, level.VolumetricMaxSteps));
             sb.AppendLine($"  Contact shadows: {(ContactShadowParams.x > 0f ? $"on (strength {contactShadowStrength:F2}, {level.ContactShadowDistance}m, {level.ContactShadowSteps} steps)" : "off")}");
             sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
             Debug.Log(sb.ToString(), this);

@@ -309,6 +309,9 @@ namespace VRSL.URP
                 public Vector4       fogTintParams;
                 public Vector4       tileParams;
                 public bool          bindTileBuffer;
+                public BufferHandle  statsBuffer;
+                public bool          bindStats;
+                public bool          collectStats;
             }
 
             class UpsampleData
@@ -422,12 +425,20 @@ namespace VRSL.URP
                     d.bindTileBuffer  = bindTileBuffer;
                     d.tileParams      = tileParams;
                     d.tileLightIndices = tileHandle;
+                    // Bound whenever it exists, collecting or not, so the UAV slot
+                    // the shader declares is never left unbound.
+                    var stats         = mgr.VolumetricStats;
+                    d.bindStats       = stats.Buffer != null;
+                    d.collectStats    = d.bindStats && stats.Collecting;
+                    d.statsBuffer     = d.bindStats ? rg.ImportBuffer(stats.Buffer) : default;
 
                     builder.SetRenderAttachment(halfRT, 0, AccessFlags.Write);
                     builder.UseTexture(d.halfDepth, AccessFlags.Read);
                     builder.UseBuffer(d.lightDataBuffer, AccessFlags.Read);
                     if (bindTileBuffer)
                         builder.UseBuffer(d.tileLightIndices, AccessFlags.Read);
+                    if (d.bindStats)
+                        builder.UseBufferRandomAccess(d.statsBuffer, 1, AccessFlags.ReadWrite);
                     builder.AllowGlobalStateModification(true);
 
                     builder.SetRenderFunc((RaymarchData p, RasterGraphContext ctx) =>
@@ -442,6 +453,7 @@ namespace VRSL.URP
                         cmd.SetGlobalVector( "_VRSLTileParams",        p.tileParams);
                         if (p.bindTileBuffer)
                             cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
+                        cmd.SetGlobalInteger("_VRSLVolCollectStats",   p.collectStats ? 1 : 0);
                         cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
                             p.material, 0, 1);
                     });
