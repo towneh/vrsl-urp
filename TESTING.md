@@ -313,13 +313,17 @@ is entirely the clock.
 | I5 | — | **A-M7-1.** A manager with every wiring field cleared, bounced so the clear takes effect, repaired, and bounced again | **The same image as one wired by the prefab.** This is the row the milestone lives or dies on, and it is the only one that can make the claim: comparing GUIDs proves resolution picked the assets the table names, never that the table names the right ones. Rendering proves it, because a wrong asset in any of the ten shows — the wrong compute lights nothing, the wrong lighting shader puts nothing on surfaces, the wrong prepass makes every surface flat grey. **Bounced twice on purpose**: the cull resolves its shader in its constructor and the manager builds its volumetric material once and keeps it, so without the first bounce the row compares two correctly wired managers and passes whatever resolution did. Any row that changes a shader field has to drop the cached materials for the same reason |
 
 **A reference frame is only valid for the run shape that seeded it.** Seeding from a
-filtered run and verifying in a full one reports 1341 pixels differing, identically
-every time — deterministic, but a property of what ran first rather than of the
-renderer. The difference is a narrow band at the far edge of the floor and the cause is
-not yet identified; blanking the DMX grid globals and discarding a warm-up capture were
-both tried and changed nothing. Seed and verify the same way and the rows are exact,
-which is what the suite does. Worth chasing before anyone relies on these rows across
-run shapes.
+filtered run and verifying in a full one reports a fixed set of pixels differing,
+identically every time — deterministic, but a property of what ran first rather than
+of the renderer. It was 1341 pixels in a narrow band at the far edge of the floor, and
+is 3389 at up to 0.33 since the movers' frozen state moved; the failure images show the
+filtered-run frame with a bright ring on the floor at the left that the full-run frame
+does not have, with the fixture-body highlights differing slightly. So one fixture
+points or lights differently depending on which rows ran first: something a prior row
+leaves in static or asset state, not the march. Blanking the DMX grid globals,
+discarding a warm-up capture and pinning the raymarch's clock have each been tried and
+changed nothing. Seed and verify the same way and the rows are exact, which is what
+the suite does. Worth chasing before anyone relies on these rows across run shapes.
 
 A failing row writes `-expected`, `-actual` and an amplified `-diff` PNG under
 `VRSL-Benchmarks/image-failures/`, because a number cannot distinguish a global
@@ -496,6 +500,13 @@ frame capture, and V11 reads its number off `VRSL Diagnostics`.
 | V15 | — | `VRSLVolumetricLoopTests`: bake with a compute that has no kernel | The shared 1×1×1 white fallback, so density is unmodulated rather than zeroed, and one warning per session naming the kernel. Releasing a fallback leaves it alone |
 | V16 | — | `VRSLVolumetricLoopTests`: collect the raymarch counters on the rig with its movers pointed straight down, at `Standard`, then at `High` | Steps per light marched never below 4 and never above the level's ceiling, and higher at `High` than at `Standard` on the same spans. The second half is what says the count follows the level's spacing rather than sitting at the ceiling |
 | V17 | — | `VRSLVolumetricLoopTests`: the same rig, frozen and on the Ramp, with `volumetricIntensity` at `1e-12` | Every light that reaches the loop is skipped by the bound and no step is taken; the count of lights reaching the loop is unchanged from the lit frame, so the bound moved only the verdict. Restoring the intensity restores the march |
+
+**A frozen capture pins the raymarch's clock as well.** The dither phase and the haze
+scroll follow time by design, and at the step floor of four the dither reaches the
+quantised output on a few grazing pixels: two captures of a frozen scene at different
+frames differed by one 8-bit step on two or three of them. `FreezeForImageCapture` holds
+the clock at zero through the manager's override, beside the strobe, the spin and the
+damping. A capture that skips the freeze is comparing dither phases.
 
 **The rig's movers point wherever their channels say, and under the synthetic pattern
 that is off sideways at shallow angles.** Measured while writing V16: of some ten
