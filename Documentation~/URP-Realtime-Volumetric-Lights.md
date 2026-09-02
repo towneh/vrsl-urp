@@ -360,14 +360,34 @@ Stage 2 is what makes the sample budget actually land in the light. A sphere is 
 
 `VRSL_NarrowSpanToCone` relies on a cone nappe being convex, so a ray meets it in exactly one interval. The quadratic supplies the surface crossings; midpoint tests select which sub-interval is inside. That avoids case analysis on root signs and puts the ray-parallel-to-surface degeneracy on the same path as the general case. It projects from the same virtual apex as `VRSL_SpotAttenuation`, so the marched span matches the cone the attenuation lights.
 
-Worst-case cost is `stepCount` steps per light per pixel, as it would be for a shared march. It improves in the common case: a ray missing the sphere costs one intersection test, and a ray missing the cone costs the quadratic plus three midpoint tests, instead of a full march that early-outs at every step.
+### Step count
+
+The number of steps a light is marched with follows the length of its span:
+
+```hlsl
+int steps = clamp((int)ceil(span / spacing), 4, maxSteps);
+```
+
+`spacing` and `maxSteps` come from the quality level, so what governs sample density is metres of cone per step rather than a count. A cone clipping half a metre of the ray takes the floor of four; one running thirty metres down it takes the ceiling. The floor is load-bearing: one or two samples across a short span alias into dots that swim as the camera moves, which is worse than the cost they would save.
+
+Two consequences are the intent rather than faults. The samples a pixel takes depend on what is in front of it rather than on the light count alone, so frame time follows content more than a fixed count would. And a long span at `High` may take more steps than the same span at `Standard`: the level sets density, and the maximum is a ceiling rather than a target.
+
+Worst-case cost is `maxSteps` steps per light per pixel, as it would be for a shared march. It improves in the common case: a ray missing the sphere costs one intersection test, a ray missing the cone costs the quadratic plus three midpoint tests, and a ray crossing a short span pays for the span rather than for the budget.
+
+### Visibility bound
+
+Before a light is stepped, the march bounds the most it can add across the whole span and skips it when that cannot be seen. The bound is evaluated at the ray's closest approach to the light within the span, where distance attenuation peaks. The angular falloff, the gobo, the phase function and the density noise can each only reduce a sample from there, so every step is at or below that peak and the sum over the span is at or below peak times span. The phase term is the closed-form maximum of Henyey-Greenstein at the current anisotropy, and the colour term is the brightest channel rather than luminance, so an all-blue light is not bounded by how little blue weighs.
+
+The test is conservative by construction: it marches lights it need not and never skips one that would have shown. What it removes is the case where a ray grazes the far tail of a fixture's falloff and would otherwise pay the whole march to accumulate almost nothing.
+
+The threshold, `VRSL_VOL_MIN_CONTRIB` in the volumetric shader, is in the units the pixel is written in: linear radiance after density, span, tint and the global intensity have been applied. That is what lands in the frame, so it holds whatever range a rig's decoded intensities run to. 1/4096 is under one 8-bit step at black. It is a compile-time constant and zero switches the test off without touching anything else.
 
 Two consequences worth knowing:
 
-- Density noise (`_VRSL_VOLUMETRIC_NOISE`) is evaluated per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one noise fetch per light per step.
+- Density noise (`_VRSL_VOLUMETRIC_NOISE`) is sampled per light rather than once per shared step, so each beam's haze follows its own sample positions. Where cones overlap that is one texture fetch per light per step.
 - Each light's step size differs, and the accumulation weights by that light's own `stepSize`, so overlapping cones still sum to the same result as marching them together.
 
-Because the span is tight, every step lands inside the beam and the budget buys far more than it would against an untargeted march. `Standard` spends 24 and `High` 40. What governs the floor is metres of cone per step rather than the count on its own, so wide cones, long beams and dense haze are the cases `High` is for; a narrow spot needs very few.
+Because the span is tight, every step lands inside the beam and the budget buys far more than it would against an untargeted march. Wide cones, long beams and dense haze are the cases `High` is for; a narrow spot needs very few steps at either level.
 
 ### Quality levels
 
@@ -376,11 +396,11 @@ Because the span is tight, every step lands inside the beam and the budget buys 
 scene carrying both light paths cannot march at two budgets depending on which manager
 owns the pass.
 
-| Level | Beams | Max steps per light | Noise | Contact shadows | Steps | Distance | Thickness |
-|---|---|---|---|---|---|---|---|
-| `Off` | no | — | — | no | — | — | — |
-| `Standard` | yes | 24 | yes | yes | 8 | 1.5 m | 0.5 m |
-| `High` | yes | 40 | yes | yes | 16 | 2.5 m | 0.35 m |
+| Level | Beams | Sample spacing | Max steps per light | Noise | Contact shadows | Steps | Distance | Thickness |
+|---|---|---|---|---|---|---|---|---|
+| `Off` | no | — | — | — | no | — | — | — |
+| `Standard` | yes | 0.35 m | 24 | yes | yes | 8 | 1.5 m | 0.5 m |
+| `High` | yes | 0.20 m | 40 | yes | yes | 16 | 2.5 m | 0.35 m |
 
 `Standard` is the default and reproduces what the package shipped before the level
 existed, so a scene authored earlier renders and costs what it did. `Off` records no
@@ -408,14 +428,24 @@ The raymarch offsets each pixel's step phase with interleaved gradient noise. Th
 
 Note that a dither only conceals quadrature error while that error is small. If stepping is visible as a *structured* pattern rather than fine grain, the sample budget is landing in the wrong place — check the march span before reaching for the dither or the step count.
 
-**Full earns its place as a diagnostic, not just as a quality tier.** It runs the same `VRSL_Raymarch` as Half but skips the depth downsample and the bilateral upsample entirely, so comparing the two modes on one view separates a fault in the integration from a fault in the reconstruction: an artefact present in both is in the march, one that appears only in Half is in passes 0 or 2. That bisection is the fastest way into any volumetric bug and it is why the mode is worth keeping even though Half is the default and now clean — the alternative is guessing at which half of the pipeline is at fault. Test row V8 exists for exactly this. Pass 3 shares all its logic with Half, so there is no second implementation to keep in step.
+A suspected upsample artefact is told from a march artefact by reading the half-resolution target in a frame capture: an artefact present there is in the march, one that appears only in the composite is in passes 0 or 2.
 
 ### Density model
 
 `multi_compile _ _VRSL_VOLUMETRIC_NOISE` toggles between two variants:
 
 - **Off** (clean) — uniform `volumetricDensity` per step.
-- **On** (modulated) — density is multiplied by a procedural hash-based 3D value noise sampled in world space and drifting vertically on `_Time.y`. ~50 ALU per step (~5–10% extra raymarch cost at typical fixture counts). The volumetric pass sets the keyword on the volumetric material each frame from the manager flag, so disabling fully removes the noise code from the active variant.
+- **On** (modulated) — density is multiplied by a 3D value noise sampled in world space and drifting vertically on `_Time.y`. The volumetric pass sets the keyword on the volumetric material each frame from the manager flag, so disabling fully removes the noise code from the active variant.
+
+The field is a texture, not a function evaluated per sample. Each manager bakes it once, on the first frame that needs it, with the `BakeVolumetricNoise` kernel both light-update computes carry: 64 texels per axis of `R8_UNorm`, 256 KB, over a lattice of 16 cells, so four texels span each cell and the sampler's linear filter follows the smoothstep between lattice points rather than flattening it. The kernel evaluates `VRSL_ValueNoise3DPeriodic` from the lighting library, the same value noise as `VRSL_ValueNoise3D` on a lattice that wraps, so the texture cannot drift from the function that defines it and the period is an implementation detail rather than an import setting. The march then takes one repeat-wrapped trilinear fetch per light per step where the procedural form cost eight hash taps.
+
+The field repeats every 16 lattice units, which at the shipped noise scale of 0.3 is every 53 m of world. A density modulation has no feature a viewer can recognise at a second sighting, so the repeat is not readable.
+
+A compute without the kernel gets a single white texel and one warning: the field reads 1 everywhere, so a beam loses its haze and keeps everything else, rather than dimming to a third against an unbound texture reading 0.
+
+### Diagnostics
+
+The raymarch keeps four counters per pixel: pixels marched, lights marched, steps taken and lights skipped by the visibility bound. Collecting them is one atomic per counter per pixel, so it is a request rather than a switch: `VRSL Diagnostics` arms the probe on its first call and reports steps per light, lights marched per pixel and the share of lights skipped on the next, and a sweep row carries the same three figures beside its timings, collected after each timed window so the atomics never land inside a measured frame. The step count and the bound are both designed to leave the image alone, which is why these exist.
 
 ### Scene-fog coupling
 
@@ -441,9 +471,12 @@ The inspector exposes the field with a `Range` of `[0, 1.0]`. `VRSL_SpotAttenuat
 ### Manager parameter packing
 
 ```hlsl
-float4 _VRSLVolStepCount;   // x = step count, y = fog coupling flag, w = HG anisotropy g
+float4 _VRSLVolStepCount;   // x = max steps per light, y = fog coupling flag,
+                            // z = 1 / sample spacing (m), w = HG anisotropy g
 float4 _VRSLVolDensity;     // x = base density, y = noise scale, z = noise scroll, w = noise strength
 float4 _VRSLVolFogTint;     // xyz = tint, w = global intensity multiplier
+Texture3D<float> _VRSLVolNoise;         // the baked density field, bound per camera
+RWStructuredBuffer<uint> _VRSLVolStats; // the four counters, written only while _VRSLVolCollectStats is set
 ```
 
 Uploaded once per frame as global vectors in the volumetric pass `SetRenderFunc`.
