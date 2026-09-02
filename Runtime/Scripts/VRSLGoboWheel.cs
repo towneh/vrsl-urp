@@ -25,13 +25,52 @@ namespace VRSL.URP
         public const int MaxResolution = 1024;
 
         /// <summary>
+        /// Whether every source has its full mip chain on the GPU, asking the mip
+        /// streamer for it where it does not.
+        /// </summary>
+        /// <remarks>
+        /// The blit below samples whatever mips are resident at that moment. With
+        /// mip streaming on, a texture that has not been looked at yet holds only
+        /// its smallest mips, and a wheel built from one carries a soft-edged gobo
+        /// for the whole session: a sharp disc and a blurred disc differ in a ring
+        /// at the edge, which is how it was found. A source that opts out of
+        /// streaming is always resident.
+        /// </remarks>
+        public static bool Resident(Texture2D[] sources)
+        {
+            if (sources == null) return true;
+            bool resident = true;
+            foreach (var source in sources)
+            {
+                if (source == null || !source.streamingMipmaps) continue;
+                source.requestedMipmapLevel = 0;
+                if (!source.IsRequestedMipmapLevelLoaded()) resident = false;
+            }
+            return resident;
+        }
+
+        /// <summary>Let the streamer drop the mips again once the wheel holds
+        /// them.</summary>
+        static void ReleaseMipRequests(Texture2D[] sources)
+        {
+            foreach (var source in sources)
+                if (source != null && source.streamingMipmaps)
+                    source.ClearRequestedMipmapLevel();
+        }
+
+        /// <summary>
         /// Build the array. Returns null when there is nothing to pack. The caller
         /// owns the result and should pass it to <see cref="Release"/>.
+        /// <paramref name="complete"/> is false when a source was not fully
+        /// resident, in which case the wheel is usable but soft and the caller
+        /// should build it again once <see cref="Resident"/> says so.
         /// </summary>
-        public static RenderTexture Build(Texture2D[] sources, out int sliceCount)
+        public static RenderTexture Build(Texture2D[] sources, out int sliceCount, out bool complete)
         {
             sliceCount = sources?.Length ?? 0;
+            complete   = true;
             if (sliceCount == 0) return null;
+            complete = Resident(sources);
 
             int resolution = MinResolution;
             for (int i = 0; i < sources.Length; i++)
@@ -70,6 +109,7 @@ namespace VRSL.URP
                 Graphics.Blit(sources[i], array, 0, i);
             }
             RenderTexture.active = previous;
+            if (complete) ReleaseMipRequests(sources);
 
             return array;
         }

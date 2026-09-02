@@ -1126,12 +1126,21 @@ namespace VRSL.URP
         void BuildGoboArray()
         {
             VRSLGoboWheel.Release(ref _goboArray);
-            _goboArray = VRSLGoboWheel.Build(goboTextures, out int count);
+            _goboArray = VRSLGoboWheel.Build(goboTextures, out int count, out _goboWheelComplete);
             GoboArray  = _goboArray;
             GoboCount  = count;
         }
 
+        /// <summary>Rebuild the wheel once every source is fully streamed in, if
+        /// the first build caught one part-way. Cheap to ask every camera.</summary>
+        void CompleteGoboArray()
+        {
+            if (_goboWheelComplete || !VRSLGoboWheel.Resident(goboTextures)) return;
+            BuildGoboArray();
+        }
+
         RenderTexture _goboArray;
+        bool          _goboWheelComplete = true;
 
         void ReleaseBuffers()
         {
@@ -1288,6 +1297,7 @@ namespace VRSL.URP
 
             // Gobo wheel is a Texture2DArray, bound globally here because the
             // render graph only accepts TextureHandle.
+            CompleteGoboArray();
             if (GoboArray != null)
                 Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
 
