@@ -66,9 +66,14 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             StructuredBuffer<VRSLLightData> _VRSLLights;
             uint   _VRSLLightCount;
 
-            // x = step count, y = couple-to-scene-fog flag (0/1),
-            // w = HG anisotropy g
+            // x = max steps per light, y = couple-to-scene-fog flag (0/1),
+            // z = 1 / sample spacing in metres, w = HG anisotropy g
             float4 _VRSLVolStepCount;
+
+            // Fewest steps a light is marched with, however short its span. One
+            // or two samples across a short span alias into dots that swim as
+            // the camera moves, which is worse than the cost they save.
+            #define VRSL_MIN_VOL_STEPS 4
             // x = base density, y = noise scale, z = noise scroll speed,
             // w = noise strength (modulated variant only)
             float4 _VRSLVolDensity;
@@ -135,7 +140,10 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 float3 viewDir   = viewDelta / max(maxDist, 0.0001);
                 float3 toCamera  = -viewDir;
 
-                int   stepCount = max(1, (int)_VRSLVolStepCount.x);
+                // Ceiling on the steps one light may take. The count itself is
+                // set per light from its span, below.
+                int   maxSteps   = max(VRSL_MIN_VOL_STEPS, (int)_VRSLVolStepCount.x);
+                float invSpacing = _VRSLVolStepCount.z;
 
                 float jitter   = VRSL_Jitter(pixelCS);
                 float density  = _VRSLVolDensity.x;
@@ -179,9 +187,11 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 // undersampling into visible grain, which is what makes the
                 // half-res path read as dithered.
                 //
-                // The per-light step budget is the full step count, so the
-                // worst case costs what a shared march costs. Rays that miss a
-                // light's sphere skip it outright.
+                // Each light's step count follows its span at a constant world
+                // spacing and is capped at the level's maximum, so the worst
+                // case costs what a shared march costs and the common case
+                // costs far less. Rays that miss a light's sphere skip it
+                // outright.
                 [loop]
                 for (uint slot = 0; slot < lightCount; slot++)
                 {
@@ -229,10 +239,18 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                             continue;
                     }
 
-                    float stepSize = (spanEnd - spanStart) / stepCount;
+                    // Steps from the span at a constant spacing, so a cone
+                    // clipping half a metre of the ray costs a fraction of one
+                    // running thirty metres down it. The level sets the spacing
+                    // and the ceiling: a long span at High may take more steps
+                    // than the same span at Standard, which is the intent.
+                    float span     = spanEnd - spanStart;
+                    int   steps    = clamp((int)ceil(span * invSpacing),
+                                           VRSL_MIN_VOL_STEPS, maxSteps);
+                    float stepSize = span / steps;
 
                     [loop]
-                    for (int s = 0; s < stepCount; s++)
+                    for (int s = 0; s < steps; s++)
                     {
                         float3 samplePos = cameraWS + viewDir
                                          * (spanStart + (s + jitter) * stepSize);

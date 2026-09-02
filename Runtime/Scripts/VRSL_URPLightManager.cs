@@ -293,7 +293,8 @@ namespace VRSL.URP
         // each frame and uploaded as global vectors before the raymarch pass.
         public Vector4 VolumetricStepParams =>
             new Vector4(Quality.VolumetricMaxSteps, coupleToSceneFog ? 1f : 0f,
-                        0f, volumetricAnisotropy);
+                        1f / Mathf.Max(Quality.VolumetricStepSpacing, 0.01f),
+                        volumetricAnisotropy);
         public Vector4 VolumetricDensityParams =>
             new Vector4(volumetricDensity, VRSLQualityLevel.NoiseScale,
                         VRSLQualityLevel.NoiseScrollSpeed, VRSLQualityLevel.NoiseStrength);

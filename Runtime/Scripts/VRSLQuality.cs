@@ -42,12 +42,12 @@ namespace VRSL.URP
         /// volumetric targets and records no volumetric pass.</summary>
         public readonly bool  Volumetrics;
         /// <summary>Upper bound on samples along one light's span. An upper
-        /// bound rather than a count: M5 makes the number adaptive, and a span
+        /// bound rather than a count: the number follows the span, and a span
         /// that crosses half a metre has no use for the whole budget.</summary>
         public readonly int   VolumetricMaxSteps;
-        /// <summary>Metres between samples, once M5 lands the adaptive count.
-        /// Carried now so that milestone does not have to reopen this table;
-        /// nothing reads it yet.</summary>
+        /// <summary>Metres between samples along a light's span. The count is
+        /// the span over this, never fewer than four and never more than
+        /// <see cref="VolumetricMaxSteps"/>.</summary>
         public readonly float VolumetricStepSpacing;
         public readonly bool  VolumetricNoise;
         public readonly bool  ContactShadows;
