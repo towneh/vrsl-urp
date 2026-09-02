@@ -69,14 +69,12 @@ The AudioLink manager auto-discovers `_AudioTexture` from the global shader prop
 
 ### Volumetric tuning (both managers)
 
-The volumetric pass runs whenever `volumetricShader` is assigned. Inspector fields:
-
-The volumetric pass runs whenever the level draws beams and `volumetricShader` is
-assigned.
+The volumetric pass runs when the level draws beams and `volumetricShader` is assigned.
+Emptying the shader and setting quality to `Off` both stop it being recorded.
 
 | Field | Effect |
 |---|---|
-| `quality` | What the package may spend: `Off`, `Standard` or `High`. `Off` draws no beams and casts no contact shadows; `Standard` is the default; `High` marches more finely and traces further. What each costs is fixed in code — see the quality table in the pipeline document |
+| `quality` | What the package may spend: `Off`, `Standard` or `High`. `Off` draws no beams and casts no contact shadows; `Standard` is the default; `High` marches more finely and traces further. What each costs is fixed in code; the quality table in the pipeline document lists them |
 | `volumetricDensity` | Base scattering density. |
 | `volumetricAnisotropy` | Henyey–Greenstein g (default 0.2; 0 = isotropic; positive forward-scatters). |
 | `volumetricTint` / `volumetricIntensity` | Colour tint and global multiplier. |
@@ -88,7 +86,7 @@ frame time directly and none can be judged by eye without a profiler, so they be
 the level.
 
 To take the cones out of the air without touching the shader assignment, drop
-`volumetricIntensity` to 0 — or set `quality` to `Off`, which also stops the pass being
+`volumetricIntensity` to 0, or set `quality` to `Off`, which also stops the pass being
 recorded and the targets being allocated.
 
 ---

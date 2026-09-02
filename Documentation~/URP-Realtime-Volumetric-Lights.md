@@ -326,7 +326,7 @@ should and `Standard` is the shorter one.
 occluded. Trace length, sample count and how thick a depth-buffer surface is treated as
 being all come from the quality level, because each of them sets frame time and none can
 be judged by eye. A strength of 0, and any strength at `Off`, zeroes the packed step
-count — which the shader reads as skip, rather than tracing and scaling the result to
+count, which the shader reads as skip, rather than tracing and scaling the result to
 nothing.
 
 ### Tiled light culling
@@ -396,7 +396,7 @@ The march is half-resolution and only half-resolution, in three sub-passes:
 The upsample is bilateral rather than trilinear, which is what makes half-resolution
 affordable instead of a compromise: it rejects taps across a depth discontinuity and so
 holds an edge a trilinear filter would smear. `High` spends its extra budget on step
-count for that reason — against a bilateral upsample, a finer march buys more per unit
+count for that reason: against a bilateral upsample, a finer march buys more per unit
 cost than more pixels would.
 
 Two details of the upsample are load-bearing rather than incidental:

@@ -88,12 +88,11 @@ namespace VRSL.URP
                + "occluder just off the edge of the screen.")]
         public float contactShadowStrength = 0f;
 
-
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
-               + "The volumetric raymarch pass runs whenever this is assigned. There is no "
-               + "separate enable toggle since the URP prefab path has no legacy mesh-cone "
-               + "shader to fall back to. To silence cones at runtime, drive volumetricIntensity "
-               + "to 0 instead.")]
+               + "The raymarch runs when this is assigned and the quality level draws beams. "
+               + "Emptying it and setting quality to Off both stop the pass being recorded, so "
+               + "either is a way to switch beams off outright. Dropping volumetricIntensity to "
+               + "0 hides them instead, and still pays for the march.")]
         public Shader volumetricShader;
 
         [Header("Volumetrics")]
