@@ -162,22 +162,6 @@ namespace VRSL.URP.Tests
                  + $"fog {rig.Manager.coupleToSceneFog}, steps {rig.Manager.VolumetricStepParams}]";
         }
 
-        /// <summary>
-        /// Point every fixture straight down, as hung.
-        ///
-        /// The rig's movers pan and tilt to whatever their channels say, and under
-        /// the synthetic pattern that sends the beams off sideways at shallow
-        /// angles, mostly clear of the floor the camera looks at. Measured before
-        /// this existed: of some ten thousand marched pixels, 326 rays crossed any
-        /// cone, every one of them a grazing edge. A row about the march needs
-        /// beams in the frame, and this is what puts them there.
-        /// </summary>
-        static void PointBeamsDown(VRSLDMXRig rig)
-        {
-            foreach (var fixture in rig.Fixtures) fixture.enablePanTilt = false;
-            rig.Manager.MarkConfigDirty();
-        }
-
         /// <summary>One frame of counters from the rig's manager. Two ticks from
         /// request to result; three frames leaves a margin.</summary>
         static IEnumerator Collect(VRSLDMXRig rig)
@@ -194,7 +178,7 @@ namespace VRSL.URP.Tests
             var rig = VRSLDMXRig.Build();
             try
             {
-                PointBeamsDown(rig);
+                rig.PointBeamsDown();
                 yield return rig.Step(4);
 
                 rig.Manager.quality = VRSLQuality.Standard;
@@ -235,7 +219,7 @@ namespace VRSL.URP.Tests
             var rig = VRSLDMXRig.Build();
             try
             {
-                PointBeamsDown(rig);
+                rig.PointBeamsDown();
                 // Held still, so the two frames compared below see the same rig:
                 // a strobing fixture is inactive on alternate frames and never
                 // reaches the loop at all, and a moving one changes what it crosses.

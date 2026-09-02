@@ -46,7 +46,11 @@ namespace VRSL.URP.Tests
             try
             {
             using var rig = VRSLDMXRig.Build(targetSize: ImageSize);
-            rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
+            // Every dimmer at full with mid-range colours, held still. Under Ramp the
+            // fixtures in view carry dimmer and colour channels of a few percent, and
+            // the frame was nearly black at any intensity.
+            rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
+            rig.Source.speed   = 0f;
             rig.Manager.enabled = false;
             rig.Manager.enabled = true;
             rig.FreezeForImageCapture();

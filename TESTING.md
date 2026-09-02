@@ -315,15 +315,37 @@ is entirely the clock.
 **A reference frame is only valid for the run shape that seeded it.** Seeding from a
 filtered run and verifying in a full one reports a fixed set of pixels differing,
 identically every time — deterministic, but a property of what ran first rather than
-of the renderer. It was 1341 pixels in a narrow band at the far edge of the floor, and
-is 3389 at up to 0.33 since the movers' frozen state moved; the failure images show the
-filtered-run frame with a bright ring on the floor at the left that the full-run frame
-does not have, with the fixture-body highlights differing slightly. So one fixture
-points or lights differently depending on which rows ran first: something a prior row
-leaves in static or asset state, not the march. Blanking the DMX grid globals,
-discarding a warm-up capture and pinning the raymarch's clock have each been tried and
-changed nothing. Seed and verify the same way and the rows are exact, which is what
-the suite does. Worth chasing before anyone relies on these rows across run shapes.
+of the renderer. What is known about it, from a day spent on it:
+
+- **It is not the package's.** The frozen rig captured with the manager switched off
+  differs from the same rig with it on by 228 pixels at most 3 of 255. The run-shape
+  difference is 2782 pixels at up to 0.64: a thin ellipse on the floor at the left of
+  the frame, present in a filtered run and absent in a full one.
+- **Every fixture decodes identically in both shapes**, all four light-data vectors
+  of all fifty, logged and diffed. Pointing and intensity are not it.
+- **It survives everything of the host's the rig can name.** The rig now switches
+  every scene light off, sets a flat black ambient, clears the skybox, sun and fog,
+  forces every mip resident and clears the CRT chain's textures for its lifetime. The
+  fixture-body highlights that used to differ went with the CRT clear; the ring did
+  not move.
+- The raymarch's clock, gobo-wheel mip residency and beam direction were each pinned
+  and ruled out in turn.
+
+The next step is to log the active render pipeline asset and quality level at capture
+in both shapes: the host applies a quality tier at an unpredictable moment after
+start-up, and a filtered run captures at about sixteen seconds where a full one is
+minutes in. Seed and verify the same way and the rows are exact, which is what the
+suite does.
+
+**What the frame guards changed on 2026-09-02.** Until then the rig's movers pointed
+wherever their channels sent them, at the zoom channel's cone width, at the prefab's
+intensity, under the host's own lighting — and the package moved 228 pixels of it.
+`FreezeForImageCapture` now aims the beams at the floor at their authored cone, at an
+intensity of 60, in a frame with nothing else lighting it, and the capture helpers
+drive the source with the `Fixtures` pattern held still, every dimmer at full, where
+`Ramp` gave the fixtures in view channels of a few percent. What an image row compares
+is the package's light. Every machine's stored capture and the committed reference are
+stale from that commit and re-seed on the next run.
 
 A failing row writes `-expected`, `-actual` and an amplified `-diff` PNG under
 `VRSL-Benchmarks/image-failures/`, because a number cannot distinguish a global

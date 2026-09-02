@@ -47,6 +47,13 @@ namespace VRSL.URP.Tests
         Camera        _camera;
         RenderTexture _target;
         float         _captureWas;
+        bool          _forceLoadWas;
+        List<Light>   _lightsWereOn;
+        UnityEngine.Rendering.AmbientMode _ambientModeWas;
+        Color         _ambientLightWas;
+        Material      _skyboxWas;
+        Light         _sunWas;
+        bool          _fogWas;
         int           _validateKernel = -1;
         GraphicsBuffer _dummyChannels;
         int[]         _map;
@@ -88,6 +95,40 @@ namespace VRSL.URP.Tests
             var rig = building = new VRSLDMXRig();
             rig._captureWas = Time.captureDeltaTime;
             Time.captureDeltaTime = FrameDelta;
+
+            // Every mip of every texture, for the rig's lifetime. The host streams
+            // mips, and the rig's camera is disabled, so nothing ever tells the
+            // streamer what this view needs: which mips are resident is then a
+            // function of what ran before. That was the run-shape difference the
+            // image rows carried for weeks, a soft gobo disc against a sharp one,
+            // and the fixture bodies' textures beside it.
+            rig._forceLoadWas = Texture.streamingTextureForceLoadAll;
+            Texture.streamingTextureForceLoadAll = true;
+
+            // The frame is the package's, not the host scene's. Whatever sun,
+            // skybox and ambient the test scene carries is switched off for the
+            // rig's lifetime and put back on dispose. Found by capturing the rig
+            // with the manager off: the package moved 228 pixels by at most 3 of
+            // 255, while a host highlight on the floor moved 2782 by 48, and which
+            // rows had run first decided whether that highlight was there at all.
+            rig._lightsWereOn = new List<Light>();
+            foreach (var light in UnityEngine.Object.FindObjectsByType<Light>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (light == null || !light.enabled) continue;
+                light.enabled = false;
+                rig._lightsWereOn.Add(light);
+            }
+            rig._ambientModeWas  = RenderSettings.ambientMode;
+            rig._ambientLightWas = RenderSettings.ambientLight;
+            rig._skyboxWas       = RenderSettings.skybox;
+            rig._sunWas          = RenderSettings.sun;
+            rig._fogWas          = RenderSettings.fog;
+            RenderSettings.ambientMode  = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = Color.black;
+            RenderSettings.skybox       = null;
+            RenderSettings.sun          = null;
+            RenderSettings.fog          = false;
 
             // Anything a previous test left behind, usually because it failed
             // before its finally ran. The cost of not clearing it is silent and
@@ -171,6 +212,7 @@ namespace VRSL.URP.Tests
             // The fixtures above already do, but a caller adding more later has
             // to say so.
             rig.Manager.RefreshFixtures();
+            ClearDmxTextures(rig.Manager);
 
             if (withSource)
             {
@@ -301,6 +343,11 @@ namespace VRSL.URP.Tests
         /// </summary>
         public void FreezeForImageCapture()
         {
+            PointBeamsDown();
+            // Bright enough to read. At the prefab's 10 the package moved 228 pixels
+            // of a 256-square frame by at most 3 of 255, so an image row was
+            // guarding a frame the package barely touched.
+            foreach (var fixture in Fixtures) fixture.maxIntensity = 60f;
             Manager.disableStrobe = true;
             foreach (var fixture in Fixtures) fixture.enableGoboSpin = false;
             // smoothing of 0 gives lerp(previous, target, 1 - pow(0, dt)) = target.
@@ -315,6 +362,60 @@ namespace VRSL.URP.Tests
             Manager.MarkConfigDirty();
         }
 
+
+        /// <summary>
+        /// Start the CRT decode chain from black.
+        ///
+        /// The chain's textures are assets, and their contents live for the
+        /// session: a row that drives the texture path writes the raw grid and
+        /// every CRT downstream of it, and the next rig's fixture bodies read the
+        /// leftovers through the <c>_VRSLU_DMX*</c> globals. A rig built first in a
+        /// session sees the assets as imported instead. Clearing the manager's
+        /// five and whatever their materials sample puts both on the same footing.
+        /// </summary>
+        static void ClearDmxTextures(VRSL_URPLightManager manager)
+        {
+            var seen = new HashSet<RenderTexture>();
+            void Clear(RenderTexture rt)
+            {
+                if (rt == null || !seen.Add(rt)) return;
+                if (rt is CustomRenderTexture crt && crt.material != null)
+                    foreach (var name in crt.material.GetTexturePropertyNames())
+                        Clear(crt.material.GetTexture(name) as RenderTexture);
+                var previous = RenderTexture.active;
+                RenderTexture.active = rt;
+                GL.Clear(false, true, Color.black);
+                RenderTexture.active = previous;
+            }
+            Clear(manager.dmxMainTexture);
+            Clear(manager.dmxMovementTexture);
+            Clear(manager.dmxStrobeTexture);
+            Clear(manager.dmxStrobeTimerTexture);
+            Clear(manager.dmxSpinTimerTexture);
+        }
+
+        /// <summary>
+        /// Point every fixture straight down, as hung.
+        ///
+        /// The movers pan and tilt to whatever their channels say, and under the
+        /// synthetic patterns that sends the beams off sideways at shallow angles,
+        /// mostly clear of the floor the camera looks at. Measured: of some ten
+        /// thousand marched pixels, 326 rays crossed any cone, every one of them a
+        /// grazing edge. A frame with no beam in it cannot guard the beams, so a
+        /// capture aims them at the floor first. Rows about movement leave pan and
+        /// tilt on, since the beam direction is their only observable.
+        /// </summary>
+        public void PointBeamsDown()
+        {
+            foreach (var fixture in Fixtures)
+            {
+                fixture.enablePanTilt   = false;
+                // The authored cone rather than the zoom channel, which under the
+                // synthetic patterns narrows most cones to a few degrees.
+                fixture.enableConeWidth = false;
+            }
+            Manager.MarkConfigDirty();
+        }
 
         /// <summary>Frames covering the given span of game time.</summary>
         public static int Frames(float seconds) => Mathf.RoundToInt(seconds / FrameDelta);
@@ -443,6 +544,17 @@ namespace VRSL.URP.Tests
             // Restoring this matters beyond the test: left set, captureDeltaTime
             // decouples the whole editor from real time.
             Time.captureDeltaTime = _captureWas;
+            Texture.streamingTextureForceLoadAll = _forceLoadWas;
+            if (_lightsWereOn != null)
+            {
+                foreach (var light in _lightsWereOn) if (light != null) light.enabled = true;
+                _lightsWereOn = null;
+                RenderSettings.ambientMode  = _ambientModeWas;
+                RenderSettings.ambientLight = _ambientLightWas;
+                RenderSettings.skybox       = _skyboxWas;
+                RenderSettings.sun          = _sunWas;
+                RenderSettings.fog          = _fogWas;
+            }
             if (_root != null) UnityEngine.Object.DestroyImmediate(_root);
             _root = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
