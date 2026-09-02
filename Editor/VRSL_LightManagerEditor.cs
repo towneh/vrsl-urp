@@ -194,7 +194,7 @@ namespace VRSL.URP.EditorScripts
         void DrawFold(VRSLWiringField[] fields)
         {
             Folded = EditorGUILayout.Foldout(
-                Folded, "Assets this uses, and which ones fill in automatically", true);
+                Folded, "Asset references", true);
             if (!Folded) return;
 
             using (new EditorGUI.IndentLevelScope())
