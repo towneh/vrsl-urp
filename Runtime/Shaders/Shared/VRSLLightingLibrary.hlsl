@@ -138,6 +138,17 @@ float VRSL_HenyeyGreenstein(float cosTheta, float g)
     return (1.0 - g2) / (4.0 * VRSL_PI * pow(max(denom, 0.0001), 1.5));
 }
 
+// The largest value the phase function takes at this g, over every angle.
+// Closed form: the peak sits at cos(theta) = sign(g), where the denominator
+// collapses to (1 - |g|)^2. What the visibility bound multiplies by, so it is
+// an upper bound on the phase term wherever the sample lands.
+float VRSL_MaxPhase(float g)
+{
+    float a = abs(g);
+    float d = max(1.0 - a, 0.05);
+    return (1.0 + a) / (4.0 * VRSL_PI * d * d);
+}
+
 // Narrow an existing ray span to the part that lies inside a spot cone.
 // tNear/tFar arrive as the span against the light's bounding sphere and are
 // tightened in place; returns false when the ray misses the cone entirely.

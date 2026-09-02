@@ -82,6 +82,16 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             // or two samples across a short span alias into dots that swim as
             // the camera moves, which is worse than the cost they save.
             #define VRSL_MIN_VOL_STEPS 4
+
+            // The least a light may add to a pixel and still be marched, in the
+            // units the pixel is written in: linear radiance after density, span,
+            // tint and the global intensity have all been applied, which is what
+            // lands in the frame. 1/4096 is under one 8-bit step at black, so a
+            // light whose whole span cannot reach it cannot be seen against any
+            // background. Relative to what is written rather than to a decoded
+            // intensity, so it holds whatever range a rig's intensities run to.
+            // Zero switches the test off without touching anything else.
+            #define VRSL_VOL_MIN_CONTRIB (1.0 / 4096.0)
             // x = base density, y = noise scale, z = noise scroll speed,
             // w = noise strength (modulated variant only)
             float4 _VRSLVolDensity;
@@ -157,6 +167,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 float density  = _VRSLVolDensity.x;
                 float3 tint    = _VRSLVolFogTint.xyz;
                 float anisotropy = _VRSLVolStepCount.w;
+                float maxPhase   = VRSL_MaxPhase(anisotropy);
 
                 // Optional URP scene-fog coupling. unity_FogParams.x is the scene
                 // fog coefficient (≈ density / sqrt(ln 2) for Exp2 mode); folding
@@ -173,6 +184,14 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 float noiseScroll   = _VRSLVolDensity.z;
                 float noiseStrength = _VRSLVolDensity.w;
             #endif
+
+                // Everything a light's accumulated result is scaled by after the
+                // per-sample terms, folded once so the bound below compares in
+                // the units the pixel is written in. The brightest channel
+                // rather than luminance: a light that is all blue must not be
+                // bounded by how little blue weighs.
+                float outputScale = density * _VRSLVolFogTint.w
+                                  * max(tint.r, max(tint.g, tint.b));
 
                 float3 accumulated = 0;
                 uint   marched     = 0;
@@ -250,12 +269,38 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                             continue;
                     }
 
+                    float span = spanEnd - spanStart;
+
+                    // Bound the most this light can add across the whole span
+                    // and skip it when that cannot be seen. Evaluated at the
+                    // ray's closest approach to the light within the span, which
+                    // is where distance attenuation peaks; the angular falloff,
+                    // the gobo, the phase function and the noise can each only
+                    // reduce a sample from there, so every step is at or below
+                    // this and the sum over the span is at or below peak times
+                    // span. Conservative by construction: it marches lights it
+                    // need not, and never skips one that would have shown.
+                    if (VRSL_VOL_MIN_CONTRIB > 0.0)
+                    {
+                        float  tClosest = clamp(proj, spanStart, spanEnd);
+                        float3 toLightC = toCentre - viewDir * tClosest;
+                        float3 colour   = light.colorAndIntensity.xyz;
+                        float  peak     = VRSL_DistanceAttenuation(dot(toLightC, toLightC), range)
+                                        * light.colorAndIntensity.w
+                                        * max(colour.r, max(colour.g, colour.b))
+                                        * maxPhase;
+                        if (peak * span * outputScale < VRSL_VOL_MIN_CONTRIB)
+                        {
+                            skipped += 1;
+                            continue;
+                        }
+                    }
+
                     // Steps from the span at a constant spacing, so a cone
                     // clipping half a metre of the ray costs a fraction of one
                     // running thirty metres down it. The level sets the spacing
                     // and the ceiling: a long span at High may take more steps
                     // than the same span at Standard, which is the intent.
-                    float span     = spanEnd - spanStart;
                     int   steps    = clamp((int)ceil(span * invSpacing),
                                            VRSL_MIN_VOL_STEPS, maxSteps);
                     float stepSize = span / steps;
