@@ -34,7 +34,7 @@ namespace VRSL.URP
 
         [Tooltip("Assign VRSLLightCull. Builds the per-tile light list so the surface and "
                + "volumetric passes only evaluate the fixtures that reach each screen tile. "
-               + "Leave empty to disable tiled culling — the passes then loop every fixture on "
+               + "Leave empty to disable tiled culling. The passes then loop every fixture on "
                + "every pixel, which is correct but scales badly past a handful of fixtures.")]
         public ComputeShader lightCullShader;
 
@@ -44,29 +44,26 @@ namespace VRSL.URP
 
         [Tooltip("Assign Hidden/VRSL-URP/SurfaceProperties (the VRSLSurfaceProperties shader "
                + "asset). Drives the prepass that captures each surface's albedo, smoothness and "
-               + "metallic so the lighting pass can run a real BRDF — that is what makes a lit "
+               + "metallic so the lighting pass can run a real BRDF. That is what keeps a lit "
                + "surface keep its texture colour instead of washing towards white. Costs one "
                + "extra opaque geometry pass. Leave empty to skip it, in which case every "
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
-        [Header("What the package may spend")]
-        [Tooltip("How much of the frame VRSL is allowed to use.\n\n"
-               + "Standard is what most worlds want. High marches the beams more finely and "
-               + "traces shadows further, which costs more per pixel and looks a little "
-               + "cleaner up close. Off keeps surfaces lit but takes the beams out of the "
-               + "air and switches shadows off, which is the cheapest the package gets "
-               + "without removing it.\n\n"
-               + "What each level costs is fixed in code. There is nothing to tune here, on "
-               + "purpose: the numbers this replaced set frame time directly and could not "
-               + "be judged without a profiler.")]
+        [Header("Performance")]
+        [Tooltip("How much of the frame VRSL may use.\n\n"
+               + "Standard suits most worlds. High marches the beams more finely and traces "
+               + "contact shadows further, which costs more per pixel. Off keeps surfaces "
+               + "lit and removes the beams and the shadows.\n\n"
+               + "What each level costs is fixed in code, so a level costs the same in "
+               + "every scene.")]
         public VRSLQuality quality = VRSLQuality.Standard;
 
-        [Header("Shadows where something stands in a beam")]
+        [Header("Contact shadows")]
         [Range(0f, 1f)]
         [Tooltip("Screen-space contact shadows. 0 disables them and compiles the trace out. "
                + "Each light marches the depth buffer from the lit pixel towards the fixture, "
-               + "so cost scales with lights-per-tile times step count — the most expensive "
+               + "so cost scales with lights-per-tile times step count, the most expensive "
                + "term in the lighting loop. Off by default for that reason. "
                + "This is contact shadowing, not shadow mapping: it only sees geometry the "
                + "camera can see, and only within Distance. An avatar in a beam shadows the "
@@ -76,13 +73,13 @@ namespace VRSL.URP
 
 
         [Tooltip("Assign Hidden/VRSL-URP/VolumetricLighting (the VRSLVolumetricLighting shader asset). "
-               + "The volumetric raymarch pass runs whenever this is assigned — there is no "
+               + "The volumetric raymarch pass runs whenever this is assigned. There is no "
                + "separate enable toggle since the URP prefab path has no legacy mesh-cone "
                + "shader to fall back to. To silence cones at runtime, drive volumetricIntensity "
                + "to 0 instead.")]
         public Shader volumetricShader;
 
-        [Header("Beams in the air")]
+        [Header("Volumetrics")]
         [Range(0f, 2f)]
         [Tooltip("Base scattering density. Lower = subtler shafts; higher = denser haze. "
                + "Tune relative to scene scale.")]
@@ -90,7 +87,7 @@ namespace VRSL.URP
 
         [Range(-0.95f, 0.95f)]
         [Tooltip("Which way the haze throws light. 0 looks the same from anywhere. Positive "
-               + "makes a beam flare when you look along it, towards the fixture — the "
+               + "makes a beam flare when you look along it, towards the fixture, which is the "
                + "cinematic one. Negative brightens it from behind instead. Henyey–Greenstein "
                + "anisotropy, if you want to look it up.")]
         public float volumetricAnisotropy = 0.2f;
@@ -107,29 +104,29 @@ namespace VRSL.URP
         public float volumetricIntensity = 1f;
 
         [Tooltip("Let the scene's own fog drive the haze. On, adding fog thickens the beams "
-               + "and turning fog off hides them, so one control does the whole venue — useful "
+               + "and turning fog off hides them, so one control does the whole venue, useful "
                + "where the fog is already animated. Off, the density and tint here are what "
                + "you get.")]
         public bool coupleToSceneFog = false;
 
-        [Header("Gobo patterns")]
+        [Header("Gobos")]
         [Tooltip("Gobo textures shared by all AudioLink fixtures. Packed into a Texture2DArray. "
                + "Each fixture selects a slot via its Gobo Index field. -1 = no gobo (open beam).")]
         public Texture2D[] goboTextures;
 
-        [Header("Where the colours come from")]
+        [Header("AudioLink")]
         [Tooltip("Scene-wide texture sampled by every AudioLink fixture in ColorTexture / "
                + "ColorTextureTraditional color modes. Mirrors the legacy AudioLink Static "
                + "approach where _SamplingTexture sat on the fixture material rather than per "
-               + "fixture instance — projects typically pick one palette/atlas/RT for all "
+               + "fixture instance. Projects typically pick one palette/atlas/RT for all "
                + "their fixtures and rely on per-fixture textureSamplingCoordinates to choose "
                + "the colour. Accepts any Texture or RenderTexture; leave blank to fall back "
                + "to AudioLink's _AudioTexture atlas.")]
         public Texture samplingTexture;
 
-        [Header("Mirrors and camera props")]
+        [Header("Secondary cameras")]
         [Tooltip("How VRSL treats cameras that render into a texture rather than to the "
-               + "player's view — mirrors, portals, camera props. Full lights them like the "
+               + "player's view: mirrors, portals, camera props. Full lights them like the "
                + "main view, which is the default because beams in a mirror are a large part "
                + "of a stage look. SurfaceOnly keeps surface lighting but drops the "
                + "volumetric raymarch, the more expensive of the two. Skip runs nothing. "

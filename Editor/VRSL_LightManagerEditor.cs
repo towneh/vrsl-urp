@@ -88,8 +88,8 @@ namespace VRSL.URP.EditorScripts
                     && quality.enumValueIndex == (int)VRSLQuality.Off;
             if (off)
                 EditorGUILayout.LabelField(
-                    "Off, so there are no beams in the air and nothing casts a contact "
-                  + "shadow. The controls below still describe how they would look.",
+                    "Off: no beams and no contact shadows. These still set how they "
+                  + "would look at Standard or High.",
                     EditorStyles.wordWrappedMiniLabel);
 
             var drawn = new List<string> { "quality" };
