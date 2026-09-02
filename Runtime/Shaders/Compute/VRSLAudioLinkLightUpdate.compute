@@ -1,6 +1,8 @@
 #pragma kernel UpdateLights
+#pragma kernel BakeVolumetricNoise
 
 #include "../Shared/VRSLLightingLibrary.hlsl"
+#include "../Shared/VRSLVolumetricNoiseBake.hlsl"
 
 // AudioLink texture — set globally each frame by the AudioLink system as _AudioTexture.
 // Accessed via Load() (integer coords) to guarantee point sampling; bilinear would

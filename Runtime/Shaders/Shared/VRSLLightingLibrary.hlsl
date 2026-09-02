@@ -330,8 +330,27 @@ struct VRSLALFixtureConfig
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Procedural density noise — shared by the half- and full-res raymarch passes
+// Density noise — the field the volumetric raymarch modulates density with
 // ──────────────────────────────────────────────────────────────────────────────
+
+// The raymarch does not evaluate this per sample. It samples a baked texture,
+// generated once per manager by the BakeVolumetricNoise kernel
+// (VRSLVolumetricNoiseBake.hlsl) from VRSL_ValueNoise3DPeriodic below, so the
+// field and the function that defines it live in the same file and the texture
+// cannot drift from the code that expects it. The procedural form is kept as
+// that definition and as the reference a still of the texture is judged against.
+//
+// The texture is VRSL_VOL_NOISE_SIZE texels per axis over a lattice of
+// VRSL_VOL_NOISE_PERIOD cells, so four texels per cell: enough for the sampler's
+// linear filter to follow the smoothstep between lattice points rather than
+// flatten it to a straight line. In lattice units the field repeats every
+// VRSL_VOL_NOISE_PERIOD, which at the shipped noise scale of 0.3 is every 53 m
+// of world. A density modulation has no feature a viewer can recognise at a
+// second sighting, so the repeat is not readable; it is not an oversight.
+// Both constants are mirrored in VRSLVolumetricNoise.cs.
+#define VRSL_VOL_NOISE_SIZE        64
+#define VRSL_VOL_NOISE_PERIOD      16.0
+#define VRSL_VOL_NOISE_INV_PERIOD  (1.0 / 16.0)
 
 // Dave Hoskins-style 3D hash. ~6 ALU per call.
 float VRSL_Hash3D(float3 p)
@@ -357,6 +376,37 @@ float VRSL_ValueNoise3D(float3 p)
     float n101 = VRSL_Hash3D(i + float3(1, 0, 1));
     float n011 = VRSL_Hash3D(i + float3(0, 1, 1));
     float n111 = VRSL_Hash3D(i + float3(1, 1, 1));
+
+    float n00 = lerp(n000, n100, f.x);
+    float n10 = lerp(n010, n110, f.x);
+    float n01 = lerp(n001, n101, f.x);
+    float n11 = lerp(n011, n111, f.x);
+    float n0  = lerp(n00,  n10,  f.y);
+    float n1  = lerp(n01,  n11,  f.y);
+    return lerp(n0, n1, f.z);
+}
+
+// The same field on a lattice that wraps every `period` cells, so a texture
+// holding one period tiles with no seam. Inside one period it is
+// VRSL_ValueNoise3D exactly, except in the last cell of each axis, where the
+// far corner reads lattice point 0 instead of `period`. Expects p >= 0, which
+// the bake guarantees; fmod on a negative would wrap the wrong way.
+float VRSL_ValueNoise3DPeriodic(float3 p, float period)
+{
+    float3 i = floor(p);
+    float3 f = frac(p);
+    f = f * f * (3.0 - 2.0 * f);
+
+    float3 i1 = fmod(i + 1.0, period);
+
+    float n000 = VRSL_Hash3D(float3(i.x,  i.y,  i.z));
+    float n100 = VRSL_Hash3D(float3(i1.x, i.y,  i.z));
+    float n010 = VRSL_Hash3D(float3(i.x,  i1.y, i.z));
+    float n110 = VRSL_Hash3D(float3(i1.x, i1.y, i.z));
+    float n001 = VRSL_Hash3D(float3(i.x,  i.y,  i1.z));
+    float n101 = VRSL_Hash3D(float3(i1.x, i.y,  i1.z));
+    float n011 = VRSL_Hash3D(float3(i.x,  i1.y, i1.z));
+    float n111 = VRSL_Hash3D(float3(i1.x, i1.y, i1.z));
 
     float n00 = lerp(n000, n100, f.x);
     float n10 = lerp(n010, n110, f.x);

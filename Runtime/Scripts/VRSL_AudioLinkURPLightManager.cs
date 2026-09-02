@@ -164,6 +164,10 @@ namespace VRSL.URP
         public int  ComputeKernel { get; private set; }
         public Material LightingMaterial   { get; private set; }
         public Material VolumetricMaterial { get; private set; }
+        /// <summary>The density field the raymarch samples, baked by
+        /// <see cref="VRSLVolumetricNoise"/> on the first frame that needs it.</summary>
+        public Texture  VolumetricNoiseTexture => _volumetricNoise;
+        Texture _volumetricNoise;
 
         public Vector4 VolumetricStepParams =>
             new Vector4(Quality.VolumetricMaxSteps, coupleToSceneFog ? 1f : 0f,
@@ -301,6 +305,7 @@ namespace VRSL.URP
             ReleaseAudioLinkHandle();
             ReleaseSamplingTextureHandle();
             ReleaseFallbackBlackRT();
+            VRSLVolumetricNoise.Release(ref _volumetricNoise);
 
             // Last, so this one has finished tearing down before another starts
             // building. Both hold their own buffers, but the shipped state should
@@ -689,6 +694,16 @@ namespace VRSL.URP
             // render graph only accepts TextureHandle.
             if (GoboArray != null)
                 Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
+
+            // Baked here rather than on enable so a level switched at runtime from
+            // Off finds one. Bound the way the gobo wheel is: it is not a graph
+            // resource and nothing in the graph writes it.
+            if (VolumetricsEnabled && VolumetricUseNoise)
+            {
+                if (_volumetricNoise == null)
+                    _volumetricNoise = VRSLVolumetricNoise.Bake(computeShader, this);
+                Shader.SetGlobalTexture("_VRSLVolNoise", _volumetricNoise);
+            }
 
             renderer.EnqueuePass(_computePass);
             // The surface prepass costs two opaque geometry draws and writes the

@@ -75,6 +75,22 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             // xyz = colour tint, w = global intensity multiplier
             float4 _VRSLVolFogTint;
 
+            // The density field, baked by the manager from the library's own
+            // noise function (see VRSL_ValueNoise3DPeriodic and the constants
+            // beside it). One trilinear fetch per light per step, in place of
+            // the eight hash taps the procedural form costs. The sampler wraps,
+            // which is what makes a texture holding one period tile the world.
+            Texture3D<float> _VRSLVolNoise;
+            SamplerState     sampler_linear_repeat;
+
+            float VRSL_VolumetricNoise(float3 posWS, float scale, float scroll, float time)
+            {
+                float3 p = posWS * scale;
+                p.y -= time * scroll;
+                return _VRSLVolNoise.SampleLevel(sampler_linear_repeat,
+                                                 p * VRSL_VOL_NOISE_INV_PERIOD, 0);
+            }
+
             // Interleaved gradient noise (Jimenez 2014), offsetting each pixel's
             // step phase along the ray.
             //
@@ -238,13 +254,12 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                             light.spotParams.z);
 
                     #ifdef _VRSL_VOLUMETRIC_NOISE
-                        // Now evaluated per light rather than once per shared
-                        // step, so haze varies with each beam's own sample
-                        // positions. Costs a noise fetch per light per step where
-                        // beams overlap; the keyword is off by default.
-                        float3 noisePos = samplePos * noiseScale;
-                        noisePos.y -= _Time.y * noiseScroll;
-                        float n = VRSL_ValueNoise3D(noisePos);
+                        // Evaluated per light rather than once per shared step,
+                        // so haze varies with each beam's own sample positions.
+                        // Costs a texture fetch per light per step where beams
+                        // overlap.
+                        float n = VRSL_VolumetricNoise(samplePos, noiseScale,
+                                                       noiseScroll, _Time.y);
                         contrib *= lerp(1.0, n, noiseStrength);
                     #endif
 

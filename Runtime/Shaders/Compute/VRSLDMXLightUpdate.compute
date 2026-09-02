@@ -3,8 +3,10 @@
 #pragma kernel AdvanceState
 #pragma kernel AdvanceStrobe
 #pragma kernel AdvanceMovement
+#pragma kernel BakeVolumetricNoise
 
 #include "../Shared/VRSLLightingLibrary.hlsl"
+#include "../Shared/VRSLVolumetricNoiseBake.hlsl"
 
 // ── DMX source textures (set by VRSL_URPLightManager) ────────────────────────
 Texture2D<float4> _DMXMainTex;
