@@ -234,6 +234,7 @@ namespace VRSL.URP
                 public BufferHandle  statsBuffer;
                 public bool          bindStats;
                 public bool          collectStats;
+                public float         time;
             }
 
             class UpsampleData
@@ -350,6 +351,7 @@ namespace VRSL.URP
                     d.bindStats       = stats.Buffer != null;
                     d.collectStats    = d.bindStats && stats.Collecting;
                     d.statsBuffer     = d.bindStats ? rg.ImportBuffer(stats.Buffer) : default;
+                    d.time            = mgr.VolumetricTime;
 
                     builder.SetRenderAttachment(halfRT, 0, AccessFlags.Write);
                     builder.UseTexture(d.halfDepth, AccessFlags.Read);
@@ -373,6 +375,7 @@ namespace VRSL.URP
                         if (p.bindTileBuffer)
                             cmd.SetGlobalBuffer("_VRSLTileLightIndices", p.tileLightIndices);
                         cmd.SetGlobalInteger("_VRSLVolCollectStats",   p.collectStats ? 1 : 0);
+                        cmd.SetGlobalFloat(  "_VRSLVolTime",           p.time);
                         cmd.DrawMesh(RenderingUtils.fullscreenMesh, Matrix4x4.identity,
                             p.material, 0, 1);
                     });

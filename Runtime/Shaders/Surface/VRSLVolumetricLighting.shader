@@ -70,6 +70,12 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             // z = 1 / sample spacing in metres, w = HG anisotropy g
             float4 _VRSLVolStepCount;
 
+            // Seconds since level load, from the CPU rather than _Time.y, so a
+            // capture that holds everything else still can hold the dither and
+            // the haze scroll still as well. Both are meant to move between
+            // frames; a frozen frame is the one case where they must not.
+            float _VRSLVolTime;
+
             // Diagnostic counters, written only while _VRSLVolCollectStats is set:
             // one atomic per counter per pixel at the end of the march, so a
             // frame that collects is not a frame anyone should time. Slots are
@@ -131,7 +137,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             // frame rate.
             float VRSL_Jitter(float2 pixelCoord)
             {
-                float2 p = pixelCoord + fmod(_Time.y * 60.0, 64.0) * 5.588238;
+                float2 p = pixelCoord + fmod(_VRSLVolTime * 60.0, 64.0) * 5.588238;
                 return frac(52.9829189
                           * frac(dot(p, float2(0.06711056, 0.00583715))));
             }
@@ -335,7 +341,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                         // Costs a texture fetch per light per step where beams
                         // overlap.
                         float n = VRSL_VolumetricNoise(samplePos, noiseScale,
-                                                       noiseScroll, _Time.y);
+                                                       noiseScroll, _VRSLVolTime);
                         contrib *= lerp(1.0, n, noiseStrength);
                     #endif
 

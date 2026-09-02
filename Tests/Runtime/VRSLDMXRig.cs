@@ -306,6 +306,11 @@ namespace VRSL.URP.Tests
             // smoothing of 0 gives lerp(previous, target, 1 - pow(0, dt)) = target.
             Manager.movementSmoothingMax = 0f;
             Manager.movementSmoothingMin = 0f;
+            // The raymarch's dither and haze scroll are phased by time. At the
+            // step floor the dither reaches the quantised output on a few grazing
+            // pixels, so two captures at different frames differed by one 8-bit
+            // step on two or three of them.
+            Manager.VolumetricTimeOverride = 0f;
 
             Manager.MarkConfigDirty();
         }

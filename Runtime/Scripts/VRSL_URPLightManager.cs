@@ -293,6 +293,17 @@ namespace VRSL.URP
         /// leave the image alone.</summary>
         public VRSLVolumetricStatsProbe VolumetricStats { get; } = new();
 
+        /// <summary>The clock the raymarch's dither and haze scroll run on, in
+        /// seconds since level load. Passed from here rather than read as
+        /// <c>_Time.y</c> in the shader so an image capture can hold it: the dither
+        /// is meant to change every frame, and at the step floor that change
+        /// reaches the quantised output on a few grazing pixels.</summary>
+        public float VolumetricTime => VolumetricTimeOverride ?? Time.timeSinceLevelLoad;
+
+        /// <summary>Set to hold the raymarch's clock. For captures that have to be
+        /// repeatable; nothing in the light path sets it.</summary>
+        internal float? VolumetricTimeOverride;
+
         // Volumetric shader parameter packing — read by VRSLDMXLightPasses.VolumetricPass
         // each frame and uploaded as global vectors before the raymarch pass.
         public Vector4 VolumetricStepParams =>
