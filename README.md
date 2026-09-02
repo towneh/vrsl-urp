@@ -71,7 +71,7 @@ Removing the upstream package afterwards leaves missing-script slots on the fixt
 
 ## Troubleshooting
 
-**Start here: select the manager in play mode, right-click the component header, and run `VRSL Diagnostics`.** Most failures in this pipeline look identical from outside — nothing is lit — and that report separates a failed decode from an empty tile cull from a shader that silently didn't compile.
+**Start here: select the manager in play mode, right-click the component header, and run `VRSL Diagnostics`.** Most failures in this pipeline look identical from outside, because nothing is lit either way, and that report separates a failed decode from an empty tile cull from a shader that silently didn't compile.
 
 | Symptom | Likely cause |
 |---|---|

@@ -155,7 +155,7 @@ The full per-fixture channel layout (offsets relative to `dmxChannel`):
 | +10 | Gobo spin speed |
 | +11 | Gobo selection |
 
-With `use5ChannelMode` enabled this collapses to the 5-channel static form — dimmer at +0, Red / Green / Blue at +1 / +2 / +3, strobe at +4 — and the motor, pan/tilt, and gobo channels are unused. Patch those fixtures 5 channels apart and set the fixture-body surface shader to its matching 5-channel mode.
+With `use5ChannelMode` enabled this collapses to the 5-channel static form (dimmer at +0, Red / Green / Blue at +1 / +2 / +3, strobe at +4), and the motor, pan/tilt, and gobo channels are unused. Patch those fixtures 5 channels apart and set the fixture-body surface shader to its matching 5-channel mode.
 
 ---
 

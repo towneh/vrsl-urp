@@ -20,7 +20,7 @@ The two managers (`VRSL_URPLightManager` for DMX, `VRSL_AudioLinkURPLightManager
 
 Surface data comes through a VRSL-owned prepass (`VRSLSurfacePrepass`) that renders opaque scene geometry twice into non-MSAA RTs:
 
-- **Normals**, using the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses, into `_VRSLNormalsTexture`. Any opaque shader that ships a URP-compatible `DepthNormals` pass — URP Lit, Poiyomi URP, lilToon URP, Mochie URP — contributes its authored normals automatically. Pixels drawn by shaders without one fall back to a depth-derivative normal reconstruction in the lighting shader, so those surfaces still pick up VRSL light, just faceted to the underlying tessellation.
+- **Normals**, using the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses, into `_VRSLNormalsTexture`. Any opaque shader that ships a URP-compatible `DepthNormals` pass contributes its authored normals automatically. Pixels drawn by shaders without one fall back to a depth-derivative normal reconstruction in the lighting shader, so those surfaces still pick up VRSL light, just faceted to the underlying tessellation.
 - **Albedo, smoothness and metallic**, using `VRSLSurfaceProperties` as a `DrawingSettings.overrideShader` over the opaque forward tags, into `_VRSLAlbedoTexture` (rgb = base colour, a = smoothness) and `_VRSLMaterialTexture` (r = metallic). An override shader keeps each renderer's own material property values, so this reaches albedo on shaders VRSL knows nothing about. See *Material capture* below for how the two property-naming conventions are resolved.
 
 Neither half asks third-party shader authors to add anything VRSL-specific. Both RTs are allocated as `Tex2DArray` with `volumeDepth` matching the camera target so per-eye data is correct under Single-Pass Stereo Instanced VR.
@@ -235,7 +235,7 @@ Gobo spin is integrated on the GPU each frame: `spinPhase = fmod(spinSpeed × _V
 
 - Three vertices generated entirely from `SV_VertexID` — no vertex buffer.
 - World position reconstructed via `ComputeWorldSpacePosition(uv, rawDepth, UNITY_MATRIX_I_VP)`.
-- Surface normal sampled from `_VRSLNormalsTexture` (written by `VRSLSurfacePrepass` at `AfterRenderingPrePasses`). On pixels where the prepass wrote no normal — surfaces drawn by shaders without a URP `DepthNormals` pass — the shader falls back to `normalize(cross(ddy(posWS), ddx(posWS)))` so those surfaces still pick up VRSL light, just faceted to the underlying tessellation rather than smooth-shaded.
+- Surface normal sampled from `_VRSLNormalsTexture` (written by `VRSLSurfacePrepass` at `AfterRenderingPrePasses`). On pixels where the prepass wrote no normal, which is any surface drawn by a shader with no URP `DepthNormals` pass, the shader falls back to `normalize(cross(ddy(posWS), ddx(posWS)))` so those surfaces still pick up VRSL light, just faceted to the underlying tessellation rather than smooth-shaded.
 - Per-pixel loop over the tile's light list (see *Tiled light culling*), evaluating each through URP's BRDF.
 
 `ConfigureInput(ScriptableRenderPassInput.Depth)` runs in the manager's per-camera callback before enqueue. The lighting pass declares `_CameraDepthTexture` as a tracked Render Graph resource and samples the prepass targets through the global bindings the prepass sets up via `SetGlobalTextureAfterPass`.
@@ -253,7 +253,7 @@ return DirectBRDF(brdfData, normalWS, lightDirWS, viewDirWS) * radiance;
 
 That gives the diffuse albedo term (a lit red carpet stays red instead of washing towards white), the GGX specular lobe (a stage spot on a polished floor gets its highlight), and the metallic response (metals lose their diffuse and tint their specular).
 
-Where the prepass wrote nothing — geometry drawn by shaders with no forward LightMode tag, or a scene running without `surfacePropertiesShader` assigned — the shader falls back to a mid-grey dielectric so those surfaces still respond to light. The lighting pass pushes `_VRSLSurfaceDataValid` so that case is explicit rather than depending on what an unbound texture slot resolves to, which differs by graphics API.
+Where the prepass wrote nothing, whether that is geometry drawn by a shader with no forward LightMode tag or a scene running without `surfacePropertiesShader` assigned, the shader falls back to a mid-grey dielectric so those surfaces still respond to light. The lighting pass pushes `_VRSLSurfaceDataValid` so that case is explicit rather than depending on what an unbound texture slot resolves to, which differs by graphics API.
 
 Shadowing is still absent, so a fixture lights every surface in range regardless of occluders. See *Known Limitations*.
 
@@ -280,7 +280,7 @@ correction, so both sources now agree at full output.
 
 ### Material capture
 
-`VRSLSurfaceProperties` declares both property-naming conventions — `_BaseMap` / `_BaseColor` (URP-native) and `_MainTex` / `_Color` (the legacy naming most avatar shaders use) — and combines them with `min()`:
+`VRSLSurfaceProperties` declares both property-naming conventions, `_BaseMap` / `_BaseColor` (URP-native) and `_MainTex` / `_Color` (the legacy naming most avatar shaders use), and combines them with `min()`:
 
 - a URP material leaves the legacy pair at its default white, so the URP pair wins;
 - an avatar material leaves the URP pair at white, so the legacy pair wins;
@@ -290,7 +290,7 @@ Where a material genuinely populates both with different values the darker wins,
 
 Smoothness takes `max(_Smoothness, _Glossiness)` on the same reasoning. Metallic and smoothness maps aren't sampled — the scalars only.
 
-An override shader replaces the material's shader outright, which is what reaches albedo on shaders VRSL knows nothing about, but it also means any visibility decision made *inside* that shader never runs here. Poiyomi's UV Tile Discard is the clearest case: in its default Vertex mode it returns NaN from the vertex program, collapsing the triangle in the passes that feed `_CameraDepthTexture`, while the prepass — running VRSL's shader, not Poiyomi's — draws the geometry as though it were there. The lighting pass would then take position from the camera's depth (the surface behind) and albedo from the prepass (the hidden avatar), and the discarded shape would reappear as lit colour on whatever stood behind it.
+An override shader replaces the material's shader outright, which is what reaches albedo on shaders VRSL knows nothing about, but it also means any visibility decision made *inside* that shader never runs here. Poiyomi's UV Tile Discard is the clearest case: in its default Vertex mode it returns NaN from the vertex program, collapsing the triangle in the passes that feed `_CameraDepthTexture`, while the prepass, running VRSL's shader rather than Poiyomi's, draws the geometry as though it were there. The lighting pass would then take position from the camera's depth (the surface behind) and albedo from the prepass (the hidden avatar), and the discarded shape would reappear as lit colour on whatever stood behind it.
 
 The prepass therefore publishes its depth as `_VRSLSurfaceDepthTexture`, and `VRSL_SurfaceDataCovers` in `VRSLSurfaceBRDF.hlsl` drops the albedo read wherever that disagrees with the camera's depth, falling through to the neutral dielectric. The comparison is in linear eye space against a tolerance proportional to viewing distance: raw depth precision is far from uniform, and the two values come from different shader compilations of the same transform, so they agree closely rather than bit-exactly. Custom alpha clips and vertex displacement produce the same mismatch and are covered by the same check — a displaced material lights as neutral grey rather than as a ghost offset from the mesh.
 
@@ -315,7 +315,7 @@ What it does and doesn't cover matters:
   fixture and a surface across the room casts nothing, and an occluder just outside the
   frame stops shadowing as it leaves. Those need a light-perspective shadow map.
 
-It is the most expensive term in the lighting loop — a depth march per light per pixel — so
+It is the most expensive term in the lighting loop, a depth march per light per pixel, so
 it runs last, only for lights still reaching the pixel after attenuation and the gobo, and
 is **off by default**. `High` is the setting for thin occluders and for shadows that
 disappear at grazing angles: it traces further and samples more finely than `Standard`.
@@ -337,7 +337,7 @@ Both fullscreen passes then iterate the tile's list rather than the whole fixtur
 
 Tile frusta span the camera's full depth range rather than each tile's scene-depth bounds. That costs a little tightness on the surface pass, but keeps one list valid for the volumetric ray (which runs from the camera to the surface) and removes any dependency on the depth texture being ready when the cull runs.
 
-The per-tile cap is 256 fixtures; past that, fixtures are dropped for that tile rather than falling back to the full list. The cull records the count a tile asked for rather than the count it drew, so the diagnostics can report how much light a dense rig is losing — a tile at its limit and a tile far past it would otherwise read identically. Nothing may iterate slot 0 of the tile list directly for that reason; `VRSL_LightListCount` clamps, and there are no indices behind the count past the cap. Leaving `lightCullShader` unassigned publishes a zero `_VRSLTileParams`, which both shaders read as "iterate every light" — correct, just without the saving.
+The per-tile cap is 256 fixtures; past that, fixtures are dropped for that tile rather than falling back to the full list. The cull records the count a tile asked for rather than the count it drew, so the diagnostics can report how much light a dense rig is losing, since a tile at its limit and a tile far past it would otherwise read identically. Nothing may iterate slot 0 of the tile list directly for that reason; `VRSL_LightListCount` clamps, and there are no indices behind the count past the cap. Leaving `lightCullShader` unassigned publishes a zero `_VRSLTileParams`, which both shaders read as "iterate every light": correct, just without the saving.
 
 ---
 
