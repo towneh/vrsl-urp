@@ -450,8 +450,8 @@ namespace VRSL.URP
                         + "wider. The figure a verdict should actually be judged against comes "
                         + "from a null run on this machine, not from this column.");
             sb.AppendLine();
-            sb.AppendLine("| Fixtures | Emitting | Camera | Quality | Package cost | +- | Basis | GPU frame | CPU frame | Lights/tile | Empty tiles | Steps/light | Skipped | Source |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| Fixtures | Emitting | Camera | Quality | Package cost | +- | Basis | GPU frame | CPU frame | Lights/tile | Empty tiles | Steps/light | Lights/pixel | Skipped | Source |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (var row in run.rows)
             {
                 sb.AppendLine(
@@ -467,6 +467,7 @@ namespace VRSL.URP
                   + $"| {row.counters.lightsPerTileAverage:F1} avg / {row.counters.lightsPerTileMax} max "
                   + $"| {row.counters.emptyTilePercent:F0}% "
                   + $"| {(row.counters.volumetricStatsMeasured ? $"{row.counters.volumetricStepsPerLight:F1} of {row.counters.stepsPerLight}" : "-")} "
+                  + $"| {(row.counters.volumetricStatsMeasured ? $"{row.counters.volumetricLightsPerPixel:F2}" : "-")} "
                   + $"| {(row.counters.volumetricStatsMeasured ? $"{row.counters.volumetricSkippedPercent:F0}%" : "-")} "
                   + $"| {row.timings.source} |");
             }
