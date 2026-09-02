@@ -474,18 +474,43 @@ them under priming.
 
 ### Volumetrics
 
+`VRSLVolumetricLoopTests` in the suite covers V14 to V17. V11 to V13 want eyes and a
+frame capture, and V11 reads its number off `VRSL Diagnostics`.
+
 | # | Path | Scenario | Expected |
 |---|---|---|---|
 | V1 | — | `Half` (default) | Cones visible, silhouetted correctly against geometry |
 | V2 | — | *Retired.* The full-resolution mode it compared against is gone |
 | V3 | — | `Off` against `Standard` | Beams present at `Standard` and absent at `Off`, with surfaces still lit at both. Noise follows the level and is on wherever beams are |
-| V4 | — | Beam a few metres from the camera, `Half`, with the geometry behind it first near and then far | Cone grain unchanged as the backing surface moves away. **Guards the per-light march span — a shared march loses sample density to whatever sits behind the beam** |
+| V4 | — | Beam a few metres from the camera, `Half`, with the geometry behind it first near and then far | Cone grain unchanged as the backing surface moves away. **Guards the per-light march span — a shared march loses sample density to whatever sits behind the beam.** It now guards the adaptive step count as well: the count is taken from the light's own span, so a count that grew or shrank with the surface behind the beam would be exactly the fault this row was written for |
 | V5 | — | Several cones overlapping, `Half` | Brightness in the overlap is the sum of the individual cones; no seam or banding where one cone's span ends |
 | V6 | — | Camera inside a cone, then walking out through its edge | No pop or brightness step as the near end of the span crosses the camera. **Exercises the midpoint selection in `VRSL_NarrowSpanToCone`** |
 | V7 | — | Narrow cone (small `spotAngle`), viewed side-on close to the fixture head | Smooth gradient, no dot-screen or weave pattern. **Worst case for span tightness — the cone is narrowest relative to its bounding sphere here** |
 | V8 | — | *Retired.* It told a march artefact from an upsample one by comparing the two resolution modes, and there is one mode now. A suspected upsample artefact is read off the half-res target in a frame capture instead |
 | V9 | — | `Standard` against `High` on a wide cone at long throw | `High` is smoother where stepping is visible at all. This is the case the level exists for: what governs stepping is metres of cone per step, so wide cones, long throws and dense haze show it first |
-| V10 | — | Cone edges at a grazing angle | Soft feather to the outer angle, no hard rim. **A hard rim means the span is clipping before the attenuation has faded** |
+| V10 | — | Cone edges at a grazing angle | Soft feather to the outer angle, no hard rim. **A hard rim means the span is clipping before the attenuation has faded**, or that the visibility bound is skipping lights it should march. The bound is `VRSL_VOL_MIN_CONTRIB` in the volumetric shader; set it to 0 and re-run to tell the two apart |
+| V11 | — | One fixture, walked away from the camera so its cone fills less and less of the view ray. `VRSL Diagnostics` on the manager at each distance | The cone keeps the same grain at every distance while the diagnostics' steps per light fall, never below 4 and never above the level's ceiling. Judged from that number, not by eye alone: the count is the span over the level's spacing, and a cone that fills less of the ray is a shorter span |
+| V12 | — | A rig of fixtures all pointed away from the camera so only their falloff tails reach it, against the build before the bound | Frame time falls, with no visible difference in the image. `VRSL Diagnostics` reports a non-zero share of lights skipped as too faint to see. **If the image differs, the threshold is too eager**: set `VRSL_VOL_MIN_CONTRIB` to 0 and confirm the difference goes with it |
+| V13 | — | The same beam with the baked noise texture and with the procedural field, captured as stills and compared. The procedural field is the build before the texture landed | Different grain is acceptable; different density structure is not. The texture is the same function on a lattice that wraps every 16 cells, so within one period it is the procedural field exactly except in the last cell of each axis |
+| V14 | — | `VRSLVolumetricLoopTests`: bake the field with the package's own compute and read it back | A 64-cubed repeat-wrapped texture whose texels span most of the range and sit around the middle, and whose texels across the wrap differ by no more than interior neighbours do. A non-periodic bake puts two unrelated lattice points at every wrap, about a third of the range apart, against a few hundredths between interior neighbours |
+| V15 | — | `VRSLVolumetricLoopTests`: bake with a compute that has no kernel | The shared 1×1×1 white fallback, so density is unmodulated rather than zeroed, and one warning per session naming the kernel. Releasing a fallback leaves it alone |
+| V16 | — | `VRSLVolumetricLoopTests`: collect the raymarch counters on the rig with its movers pointed straight down, at `Standard`, then at `High` | Steps per light marched never below 4 and never above the level's ceiling, and higher at `High` than at `Standard` on the same spans. The second half is what says the count follows the level's spacing rather than sitting at the ceiling |
+| V17 | — | `VRSLVolumetricLoopTests`: the same rig, frozen and on the Ramp, with `volumetricIntensity` at `1e-12` | Every light that reaches the loop is skipped by the bound and no step is taken; the count of lights reaching the loop is unchanged from the lit frame, so the bound moved only the verdict. Restoring the intensity restores the march |
+
+**The rig's movers point wherever their channels say, and under the synthetic pattern
+that is off sideways at shallow angles.** Measured while writing V16: of some ten
+thousand marched pixels, 326 rays crossed any cone, all of them grazing an edge. The
+rig's frame therefore carries almost no beam, which is why I1 passed unchanged across a
+change to the noise field and the step count, and why V16 and V17 switch pan and tilt
+off first. Any row about what is in the air has to do the same, and I1 as it stands
+guards the surfaces, not the beams.
+
+**The counters are how V11, V12, V16 and V17 are judged.** `VRSL Diagnostics` prints
+steps per light, lights marched per pixel and the share of lights skipped, and a sweep
+row carries the same three. Collecting them is one atomic per counter per pixel, so the
+diagnostic arms a request on its first call and answers on the next; the benchmark asks
+after each timed window so the atomics never land inside a measured frame. A row that
+reads a zero here should first ask whether a frame was collected at all.
 
 ### Cameras
 

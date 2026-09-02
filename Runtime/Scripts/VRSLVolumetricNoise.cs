@@ -89,7 +89,8 @@ namespace VRSL.URP
                     hideFlags = HideFlags.HideAndDontSave,
                 };
                 s_fallback.SetPixels32(new[] { new Color32(255, 255, 255, 255) });
-                s_fallback.Apply(false, true);
+                // Left readable: one byte, and a row reads it back to prove it is 1.
+                s_fallback.Apply(false, false);
             }
             return s_fallback;
         }
@@ -105,6 +106,10 @@ namespace VRSL.URP
             }
             texture = null;
         }
+
+        /// <summary>The warning fires once per session. A row that expects it has
+        /// to be able to re-arm it.</summary>
+        internal static void ResetWarningForTests() => s_warned = false;
 
         static void Warn(string reason, Object context)
         {
