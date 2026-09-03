@@ -118,6 +118,11 @@ namespace VRSL.URP.Tests
             }
             finally
             {
+                // Here rather than beside the assertions they follow: the filter's
+                // registries are static, and a failed assertion would otherwise leave
+                // a destroyed camera registered for every later row in the session.
+                VRSLCameraFilter.UnregisterDataReader(cam);
+                VRSLCameraFilter.UnregisterMainView(cam);
                 target.Release();
                 Object.DestroyImmediate(target);
                 Object.DestroyImmediate(go);
@@ -233,8 +238,11 @@ namespace VRSL.URP.Tests
             VRSL_URPLightManager.VRSLLightData[] alone = null, together = null;
             VRSL_URPLightManager.VRSLLightData[] before = null;
 
-            yield return Run(0, r => before = r.ReadLights(), r => alone = r.ReadLights());
-            yield return Run(3, null, r => together = r.ReadLights());
+            yield return Run(0, null, r => alone = r.ReadLights());
+            // The baseline for the rate comes from the same run as the end reading, so
+            // the claim rests on this rig alone rather than on two rigs starting in
+            // step; the one-camera rig is compared against separately below.
+            yield return Run(3, r => before = r.ReadLights(), r => together = r.ReadLights());
 
             float elapsed = span * VRSLDMXRig.FrameDelta;
             int checkedCount = 0;

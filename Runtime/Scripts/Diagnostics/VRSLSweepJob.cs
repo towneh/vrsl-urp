@@ -363,8 +363,15 @@ namespace VRSL.URP
                         determinism.Reassert();
                         sharedFrame(VRSLBenchmarkScene.RenderingCameraCount() > keep.Count);
 
+                        // Checked on every captured frame as well as either side of
+                        // the capture: a host camera that comes up and goes away
+                        // inside the timed frames would otherwise leave the row
+                        // reading as the sweep's alone. The enabled-camera count is
+                        // a native figure, so the check costs the measured frame
+                        // nothing worth noticing and no allocation.
                         var capture = VRSLBenchmark.CaptureRow(
-                            settings, config, run, expectedTileCamera: camera);
+                            settings, config, run, expectedTileCamera: camera,
+                            onFrame: () => sharedFrame(Camera.allCamerasCount > keep.Count));
                         while (capture.MoveNext()) yield return capture.Current;
 
                         sharedFrame(VRSLBenchmarkScene.RenderingCameraCount() > keep.Count);
