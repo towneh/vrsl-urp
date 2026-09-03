@@ -54,7 +54,9 @@ namespace VRSL.URP
         [Tooltip("Which layers keep their own colour, gloss and normal maps when a fixture "
                + "lights them. Anything on a layer left out is still lit, but as a plain "
                + "mid-grey surface. Leave at Everything unless a layer is expensive to draw "
-               + "and you can accept it lighting grey.")]
+               + "and you can accept it lighting grey. When a DMX light manager is also "
+               + "running and drawing fixtures through the same camera, it owns the prepass "
+               + "and its own mask applies instead of this one.")]
         public LayerMask prepassLayers = ~0;
 
         [Header("Performance")]
@@ -139,6 +141,16 @@ namespace VRSL.URP
                + "Cameras feeding VRSL's own data path are always skipped regardless of "
                + "this setting.")]
         public SecondaryCameraMode secondaryCameraMode = SecondaryCameraMode.Full;
+
+        [Header("Troubleshooting")]
+        [Tooltip("Draw VRSL's own normals prepass even where URP's could be read instead. "
+               + "Costs an extra opaque geometry pass per camera. Turn it on if lit surfaces "
+               + "look wrong in a way that changes with the camera angle, which is what a "
+               + "normals texture in the wrong space looks like, and say which URP version "
+               + "you are on. With both managers in a scene, set it on both: when a DMX "
+               + "light manager draws the prepass for a camera, its setting decides what "
+               + "that prepass does.")]
+        public bool forceOwnNormals = false;
 
         /// <summary>x = strength, y = trace distance, z = steps, w = thickness.</summary>
         public Vector4 ContactShadowParams
@@ -240,6 +252,14 @@ namespace VRSL.URP
         // even with multiple cameras.
         VRSLAudioLinkLightPasses.ComputePass    _computePass;
         VRSLSurfacePrepass                      _surfacePrepass;
+
+        /// <summary>The surface prepass this manager enqueues, for its counters.</summary>
+        public VRSLSurfacePrepass SurfacePrepass => _surfacePrepass;
+
+        /// <summary>Whether the last camera this manager set up reads URP's normals
+        /// texture rather than drawing its own, and why, in an author's words.</summary>
+        public bool   UsesUrpNormals { get; private set; }
+        public string NormalsSource  { get; private set; }
         VRSLTileCullPass                        _tileCullPass;
         VRSLAudioLinkLightPasses.LightingPass   _lightingPass;
         VRSLAudioLinkLightPasses.VolumetricPass _volumetricPass;
@@ -658,6 +678,7 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
             sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
+            sb.AppendLine("  Normals: " + (NormalsSource ?? "no camera has rendered yet"));
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
             sb.AppendLine("  " + VRSLDiagnostics.LightDataStatus(LightDataBuffer, FixtureCount));
@@ -720,13 +741,21 @@ namespace VRSL.URP
 
             UploadPerFrameState();
 
-            // VRSLSurfacePrepass writes _VRSLNormalsTexture, _VRSLAlbedoTexture and
-            // _VRSLMaterialTexture into VRSL-owned non-MSAA RTs before opaque
-            // rendering; the lighting shader samples those globals. The lighting
-            // and volumetric passes only need depth from URP, so neither requests
-            // Normal or Color here.
-            _lightingPass.ConfigureInput(ScriptableRenderPassInput.Depth);
-            _volumetricPass.ConfigureInput(ScriptableRenderPassInput.Depth);
+            // Where the normals come from is decided here, once per camera, and the
+            // lighting shader samples one global name either way. Normal is asked
+            // of URP only where its prepass can be drawn: on a multisampled camera
+            // that is also depth primed, the request itself takes the frame down.
+            // With no fixtures nothing would read it, so nothing is asked for.
+            var normals = VRSLPrepassPolicy.Decide(cam, renderer, forceOwnNormals);
+            UsesUrpNormals = normals.UseUrpNormals;
+            NormalsSource  = normals.Reason;
+            var input = ScriptableRenderPassInput.Depth;
+            if (normals.UseUrpNormals && FixtureCount > 0)
+                input |= ScriptableRenderPassInput.Normal;
+            _lightingPass.ConfigureInput(input);
+            _volumetricPass.ConfigureInput(input);
+            _surfacePrepass.ConfigureInput(input);
+            _surfacePrepass.UrpNormals = normals.UseUrpNormals;
 
             // Gobo wheel is a Texture2DArray, bound globally here because the
             // render graph only accepts TextureHandle.
@@ -757,6 +786,10 @@ namespace VRSL.URP
             // leave the prepass enqueued by nobody and the lighting pass shading
             // against stale data. With no fixtures of its own nothing here reads
             // the targets either, so it is not drawn.
+            //
+            // When the DMX manager drives it, its prepassLayers apply and the mask
+            // on this component does nothing; the tooltip says so, since the frame
+            // will not.
             var dmxManager = VRSL_URPLightManager.Instance;
             bool dmxDrives = dmxManager != null && dmxManager.DrivesSurfacePrepass(cam);
             if (FixtureCount > 0 && !dmxDrives)

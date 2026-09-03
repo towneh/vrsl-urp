@@ -28,8 +28,11 @@ namespace VRSL.URP
     /// allocated as <c>Tex2DArray</c> with <c>volumeDepth</c> matching the camera
     /// target so per-eye data is correct under single-pass instanced VR.
     ///
-    /// Costs two opaque geometry passes. The normals half can't be merged into
-    /// the override-shader half without giving up authored normal maps, since a
+    /// Costs two opaque geometry passes, or one where URP's own depth-normals
+    /// prepass can be read instead (<see cref="UrpNormals"/>, decided per camera
+    /// by <see cref="VRSLPrepassPolicy"/>): URP's texture is then published under
+    /// the same global name and the normals draw is skipped. The albedo half
+    /// can't be merged into it without giving up authored normal maps, since a
     /// shader-tag draw renders each material's own pass and an override draw
     /// replaces it.
     ///
@@ -90,10 +93,26 @@ namespace VRSL.URP
         /// each enqueue, so an author's change applies on the next frame.</summary>
         public LayerMask Layers { get; set; } = ~0;
 
+        /// <summary>
+        /// Publish URP's normals texture under <c>_VRSLNormalsTexture</c> instead of
+        /// drawing one. Set per camera by the owning manager from
+        /// <see cref="VRSLPrepassPolicy"/>, which also has the manager request
+        /// <c>Normal</c> from URP in the same decision. If URP produced no texture
+        /// anyway, the draw runs as it always has.
+        /// </summary>
+        public bool UrpNormals { get; set; }
+
+        /// <summary>How many camera renders drew VRSL's own normals, and how many
+        /// read URP's. For the diagnostics line and row S11.</summary>
+        public int OwnNormalsDraws { get; private set; }
+        public int UrpNormalsReads { get; private set; }
+
         class NormalsPassData
         {
             public RendererListHandle rendererList;
         }
+
+        class PublishPassData { }
 
         class SurfacePassData
         {
@@ -135,14 +154,35 @@ namespace VRSL.URP
             var dimension = slices > 1 ? TextureDimension.Tex2DArray : TextureDimension.Tex2D;
 
             var sortFlags = camData.defaultOpaqueSortFlags;
+            var resources = frame.Get<UniversalResourceData>();
 
-            RecordNormals(rg, renderingData, camData, lightData, sortFlags,
-                          width, height, slices, dimension);
+            if (UrpNormals && resources.cameraNormalsTexture.IsValid())
+                PublishUrpNormals(rg, resources);
+            else
+                RecordNormals(rg, renderingData, camData, lightData, sortFlags,
+                              width, height, slices, dimension);
 
             if (_surfacePropertiesShader != null)
-                RecordSurfaceProperties(rg, frame.Get<UniversalResourceData>(),
+                RecordSurfaceProperties(rg, resources,
                                         renderingData, camData, lightData, sortFlags,
                                         width, height, slices, dimension);
+        }
+
+        /// <summary>
+        /// URP's depth-normals prepass already drew what the normals draw would, so
+        /// its texture is bound under the name the lighting shader samples. A pass
+        /// with no attachments, kept only for the global it sets, which is how URP
+        /// publishes its own.
+        /// </summary>
+        void PublishUrpNormals(RenderGraph rg, UniversalResourceData resources)
+        {
+            UrpNormalsReads++;
+            using var builder = rg.AddRasterRenderPass<PublishPassData>(
+                "VRSL Normals From URP", out _);
+            builder.UseTexture(resources.cameraNormalsTexture, AccessFlags.Read);
+            builder.AllowGlobalStateModification(true);
+            builder.SetGlobalTextureAfterPass(resources.cameraNormalsTexture, s_NormalsTextureID);
+            builder.SetRenderFunc(static (PublishPassData p, RasterGraphContext ctx) => { });
         }
 
         void RecordNormals(RenderGraph rg, UniversalRenderingData renderingData,
@@ -150,9 +190,11 @@ namespace VRSL.URP
                            SortingCriteria sortFlags,
                            int width, int height, int slices, TextureDimension dimension)
         {
-            // MSAASamples.None pinned regardless of the URP asset's MSAA setting —
-            // that's the payoff of running our own prepass rather than reading
-            // URP's _CameraNormalsTexture handle.
+            OwnNormalsDraws++;
+
+            // MSAASamples.None pinned regardless of the URP asset's MSAA setting.
+            // This draw is what runs wherever URP's own texture cannot be read, and
+            // a multisampled camera is the usual reason (see VRSLPrepassPolicy).
             var normalsDesc = new TextureDesc(width, height)
             {
                 name        = "_VRSLNormalsTexture",

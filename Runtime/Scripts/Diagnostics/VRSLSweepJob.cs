@@ -37,10 +37,18 @@ namespace VRSL.URP
         /// things: the editor can read VERSION.txt and shell out to git, and a player
         /// can only carry what was baked into it when it was built.
         /// </summary>
-        public static IEnumerator Run(VRSLSweepOutcome outcome, Action<VRSLBenchmarkRun> stampEnvironment)
+        /// <param name="forceOwnNormals">Draw VRSL's own normals prepass on every camera,
+        /// where the policy would otherwise read URP's. The other half of a pair that
+        /// measures what the reuse is worth; the run is labelled so the two are not
+        /// mistaken for each other.</param>
+        public static IEnumerator Run(VRSLSweepOutcome outcome, Action<VRSLBenchmarkRun> stampEnvironment,
+                                      bool forceOwnNormals = false)
         {
             var settings = new VRSLBenchmarkSettings();
-            var run      = new VRSLBenchmarkRun { label = "standard-sweep" };
+            var run      = new VRSLBenchmarkRun
+            {
+                label = forceOwnNormals ? "standard-sweep-own-normals" : "standard-sweep",
+            };
             var root     = GameObject.Find(VRSLBenchmarkScene.RootName);
             var camera   = VRSLBenchmarkScene.FindCamera(root);
 
@@ -71,6 +79,10 @@ namespace VRSL.URP
                 yield break;
             }
             manager.ChannelSource = source;
+            manager.forceOwnNormals = forceOwnNormals;
+            if (forceOwnNormals)
+                run.Note("VRSL drew its own normals prepass on every camera (forceOwnNormals), "
+                       + "so normalsReuseEngaged is false by request rather than by policy.");
 
             // Everything that can refuse the run happens above this line. A fixed target
             // rather than the screen, so the measurement does not depend on the size of a

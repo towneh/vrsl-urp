@@ -63,10 +63,64 @@ namespace VRSL.URP.EditorScripts
             var fixtureRenderers = FixtureRenderers();
 
             var used = ValidateCameras(urp, report);
+            ReportNormalsSource(urp, report);
             problems += ValidateRenderers(urp, used, fixtureRenderers, report);
             ReportPrepassLayers(report);
             problems += ValidateSceneShaders(fixtureRenderers, report);
             return problems;
+        }
+
+        /// <summary>
+        /// Where each camera's normals will come from, and why. "MSAA 4x, so VRSL draws
+        /// its own" is an answer an author can act on; a saving that silently does or
+        /// does not happen is not.
+        /// </summary>
+        static void ReportNormalsSource(UniversalRenderPipelineAsset urp, StringBuilder report)
+        {
+            bool anyManager = false, forceOwn = false;
+            foreach (var m in Object.FindObjectsByType<VRSL_URPLightManager>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                if (m != null && m.isActiveAndEnabled) { anyManager = true; forceOwn |= m.forceOwnNormals; }
+            foreach (var m in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                if (m != null && m.isActiveAndEnabled) { anyManager = true; forceOwn |= m.forceOwnNormals; }
+
+            report.AppendLine("Where VRSL's surface normals come from:");
+            if (!anyManager)
+            {
+                report.AppendLine("      NOT CHECKED — no VRSL light manager switched on in the open "
+                                + "scene. Below is what one would do on each camera.");
+            }
+
+            int defaultIndex = -1;
+            var assetSo = new SerializedObject(urp);
+            var defaultProperty = assetSo.FindProperty("m_DefaultRendererIndex");
+            if (defaultProperty != null) defaultIndex = defaultProperty.intValue;
+
+            int seen = 0;
+            foreach (var camera in Object.FindObjectsByType<Camera>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (camera == null || !camera.isActiveAndEnabled) continue;
+                int index = defaultIndex;
+                var data = camera.GetComponent<UniversalAdditionalCameraData>();
+                if (data != null)
+                {
+                    var property = new SerializedObject(data).FindProperty("m_RendererIndex");
+                    if (property != null && property.intValue >= 0) index = property.intValue;
+                }
+                var rendererData = index >= 0 && index < urp.rendererDataList.Length
+                                 ? urp.rendererDataList[index] as UniversalRendererData
+                                 : null;
+                int msaa = VRSLPrepassPolicy.PredictMsaa(camera, urp);
+                var decision = VRSLPrepassPolicy.Decide(msaa, rendererData, forceOwn);
+                report.AppendLine($"      {camera.name}: {decision.Reason}");
+                seen++;
+            }
+            if (seen == 0)
+                report.AppendLine("      No camera switched on in the open scene, so there is no "
+                                + "camera to decide for.");
+            report.AppendLine();
         }
 
         /// <summary>

@@ -18,12 +18,28 @@ The pipeline lives in the `Towneh.VRSL.URP` assembly, which targets URP ≥17.0 
 
 The two managers (`VRSL_URPLightManager` for DMX, `VRSL_AudioLinkURPLightManager` for AudioLink) inject their render passes at runtime by subscribing to `RenderPipelineManager.beginCameraRendering` and calling `EnqueuePass` directly on each camera's `ScriptableRenderer`. There is no `ScriptableRendererFeature` to add to the URP Renderer asset — the package works without any renderer-asset authoring step.
 
-Surface data comes through a VRSL-owned prepass (`VRSLSurfacePrepass`) that renders opaque scene geometry twice into non-MSAA RTs:
+Surface data comes through a VRSL-owned prepass (`VRSLSurfacePrepass`) that renders opaque scene geometry into non-MSAA RTs, twice at most:
 
-- **Normals**, using the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses, into `_VRSLNormalsTexture`. Any opaque shader that ships a URP-compatible `DepthNormals` pass contributes its authored normals automatically. Pixels drawn by shaders without one fall back to a depth-derivative normal reconstruction in the lighting shader, so those surfaces still pick up VRSL light, just faceted to the underlying tessellation.
+- **Normals**, using the same `DepthNormals` / `DepthNormalsOnly` shader tags URP's built-in depth-normals prepass uses, into `_VRSLNormalsTexture`. Any opaque shader that ships a URP-compatible `DepthNormals` pass contributes its authored normals automatically. Pixels drawn by shaders without one fall back to a depth-derivative normal reconstruction in the lighting shader, so those surfaces still pick up VRSL light, just faceted to the underlying tessellation. **Where URP's own depth-normals prepass can be read, this draw does not run**: the manager asks URP for normals and publishes `_CameraNormalsTexture` under the same global name, so the lighting shader never learns which it got. See *Where the normals come from* below.
 - **Albedo, smoothness and metallic**, using `VRSLSurfaceProperties` as a `DrawingSettings.overrideShader` over the opaque forward tags, into `_VRSLAlbedoTexture` (rgb = base colour, a = smoothness) and `_VRSLMaterialTexture` (r = metallic). An override shader keeps each renderer's own material property values, so this reaches albedo on shaders VRSL knows nothing about. See *Material capture* below for how the two property-naming conventions are resolved.
 
 Neither half asks third-party shader authors to add anything VRSL-specific. Both RTs are allocated as `Tex2DArray` with `volumeDepth` matching the camera target so per-eye data is correct under Single-Pass Stereo Instanced VR.
+
+Both draws honour **Lit surfaces** (`prepassLayers`) on the manager, a layer mask defaulting to everything. Geometry on a layer left out is not drawn into either target and lights as the neutral mid-grey dielectric with a depth-derived normal: still lit, but without its own colour, gloss or normal map. `VRSL → URP → Validate Renderer Setup` reports the mask beside the renderer's own and names what it leaves out. The prepass is not enqueued at all while the manager has no fixtures, since nothing would read its targets.
+
+### Where the normals come from
+
+`VRSLPrepassPolicy` decides per camera, on the CPU, before the passes are enqueued. URP's `_CameraNormalsTexture` holds exactly what VRSL's normals draw would produce: the same shader passes, the same `R8G8B8A8_SNorm` format, world space, measured bit-identical over every written pixel (row S13). So wherever URP can draw it, the manager requests `ScriptableRenderPassInput.Normal`, which turns URP's depth prepass into a depth-normals one, and VRSL skips its own draw. That is one opaque geometry pass fewer per camera on a renderer with depth priming on, where the depth prepass was running anyway.
+
+Where URP cannot draw it, VRSL draws its own as before, into its own single-sample target. URP never multisamples its normals texture, but under depth priming its prepass draws into the camera's depth attachment, and on a multisampled camera that puts a single-sample colour beside a multisampled depth: the frame is a Render Graph error and nothing renders, not a wrong picture. Stock URP declines to prime on a multisampled camera; a project's own URP may not, and the package cannot tell which it is running on. The policy therefore reads URP's normals only when
+
+- the camera renders at MSAA 1, or its renderer has depth priming `Disabled`;
+- the renderer is Forward or Forward+ (Deferred packs its normals differently);
+- `forceOwnNormals` on the manager is off.
+
+The camera's sample count is predicted the way URP computes it: a camera with a target texture takes the texture's, one without takes the pipeline asset's. Anything URP goes on to lower it by makes that an over-estimate, which errs towards drawing VRSL's own normals.
+
+`forceOwnNormals` (under *Troubleshooting*) draws VRSL's own normals everywhere. It exists for a URP version where the texture's contents turn out to differ, and as the comparison switch for row S11. `Validate Renderer Setup` says for each camera which source it will use and why; `VRSL Diagnostics` on a manager says which the last camera got.
 
 The two halves can't be merged into one geometry pass: a shader-tag draw renders each material's own pass (which is what supplies authored normal maps) and an override draw replaces it (which is what supplies albedo). Skipping the albedo half by leaving `surfacePropertiesShader` unassigned is supported and drops the cost back to one pass, at the price of every surface lighting as a neutral mid-grey dielectric.
 
@@ -45,8 +61,9 @@ Per-fixture config (StructuredBuffer)
   authored normals via the DepthNormals / DepthNormalsOnly shader tags
   (_VRSLNormalsTexture), and albedo / smoothness / metallic via
   VRSLSurfaceProperties as an override shader (_VRSLAlbedoTexture,
-  _VRSLMaterialTexture). Independent of URP's _CameraNormalsTexture, so
-  the lighting pass works under any MSAA setting on the URP asset.
+  _VRSLMaterialTexture). Where URP's own depth-normals prepass can be
+  read (VRSLPrepassPolicy), its texture is published as _VRSLNormalsTexture
+  instead and the normals draw is skipped.
         │
         ▼ [BeforeRenderingOpaques + 1]
 [TILE CULL — VRSLLightCull.compute]
@@ -238,7 +255,7 @@ Gobo spin is integrated on the GPU each frame: `spinPhase = fmod(spinSpeed × _V
 - Surface normal sampled from `_VRSLNormalsTexture` (written by `VRSLSurfacePrepass` at `AfterRenderingPrePasses`). On pixels where the prepass wrote no normal, which is any surface drawn by a shader with no URP `DepthNormals` pass, the shader falls back to `normalize(cross(ddy(posWS), ddx(posWS)))` so those surfaces still pick up VRSL light, just faceted to the underlying tessellation rather than smooth-shaded.
 - Per-pixel loop over the tile's light list (see *Tiled light culling*), evaluating each through URP's BRDF.
 
-`ConfigureInput(ScriptableRenderPassInput.Depth)` runs in the manager's per-camera callback before enqueue. The lighting pass declares `_CameraDepthTexture` as a tracked Render Graph resource and samples the prepass targets through the global bindings the prepass sets up via `SetGlobalTextureAfterPass`.
+`ConfigureInput` runs in the manager's per-camera callback before enqueue: `Depth` always, and `Normal` as well where `VRSLPrepassPolicy` reads URP's normals for that camera. The lighting pass declares `_CameraDepthTexture` as a tracked Render Graph resource and samples the prepass targets through the global bindings the prepass sets up via `SetGlobalTextureAfterPass`.
 
 ### Surface response
 
@@ -499,12 +516,18 @@ here and both are gone.)
 **Depth priming may be on or off.** A project is free to choose, and the package is
 correct either way, in Forward and Forward+.
 
-**With MSAA on, priming does not run at all.** URP requires a single-sample target for
-it, so a renderer set to `Forced` with MSAA above 1x renders as though priming were
-`Disabled` — as it does under Deferred, on a camera that is not the first to write depth,
-and on WebGL. That is worth knowing before concluding a shader is fine: a depth pass that
+**Whether priming runs with MSAA on depends on the URP a project ships.** Stock URP
+requires a single-sample target for it, so a renderer set to `Forced` with MSAA above 1x
+renders as though priming were `Disabled` — as it does under Deferred, on a camera that
+is not the first to write depth, and on WebGL. A project vendoring its own URP may have
+removed that condition, and then priming really is running on a multisampled camera.
+Both are worth knowing before concluding a shader is fine: on stock URP a depth pass that
 disagrees with its forward pass costs nothing on an MSAA target and takes the geometry
-away the moment somebody turns MSAA off.
+away the moment somebody turns MSAA off. And on a URP that primes with MSAA, anything
+that asks for `ScriptableRenderPassInput.Normal` on that camera fails the whole frame,
+because the depth-normals prepass cannot draw a single-sample normals target beside a
+multisampled depth. VRSL never asks in that configuration; a renderer feature that does
+will take the camera down on its own.
 
 **A custom opaque shader has to hold up its end.** With priming on, URP renders a depth
 prepass and then draws opaque geometry with an `Equal` depth test. Any shader whose
@@ -543,7 +566,7 @@ A few Unity 6-specific requirements are worth flagging for contributors:
 - **No GPU→CPU readback** in either path.
 - **No shadow pass penalty.** Bypassing Unity's `Light` component means URP doesn't generate per-light shadow atlases — the architectural choice that makes 100+ fixtures feasible. URP's per-light shadow atlas at scale is the dominant cost in the equivalent `Light`-component approach (one full scene redraw per shadow-casting spot, six per point light).
 - **Per-pixel light cost scales with lights-per-tile, not fixture count.** The tile cull is what bounds it; without `lightCullShader` assigned, both fullscreen passes fall back to iterating every fixture on every pixel, and the volumetric pass tests a march span for each one.
-- **Geometry cost is the surface prepass.** Two extra opaque draws per camera, and both again when the DMX and AudioLink managers are active together. In a scene whose opaque cost is dominated by avatars this is the term that grows with occupancy rather than with rig size.
+- **Geometry cost is the surface prepass.** Up to two extra opaque draws per camera: one where URP's depth-normals prepass is read instead of drawn (see *Where the normals come from*), which on a depth-primed single-sample camera is the common case. One manager draws it however many are active. In a scene whose opaque cost is dominated by avatars this is the term that grows with occupancy rather than with rig size.
 - **The decode compute is negligible.** One workgroup per 64 fixtures, well under 1 ms at any practical fixture count.
 
 No measured sweep is published with the package. The `RealtimeLightProfiling` sample builds a deterministic scene for one; run it before tuning anything above.

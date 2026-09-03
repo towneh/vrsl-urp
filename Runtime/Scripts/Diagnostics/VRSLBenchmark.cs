@@ -793,11 +793,13 @@ namespace VRSL.URP
                 expectedTileCamera != null && cullPass != null
                 && ReferenceEquals(cullPass.LastRecordedCameraObject, expectedTileCamera);
 
-            // These two are set by M3 and M4. Recorded as false rather than omitted
-            // so the row shape does not change when they land, and noted so a
-            // permanently-false flag is not read as a regression.
-            run.Note("normalsReuseEngaged and depthBoundEngaged are always false until "
-                   + "M4 and M3 land the accelerations they report.");
+            counters.normalsReuseEngaged = useDmx ? dmx.UsesUrpNormals : audioLink.UsesUrpNormals;
+
+            // Recorded as false rather than omitted so the row shape does not change
+            // when it lands, and noted so a permanently-false flag is not read as a
+            // regression.
+            run.Note("depthBoundEngaged is always false until the depth bound it reports "
+                   + "is built.");
 
             if (tiles.Capped > 0)
                 run.Note($"{tiles.Capped} of {tiles.Tiles} tile(s) wanted more than the "

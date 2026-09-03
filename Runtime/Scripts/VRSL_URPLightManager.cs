@@ -153,6 +153,13 @@ namespace VRSL.URP
                + "from the right CRTs.")]
         public bool outputDebugLogs = false;
 
+        [Tooltip("Draw VRSL's own normals prepass even where URP's could be read instead. "
+               + "Costs an extra opaque geometry pass per camera. Turn it on if lit surfaces "
+               + "look wrong in a way that changes with the camera angle, which is what a "
+               + "normals texture in the wrong space looks like, and say which URP version "
+               + "you are on. With both managers in a scene, set it on both.")]
+        public bool forceOwnNormals = false;
+
         /// <summary>The level this manager is running at.</summary>
         public VRSLQualityLevel Quality => VRSLQualityLevel.For(quality);
 
@@ -372,6 +379,14 @@ namespace VRSL.URP
         // even with multiple cameras.
         VRSLDMXLightPasses.ComputePass    _computePass;
         VRSLSurfacePrepass                _surfacePrepass;
+
+        /// <summary>The surface prepass this manager enqueues, for its counters.</summary>
+        public VRSLSurfacePrepass SurfacePrepass => _surfacePrepass;
+
+        /// <summary>Whether the last camera this manager set up reads URP's normals
+        /// texture rather than drawing its own, and why, in an author's words.</summary>
+        public bool   UsesUrpNormals { get; private set; }
+        public string NormalsSource  { get; private set; }
         VRSLTileCullPass                  _tileCullPass;
         VRSLDMXLightPasses.LightingPass   _lightingPass;
         VRSLDMXLightPasses.VolumetricPass _volumetricPass;
@@ -1247,6 +1262,7 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
             sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
+            sb.AppendLine("  Normals: " + (NormalsSource ?? "no camera has rendered yet"));
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
             sb.AppendLine("  " + VRSLDiagnostics.LightDataStatus(LightDataBuffer, FixtureCount));
@@ -1305,13 +1321,21 @@ namespace VRSL.URP
             var renderer = camData.scriptableRenderer;
             if (renderer == null) return;
 
-            // VRSLSurfacePrepass writes _VRSLNormalsTexture, _VRSLAlbedoTexture and
-            // _VRSLMaterialTexture into VRSL-owned non-MSAA RTs before opaque
-            // rendering; the lighting shader samples those globals. The lighting
-            // and volumetric passes only need depth from URP, so neither requests
-            // Normal or Color here.
-            _lightingPass.ConfigureInput(ScriptableRenderPassInput.Depth);
-            _volumetricPass.ConfigureInput(ScriptableRenderPassInput.Depth);
+            // Where the normals come from is decided here, once per camera, and the
+            // lighting shader samples one global name either way. Normal is asked
+            // of URP only where its prepass can be drawn: on a multisampled camera
+            // that is also depth primed, the request itself takes the frame down.
+            // With no fixtures nothing would read it, so nothing is asked for.
+            var normals = VRSLPrepassPolicy.Decide(cam, renderer, forceOwnNormals);
+            UsesUrpNormals = normals.UseUrpNormals;
+            NormalsSource  = normals.Reason;
+            var input = ScriptableRenderPassInput.Depth;
+            if (normals.UseUrpNormals && FixtureCount > 0)
+                input |= ScriptableRenderPassInput.Normal;
+            _lightingPass.ConfigureInput(input);
+            _volumetricPass.ConfigureInput(input);
+            _surfacePrepass.ConfigureInput(input);
+            _surfacePrepass.UrpNormals = normals.UseUrpNormals;
 
             // Gobo wheel is a Texture2DArray, bound globally here because the
             // render graph only accepts TextureHandle.

@@ -15,8 +15,9 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The surface prepass rows: what it draws, for whom, and where its normals
-    /// may come from instead.
+    /// The surface prepass rows, S10 to S14: what it draws, for whom, where its
+    /// normals may come from instead, and whether what it captured reaches the
+    /// lighting pass.
     ///
     /// S13 asks what URP's normals texture holds beside VRSL's own, per renderer
     /// configuration. VRSL draws its own normals prepass with the same shader tags
@@ -41,25 +42,28 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// Asks URP for normals and, once opaques are drawn, copies both normals
         /// textures out to targets the test owns. The copy is a fullscreen draw
-        /// through the probe shader: pass 0 reads <c>_VRSLNormalsTexture</c>, pass 1
-        /// reads <c>_CameraNormalsTexture</c>.
+        /// through the probe shader: pass 0 reads <c>_VRSLNormalsTexture</c>, pass 5
+        /// reads <c>_CameraNormalsTexture</c>. With <see cref="Extras"/> set, passes 1
+        /// to 4 copy the albedo, material, camera depth and surface depth out as well.
         /// </summary>
         sealed class ProbePass : ScriptableRenderPass
         {
             class Data
             {
-                public TextureHandle vrsl, urp;
-                public Material      material;
+                public TextureHandle   vrsl, urp;
+                public TextureHandle[] extras;
+                public Material        material;
             }
 
             readonly Material _material;
             readonly RTHandle _vrsl, _urp;
+            public RTHandle[] Extras;
 
             public int  ObservedMsaa   { get; private set; }
             public bool UrpHandleValid { get; private set; }
             public int  Recorded       { get; private set; }
 
-            public ProbePass(Material material, RTHandle vrsl, RTHandle urp)
+            public ProbePass(Material material, RTHandle vrsl, RTHandle urp, bool requestNormals = true)
             {
                 _material = material;
                 _vrsl     = vrsl;
@@ -67,7 +71,9 @@ namespace VRSL.URP.Tests
                 renderPassEvent = RenderPassEvent.AfterRenderingOpaques;
                 // Normal is what turns URP's prepass from depth-only into
                 // depth-and-normals. Depth is what the package's passes ask for.
-                ConfigureInput(ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Normal);
+                ConfigureInput(requestNormals
+                    ? ScriptableRenderPassInput.Depth | ScriptableRenderPassInput.Normal
+                    : ScriptableRenderPassInput.Depth);
             }
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
@@ -84,6 +90,17 @@ namespace VRSL.URP.Tests
                 d.urp      = rg.ImportTexture(_urp);
                 builder.UseTexture(d.vrsl, AccessFlags.Write);
                 builder.UseTexture(d.urp,  AccessFlags.Write);
+                if (Extras != null)
+                {
+                    d.extras = new TextureHandle[Extras.Length];
+                    for (int i = 0; i < Extras.Length; i++)
+                    {
+                        d.extras[i] = rg.ImportTexture(Extras[i]);
+                        builder.UseTexture(d.extras[i], AccessFlags.Write);
+                    }
+                    if (resources.cameraDepthTexture.IsValid())
+                        builder.UseTexture(resources.cameraDepthTexture, AccessFlags.Read);
+                }
                 if (UrpHandleValid)
                     builder.UseTexture(resources.cameraNormalsTexture, AccessFlags.Read);
                 // Both sources are globals set after the passes that write them;
@@ -97,7 +114,13 @@ namespace VRSL.URP.Tests
                     cmd.SetRenderTarget(p.vrsl);
                     cmd.DrawProcedural(Matrix4x4.identity, p.material, 0, MeshTopology.Triangles, 3);
                     cmd.SetRenderTarget(p.urp);
-                    cmd.DrawProcedural(Matrix4x4.identity, p.material, 1, MeshTopology.Triangles, 3);
+                    cmd.DrawProcedural(Matrix4x4.identity, p.material, 5, MeshTopology.Triangles, 3);
+                    if (p.extras != null)
+                        for (int i = 0; i < p.extras.Length; i++)
+                        {
+                            cmd.SetRenderTarget(p.extras[i]);
+                            cmd.DrawProcedural(Matrix4x4.identity, p.material, 1 + i, MeshTopology.Triangles, 3);
+                        }
                 });
             }
         }
@@ -125,6 +148,18 @@ namespace VRSL.URP.Tests
                  + $"mean VRSL {vrslMean:F3} URP {urpMean:F3}, frame lit {frameLitPercent:F2}%, "
                  + $"errors {errors.Count}"
                  + (errors.Count > 0 ? $" — first: {errors[0]}" : "");
+        }
+
+        /// <summary>
+        /// Put every renderer's priming where the row wants it. Called before each
+        /// render as well as up front: a host quality module rewrites priming at a
+        /// moment of its own, and one of these rows found its second capture running
+        /// with priming Disabled after setting Forced thirty seconds earlier.
+        /// </summary>
+        static void HoldPriming(List<UniversalRendererData> renderers, DepthPrimingMode mode)
+        {
+            foreach (var r in renderers)
+                if (r != null && r.depthPrimingMode != mode) r.depthPrimingMode = mode;
         }
 
         static List<UniversalRendererData> Renderers()
@@ -160,22 +195,10 @@ namespace VRSL.URP.Tests
         {
             var outcome = new Outcome { name = $"priming {mode}, MSAA {msaa}x", priming = mode, msaaAsked = msaa };
 
+            var renderers = Renderers();
             var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
-            foreach (var r in Renderers()) restore[r] = r.depthPrimingMode;
-            foreach (var r in restore.Keys) r.depthPrimingMode = mode;
-
-            // A camera with a target takes its sample count from the target, but only
-            // when the pipeline asset allows MSAA at all, and a host that rewrites its
-            // asset per quality tier does so at a moment of its own: the asset read 2x
-            // as this row began and 1x by the time its first frame rendered. Held to
-            // the asked count for the configuration's frames, and put back after.
-            var asset   = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-            int msaaWas = asset != null ? asset.msaaSampleCount : 0;
-            void HoldAssetMsaa()
-            {
-                if (asset != null && msaa > 1 && asset.msaaSampleCount != msaa)
-                    asset.msaaSampleCount = msaa;
-            }
+            foreach (var r in renderers) restore[r] = r.depthPrimingMode;
+            HoldPriming(renderers, mode);
 
             void OnLog(string condition, string stack, LogType type)
             {
@@ -218,7 +241,7 @@ namespace VRSL.URP.Tests
                 for (int i = 0; i < WarmUpFrames; i++)
                 {
                     yield return null;
-                    HoldAssetMsaa();
+                    HoldPriming(renderers, mode);
                     rig.RenderFrame();
                 }
 
@@ -249,7 +272,6 @@ namespace VRSL.URP.Tests
                 Application.logMessageReceived -= OnLog;
                 foreach (var pair in restore)
                     if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
-                if (asset != null && msaaWas > 0) asset.msaaSampleCount = msaaWas;
                 if (vrslTex != null) Object.DestroyImmediate(vrslTex);
                 if (urpTex  != null) Object.DestroyImmediate(urpTex);
                 if (frame   != null) Object.DestroyImmediate(frame);
@@ -345,6 +367,224 @@ namespace VRSL.URP.Tests
             foreach (var p in pixels)
                 if (p.r > 8 || p.g > 8 || p.b > 8) lit++;
             return 100f * lit / pixels.Length;
+        }
+
+        /// <summary>Mean colour of the lit pixels, in 0..255.</summary>
+        static Vector3 LitMean(Texture2D frame)
+        {
+            var pixels = frame.GetPixels32();
+            Vector3 sum = Vector3.zero;
+            int lit = 0;
+            foreach (var p in pixels)
+            {
+                if (p.r <= 8 && p.g <= 8 && p.b <= 8) continue;
+                sum += new Vector3(p.r, p.g, p.b);
+                lit++;
+            }
+            return lit > 0 ? sum / lit : Vector3.zero;
+        }
+
+        sealed class SourceReport
+        {
+            public bool   usesUrp;
+            public string reason;
+            public int    ownDraws, urpReads;
+        }
+
+        /// <summary>
+        /// Render the rig at the given sample count with the normals source forced
+        /// or left to the policy, and hand back the frame with what the prepass
+        /// did. Yields <c>null</c> itself: the runner drives one level of nesting.
+        /// </summary>
+        static IEnumerator CaptureNormalsSource(bool forceOwn, int msaa, DepthPrimingMode priming,
+                                                System.Action<Texture2D> onCaptured,
+                                                System.Action<SourceReport> onReport)
+        {
+            var renderers = Renderers();
+            HoldPriming(renderers, priming);
+            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa);
+            rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
+            rig.Source.speed   = 0f;
+            rig.Manager.enabled = false;
+            rig.Manager.enabled = true;
+            rig.FreezeForImageCapture();
+            // Read per camera, so no bounce; and after the bounce, since the prepass
+            // whose counters are read is the one the bounce built.
+            rig.Manager.forceOwnNormals = forceOwn;
+
+            for (int i = 0; i < WarmUpFrames; i++)
+            {
+                yield return null;
+                HoldPriming(renderers, priming);
+                rig.RenderFrame();
+            }
+
+            onReport(new SourceReport
+            {
+                usesUrp  = rig.Manager.UsesUrpNormals,
+                reason   = rig.Manager.NormalsSource,
+                ownDraws = rig.Manager.SurfacePrepass.OwnNormalsDraws,
+                urpReads = rig.Manager.SurfacePrepass.UrpNormalsReads,
+            });
+            onCaptured(VRSLImageCompare.Read(rig.Target));
+        }
+
+        /// <summary>
+        /// S11. Where URP's normals can be read, VRSL's own normals draw does not run,
+        /// and the frame is the one the draw would have produced.
+        ///
+        /// Priming Forced at MSAA 1, which is where the reuse engages and the
+        /// configuration the host ships. Two captures, the policy left to decide and
+        /// then overridden with Force own normals: the first must have read URP's
+        /// texture on every render and drawn nothing of its own, the second the
+        /// reverse, and the two frames must agree. The counters are the automated
+        /// half of "one opaque geometry pass fewer"; the pass list itself is read in
+        /// a frame capture by hand.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S11_ReuseSkipsTheNormalsDrawAndKeepsTheFrame()
+        {
+            var renderers = Renderers();
+            if (renderers.Count == 0)
+                Assert.Ignore("No Universal Renderer on the active pipeline asset.");
+            var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
+            foreach (var r in renderers) restore[r] = r.depthPrimingMode;
+
+            Texture2D reused = null, own = null;
+            SourceReport policy = null, forced = null;
+            try
+            {
+                yield return CaptureNormalsSource(false, 1, DepthPrimingMode.Forced, t => reused = t, r => policy = r);
+                yield return CaptureNormalsSource(true,  1, DepthPrimingMode.Forced, t => own    = t, r => forced = r);
+
+                var result = VRSLImageCompare.Compare(reused, own);
+                Debug.Log($"[S11] policy: {policy.reason} (own draws {policy.ownDraws}, URP reads "
+                        + $"{policy.urpReads}); forced: {forced.reason} (own draws {forced.ownDraws}, "
+                        + $"URP reads {forced.urpReads}); frames differ by {result}");
+
+                if (!policy.usesUrp)
+                    Assert.Inconclusive("the policy did not engage the reuse on this renderer, so "
+                                      + $"the row has nothing to compare: {policy.reason}");
+
+                Assert.AreEqual(0, policy.ownDraws,
+                    "VRSL drew its own normals while reading URP's, so the saving did not happen");
+                Assert.Greater(policy.urpReads, 0,
+                    "the prepass never published URP's texture, so the lighting pass read nothing");
+                Assert.AreEqual(0, forced.urpReads,
+                    "Force own normals is on and the prepass still read URP's texture");
+                Assert.Greater(forced.ownDraws, 0,
+                    "Force own normals is on and the prepass drew nothing");
+
+                Assert.LessOrEqual(result.DifferingPercent, 0.05f,
+                    $"reading URP's normals changed {result.DifferingPercent:F3}% of the frame "
+                  + "against drawing VRSL's own. S13 shows the two textures identical, so the "
+                  + "lighting pass is reading something other than the texture it was given");
+            }
+            finally
+            {
+                foreach (var pair in restore)
+                    if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
+                if (reused != null) Object.DestroyImmediate(reused);
+                if (own    != null) Object.DestroyImmediate(own);
+            }
+        }
+
+        /// <summary>
+        /// S10. The same scene at MSAA 1 and MSAA 4 shades its surfaces the same,
+        /// whichever source the normals came from.
+        ///
+        /// Priming Disabled, where URP's normals are read at both sample counts, so
+        /// the MSAA comparison varies only MSAA: multisampling moves every geometry
+        /// edge, so the frames are not compared pixel for pixel, and the lit area
+        /// and the mean colour of the lit pixels are what shading is judged on. A
+        /// third capture at 4x with Force own normals varies only the source, and
+        /// that pair is held to the pixel. Under priming Forced the 4x frame is
+        /// dominated by S14 instead, which is why this row does not run there.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S10_SurfaceShadingMatchesAcrossMsaa()
+        {
+            var renderers = Renderers();
+            if (renderers.Count == 0)
+                Assert.Ignore("No Universal Renderer on the active pipeline asset.");
+            var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
+            foreach (var r in renderers) restore[r] = r.depthPrimingMode;
+
+            Texture2D at1 = null, at4 = null, at4Own = null;
+            SourceReport source1 = null, source4 = null, source4Own = null;
+            try
+            {
+                yield return CaptureNormalsSource(false, 1, DepthPrimingMode.Disabled, t => at1    = t, r => source1    = r);
+                yield return CaptureNormalsSource(false, 4, DepthPrimingMode.Disabled, t => at4    = t, r => source4    = r);
+                yield return CaptureNormalsSource(true,  4, DepthPrimingMode.Disabled, t => at4Own = t, r => source4Own = r);
+
+                float lit1 = LitPercent(at1), lit4 = LitPercent(at4);
+                var mean1 = LitMean(at1);
+                var mean4 = LitMean(at4);
+                var msaaPair   = VRSLImageCompare.Compare(at1, at4);
+                var sourcePair = VRSLImageCompare.Compare(at4, at4Own);
+                Debug.Log($"[S10] 1x: {source1.reason}; 4x: {source4.reason}; 4x forced: {source4Own.reason}; "
+                        + $"lit {lit1:F2}% against {lit4:F2}%, lit mean {mean1:F2} against {mean4:F2}, "
+                        + $"1x vs 4x {msaaPair}; 4x URP vs 4x own {sourcePair}");
+
+                if (!source1.usesUrp || !source4.usesUrp)
+                    Assert.Inconclusive("the policy did not read URP's normals at both sample counts, so "
+                                      + $"this row is not the comparison it claims: 1x {source1.reason}; 4x {source4.reason}");
+                if (source4Own.usesUrp)
+                    Assert.Inconclusive("Force own normals did not take, so the source was not varied at 4x");
+
+                Assert.Greater(lit1, 5f, "the 1x frame is nearly dark, so the row has nothing to judge");
+                Assert.AreEqual(lit1, lit4, 0.5f,
+                    $"the lit area moved from {lit1:F2}% to {lit4:F2}% between MSAA 1 and 4, which "
+                  + "is more than edges account for");
+                for (int c = 0; c < 3; c++)
+                    Assert.AreEqual(mean1[c], mean4[c], 2f,
+                        $"the mean lit colour moved by more than 2 of 255 on channel {c} between "
+                      + "MSAA 1 and 4, so surfaces are shading differently with the sample count");
+                Assert.LessOrEqual(sourcePair.DifferingPercent, 0.05f,
+                    $"at MSAA 4 reading URP's normals changed {sourcePair.DifferingPercent:F3}% of the "
+                  + "frame against drawing VRSL's own");
+            }
+            finally
+            {
+                foreach (var pair in restore)
+                    if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
+                if (at1    != null) Object.DestroyImmediate(at1);
+                if (at4    != null) Object.DestroyImmediate(at4);
+                if (at4Own != null) Object.DestroyImmediate(at4Own);
+            }
+        }
+
+        /// <summary>
+        /// Render the rig with volumetrics off and, optionally, the floor left out of
+        /// the prepass, so the frame is surface lighting alone. Yields <c>null</c>
+        /// itself: the runner drives one level of nesting.
+        /// </summary>
+        static IEnumerator CaptureSurfaceOnly(int msaa, DepthPrimingMode priming, bool excludeFloor,
+                                              System.Action<Texture2D> onCaptured)
+        {
+            var renderers = Renderers();
+            HoldPriming(renderers, priming);
+            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa);
+            rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
+            rig.Source.speed   = 0f;
+            rig.Manager.quality = VRSLQuality.Off;
+            rig.Manager.enabled = false;
+            rig.Manager.enabled = true;
+            rig.FreezeForImageCapture();
+            if (excludeFloor && FindSpareLayers(out int spare, out _))
+            {
+                rig.Floor.layer = spare;
+                rig.Manager.prepassLayers = ~0 & ~(1 << spare);
+            }
+
+            for (int i = 0; i < WarmUpFrames; i++)
+            {
+                yield return null;
+                HoldPriming(renderers, priming);
+                rig.RenderFrame();
+            }
+            onCaptured(VRSLImageCompare.Read(rig.Target));
         }
 
         /// <summary>

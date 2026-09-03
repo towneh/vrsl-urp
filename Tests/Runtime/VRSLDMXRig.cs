@@ -51,6 +51,9 @@ namespace VRSL.URP.Tests
         GameObject    _root;
         Camera        _camera;
         RenderTexture _target;
+        int           _msaa;
+        UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset _asset;
+        int           _assetMsaaWas;
         float         _captureWas;
         bool          _forceLoadWas;
         List<Light>   _lightsWereOn;
@@ -174,6 +177,15 @@ namespace VRSL.URP.Tests
                 name         = "VRSL test target",
                 antiAliasing = Mathf.Max(1, msaa),
             };
+            // The target's count only reaches the frame while the pipeline asset
+            // allows MSAA at all, and a host that rewrites its asset per quality
+            // tier does so at a moment of its own: it read 2x as a row began and 1x
+            // by its first frame. Held to the asked count on every render, put
+            // back on dispose.
+            rig._msaa  = msaa;
+            rig._asset = GraphicsSettings.currentRenderPipeline
+                             as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            rig._assetMsaaWas = rig._asset != null ? rig._asset.msaaSampleCount : 0;
             rig._camera = new GameObject("Camera").AddComponent<Camera>();
             rig._camera.transform.SetParent(rig._root.transform, false);
             // Aimed across the near end of the truss and down at the floor, so several
@@ -336,7 +348,7 @@ namespace VRSL.URP.Tests
                 // by the DMX pass, which only runs while a camera is rendering — so
                 // without this every row reads a buffer of zeros and blames the
                 // carrier. The camera is disabled, so this is the only render.
-                _camera.Render();
+                RenderFrame();
             }
         }
 
@@ -344,6 +356,8 @@ namespace VRSL.URP.Tests
         /// <see cref="Step"/> because they are already a level deep.</summary>
         public void RenderFrame()
         {
+            if (_asset != null && _msaa > 1 && _asset.msaaSampleCount != _msaa)
+                _asset.msaaSampleCount = _msaa;
             _camera.Render();
         }
 
@@ -584,6 +598,8 @@ namespace VRSL.URP.Tests
             }
             if (_root != null) UnityEngine.Object.DestroyImmediate(_root);
             _root = null;
+            if (_asset != null && _assetMsaaWas > 0) _asset.msaaSampleCount = _assetMsaaWas;
+            _asset = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
             _target = null;
             _dummyChannels?.Release();

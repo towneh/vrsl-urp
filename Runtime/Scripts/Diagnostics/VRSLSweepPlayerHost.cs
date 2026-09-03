@@ -36,6 +36,9 @@ namespace VRSL.URP
         /// build folder when it is not given, which is where a player's
         /// <c>Application.dataPath</c> points.</summary>
         const string OutputArgument = "-vrsl-out";
+        /// <summary>Present on the command line: draw VRSL's own normals everywhere,
+        /// for the half of a pair that measures what reading URP's is worth.</summary>
+        const string ForceOwnNormalsArgument = "-vrsl-force-own-normals";
 
         /// <summary>What a script greps the log for. The player writes the folder
         /// itself rather than the caller guessing at a timestamp.</summary>
@@ -65,7 +68,8 @@ namespace VRSL.URP
             if (!string.IsNullOrEmpty(output)) VRSLBenchmarkReport.OutputRoot = output;
 
             var outcome = new VRSLSweepOutcome();
-            var job     = VRSLSweepJob.Run(outcome, Stamp);
+            bool forceOwnNormals = Array.IndexOf(Environment.GetCommandLineArgs(), ForceOwnNormalsArgument) >= 0;
+            var job     = VRSLSweepJob.Run(outcome, Stamp, forceOwnNormals);
 
             // Stepped by hand so a throw can be caught. A coroutine that dies of an
             // exception simply stops, and this one is the only thing that ever quits:
