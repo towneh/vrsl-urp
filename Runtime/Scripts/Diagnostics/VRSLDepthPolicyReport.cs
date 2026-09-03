@@ -103,6 +103,43 @@ namespace VRSL.URP
             return 0;
         }
 
+        /// <summary>
+        /// One line on a manager's own prepass layer mask, beside the renderer's.
+        ///
+        /// Never counted as a finding: a layer left out of the surface prepass is a
+        /// setting an author made, and what it costs is surfaces on that layer
+        /// lighting as plain mid-grey rather than in their own colour. What the line
+        /// has to do is say so, since nothing else in the frame will.
+        /// </summary>
+        internal static void PrepassLayersLine(string manager, int mask, StringBuilder report)
+        {
+            if (mask == ~0)
+            {
+                report.AppendLine($"      {manager}: everything, so every surface a fixture lights "
+                                + "keeps its own colour and gloss.");
+                return;
+            }
+            string left = DescribeExcluded(mask);
+            report.AppendLine($"      {manager}: leaves out {left}. Anything on "
+                            + (left.Contains(",") ? "those layers" : "that layer")
+                            + " still lights, but as plain mid-grey: its own colour, gloss and "
+                            + "normal maps are not read. That is a setting rather than a "
+                            + "fault; if it was not meant, change Lit surfaces on the manager.");
+        }
+
+        /// <summary>Names the layers a mask leaves out.</summary>
+        internal static string DescribeExcluded(int mask)
+        {
+            var named = new List<string>();
+            for (int layer = 0; layer < 32; layer++)
+            {
+                if ((mask & (1 << layer)) != 0) continue;
+                string name = LayerMask.LayerToName(layer);
+                named.Add(string.IsNullOrEmpty(name) ? $"layer {layer}" : name);
+            }
+            return named.Count == 0 ? "nothing" : string.Join(", ", named);
+        }
+
         /// <summary>Names the layers a mask includes, for a report a person reads.</summary>
         internal static string DescribeMask(int mask)
         {

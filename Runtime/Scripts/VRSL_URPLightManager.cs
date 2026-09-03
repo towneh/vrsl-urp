@@ -67,6 +67,13 @@ namespace VRSL.URP
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
+        [Header("Lit surfaces")]
+        [Tooltip("Which layers keep their own colour, gloss and normal maps when a fixture "
+               + "lights them. Anything on a layer left out is still lit, but as a plain "
+               + "mid-grey surface. Leave at Everything unless a layer is expensive to draw "
+               + "and you can accept it lighting grey.")]
+        public LayerMask prepassLayers = ~0;
+
         [Header("Performance")]
         [Tooltip("How much of the frame VRSL may use.\n\n"
                + "Standard suits most worlds. High marches the beams more finely and traces "
@@ -280,6 +287,17 @@ namespace VRSL.URP
         public RTHandle        DMXSpinTimerHandle  { get; private set; }
         public RenderTexture   GoboArray           { get; private set; }
         public int  FixtureCount   { get; private set; }
+
+        /// <summary>
+        /// Whether this manager will enqueue the surface prepass for
+        /// <paramref name="cam"/> this frame. The AudioLink manager asks before
+        /// deferring, so a camera this one skips, or a scene with no DMX fixtures,
+        /// still gets exactly one prepass rather than none.
+        /// </summary>
+        public bool DrivesSurfacePrepass(Camera cam)
+            => isActiveAndEnabled && FixtureCount > 0
+            && VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, OwnedSources())
+               != VRSLCameraDecision.Skip;
         public int  GoboCount      { get; private set; }
         public int  ComputeKernel  { get; private set; }
         public Material LightingMaterial   { get; private set; }
@@ -1315,7 +1333,12 @@ namespace VRSL.URP
             // The surface prepass output is identical whichever manager drives it,
             // so with both active only one enqueues it. The DMX manager takes
             // priority; VRSL_AudioLinkURPLightManager defers when it sees one.
-            renderer.EnqueuePass(_surfacePrepass);
+            // With no fixtures nothing reads its targets, so it is not drawn.
+            if (FixtureCount > 0)
+            {
+                _surfacePrepass.Layers = prepassLayers;
+                renderer.EnqueuePass(_surfacePrepass);
+            }
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)

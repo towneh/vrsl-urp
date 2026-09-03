@@ -41,6 +41,8 @@ namespace VRSL.URP.Tests
         /// <summary>The rig's camera, disabled: it renders only through
         /// <see cref="Step"/> and <see cref="RenderFrame"/>.</summary>
         public Camera Camera => _camera;
+        /// <summary>The plane the beams land on.</summary>
+        public GameObject Floor { get; private set; }
 
         public VRSL_URPLightManager             Manager { get; private set; }
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
@@ -204,6 +206,7 @@ namespace VRSL.URP.Tests
             // costs.
             var floor = GameObject.CreatePrimitive(PrimitiveType.Plane);
             floor.name = "Floor";
+            rig.Floor  = floor;
             floor.transform.SetParent(rig._root.transform, false);
             floor.transform.localPosition = new Vector3(fixtures * Spacing * 0.5f, 0f, 0f);
             floor.transform.localScale    = new Vector3(fixtures * Spacing * 0.2f + 4f, 1f, 6f);

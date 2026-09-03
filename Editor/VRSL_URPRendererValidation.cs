@@ -64,8 +64,41 @@ namespace VRSL.URP.EditorScripts
 
             var used = ValidateCameras(urp, report);
             problems += ValidateRenderers(urp, used, fixtureRenderers, report);
+            ReportPrepassLayers(report);
             problems += ValidateSceneShaders(fixtureRenderers, report);
             return problems;
+        }
+
+        /// <summary>
+        /// The package's own prepass layer mask, beside the renderer's. The renderer's
+        /// decides what draws at all under priming; this one decides which surfaces
+        /// light in their own colour, and a layer left out of it goes mid-grey with
+        /// nothing in the frame to say why.
+        /// </summary>
+        static void ReportPrepassLayers(StringBuilder report)
+        {
+            report.AppendLine("Surfaces VRSL lights in their own colour:");
+            int seen = 0;
+            foreach (var manager in Object.FindObjectsByType<VRSL_URPLightManager>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (manager == null || !manager.isActiveAndEnabled) continue;
+                seen++;
+                VRSLDepthPolicyReport.PrepassLayersLine(
+                    $"{manager.name} (DMX)", manager.prepassLayers, report);
+            }
+            foreach (var manager in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                if (manager == null || !manager.isActiveAndEnabled) continue;
+                seen++;
+                VRSLDepthPolicyReport.PrepassLayersLine(
+                    $"{manager.name} (AudioLink)", manager.prepassLayers, report);
+            }
+            if (seen == 0)
+                report.AppendLine("      NOT CHECKED — no VRSL light manager switched on in the "
+                                + "open scene, so there is no prepass layer mask to read.");
+            report.AppendLine();
         }
 
         /// <summary>

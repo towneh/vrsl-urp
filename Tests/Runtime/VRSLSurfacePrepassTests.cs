@@ -296,6 +296,123 @@ namespace VRSL.URP.Tests
             => new Vector3(c.r / 255f * 2f - 1f, c.g / 255f * 2f - 1f, c.b / 255f * 2f - 1f);
 
         /// <summary>
+        /// Render the rig with the floor on <paramref name="floorLayer"/> and the DMX
+        /// manager's prepass mask set as given, and hand back the frame. Yields
+        /// <c>null</c> itself: the runner drives one level of nesting.
+        /// </summary>
+        static IEnumerator CaptureWithMask(int floorLayer, LayerMask mask,
+                                           System.Action<Texture2D> onCaptured)
+        {
+            using var rig = VRSLDMXRig.Build(targetSize: ImageSize);
+            rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
+            rig.Source.speed   = 0f;
+            rig.Manager.enabled = false;
+            rig.Manager.enabled = true;
+            rig.FreezeForImageCapture();
+            rig.Floor.layer = floorLayer;
+            // Read by the manager before each enqueue, so no bounce is needed.
+            rig.Manager.prepassLayers = mask;
+
+            for (int i = 0; i < WarmUpFrames; i++)
+            {
+                yield return null;
+                rig.RenderFrame();
+            }
+            onCaptured(VRSLImageCompare.Read(rig.Target));
+        }
+
+        /// <summary>Two layers no renderer in the scene is on, so moving the floor
+        /// to one and excluding the other is the only thing that changes.</summary>
+        static bool FindSpareLayers(out int first, out int second)
+        {
+            var occupied = new HashSet<int>();
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (r != null) occupied.Add(r.gameObject.layer);
+            first = second = -1;
+            for (int layer = 31; layer >= 8; layer--)
+            {
+                if (occupied.Contains(layer)) continue;
+                if (first < 0) first = layer;
+                else { second = layer; return true; }
+            }
+            return false;
+        }
+
+        static float LitPercent(Texture2D frame)
+        {
+            var pixels = frame.GetPixels32();
+            int lit = 0;
+            foreach (var p in pixels)
+                if (p.r > 8 || p.g > 8 || p.b > 8) lit++;
+            return 100f * lit / pixels.Length;
+        }
+
+        /// <summary>
+        /// S12. Geometry on a layer the prepass mask leaves out lights as neutral grey
+        /// rather than black, and geometry inside the mask is unaffected.
+        ///
+        /// Three frames of one scene: the mask at everything, the mask leaving out the
+        /// floor's layer, and the mask leaving out a layer nothing is on. The third is
+        /// what makes the second mean anything. A mask that excludes an empty layer
+        /// must render the same frame as no mask at all, which is the row's proof that
+        /// geometry inside the mask was untouched; a mask that excludes the floor must
+        /// change the frame, which is the proof it applied, and must leave the floor
+        /// lit, which is the difference between grey and black.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S12_ALayerLeftOutOfThePrepassLightsGreyNotBlack()
+        {
+            if (!FindSpareLayers(out int floorLayer, out int emptyLayer))
+                Assert.Ignore("fewer than two layers are free of renderers in this scene, so "
+                            + "the row cannot move the floor to one and exclude another.");
+
+            Texture2D everything = null, withoutFloor = null, withoutEmpty = null;
+            try
+            {
+                yield return CaptureWithMask(floorLayer, ~0, t => everything = t);
+                yield return CaptureWithMask(floorLayer, ~0 & ~(1 << floorLayer), t => withoutFloor = t);
+                yield return CaptureWithMask(floorLayer, ~0 & ~(1 << emptyLayer), t => withoutEmpty = t);
+
+                float litAll     = LitPercent(everything);
+                float litNoFloor = LitPercent(withoutFloor);
+                var control = VRSLImageCompare.Compare(everything, withoutEmpty);
+                var effect  = VRSLImageCompare.Compare(everything, withoutFloor);
+                Debug.Log($"[S12] floor on layer {floorLayer}, empty layer {emptyLayer}: "
+                        + $"lit {litAll:F2}% against {litNoFloor:F2}% with the floor left out; "
+                        + $"excluding the empty layer moved {control}; excluding the floor moved {effect}");
+
+                Assert.Greater(litAll, 5f, "the frame with everything in the prepass is nearly "
+                                         + "dark, so the row has nothing to judge");
+
+                // Inside the mask, unaffected: a mask that leaves out a layer nothing
+                // is on has to render the same frame as no mask at all.
+                Assert.LessOrEqual(control.DifferingPercent, 0.05f,
+                    $"leaving an empty layer out of the prepass moved {control.DifferingPercent:F3}% "
+                  + "of the frame, so the mask is touching geometry inside it");
+
+                // Applied: the floor's own colour and gloss are gone from the frame.
+                Assert.Greater(effect.DifferingPercent, 1f,
+                    $"leaving the floor's layer out of the prepass moved {effect.DifferingPercent:F3}% "
+                  + "of the frame, so the mask did not apply to either draw");
+
+                // Grey, not black: the floor is still lit. The neutral fallback is a
+                // mid-grey dielectric against a white URP Lit plane, so the frame dims
+                // and does not go out.
+                Assert.GreaterOrEqual(litNoFloor, 0.9f * litAll,
+                    $"the lit area fell from {litAll:F2}% to {litNoFloor:F2}% with the floor left "
+                  + "out of the prepass. A surface outside the mask must still light, as neutral "
+                  + "grey; going dark means the lighting pass is rejecting it rather than falling "
+                  + "back");
+            }
+            finally
+            {
+                if (everything   != null) Object.DestroyImmediate(everything);
+                if (withoutFloor != null) Object.DestroyImmediate(withoutFloor);
+                if (withoutEmpty != null) Object.DestroyImmediate(withoutEmpty);
+            }
+        }
+
+        /// <summary>
         /// S13. URP's normals texture matches VRSL's own wherever URP can produce it,
         /// and the configuration where it cannot is named.
         ///

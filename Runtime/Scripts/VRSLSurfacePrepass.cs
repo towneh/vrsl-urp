@@ -33,11 +33,15 @@ namespace VRSL.URP
     /// shader-tag draw renders each material's own pass and an override draw
     /// replaces it.
     ///
+    /// Both draws honour <see cref="Layers"/>. Geometry on a layer outside it is
+    /// not drawn into either target, and the lighting pass shades it as the
+    /// neutral fallback surface with a depth-derived normal.
+    ///
     /// Both <see cref="VRSL_URPLightManager"/> (DMX) and
     /// <see cref="VRSL_AudioLinkURPLightManager"/> (AudioLink) instantiate this
     /// pass, but only one enqueues it per camera: the output is identical either
     /// way, so the DMX manager owns it and the AudioLink manager defers while a
-    /// DMX manager is present and enabled.
+    /// DMX manager is present, enabled and drawing fixtures through that camera.
     ///
     /// Holds no GPU resources and so is deliberately not <c>IDisposable</c>,
     /// unlike <see cref="VRSLTileCullPass"/>. Every target here comes from
@@ -81,6 +85,10 @@ namespace VRSL.URP
         static readonly int s_DepthGateID       = Shader.PropertyToID("_VRSLSurfaceDepthGate");
 
         readonly Shader _surfacePropertiesShader;
+
+        /// <summary>Layers both draws include. Set by the owning manager before
+        /// each enqueue, so an author's change applies on the next frame.</summary>
+        public LayerMask Layers { get; set; } = ~0;
 
         class NormalsPassData
         {
@@ -178,7 +186,7 @@ namespace VRSL.URP
 
             data.rendererList = rg.CreateRendererList(new RendererListParams(
                 renderingData.cullResults, drawSettings,
-                new FilteringSettings(RenderQueueRange.opaque)));
+                new FilteringSettings(RenderQueueRange.opaque, Layers)));
 
             builder.UseRendererList(data.rendererList);
             builder.SetRenderAttachment(normalsRT, 0, AccessFlags.Write);
@@ -259,10 +267,10 @@ namespace VRSL.URP
 
             data.opaqueList = rg.CreateRendererList(new RendererListParams(
                 renderingData.cullResults, opaqueSettings,
-                new FilteringSettings(s_OpaqueRange)));
+                new FilteringSettings(s_OpaqueRange, Layers)));
             data.alphaTestList = rg.CreateRendererList(new RendererListParams(
                 renderingData.cullResults, alphaTestSettings,
-                new FilteringSettings(s_AlphaTestRange)));
+                new FilteringSettings(s_AlphaTestRange, Layers)));
 
             builder.UseRendererList(data.opaqueList);
             builder.UseRendererList(data.alphaTestList);

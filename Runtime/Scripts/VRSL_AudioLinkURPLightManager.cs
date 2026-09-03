@@ -50,6 +50,13 @@ namespace VRSL.URP
                + "surface is lit as a neutral mid-grey dielectric.")]
         public Shader surfacePropertiesShader;
 
+        [Header("Lit surfaces")]
+        [Tooltip("Which layers keep their own colour, gloss and normal maps when a fixture "
+               + "lights them. Anything on a layer left out is still lit, but as a plain "
+               + "mid-grey surface. Leave at Everything unless a layer is expensive to draw "
+               + "and you can accept it lighting grey.")]
+        public LayerMask prepassLayers = ~0;
+
         [Header("Performance")]
         [Tooltip("How much of the frame VRSL may use.\n\n"
                + "Standard suits most worlds. High marches the beams more finely and traces "
@@ -740,16 +747,23 @@ namespace VRSL.URP
             renderer.EnqueuePass(_computePass);
             // The surface prepass costs two opaque geometry draws and writes the
             // same targets regardless of which manager drives it, so when a DMX
-            // manager is present it owns the prepass and this one defers.
+            // manager is present and will draw it for this camera, it owns the
+            // prepass and this one defers.
             //
-            // isActiveAndEnabled, not just a null check: Instance is assigned in
-            // Awake and cleared only in OnDestroy, so a DMX manager that is merely
-            // disabled still answers non-null while having unsubscribed from
-            // beginCameraRendering. Deferring to it then would leave the prepass
-            // enqueued by nobody and the lighting pass shading against stale data.
+            // Asked rather than inferred from Instance being non-null: Instance is
+            // assigned in Awake and cleared only in OnDestroy, so a DMX manager
+            // that is disabled, has no fixtures, or skips this camera still
+            // answers non-null while enqueuing nothing. Deferring to it then would
+            // leave the prepass enqueued by nobody and the lighting pass shading
+            // against stale data. With no fixtures of its own nothing here reads
+            // the targets either, so it is not drawn.
             var dmxManager = VRSL_URPLightManager.Instance;
-            if (dmxManager == null || !dmxManager.isActiveAndEnabled)
+            bool dmxDrives = dmxManager != null && dmxManager.DrivesSurfacePrepass(cam);
+            if (FixtureCount > 0 && !dmxDrives)
+            {
+                _surfacePrepass.Layers = prepassLayers;
                 renderer.EnqueuePass(_surfacePrepass);
+            }
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
             if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
