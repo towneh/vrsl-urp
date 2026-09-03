@@ -9,11 +9,11 @@ It is a standalone fork of [VR Stage Lighting](https://github.com/AcChosen/VR-St
 | You want to | Go to |
 |---|---|
 | Get a rig lit in ten minutes | [Your first rig](#your-first-rig) below |
-| Step-by-step guides in plain language | The [wiki](https://github.com/towneh/vrsl-urp/wiki) |
-| Every inspector field, for both data paths | [`Documentation~/URP-Fixture-Configuration-Guide.md`](Documentation~/URP-Fixture-Configuration-Guide.md) |
-| DMX arriving as bytes rather than as a video grid, including from a Basis media player | [`Documentation~/DMX-Channel-Sources.md`](Documentation~/DMX-Channel-Sources.md) |
-| See every channel's value live | [`Documentation~/DMX-Monitor.md`](Documentation~/DMX-Monitor.md) |
-| How it works inside, and its limits | [`Documentation~/URP-Realtime-Volumetric-Lights.md`](Documentation~/URP-Realtime-Volumetric-Lights.md) |
+| Step-by-step guides in plain language | The [wiki](https://github.com/towneh/vrsl-urp/wiki/) |
+| Every inspector field, for both data paths | [Fixture Configuration Reference](https://github.com/towneh/vrsl-urp/wiki/Fixture-Configuration-Reference) |
+| DMX arriving as bytes rather than as a video grid, including from a Basis media player | [DMX Channel Sources](https://github.com/towneh/vrsl-urp/wiki/DMX-Channel-Sources) |
+| See every channel's value live | [DMX Monitor](https://github.com/towneh/vrsl-urp/wiki/DMX-Monitor) |
+| How it works inside, and its limits | [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) |
 | What changed, and known issues | [`CHANGELOG.md`](CHANGELOG.md) |
 | Verify a change to the package | [`TESTING.md`](TESTING.md) |
 
@@ -67,7 +67,7 @@ There is no renderer feature to add and no URP setting to find. The one thing wo
 
 5. **Press play.** Surfaces light and beams appear. If they do not, select the manager, right-click its header and run **VRSL Diagnostics**: it says which stage went quiet.
 
-The per-field detail for every fixture type is in the [fixture guide](Documentation~/URP-Fixture-Configuration-Guide.md).
+The per-field detail for every fixture type is in the [Fixture Configuration Reference](https://github.com/towneh/vrsl-urp/wiki/Fixture-Configuration-Reference).
 
 ## The controls that matter
 
@@ -117,7 +117,7 @@ Two routes, and a scene can carry both.
 - **A video grid.** A frame of video encodes channel values as colours, the package decodes it on the GPU, and the fixtures read the result. Any video source that ends up as a texture will do, which is how DMX reaches a world with no other way in.
 - **Bytes.** Where the values already arrive as data, a channel source hands them straight to the manager and nothing is encoded or decoded. [Truss](https://github.com/towneh/Truss) carries a desk's Art-Net inside a live H.264 stream, and a Basis media player showing that stream feeds the rig through **VRSL → URP → DMX Config → Add Basis DMX Record Source (SEI)**. The fixtures read the exact bytes the desk sent, every record carries a checksum, and no part of the picture is given up to a grid.
 
-[`Documentation~/DMX-Channel-Sources.md`](Documentation~/DMX-Channel-Sources.md) covers both, how to frame a grid that arrives as part of a larger picture, and how to write a source of your own.
+[DMX Channel Sources](https://github.com/towneh/vrsl-urp/wiki/DMX-Channel-Sources) covers both, how to frame a grid that arrives as part of a larger picture, and how to write a source of your own.
 
 ## Migrating from Built-in
 

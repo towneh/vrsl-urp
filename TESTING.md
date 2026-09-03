@@ -685,7 +685,7 @@ scene-owned player.
 ## Known gaps — not bugs
 
 Don't raise these; they're documented limitations with reasons in
-`Documentation~/URP-Realtime-Volumetric-Lights.md`.
+the [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) page of the wiki.
 
 - Light doesn't stop at walls — only contact shadows exist, no light-perspective shadow maps.
 - Occluders off screen cast no shadow, and shadows fade as an occluder leaves frame.

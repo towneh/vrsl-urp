@@ -20,6 +20,8 @@
     "Volumetric"
   ],
   "license": "MIT",
+  "documentationUrl": "https://github.com/towneh/vrsl-urp/wiki",
+  "changelogUrl": "https://github.com/towneh/vrsl-urp/blob/main/CHANGELOG.md",
   "samples": [
     {
       "displayName": "Realtime Light Profiling",
