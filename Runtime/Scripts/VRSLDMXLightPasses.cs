@@ -219,6 +219,11 @@ namespace VRSL.URP
                 public Vector4       contactShadowParams;
             }
 
+            /// <summary>The level this camera's pass costs at. Set by the manager
+            /// per camera before enqueue; a mirror under the Reduced policy gets a
+            /// lower one than the player's view.</summary>
+            public VRSLQuality Quality = VRSLQuality.Standard;
+
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
                 var mgr = VRSL_URPLightManager.Instance;
@@ -252,7 +257,7 @@ namespace VRSL.URP
                 d.material        = mgr.LightingMaterial;
                 d.lightCount      = mgr.FixtureCount;
                 d.surfaceDataValid = mgr.surfacePropertiesShader != null;
-                d.contactShadowParams = mgr.ContactShadowParams;
+                d.contactShadowParams = mgr.ContactShadowParamsFor(VRSLQualityLevel.For(Quality));
 
                 builder.SetRenderAttachment(resources.activeColorTexture, 0, AccessFlags.ReadWrite);
                 builder.UseBuffer( d.lightDataBuffer, AccessFlags.Read);
@@ -323,16 +328,22 @@ namespace VRSL.URP
                 public Vector4       halfResSize;
             }
 
+            /// <summary>The level this camera's march costs at. Set by the manager
+            /// per camera before enqueue; a mirror under the Reduced policy gets a
+            /// lower one than the player's view.</summary>
+            public VRSLQuality Quality = VRSLQuality.Standard;
+
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
-                var mgr = VRSL_URPLightManager.Instance;
+                var mgr   = VRSL_URPLightManager.Instance;
+                var level = VRSLQualityLevel.For(Quality);
                 if (mgr == null
                     || mgr.FixtureCount == 0
-                    || !mgr.VolumetricsEnabled
+                    || !level.Volumetrics
                     || mgr.VolumetricMaterial == null
                     || mgr.LightDataBuffer == null) return;
 
-                if (mgr.VolumetricUseNoise)
+                if (level.VolumetricNoise)
                     mgr.VolumetricMaterial.EnableKeyword("_VRSL_VOLUMETRIC_NOISE");
                 else
                     mgr.VolumetricMaterial.DisableKeyword("_VRSL_VOLUMETRIC_NOISE");
@@ -420,7 +431,7 @@ namespace VRSL.URP
                     d.halfDepth       = halfDepth;
                     d.lightDataBuffer = lightDataHandle;
                     d.lightCount      = mgr.FixtureCount;
-                    d.stepParams      = mgr.VolumetricStepParams;
+                    d.stepParams      = mgr.VolumetricStepParamsFor(level);
                     d.densityParams   = mgr.VolumetricDensityParams;
                     d.fogTintParams   = mgr.VolumetricFogTintParams;
                     d.bindTileBuffer  = bindTileBuffer;

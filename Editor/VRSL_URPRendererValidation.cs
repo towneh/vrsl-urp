@@ -113,21 +113,25 @@ namespace VRSL.URP.EditorScripts
                 if (camera == null || !camera.isActiveAndEnabled) continue;
                 seen++;
 
-                bool dmxRenders = dmx != null
-                    && VRSLCameraFilter.Evaluate(camera, dmx.secondaryCameraMode, null)
-                       != VRSLCameraDecision.Skip;
-                bool audioLinkRenders = audioLink != null
-                    && VRSLCameraFilter.Evaluate(camera, audioLink.secondaryCameraMode, null)
-                       != VRSLCameraDecision.Skip;
+                var dmxDecision = dmx != null
+                    ? VRSLCameraFilter.Evaluate(camera, dmx.secondaryCameraMode, dmx.quality, null)
+                    : VRSLCameraDecision.Skip;
+                var audioLinkDecision = audioLink != null
+                    ? VRSLCameraFilter.Evaluate(camera, audioLink.secondaryCameraMode, audioLink.quality, null)
+                    : VRSLCameraDecision.Skip;
+                bool dmxRenders       = dmxDecision.Render;
+                bool audioLinkRenders = audioLinkDecision.Render;
 
-                string who; bool forceOwn; LayerMask mask;
+                string who; bool forceOwn; LayerMask mask; string at;
                 if (dmxRenders && dmxHasFixtures)
                 {
                     who = dmx.name; forceOwn = dmx.forceOwnNormals; mask = dmx.prepassLayers;
+                    at  = dmxDecision.ToString();
                 }
                 else if (audioLinkRenders)
                 {
                     who = audioLink.name; forceOwn = audioLink.forceOwnNormals; mask = audioLink.prepassLayers;
+                    at  = audioLinkDecision.ToString();
                 }
                 else if (dmx != null || audioLink != null)
                 {
@@ -140,7 +144,7 @@ namespace VRSL.URP.EditorScripts
                 }
                 else
                 {
-                    who = "no manager"; forceOwn = false; mask = ~0;
+                    who = "no manager"; forceOwn = false; mask = ~0; at = null;
                 }
 
                 int index = defaultIndex;
@@ -155,11 +159,19 @@ namespace VRSL.URP.EditorScripts
                                  : null;
                 int msaa = VRSLPrepassPolicy.PredictMsaa(camera, urp);
                 var decision = VRSLPrepassPolicy.Decide(msaa, rendererData, forceOwn, mask);
-                report.AppendLine($"      {camera.name} ({who}): {decision.Reason}");
+                // The level beside the normals answer, because a mirror under the
+                // Reduced policy renders at a level no inspector shows.
+                report.AppendLine($"      {camera.name} ({who}"
+                                + (at != null ? $", {at}" : "")
+                                + $"): {decision.Reason}");
             }
             if (seen == 0)
                 report.AppendLine("      No camera switched on in the open scene, so there is no "
                                 + "camera to decide for.");
+            if (dmx != null)
+                report.AppendLine($"      {dmx.name}: " + VRSLCameraFilter.Describe(dmx.secondaryCameraMode, dmx.quality));
+            if (audioLink != null)
+                report.AppendLine($"      {audioLink.name}: " + VRSLCameraFilter.Describe(audioLink.secondaryCameraMode, audioLink.quality));
             report.AppendLine();
         }
 

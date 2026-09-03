@@ -417,13 +417,16 @@ owns the pass.
 | Level | Beams | Sample spacing | Max steps per light | Noise | Contact shadows | Steps | Distance | Thickness |
 |---|---|---|---|---|---|---|---|---|
 | `Off` | no | — | — | — | no | — | — | — |
+| `Low` (mirrors only) | yes | 0.70 m | 12 | yes | no | — | — | — |
 | `Standard` | yes | 0.35 m | 24 | yes | yes | 8 | 1.5 m | 0.5 m |
 | `High` | yes | 0.20 m | 40 | yes | yes | 16 | 2.5 m | 0.35 m |
 
 `Standard` is the default and reproduces what the package shipped before the level
 existed, so a scene authored earlier renders and costs what it did. `Off` records no
 volumetric pass and allocates no volumetric targets, rather than recording one that draws
-nothing.
+nothing. `Low` is not offered for a scene: it is what a secondary camera renders at under
+the `Reduced` policy when the scene is at `Standard` (see *Camera Selection*), and the
+inspector leaves it out of the list.
 
 The march is half-resolution and only half-resolution, in three sub-passes:
 
@@ -593,16 +596,23 @@ decoded channel values. The failure surfaces as nonsense DMX rather than as a re
 fault, which makes it expensive to trace.
 
 Everything else is governed by `secondaryCameraMode` on the manager, which covers cameras
-that render into a texture rather than to the player's view — mirrors, portals, camera props:
+that render into a texture rather than to the player's view — mirrors, portals, camera props.
+Each one runs the whole light path again (the prepass, the cull, the lighting pass and the
+raymarch are all view-dependent), so this is the control that decides what a world with
+mirrors pays:
 
-| Mode | Behaviour |
-|---|---|
-| `Full` (default) | Lit exactly like the main view. Beams in a mirror are a large part of a stage look, so skipping them is a visual regression rather than a free saving. |
-| `SurfaceOnly` | Surface lighting runs, the volumetric raymarch doesn't. The raymarch is by far the more expensive of the two. |
-| `Skip` | No VRSL passes. |
+| Policy | What a mirror gets | Cost, against the main view |
+|---|---|---|
+| `Match` | Lit exactly like the main view, at the scene's level. | The same again per mirror. |
+| `Reduced` (default) | Lit one level below the scene: a scene at `High` renders mirrors at `Standard`; a scene at `Standard` renders them at `Low`, a level only mirrors get (see the quality table). A scene at `Off` has nothing below it and mirrors render at `Off`. | Beams stay in the mirror. At `Low` the march takes half the samples and there is no contact-shadow trace. |
+| `SurfaceOnly` | Surface lighting runs, the volumetric raymarch doesn't. | The raymarch is by far the more expensive of the two. |
+| `Skip` | No VRSL passes. | Nothing, and a mirror pointed at the rig shows it. |
 
-A camera with no `targetTexture` is always treated as the player's view, including under XR
-where the swapchain is handled outside the camera.
+The policy is decided per camera, per frame, from the camera alone, so mirrors that appear
+and disappear at runtime need nothing reset. A camera with no `targetTexture` is always
+treated as the player's view, including under XR where the swapchain is handled outside the
+camera. `Validate Renderer Setup` names the level each camera in the open scene would render
+at, and the benchmark rows carry it for the camera they measured.
 
 ---
 

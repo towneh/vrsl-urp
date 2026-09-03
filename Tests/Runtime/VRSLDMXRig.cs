@@ -44,6 +44,22 @@ namespace VRSL.URP.Tests
         /// <summary>The plane the beams land on.</summary>
         public GameObject Floor { get; private set; }
 
+        /// <summary>A camera rendering into its own texture, the way a mirror or a
+        /// camera prop does. Disabled like the main camera: it renders through
+        /// <see cref="RenderFrame"/> while <see cref="Renders"/> is set, and through
+        /// <see cref="Render"/> on its own.</summary>
+        public sealed class SecondaryCamera
+        {
+            public Camera        Camera;
+            public RenderTexture Target;
+            /// <summary>Whether <see cref="RenderFrame"/> renders it this frame. A
+            /// row about a mirror that comes and goes flips this.</summary>
+            public bool          Renders = true;
+        }
+
+        /// <summary>Secondary cameras added with <see cref="AddSecondaryCamera"/>.</summary>
+        public readonly List<SecondaryCamera> Secondaries = new();
+
         public VRSL_URPLightManager             Manager { get; private set; }
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
         public readonly List<VRStageLighting_DMX_RealtimeLight> Fixtures = new();
@@ -332,6 +348,41 @@ namespace VRSL.URP.Tests
 #endif
         }
 
+        /// <summary>
+        /// Add a camera rendering into its own texture, posed on the far side of the
+        /// truss looking back at where the beams land, so a mirror row sees the cones.
+        /// </summary>
+        public SecondaryCamera AddSecondaryCamera(int targetSize = TargetSize,
+                                                  Vector3? eye = null, Vector3? lookAt = null)
+        {
+            var target = new RenderTexture(targetSize, targetSize, 24)
+            {
+                name         = $"VRSL test secondary {Secondaries.Count}",
+                antiAliasing = Mathf.Max(1, _msaa),
+            };
+            var cam = new GameObject($"Secondary Camera {Secondaries.Count}").AddComponent<Camera>();
+            cam.transform.SetParent(_root.transform, false);
+            var at   = eye    ?? new Vector3(6f, 4f, 16f);
+            var look = lookAt ?? new Vector3(10f, 0f, 4f);
+            cam.transform.SetPositionAndRotation(at, Quaternion.LookRotation(look - at, Vector3.up));
+            cam.clearFlags      = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Color.black;
+            cam.targetTexture   = target;
+            cam.enabled         = false;
+            var secondary = new SecondaryCamera { Camera = cam, Target = target };
+            Secondaries.Add(secondary);
+            return secondary;
+        }
+
+        /// <summary>Render one camera and nothing else. For a row that wants a
+        /// frame, or a frame of counters, of a single view.</summary>
+        public void Render(Camera camera)
+        {
+            if (_asset != null && _msaa > 1 && _asset.msaaSampleCount != _msaa)
+                _asset.msaaSampleCount = _msaa;
+            camera.Render();
+        }
+
         /// <summary>Advance exactly <paramref name="frames"/> frames, which is
         /// <c>frames * FrameDelta</c> of game time whatever the machine does.</summary>
         /// <b>Yield this straight from a test method.</b> The test runner drives
@@ -352,13 +403,18 @@ namespace VRSL.URP.Tests
             }
         }
 
-        /// <summary>Render one frame. For helpers that cannot yield
-        /// <see cref="Step"/> because they are already a level deep.</summary>
-        public void RenderFrame()
+        /// <summary>Render one frame: the main camera, then every secondary camera
+        /// that is set to render. For helpers that cannot yield <see cref="Step"/>
+        /// because they are already a level deep.</summary>
+        public void RenderFrame() => RenderFrame(mainCamera: true);
+
+        /// <param name="mainCamera">False leaves the main camera out, for a frame
+        /// where only a mirror renders.</param>
+        public void RenderFrame(bool mainCamera)
         {
-            if (_asset != null && _msaa > 1 && _asset.msaaSampleCount != _msaa)
-                _asset.msaaSampleCount = _msaa;
-            _camera.Render();
+            if (mainCamera) Render(_camera);
+            foreach (var secondary in Secondaries)
+                if (secondary.Renders) Render(secondary.Camera);
         }
 
         /// <summary>
@@ -602,6 +658,13 @@ namespace VRSL.URP.Tests
             _asset = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
             _target = null;
+            foreach (var secondary in Secondaries)
+                if (secondary.Target != null)
+                {
+                    secondary.Target.Release();
+                    UnityEngine.Object.DestroyImmediate(secondary.Target);
+                }
+            Secondaries.Clear();
             _dummyChannels?.Release();
             _dummyChannels = null;
         }

@@ -4,12 +4,18 @@ using UnityEngine;
 namespace VRSL.URP
 {
     /// <summary>How VRSL treats cameras that render into a texture rather than to
-    /// the player's view — mirrors, portals, and camera props.</summary>
+    /// the player's view — mirrors, portals, and camera props. Declared in cost
+    /// order; the values are fixed so a scene keeps the choice it was saved with.</summary>
     public enum SecondaryCameraMode
     {
-        /// <summary>Light them exactly like the main view. Beams in a mirror are a
-        /// large part of a stage look, so this is the default.</summary>
-        Full = 0,
+        /// <summary>Light them exactly like the main view, at the scene's own
+        /// quality level.</summary>
+        Match = 0,
+
+        /// <summary>Light them one quality level below the scene's, so beams stay
+        /// in a mirror at a lower price. The default. See
+        /// <see cref="VRSLQualityLevel.Below"/> for what each level steps down to.</summary>
+        Reduced = 3,
 
         /// <summary>Run surface lighting but skip the volumetric raymarch, which is
         /// by far the more expensive of the two.</summary>
@@ -20,12 +26,28 @@ namespace VRSL.URP
         Skip = 2,
     }
 
-    /// <summary>What VRSL should do for a given camera.</summary>
-    public enum VRSLCameraDecision
+    /// <summary>What VRSL should do for a given camera, and at what level.</summary>
+    public readonly struct VRSLCameraDecision
     {
-        Skip = 0,
-        SurfaceOnly = 1,
-        Full = 2,
+        /// <summary>Whether any VRSL pass runs on the camera.</summary>
+        public readonly bool        Render;
+        /// <summary>Whether the volumetric pass runs, where the level draws beams.</summary>
+        public readonly bool        Volumetrics;
+        /// <summary>The level the camera's passes take their costs from.</summary>
+        public readonly VRSLQuality Quality;
+
+        public VRSLCameraDecision(bool render, bool volumetrics, VRSLQuality quality)
+        {
+            Render      = render;
+            Volumetrics = volumetrics;
+            Quality     = quality;
+        }
+
+        /// <summary>No passes. The level is meaningless and left at Off.</summary>
+        public static VRSLCameraDecision Skip => default;
+
+        public override string ToString() =>
+            !Render ? "Skip" : Volumetrics ? $"Full at {Quality}" : $"SurfaceOnly at {Quality}";
     }
 
     /// <summary>
@@ -42,7 +64,8 @@ namespace VRSL.URP
     ///
     /// Everything here is decided package-side from what VRSL already owns. No host
     /// cooperation, no assumptions about how the surrounding application sets its
-    /// cameras up.
+    /// cameras up. Stateless per camera, so mirrors that come and go at runtime need
+    /// nothing reset.
     /// </summary>
     public static class VRSLCameraFilter
     {
@@ -64,12 +87,15 @@ namespace VRSL.URP
             if (cam != null) s_DataReaderCameras.Remove(cam);
         }
 
+        /// <param name="sceneQuality">The manager's own level, which the player's
+        /// view always renders at and a secondary camera renders at or below.</param>
         /// <param name="ownedSources">
         /// Render textures this manager consumes. A camera rendering into one of
         /// them is rejected outright — a second line of defence for reader rigs
         /// assembled without <c>VRSL_CameraConfigurator</c>.
         /// </param>
         public static VRSLCameraDecision Evaluate(Camera cam, SecondaryCameraMode mode,
+                                                  VRSLQuality sceneQuality,
                                                   IReadOnlyList<Texture> ownedSources)
         {
             if (cam == null) return VRSLCameraDecision.Skip;
@@ -85,7 +111,7 @@ namespace VRSL.URP
 
             // No target texture means the player's view, including XR where the
             // swapchain is handled outside the camera. Always the full treatment.
-            if (target == null) return VRSLCameraDecision.Full;
+            if (target == null) return new VRSLCameraDecision(true, true, sceneQuality);
 
             if (ownedSources != null)
             {
@@ -97,9 +123,35 @@ namespace VRSL.URP
             return mode switch
             {
                 SecondaryCameraMode.Skip        => VRSLCameraDecision.Skip,
-                SecondaryCameraMode.SurfaceOnly => VRSLCameraDecision.SurfaceOnly,
-                _                               => VRSLCameraDecision.Full,
+                SecondaryCameraMode.SurfaceOnly => new VRSLCameraDecision(true, false, sceneQuality),
+                SecondaryCameraMode.Reduced     => new VRSLCameraDecision(true, true, VRSLQualityLevel.Below(sceneQuality)),
+                _                               => new VRSLCameraDecision(true, true, sceneQuality),
             };
+        }
+
+        /// <summary>What a policy does to a mirror in this scene, in an author's
+        /// words. For diagnostics and validation, so the reader is not left to work
+        /// out what <c>Reduced</c> steps down to.</summary>
+        public static string Describe(SecondaryCameraMode mode, VRSLQuality sceneQuality)
+        {
+            switch (mode)
+            {
+                case SecondaryCameraMode.Skip:
+                    return "Skip: mirrors and camera props get no VRSL lighting";
+                case SecondaryCameraMode.SurfaceOnly:
+                    return "SurfaceOnly: mirrors and camera props get surface lighting and no beams";
+                case SecondaryCameraMode.Reduced:
+                {
+                    var below = VRSLQualityLevel.Below(sceneQuality);
+                    return below == sceneQuality
+                        ? $"Reduced: mirrors and camera props render at {sceneQuality}, the same as "
+                        + "the scene, because there is no level below it"
+                        : $"Reduced: mirrors and camera props render at {below}, one level below "
+                        + $"the scene's {sceneQuality}";
+                }
+                default:
+                    return $"Match: mirrors and camera props render at {sceneQuality}, the same as the scene";
+            }
         }
     }
 }

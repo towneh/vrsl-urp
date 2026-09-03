@@ -26,6 +26,12 @@ namespace VRSL.URP
         /// shadow trace. Costs more per pixel; changes no author-facing
         /// behaviour.</summary>
         High = 2,
+        /// <summary>Beams at half Standard's samples and no contact shadows.
+        /// Only a secondary camera renders at this: it is what a mirror gets
+        /// under the <see cref="SecondaryCameraMode.Reduced"/> policy when the
+        /// scene is at Standard. Not offered for a scene, so the inspector does
+        /// not list it.</summary>
+        Low = 3,
     }
 
     /// <summary>
@@ -88,6 +94,22 @@ namespace VRSL.URP
         public const float NoiseScrollSpeed = 0.1f;
         public const float NoiseStrength    = 0.7f;
 
+        /// <summary>The level one step below <paramref name="scene"/>, which is
+        /// what a secondary camera renders at under
+        /// <see cref="SecondaryCameraMode.Reduced"/>. Standard steps down to
+        /// <see cref="VRSLQuality.Low"/> rather than to Off: a mirror with no
+        /// beams in it is the failure that policy exists to avoid. Off and Low
+        /// have nothing below them.</summary>
+        public static VRSLQuality Below(VRSLQuality scene)
+        {
+            switch (scene)
+            {
+                case VRSLQuality.High:     return VRSLQuality.Standard;
+                case VRSLQuality.Standard: return VRSLQuality.Low;
+                default:                   return scene;
+            }
+        }
+
         /// <summary>The costs for a level. Anything unrecognised is Standard,
         /// which is also what a scene deserialising an out-of-range value
         /// gets.</summary>
@@ -98,6 +120,15 @@ namespace VRSL.URP
                 case VRSLQuality.Off:
                     return new VRSLQualityLevel(
                         volumetrics: false, maxSteps: 0, spacing: 0f, noise: false,
+                        contactShadows: false, contactSteps: 0,
+                        contactDistance: 0f, contactThickness: 0f);
+
+                case VRSLQuality.Low:
+                    // Half Standard's sample density along each light's span, and no
+                    // contact-shadow trace, which is the most expensive term in the
+                    // surface loop. The beams stay.
+                    return new VRSLQualityLevel(
+                        volumetrics: true, maxSteps: 12, spacing: 0.70f, noise: true,
                         contactShadows: false, contactSteps: 0,
                         contactDistance: 0f, contactThickness: 0f);
 

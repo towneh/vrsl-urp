@@ -138,14 +138,20 @@ namespace VRSL.URP
         public Texture2D[] goboTextures;
 
         [Header("Secondary cameras")]
-        [Tooltip("How VRSL treats cameras that render into a texture rather than to the "
-               + "player's view: mirrors, portals, camera props. Full lights them like the "
-               + "main view, which is the default because beams in a mirror are a large part "
-               + "of a stage look. SurfaceOnly keeps surface lighting but drops the "
-               + "volumetric raymarch, the more expensive of the two. Skip runs nothing. "
+        [Tooltip("How VRSL lights cameras that render into a texture rather than to the "
+               + "player's view: mirrors, portals, camera props. Each one pays for the whole "
+               + "light path again, so this is where a world with mirrors spends or saves.\n\n"
+               + "Match lights them exactly like the main view.\n"
+               + "Reduced, the default, lights them one level below the scene: a scene at "
+               + "High renders mirrors at Standard, and a scene at Standard renders them at "
+               + "Low, a mirror-only level with beams at half the samples and no contact "
+               + "shadows. Beams stay in the mirror at a lower price.\n"
+               + "SurfaceOnly keeps surface lighting and drops the beams, the more expensive "
+               + "of the two.\n"
+               + "Skip runs nothing, and a mirror pointed at the rig shows it.\n\n"
                + "Cameras feeding VRSL's own DMX readers are always skipped regardless of "
                + "this setting.")]
-        public SecondaryCameraMode secondaryCameraMode = SecondaryCameraMode.Full;
+        public SecondaryCameraMode secondaryCameraMode = SecondaryCameraMode.Reduced;
 
         [Header("Troubleshooting")]
         [Tooltip("Log fixture collection and DMX global / CRT publishing to the Console on enable. "
@@ -169,23 +175,25 @@ namespace VRSL.URP
         public bool VolumetricsEnabled => Quality.Volumetrics && volumetricShader != null;
 
         /// <summary>
-        /// x = strength, y = trace distance, z = steps, w = thickness. All zero when the
-        /// trace should not run.
+        /// x = strength, y = trace distance, z = steps, w = thickness, at the manager's
+        /// own level. All zero when the trace should not run.
+        /// </summary>
+        public Vector4 ContactShadowParams => ContactShadowParamsFor(Quality);
+
+        /// <summary>
+        /// The contact-shadow parameters at <paramref name="level"/>, which for a
+        /// secondary camera is not necessarily the manager's own.
         /// </summary>
         /// <remarks>
         /// Zeroed rather than left with a live step count, because the shader reads a
         /// step count of 0 as "skip the trace" — tracing and multiplying by a strength of
         /// zero is the most expensive term in the lighting loop spent on nothing.
         /// </remarks>
-        public Vector4 ContactShadowParams
+        public Vector4 ContactShadowParamsFor(VRSLQualityLevel level)
         {
-            get
-            {
-                var level = Quality;
-                if (!level.ContactShadows || contactShadowStrength <= 0f) return Vector4.zero;
-                return new Vector4(contactShadowStrength, level.ContactShadowDistance,
-                                   level.ContactShadowSteps, level.ContactShadowThickness);
-            }
+            if (!level.ContactShadows || contactShadowStrength <= 0f) return Vector4.zero;
+            return new Vector4(contactShadowStrength, level.ContactShadowDistance,
+                               level.ContactShadowSteps, level.ContactShadowThickness);
         }
 
         public enum StrobeRate
@@ -303,8 +311,7 @@ namespace VRSL.URP
         /// </summary>
         public bool DrivesSurfacePrepass(Camera cam)
             => isActiveAndEnabled && FixtureCount > 0
-            && VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, OwnedSources())
-               != VRSLCameraDecision.Skip;
+            && VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, OwnedSources()).Render;
         public int  GoboCount      { get; private set; }
         public int  ComputeKernel  { get; private set; }
         public Material LightingMaterial   { get; private set; }
@@ -331,9 +338,13 @@ namespace VRSL.URP
 
         // Volumetric shader parameter packing — read by VRSLDMXLightPasses.VolumetricPass
         // each frame and uploaded as global vectors before the raymarch pass.
-        public Vector4 VolumetricStepParams =>
-            new Vector4(Quality.VolumetricMaxSteps, coupleToSceneFog ? 1f : 0f,
-                        1f / Mathf.Max(Quality.VolumetricStepSpacing, 0.01f),
+        public Vector4 VolumetricStepParams => VolumetricStepParamsFor(Quality);
+
+        /// <summary>The step parameters at <paramref name="level"/>, which for a
+        /// secondary camera is not necessarily the manager's own.</summary>
+        public Vector4 VolumetricStepParamsFor(VRSLQualityLevel level) =>
+            new Vector4(level.VolumetricMaxSteps, coupleToSceneFog ? 1f : 0f,
+                        1f / Mathf.Max(level.VolumetricStepSpacing, 0.01f),
                         volumetricAnisotropy);
         public Vector4 VolumetricDensityParams =>
             new Vector4(volumetricDensity, VRSLQualityLevel.NoiseScale,
@@ -396,6 +407,15 @@ namespace VRSL.URP
         /// and the manager-wide value is whichever came last.</summary>
         public bool UsesUrpNormalsFor(Camera cam)
             => cam != null && _normalsByCamera.TryGetValue(cam, out bool uses) && uses;
+
+        readonly Dictionary<Camera, VRSLQuality> _qualityByCamera = new();
+
+        /// <summary>The level <paramref name="cam"/> rendered at the last time this
+        /// manager set it up, or null if it never has. The player's view renders at
+        /// the manager's own level; a mirror renders at whatever the secondary-camera
+        /// policy gave it, and this is the only record of which.</summary>
+        public VRSLQuality? QualityFor(Camera cam)
+            => cam != null && _qualityByCamera.TryGetValue(cam, out var level) ? level : null;
         VRSLTileCullPass                  _tileCullPass;
         VRSLDMXLightPasses.LightingPass   _lightingPass;
         VRSLDMXLightPasses.VolumetricPass _volumetricPass;
@@ -1281,7 +1301,7 @@ namespace VRSL.URP
             if (VolumetricsEnabled)
                 sb.AppendLine("  " + VRSLDiagnostics.VolumetricMarchStatus(VolumetricStats, level.VolumetricMaxSteps));
             sb.AppendLine($"  Contact shadows: {(ContactShadowParams.x > 0f ? $"on (strength {contactShadowStrength:F2}, {level.ContactShadowDistance}m, {level.ContactShadowSteps} steps)" : "off")}");
-            sb.AppendLine($"  Secondary cameras: {secondaryCameraMode}");
+            sb.AppendLine("  Secondary cameras: " + VRSLCameraFilter.Describe(secondaryCameraMode, quality));
             Debug.Log(sb.ToString(), this);
         }
 
@@ -1322,13 +1342,20 @@ namespace VRSL.URP
 
         void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
         {
-            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, OwnedSources());
-            if (decision == VRSLCameraDecision.Skip) return;
+            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, OwnedSources());
+            if (!decision.Render) return;
 
             var camData = cam.GetUniversalAdditionalCameraData();
             if (camData == null) return;
             var renderer = camData.scriptableRenderer;
             if (renderer == null) return;
+
+            // The level this camera's passes cost at. The passes are shared across
+            // cameras and record for one camera at a time, so a field set here is
+            // what they read for this camera and only this one.
+            _qualityByCamera[cam]   = decision.Quality;
+            _lightingPass.Quality   = decision.Quality;
+            _volumetricPass.Quality = decision.Quality;
 
             // Where the normals come from is decided here, once per camera, and the
             // lighting shader samples one global name either way. Normal is asked
@@ -1375,7 +1402,8 @@ namespace VRSL.URP
             }
             renderer.EnqueuePass(_tileCullPass);
             renderer.EnqueuePass(_lightingPass);
-            if (VolumetricMaterial != null && decision == VRSLCameraDecision.Full)
+            if (VolumetricMaterial != null && decision.Volumetrics
+             && VRSLQualityLevel.For(decision.Quality).Volumetrics)
             {
                 renderer.EnqueuePass(_volumetricPass);
             }
