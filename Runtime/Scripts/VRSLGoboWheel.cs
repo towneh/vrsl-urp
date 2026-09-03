@@ -103,10 +103,13 @@ namespace VRSL.URP
             var previous = RenderTexture.active;
             for (int i = 0; i < sliceCount; i++)
             {
-                if (sources[i] == null) continue;
                 // Blitting into a specific destination slice keeps the whole build
                 // on the GPU; the readback path this replaces stalled once per slot.
-                Graphics.Blit(sources[i], array, 0, i);
+                // An empty slot is written white, an open gobo: Create does not clear
+                // the array, and a slice left alone holds whatever the allocation
+                // returned, which the shaders would sample as a mask.
+                Texture source = sources[i] != null ? sources[i] : Texture2D.whiteTexture;
+                Graphics.Blit(source, array, 0, i);
             }
             RenderTexture.active = previous;
             if (complete) ReleaseMipRequests(sources);
