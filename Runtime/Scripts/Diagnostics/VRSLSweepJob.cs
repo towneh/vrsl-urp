@@ -79,6 +79,7 @@ namespace VRSL.URP
                 yield break;
             }
             manager.ChannelSource = source;
+            bool forceOwnNormalsWas = manager.forceOwnNormals;
             manager.forceOwnNormals = forceOwnNormals;
             if (forceOwnNormals)
                 run.Note("VRSL drew its own normals prepass on every camera (forceOwnNormals), "
@@ -225,6 +226,7 @@ namespace VRSL.URP
             finally
             {
                 quality?.Restore();
+                if (manager != null) manager.forceOwnNormals = forceOwnNormalsWas;
                 VRSLBenchmarkScene.RestoreCameras();
                 camera.targetTexture = null;
                 if (target != null) { target.Release(); UnityEngine.Object.DestroyImmediate(target); }

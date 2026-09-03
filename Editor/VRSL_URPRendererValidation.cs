@@ -77,13 +77,26 @@ namespace VRSL.URP.EditorScripts
         /// </summary>
         static void ReportNormalsSource(UniversalRenderPipelineAsset urp, StringBuilder report)
         {
+            // The DMX manager draws the prepass wherever it renders, so its mask is
+            // the one that applies there; the AudioLink manager's applies only where
+            // the DMX manager does not draw. Reported for the DMX manager's where
+            // there is one.
             bool anyManager = false, forceOwn = false;
+            LayerMask mask = ~0;
             foreach (var m in Object.FindObjectsByType<VRSL_URPLightManager>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-                if (m != null && m.isActiveAndEnabled) { anyManager = true; forceOwn |= m.forceOwnNormals; }
+                if (m != null && m.isActiveAndEnabled)
+                {
+                    if (!anyManager) mask = m.prepassLayers;
+                    anyManager = true; forceOwn |= m.forceOwnNormals;
+                }
             foreach (var m in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-                if (m != null && m.isActiveAndEnabled) { anyManager = true; forceOwn |= m.forceOwnNormals; }
+                if (m != null && m.isActiveAndEnabled)
+                {
+                    if (!anyManager) mask = m.prepassLayers;
+                    anyManager = true; forceOwn |= m.forceOwnNormals;
+                }
 
             report.AppendLine("Where VRSL's surface normals come from:");
             if (!anyManager)
@@ -113,7 +126,7 @@ namespace VRSL.URP.EditorScripts
                                  ? urp.rendererDataList[index] as UniversalRendererData
                                  : null;
                 int msaa = VRSLPrepassPolicy.PredictMsaa(camera, urp);
-                var decision = VRSLPrepassPolicy.Decide(msaa, rendererData, forceOwn);
+                var decision = VRSLPrepassPolicy.Decide(msaa, rendererData, forceOwn, mask);
                 report.AppendLine($"      {camera.name}: {decision.Reason}");
                 seen++;
             }

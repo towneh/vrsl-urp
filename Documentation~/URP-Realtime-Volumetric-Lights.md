@@ -35,6 +35,7 @@ Where URP cannot draw it, VRSL draws its own as before, into its own single-samp
 
 - the camera renders at MSAA 1, or its renderer has depth priming `Disabled`;
 - the renderer is Forward or Forward+ (Deferred packs its normals differently);
+- `prepassLayers` is Everything, because URP's prepass draws every layer and a surface left out of VRSL's is meant to light with a depth-derived normal;
 - `forceOwnNormals` on the manager is off.
 
 The camera's sample count is predicted the way URP computes it: a camera with a target texture takes the texture's, one without takes the pipeline asset's. Anything URP goes on to lower it by makes that an over-estimate, which errs towards drawing VRSL's own normals.

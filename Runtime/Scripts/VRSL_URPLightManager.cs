@@ -387,6 +387,15 @@ namespace VRSL.URP
         /// texture rather than drawing its own, and why, in an author's words.</summary>
         public bool   UsesUrpNormals { get; private set; }
         public string NormalsSource  { get; private set; }
+
+        readonly Dictionary<Camera, bool> _normalsByCamera = new();
+
+        /// <summary>Whether <paramref name="cam"/> read URP's normals the last time
+        /// this manager set it up, or false if it never has. Per camera, because two
+        /// cameras in one frame can resolve to different renderers or sample counts
+        /// and the manager-wide value is whichever came last.</summary>
+        public bool UsesUrpNormalsFor(Camera cam)
+            => cam != null && _normalsByCamera.TryGetValue(cam, out bool uses) && uses;
         VRSLTileCullPass                  _tileCullPass;
         VRSLDMXLightPasses.LightingPass   _lightingPass;
         VRSLDMXLightPasses.VolumetricPass _volumetricPass;
@@ -1326,9 +1335,10 @@ namespace VRSL.URP
             // of URP only where its prepass can be drawn: on a multisampled camera
             // that is also depth primed, the request itself takes the frame down.
             // With no fixtures nothing would read it, so nothing is asked for.
-            var normals = VRSLPrepassPolicy.Decide(cam, renderer, forceOwnNormals);
+            var normals = VRSLPrepassPolicy.Decide(cam, renderer, forceOwnNormals, prepassLayers);
             UsesUrpNormals = normals.UseUrpNormals;
             NormalsSource  = normals.Reason;
+            _normalsByCamera[cam] = normals.UseUrpNormals;
             var input = ScriptableRenderPassInput.Depth;
             if (normals.UseUrpNormals && FixtureCount > 0)
                 input |= ScriptableRenderPassInput.Normal;

@@ -17,7 +17,9 @@ namespace VRSL.URP
     /// may not, and this package cannot tell which it is running on, so the
     /// decision refuses whenever priming could be on and the camera is
     /// multisampled. Deferred renderers pack their normals differently and are
-    /// refused too.
+    /// refused too, and so is a manager whose Lit surfaces mask leaves layers
+    /// out: URP's prepass draws every layer, and a surface left out of VRSL's
+    /// is meant to light with a depth-derived normal, not an authored one.
     ///
     /// One place decides, on the CPU, and the lighting shader samples one name
     /// whichever way it went.
@@ -67,18 +69,26 @@ namespace VRSL.URP
         }
 
         /// <summary>Decide for a camera about to render.</summary>
-        public static Decision Decide(Camera cam, ScriptableRenderer renderer, bool forceOwnNormals)
+        public static Decision Decide(Camera cam, ScriptableRenderer renderer, bool forceOwnNormals,
+                                      LayerMask prepassLayers)
         {
             var asset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-            return Decide(PredictMsaa(cam, asset), RendererDataFor(asset, renderer), forceOwnNormals);
+            return Decide(PredictMsaa(cam, asset), RendererDataFor(asset, renderer), forceOwnNormals,
+                          prepassLayers);
         }
 
         /// <summary>The decision itself, a pure function of what it depends on.</summary>
-        public static Decision Decide(int msaa, UniversalRendererData renderer, bool forceOwnNormals)
+        public static Decision Decide(int msaa, UniversalRendererData renderer, bool forceOwnNormals,
+                                      LayerMask prepassLayers)
         {
             if (forceOwnNormals)
                 return new Decision(false,
                     "VRSL draws its own normals: Force own normals is on.");
+
+            if (prepassLayers != ~0)
+                return new Decision(false,
+                    "VRSL draws its own normals: Lit surfaces leaves layers out, and URP's "
+                  + "prepass draws every layer.");
 
             if (renderer == null)
                 return new Decision(false,

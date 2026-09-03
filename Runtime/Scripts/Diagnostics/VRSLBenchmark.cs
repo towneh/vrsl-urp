@@ -793,7 +793,12 @@ namespace VRSL.URP
                 expectedTileCamera != null && cullPass != null
                 && ReferenceEquals(cullPass.LastRecordedCameraObject, expectedTileCamera);
 
-            counters.normalsReuseEngaged = useDmx ? dmx.UsesUrpNormals : audioLink.UsesUrpNormals;
+            // For the camera the row is about. The manager-wide value is whichever
+            // camera set up last, and a host camera on another renderer can be it.
+            counters.normalsReuseEngaged = expectedTileCamera != null
+                ? (useDmx ? dmx.UsesUrpNormalsFor(expectedTileCamera)
+                          : audioLink.UsesUrpNormalsFor(expectedTileCamera))
+                : (useDmx ? dmx.UsesUrpNormals : audioLink.UsesUrpNormals);
 
             // Recorded as false rather than omitted so the row shape does not change
             // when it lands, and noted so a permanently-false flag is not read as a
