@@ -67,6 +67,16 @@ On enable the manager publishes its assigned DMX CRTs as the `_VRSLU_DMX*` shade
 
 The AudioLink manager auto-discovers `_AudioTexture` from the global shader property; no texture references are needed.
 
+### Scene-wide controls (both managers)
+
+| Field | Effect |
+|---|---|
+| `quality` | What the package may spend: `Off`, `Standard` or `High`. See *Volumetric tuning* below and the quality table in the pipeline document. |
+| `prepassLayers` | Which layers keep their own colour, gloss and normal maps when lit. A layer left out is still lit, as a plain mid-grey surface. Defaults to everything. With a DMX manager and an AudioLink manager in one scene, the DMX manager draws the prepass for the cameras it renders and its mask applies there. |
+| `contactShadowStrength` | Screen-space contact shadows, 0 to 1. Off at 0, which is the default: each fixture traces the depth buffer towards itself from every lit pixel, the most expensive term in the surface pass. Shadows come only from geometry the camera can see, within the level's trace distance. |
+| `secondaryCameraMode` | What cameras rendering into a texture get: `Match`, `Reduced` (default), `SurfaceOnly` or `Skip`. `Reduced` lights them one level below the scene, with `Standard` stepping down to a mirror-only `Low` level. The *Camera Selection* section of the pipeline document has the table. |
+| `forceOwnNormals` | Draw VRSL's own normals prepass even where URP's could be read instead. Costs an opaque draw per camera; for diagnosing lit surfaces that look wrong in a way that changes with the camera angle. |
+
 ### Volumetric tuning (both managers)
 
 The volumetric pass runs when the level draws beams and `volumetricShader` is assigned.
