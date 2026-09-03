@@ -38,6 +38,9 @@ namespace VRSL.URP.Tests
 
         /// <summary>The camera's render target, for rows that read the frame back.</summary>
         public RenderTexture Target => _target;
+        /// <summary>The rig's camera, disabled: it renders only through
+        /// <see cref="Step"/> and <see cref="RenderFrame"/>.</summary>
+        public Camera Camera => _camera;
 
         public VRSL_URPLightManager             Manager { get; private set; }
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
@@ -100,8 +103,11 @@ namespace VRSL.URP.Tests
         /// filed under.</summary>
         public static string CaptureName(string scene) => $"{scene}-v{CaptureVersion}";
 
+        /// <param name="msaa">Samples on the render target. A camera rendering into a
+        /// texture takes its MSAA from the texture rather than from the pipeline
+        /// asset, so this, not the asset, is what the rig's frame is multisampled at.</param>
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
-                                       int targetSize = TargetSize)
+                                       int targetSize = TargetSize, int msaa = 1)
         {
             VRSLDMXRig building = null;
             try
@@ -161,7 +167,11 @@ namespace VRSL.URP.Tests
 
             // A render target, because batch mode has no display to render to and
             // a camera without one produces nothing.
-            rig._target = new RenderTexture(targetSize, targetSize, 24) { name = "VRSL test target" };
+            rig._target = new RenderTexture(targetSize, targetSize, 24)
+            {
+                name         = "VRSL test target",
+                antiAliasing = Mathf.Max(1, msaa),
+            };
             rig._camera = new GameObject("Camera").AddComponent<Camera>();
             rig._camera.transform.SetParent(rig._root.transform, false);
             // Aimed across the near end of the truss and down at the floor, so several
