@@ -45,7 +45,10 @@ namespace VRSL.URP.Tests
 
             try
             {
-            using var rig = VRSLDMXRig.Build(targetSize: ImageSize);
+            // Held per render by the rig as well as set here: the host rewrites the
+            // renderer's mode at a moment of its own, and a capture that set it once
+            // measured whatever the host left.
+            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, priming: mode);
             // Every dimmer at full with mid-range colours, held still. Under Ramp the
             // fixtures in view carry dimmer and colour channels of a few percent, and
             // the frame was nearly black at any intensity.

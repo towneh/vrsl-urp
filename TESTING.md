@@ -587,6 +587,11 @@ level it is labelled with, and a row about the policy adds mirror cameras of its
 | M8 | D | `VRSLCameraPolicyTests.M8`: a mirror toggled through main-only, mirror-only and both across 45 frames, under `Sweep` at a speed that moves every channel far each frame | On every frame the decoded colour equals the bytes the manager uploaded last, whichever cameras rendered, and the mirror's frame is not black on any frame it rendered. A one-frame-old colour is a decode that did not run for that frame's cameras; a black mirror is the grid textures unbound or the light path skipping it |
 | M9 | — | `VRSLCameraPolicyTests.M9`: the camera filter as a function | `Match` renders everything at the scene's level; `SurfaceOnly` the same without beams; `Skip` nothing; `Reduced` everything one level below (`High` to `Standard`, `Standard` to `Low`, `Off` and `Low` unchanged). A camera with no target keeps the scene's level under every value. `Low` draws beams at fewer steps and wider spacing than `Standard` with no contact shadows, and is not in the sweep's level list. Reflection probes, registered data readers and cameras rendering into a texture the manager consumes stay skipped |
 
+**The rig holds depth priming per render** (`VRSLDMXRig.Build(priming:)`, Forced unless a
+row asks otherwise, put back on dispose), the way S10 and S13 always did for themselves. The
+host rewrites the renderer's mode at a moment of its own after start-up, so a row that set
+it once measured whatever the host left; D1_D2 passes its mode through.
+
 **The decode runs once per frame, from the first camera VRSL renders.** It used to be a
 graph pass per camera. Nothing in it depends on the camera, so every camera in a frame reads
 one buffer; the DMX grid textures are still published from inside the graph, by an

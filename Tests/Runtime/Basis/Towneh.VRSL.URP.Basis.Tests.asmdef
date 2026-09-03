@@ -8,6 +8,7 @@
         "BasisMediaPlayer",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
+        "Unity.RenderPipelines.Universal.Runtime",
         "Unity.Collections"
     ],
     "includePlatforms": [],

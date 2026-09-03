@@ -70,6 +70,9 @@ namespace VRSL.URP.Tests
         int           _msaa;
         UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset _asset;
         int           _assetMsaaWas;
+        UnityEngine.Rendering.Universal.DepthPrimingMode? _priming;
+        readonly Dictionary<UnityEngine.Rendering.Universal.UniversalRendererData,
+                            UnityEngine.Rendering.Universal.DepthPrimingMode> _primingWas = new();
         float         _captureWas;
         bool          _forceLoadWas;
         List<Light>   _lightsWereOn;
@@ -124,11 +127,25 @@ namespace VRSL.URP.Tests
         /// filed under.</summary>
         public static string CaptureName(string scene) => $"{scene}-v{CaptureVersion}";
 
+        /// <summary>The depth-priming mode every Universal Renderer is held at while
+        /// the rig stands, unless <see cref="Build"/> was told to hold none. Forced is
+        /// the shipped desktop configuration of the host this suite runs in.</summary>
+        public const UnityEngine.Rendering.Universal.DepthPrimingMode DefaultPriming =
+            UnityEngine.Rendering.Universal.DepthPrimingMode.Forced;
+
         /// <param name="msaa">Samples on the render target. A camera rendering into a
         /// texture takes its MSAA from the texture rather than from the pipeline
         /// asset, so this, not the asset, is what the rig's frame is multisampled at.</param>
+        /// <param name="priming">Depth priming, held on every Universal Renderer at
+        /// every render and put back on dispose; null holds nothing. Held per render
+        /// rather than set once because the host rewrites the renderer's mode at a
+        /// moment of its own after start-up, and a row that set it once measured
+        /// whatever the host left: two captures meant to differ in priming came back
+        /// bit-identical, and the frame a stored capture was seeded from stopped
+        /// reproducing on the same code.</param>
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
-                                       int targetSize = TargetSize, int msaa = 1)
+                                       int targetSize = TargetSize, int msaa = 1,
+                                       UnityEngine.Rendering.Universal.DepthPrimingMode? priming = DefaultPriming)
         {
             VRSLDMXRig building = null;
             try
@@ -136,6 +153,15 @@ namespace VRSL.URP.Tests
             var rig = building = new VRSLDMXRig();
             rig._captureWas = Time.captureDeltaTime;
             Time.captureDeltaTime = FrameDelta;
+            rig._priming = priming;
+            if (priming.HasValue && GraphicsSettings.currentRenderPipeline
+                    is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset urpAsset)
+            {
+                foreach (var data in urpAsset.rendererDataList)
+                    if (data is UnityEngine.Rendering.Universal.UniversalRendererData universal)
+                        rig._primingWas[universal] = universal.depthPrimingMode;
+            }
+            rig.HoldPriming();
 
             // Every mip of every texture, for the rig's lifetime. The host streams
             // mips, and the rig's camera is disabled, so nothing ever tells the
@@ -384,7 +410,19 @@ namespace VRSL.URP.Tests
         {
             if (_asset != null && _msaa > 1 && _asset.msaaSampleCount != _msaa)
                 _asset.msaaSampleCount = _msaa;
+            HoldPriming();
             camera.Render();
+        }
+
+        /// <summary>The priming mode the rig is holding, or null.</summary>
+        public UnityEngine.Rendering.Universal.DepthPrimingMode? Priming => _priming;
+
+        void HoldPriming()
+        {
+            if (!_priming.HasValue) return;
+            foreach (var renderer in _primingWas.Keys)
+                if (renderer != null && renderer.depthPrimingMode != _priming.Value)
+                    renderer.depthPrimingMode = _priming.Value;
         }
 
         /// <summary>Advance exactly <paramref name="frames"/> frames, which is
@@ -661,6 +699,10 @@ namespace VRSL.URP.Tests
             _root = null;
             if (_asset != null && _assetMsaaWas > 0) _asset.msaaSampleCount = _assetMsaaWas;
             _asset = null;
+            foreach (var pair in _primingWas)
+                if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
+            _primingWas.Clear();
+            _priming = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
             _target = null;
             foreach (var secondary in Secondaries)

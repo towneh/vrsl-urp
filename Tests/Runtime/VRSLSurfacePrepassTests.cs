@@ -199,6 +199,7 @@ namespace VRSL.URP.Tests
             var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
             foreach (var r in renderers) restore[r] = r.depthPrimingMode;
             HoldPriming(renderers, mode);
+            var hold = mode;
 
             void OnLog(string condition, string stack, LogType type)
             {
@@ -222,7 +223,7 @@ namespace VRSL.URP.Tests
                 urpHandle  = RTHandles.Alloc(urpRt);
                 var probe  = new ProbePass(material, vrslHandle, urpHandle);
 
-                using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa);
+                using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa, priming: hold);
                 rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
                 rig.Source.speed   = 0f;
                 rig.Manager.enabled = false;
@@ -402,7 +403,7 @@ namespace VRSL.URP.Tests
         {
             var renderers = Renderers();
             HoldPriming(renderers, priming);
-            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa);
+            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa, priming: priming);
             rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
             rig.Source.speed   = 0f;
             rig.Manager.enabled = false;
@@ -565,7 +566,7 @@ namespace VRSL.URP.Tests
         {
             var renderers = Renderers();
             HoldPriming(renderers, priming);
-            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa);
+            using var rig = VRSLDMXRig.Build(targetSize: ImageSize, msaa: msaa, priming: priming);
             rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
             rig.Source.speed   = 0f;
             rig.Manager.quality = VRSLQuality.Off;
