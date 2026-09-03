@@ -611,7 +611,10 @@ mirrors pays:
 The policy is decided per camera, per frame, from the camera alone, so mirrors that appear
 and disappear at runtime need nothing reset. A camera with no `targetTexture` is always
 treated as the player's view, including under XR where the swapchain is handled outside the
-camera. `Validate Renderer Setup` names the level each camera in the open scene would render
+camera. A camera that renders into a texture and is nonetheless the player's view, a stream
+or spectator camera whose texture goes to a screen, can be registered with
+`VRSLCameraFilter.RegisterMainView` and is then lit in full at the scene's level whatever the
+policy says. `Validate Renderer Setup` names the level each camera in the open scene would render
 at, and the benchmark rows carry it for the camera they measured.
 
 ---

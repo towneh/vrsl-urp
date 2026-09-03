@@ -87,6 +87,26 @@ namespace VRSL.URP
             if (cam != null) s_DataReaderCameras.Remove(cam);
         }
 
+        // Cameras that render into a texture and are nonetheless the player's view:
+        // a stream or spectator camera whose texture goes to a screen, or a harness
+        // measuring the main view off-screen. The policy for secondary cameras does
+        // not apply to them.
+        static readonly HashSet<Camera> s_MainViews = new();
+
+        /// <summary>Treat <paramref name="cam"/> as the player's view even though it
+        /// renders into a texture: lit in full at the scene's level, whatever the
+        /// secondary-camera policy says. A camera rendering into a texture the manager
+        /// consumes is still skipped.</summary>
+        public static void RegisterMainView(Camera cam)
+        {
+            if (cam != null) s_MainViews.Add(cam);
+        }
+
+        public static void UnregisterMainView(Camera cam)
+        {
+            if (cam != null) s_MainViews.Remove(cam);
+        }
+
         /// <param name="sceneQuality">The manager's own level, which the player's
         /// view always renders at and a secondary camera renders at or below.</param>
         /// <param name="ownedSources">
@@ -119,6 +139,8 @@ namespace VRSL.URP
                     if (ownedSources[i] != null && ReferenceEquals(ownedSources[i], target))
                         return VRSLCameraDecision.Skip;
             }
+
+            if (s_MainViews.Contains(cam)) return new VRSLCameraDecision(true, true, sceneQuality);
 
             return mode switch
             {

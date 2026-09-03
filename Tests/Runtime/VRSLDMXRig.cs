@@ -213,6 +213,10 @@ namespace VRSL.URP.Tests
             rig._camera.clearFlags      = CameraClearFlags.SolidColor;
             rig._camera.backgroundColor = Color.black;
             rig._camera.targetTexture   = rig._target;
+            // The player's view of the rig, as far as the policy for secondary cameras
+            // is concerned, even though it renders into a texture: every row measures
+            // the level it sets, and a mirror row adds its own secondary cameras.
+            VRSLCameraFilter.RegisterMainView(rig._camera);
             // Rendering is driven from Step and RenderFrame only. Left enabled, the
             // player loop renders it too and the DMX pass runs twice per frame. That
             // happens to be harmless today because the integrators advance from
@@ -262,10 +266,6 @@ namespace VRSL.URP.Tests
             var mgrGo = UnityEngine.Object.Instantiate(Load<GameObject>(ManagerPrefab), rig._root.transform);
             mgrGo.name = "Light Manager";
             rig.Manager = mgrGo.GetComponent<VRSL_URPLightManager>();
-            // The rig's camera renders into a texture, which makes it a secondary
-            // camera to the policy. Held at Match so every row measures the level it
-            // sets; a row about the policy sets it itself.
-            rig.Manager.secondaryCameraMode = SecondaryCameraMode.Match;
             // Instantiating an active prefab runs Awake and OnEnable before this
             // returns, so the manager collected whatever existed at that moment.
             // The fixtures above already do, but a caller adding more later has
@@ -656,6 +656,7 @@ namespace VRSL.URP.Tests
                 RenderSettings.sun          = _sunWas;
                 RenderSettings.fog          = _fogWas;
             }
+            VRSLCameraFilter.UnregisterMainView(_camera);
             if (_root != null) UnityEngine.Object.DestroyImmediate(_root);
             _root = null;
             if (_asset != null && _assetMsaaWas > 0) _asset.msaaSampleCount = _assetMsaaWas;

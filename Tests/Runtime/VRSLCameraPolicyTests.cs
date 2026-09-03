@@ -102,6 +102,19 @@ namespace VRSL.URP.Tests
                 Assert.IsFalse(VRSLCameraFilter.Evaluate(cam, SecondaryCameraMode.Match, VRSLQuality.High, null).Render,
                     "a registered data reader is skipped");
                 VRSLCameraFilter.UnregisterDataReader(cam);
+
+                // A texture camera registered as the player's view is exempt from the
+                // policy, and still skipped where its texture is one the manager reads.
+                VRSLCameraFilter.RegisterMainView(cam);
+                var registered = VRSLCameraFilter.Evaluate(cam, SecondaryCameraMode.Skip, VRSLQuality.High, null);
+                Assert.IsTrue(registered.Render && registered.Volumetrics, "a registered main view renders in full under Skip");
+                Assert.AreEqual(VRSLQuality.High, registered.Quality, "and at the scene's level");
+                Assert.IsFalse(VRSLCameraFilter.Evaluate(cam, SecondaryCameraMode.Match, VRSLQuality.High,
+                                                         new List<Texture> { target }).Render,
+                    "a registered main view rendering into a texture the manager consumes is still skipped");
+                VRSLCameraFilter.UnregisterMainView(cam);
+                Assert.IsFalse(VRSLCameraFilter.Evaluate(cam, SecondaryCameraMode.Skip, VRSLQuality.High, null).Render,
+                    "unregistering puts the policy back in charge");
             }
             finally
             {
@@ -130,12 +143,9 @@ namespace VRSL.URP.Tests
         }
 
         [UnityTest]
-        public IEnumerator M5_a_mirror_under_Reduced_keeps_its_beams_at_a_lower_price()
+        public IEnumerator M5_a_mirror_under_Reduced_keeps_its_beams_at_a_lower_price_and_leaves_the_main_view_alone()
         {
-            // The rig's own camera renders into a texture, so to the policy it is a
-            // secondary camera as well: this row is about the mirror, and the main
-            // view's independence from the policy is M9's claim (a camera with no
-            // target keeps the scene's level under every value) and M5's by hand.
+            Texture2D mainMatch = null, mainReduced = null;
             Texture2D mirrorMatch = null, mirrorReduced = null, mirrorSurface = null;
             var rig = VRSLDMXRig.Build(targetSize: 512);
             try
@@ -151,6 +161,7 @@ namespace VRSL.URP.Tests
                 rig.FreezeForImageCapture();
 
                 for (int i = 0; i < WarmUpFrames; i++) { yield return null; rig.RenderFrame(); }
+                mainMatch   = VRSLImageCompare.Read(rig.Target);
                 mirrorMatch = VRSLImageCompare.Read(mirror.Target);
                 Assert.AreEqual(VRSLQuality.Standard, rig.Manager.QualityFor(mirror.Camera),
                     "under Match the mirror renders at the scene's level");
@@ -159,15 +170,24 @@ namespace VRSL.URP.Tests
 
                 rig.Manager.secondaryCameraMode = SecondaryCameraMode.Reduced;
                 for (int i = 0; i < 10; i++) { yield return null; rig.RenderFrame(); }
+                mainReduced   = VRSLImageCompare.Read(rig.Target);
                 mirrorReduced = VRSLImageCompare.Read(mirror.Target);
                 Assert.AreEqual(VRSLQuality.Low, rig.Manager.QualityFor(mirror.Camera),
                     "under Reduced a Standard scene's mirror renders at Low");
+                Assert.AreEqual(VRSLQuality.Standard, rig.Manager.QualityFor(rig.Camera),
+                    "the main view stays at the scene's level");
                 yield return CollectFromMirror(rig, mirror);
                 var atReduced = rig.Manager.VolumetricStats.Last;
 
                 rig.Manager.secondaryCameraMode = SecondaryCameraMode.SurfaceOnly;
                 for (int i = 0; i < 10; i++) { yield return null; rig.RenderFrame(); }
                 mirrorSurface = VRSLImageCompare.Read(mirror.Target);
+
+                var main = VRSLImageCompare.Compare(mainMatch, mainReduced);
+                Debug.Log($"[M5] main view, Match vs Reduced: {main}");
+                Assert.IsFalse(main.SizeMismatch);
+                Assert.LessOrEqual(main.Max, VRSLImageCompare.Threshold,
+                    $"the policy changed the main view ({main}); it is only about secondary cameras");
 
                 var beams = VRSLImageCompare.Compare(mirrorReduced, mirrorSurface);
                 Debug.Log($"[M5] mirror, Reduced vs SurfaceOnly: {beams}");
@@ -198,7 +218,7 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                foreach (var t in new[] { mirrorMatch, mirrorReduced, mirrorSurface })
+                foreach (var t in new[] { mainMatch, mainReduced, mirrorMatch, mirrorReduced, mirrorSurface })
                     if (t != null) Object.DestroyImmediate(t);
                 rig.Dispose();
             }

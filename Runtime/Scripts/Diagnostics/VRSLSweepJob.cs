@@ -86,12 +86,12 @@ namespace VRSL.URP
             manager.ChannelSource = source;
             bool forceOwnNormalsWas = manager.forceOwnNormals;
             manager.forceOwnNormals = forceOwnNormals;
-            // The sweep's camera renders into a texture, which makes it a secondary
-            // camera to the policy. Held at Match so a row measures the level it is
-            // labelled with; the mirror matrix sets the policy per row and this is
-            // what it goes back to between them.
+            // The sweep's camera renders into a texture, which would make it a
+            // secondary camera to the policy; it is the player's view here, so it is
+            // registered as one and measures the level a row is labelled with. The
+            // mirror matrix sets the policy per row and puts it back afterwards.
+            VRSLCameraFilter.RegisterMainView(camera);
             var policyWas = manager.secondaryCameraMode;
-            manager.secondaryCameraMode = SecondaryCameraMode.Match;
             if (forceOwnNormals)
                 run.Note("VRSL drew its own normals prepass on every camera (forceOwnNormals), "
                        + "so normalsReuseEngaged is false by request rather than by policy.");
@@ -266,6 +266,7 @@ namespace VRSL.URP
                     manager.forceOwnNormals     = forceOwnNormalsWas;
                     manager.secondaryCameraMode = policyWas;
                 }
+                VRSLCameraFilter.UnregisterMainView(camera);
                 VRSLBenchmarkScene.RemoveSecondaryCameras(mirrorCameras);
                 VRSLBenchmarkScene.RestoreCameras();
                 camera.targetTexture = null;
@@ -375,11 +376,6 @@ namespace VRSL.URP
                                                   : policy == SecondaryCameraMode.Skip ? "skipped" : "";
                         }
                     }
-                    // The policy the sweep's own camera measures under. Set back here
-                    // rather than left at whatever the last row used, since the next
-                    // count's first row is Match anyway and a Skip left behind would
-                    // skip the sweep's camera too.
-                    manager.secondaryCameraMode = SecondaryCameraMode.Match;
                 }
             }
             VRSLBenchmarkScene.RemoveSecondaryCameras(mirrorCameras);
