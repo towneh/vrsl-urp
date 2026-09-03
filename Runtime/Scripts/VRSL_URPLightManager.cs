@@ -385,11 +385,20 @@ namespace VRSL.URP
         bool _configDirty = true;
 
         // Render-pass instances. Allocated in OnEnable, reused across cameras and
-        // frames, dropped in OnDisable. Stateless beyond renderPassEvent and
-        // ConfigureInput flags, so a single instance per pass type is correct
-        // even with multiple cameras.
-        VRSLDMXLightPasses.ComputePass    _computePass;
+        // frames, dropped in OnDisable. Stateless beyond renderPassEvent, the
+        // ConfigureInput flags and the per-camera level, all set before each
+        // enqueue, so a single instance per pass type is correct even with
+        // multiple cameras.
+        VRSLDMXLightPasses.GridTexturePass _gridTexturePass;
         VRSLSurfacePrepass                _surfacePrepass;
+
+        // The decode is dispatched from here rather than from a graph pass: nothing
+        // in it depends on the camera, so once per frame is the whole of it however
+        // many cameras render. The command buffer is executed immediately, ahead of
+        // whatever the first camera's graph submits, which is the ordering guarantee
+        // the graph pass used to give. Marked with the name the harness looks for.
+        CommandBuffer _decodeCommands;
+        int           _decodedFrame = -1;
 
         /// <summary>The surface prepass this manager enqueues, for its counters.</summary>
         public VRSLSurfacePrepass SurfacePrepass => _surfacePrepass;
@@ -639,6 +648,78 @@ namespace VRSL.URP
             UploadChannels();
             AdvanceState();
             VolumetricStats.Tick();
+        }
+
+        // ── The decode ────────────────────────────────────────────────────────
+        static readonly int s_FixtureCount   = Shader.PropertyToID("_FixtureCount");
+        static readonly int s_GoboCount      = Shader.PropertyToID("_VRSLGoboCount");
+        static readonly int s_FixtureConfigs = Shader.PropertyToID("_FixtureConfigs");
+        static readonly int s_LightData      = Shader.PropertyToID("_LightData");
+        static readonly int s_DMXMainTex     = Shader.PropertyToID("_DMXMainTex");
+        static readonly int s_DMXMovementTex = Shader.PropertyToID("_DMXMovementTex");
+        static readonly int s_DMXStrobeTex   = Shader.PropertyToID("_DMXStrobeTex");
+        static readonly int s_DMXSpinTex     = Shader.PropertyToID("_DMXSpinTimerTex");
+
+        /// <summary>The marker the decode dispatch is recorded under, which the
+        /// benchmark reads per pass.</summary>
+        public const string DecodeMarker = "VRSL DMX Light Compute";
+
+        /// <summary>
+        /// Decode the grid, or the channel buffer, into the light buffer, once per
+        /// frame. Called from the first camera this manager renders each frame, so a
+        /// frame nobody renders decodes nothing and every camera in a frame reads one
+        /// buffer. Nothing here depends on the camera: the strobe clock is sampled once
+        /// so every camera in the frame strobes together, and the integrators the
+        /// kernel reads were advanced in LateUpdate.
+        /// </summary>
+        void DispatchDecode()
+        {
+            if (_decodedFrame == Time.frameCount) return;
+            _decodedFrame = Time.frameCount;
+
+            if (FixtureCount == 0
+                || computeShader       == null
+                || FixtureConfigBuffer == null
+                || LightDataBuffer     == null
+                || ChannelBuffer       == null
+                || SpinPhaseBuffer     == null
+                || StrobePhaseBuffer   == null
+                || MovementBuffer      == null
+                || dmxMainTexture      == null) return;
+
+            var cs  = computeShader;
+            int k   = ComputeKernel;
+            var cmd = _decodeCommands ??= new CommandBuffer { name = DecodeMarker };
+            cmd.Clear();
+            cmd.BeginSample(DecodeMarker);
+            cmd.SetComputeVectorParam(cs, s_DMXGridTexelSize, new Vector4(
+                1f / dmxMainTexture.width, 1f / dmxMainTexture.height,
+                dmxMainTexture.width,      dmxMainTexture.height));
+            cmd.SetComputeIntParam(   cs,    s_FixtureCount,    FixtureCount);
+            cmd.SetComputeIntParam(   cs,    s_GoboCount,       GoboCount);
+            cmd.SetComputeBufferParam(cs, k, s_FixtureConfigs,  FixtureConfigBuffer);
+            cmd.SetComputeBufferParam(cs, k, s_LightData,       LightDataBuffer);
+            // Bound explicitly rather than relying on the manager's global: compute
+            // kernels take their buffers per dispatch, and the count is what decides
+            // whether the kernel reads this or the CRTs.
+            cmd.SetComputeBufferParam(cs, k, s_DMXChannels,     ChannelBuffer);
+            cmd.SetComputeIntParam(   cs,    s_DMXChannelCount, ChannelCount);
+            // Read-only here: the integrators advance once per frame in LateUpdate.
+            cmd.SetComputeBufferParam(cs, k, s_DMXSpinPhase,    SpinPhaseBuffer);
+            cmd.SetComputeBufferParam(cs, k, s_DMXStrobePhase,  StrobePhaseBuffer);
+            cmd.SetComputeBufferParam(cs, k, s_DMXMovement,     MovementBuffer);
+            cmd.SetComputeIntParam(   cs,    s_StrobeStatic,    strobeRate == StrobeRate.Dynamic ? 0 : 1);
+            cmd.SetComputeVectorParam(cs,    s_StrobeFreqs,     StrobeFreqs);
+            // Sampled once per frame so both eyes and every mirror strobe together.
+            cmd.SetComputeFloatParam( cs,    s_TimeY,           Time.timeSinceLevelLoad);
+            cmd.SetComputeIntParam(   cs,    s_StrobeDisabled,  disableStrobe ? 1 : 0);
+            cmd.SetComputeTextureParam(cs, k, s_DMXMainTex, dmxMainTexture);
+            if (dmxMovementTexture  != null) cmd.SetComputeTextureParam(cs, k, s_DMXMovementTex, dmxMovementTexture);
+            if (dmxStrobeTexture    != null) cmd.SetComputeTextureParam(cs, k, s_DMXStrobeTex,   dmxStrobeTexture);
+            if (dmxSpinTimerTexture != null) cmd.SetComputeTextureParam(cs, k, s_DMXSpinTex,     dmxSpinTimerTexture);
+            cmd.DispatchCompute(cs, k, Mathf.CeilToInt(FixtureCount / 64f), 1, 1);
+            cmd.EndSample(DecodeMarker);
+            Graphics.ExecuteCommandBuffer(cmd);
         }
 
         // ── DMX channels as bytes ─────────────────────────────────────────────
@@ -933,6 +1014,9 @@ namespace VRSL.URP
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
                 Marshal.SizeOf<VRSLLightData>());       // 64 bytes
+            // A fresh buffer holds nothing, so the next camera decodes again even
+            // when one already has this frame.
+            _decodedFrame = -1;
 
             VolumetricStats.Allocate();
 
@@ -1314,7 +1398,7 @@ namespace VRSL.URP
         {
             if (_injectionSubscribed) return;
 
-            _computePass    ??= new VRSLDMXLightPasses.ComputePass
+            _gridTexturePass ??= new VRSLDMXLightPasses.GridTexturePass
             {
                 renderPassEvent = RenderPassEvent.BeforeRenderingOpaques,
             };
@@ -1338,6 +1422,10 @@ namespace VRSL.URP
             if (!_injectionSubscribed) return;
             RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
             _injectionSubscribed = false;
+            // Decode again on the first camera after a re-enable, whatever frame it is.
+            _decodedFrame = -1;
+            _decodeCommands?.Release();
+            _decodeCommands = null;
         }
 
         void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
@@ -1390,7 +1478,11 @@ namespace VRSL.URP
                 Shader.SetGlobalTexture("_VRSLVolNoise", _volumetricNoise);
             }
 
-            renderer.EnqueuePass(_computePass);
+            // Before anything of this camera's records. The first camera of the frame
+            // pays for it and the rest read what it wrote.
+            DispatchDecode();
+
+            renderer.EnqueuePass(_gridTexturePass);
             // The surface prepass output is identical whichever manager drives it,
             // so with both active only one enqueues it. The DMX manager takes
             // priority; VRSL_AudioLinkURPLightManager defers when it sees one.

@@ -24,8 +24,10 @@ namespace VRSL.URP
     /// Holds the three Render Graph pass classes that make up the VRSL URP DMX
     /// realtime-light pipeline:
     ///
-    ///   1. ComputePass — dispatches VRSLDMXLightUpdate.compute, which reads the
-    ///      three DMX RenderTextures and writes a VRSLLightData StructuredBuffer.
+    ///   1. GridTexturePass — publishes the DMX grid textures to the fixture-body
+    ///      shaders from inside the graph. The decode itself (VRSLDMXLightUpdate.compute
+    ///      writing the VRSLLightData buffer) is camera-independent and the manager
+    ///      dispatches it once per frame, before the first camera's passes record.
     ///
     ///   2. LightingPass — fullscreen additive pass; reconstructs world position
     ///      from depth, derives a per-pixel normal from screen-space derivatives
@@ -44,39 +46,26 @@ namespace VRSL.URP
     /// </summary>
     public static class VRSLDMXLightPasses
     {
-        // ── Compute pass: decode DMX → light buffer ────────────────────────────
-        public class ComputePass : ScriptableRenderPass
+        // ── Grid textures: published for the opaque pass ──────────────────────
+        /// <summary>
+        /// Makes the DMX grid CRTs visible to the fixture-body surface shaders.
+        /// </summary>
+        /// <remarks>
+        /// Published from inside the graph via <c>SetGlobalTextureAfterPass</c> rather
+        /// than by <c>Shader.SetGlobalTexture</c> on the manager: a global texture set
+        /// outside Render Graph binds to scene shaders as a 1x1 black fallback, so the
+        /// surface decoded a black grid (every bar dark) while the compute, which bound
+        /// the texture itself, read the real data. Global vectors such as
+        /// <c>_VRSLDMXTexelSize</c> do not suffer the same fallback.
+        ///
+        /// A pass with no attachments and nothing to draw, kept for the globals it
+        /// sets, which is how URP publishes its own. It writes nothing the graph can
+        /// see consumed, so it opts out of pass culling.
+        /// </remarks>
+        public class GridTexturePass : ScriptableRenderPass
         {
-            class PassData
-            {
-                public BufferHandle  fixtureConfigBuffer;
-                public BufferHandle  lightDataBuffer;
-                public BufferHandle  channelBuffer;
-                public BufferHandle  spinPhaseBuffer;
-                public BufferHandle  strobePhaseBuffer;
-                public BufferHandle  movementBuffer;
-                public int           strobeStatic;
-                public Vector4       strobeFreqs;
-                public float         timeY;
-                public int           strobeDisabled;
-                public int           channelCount;
-                public TextureHandle dmxMainTex;
-                public TextureHandle dmxMovementTex;
-                public TextureHandle dmxStrobeTex;
-                public TextureHandle dmxSpinTimerTex;
-                public ComputeShader cs;
-                public int           kernel;
-                public int           fixtureCount;
-                public int           goboCount;
-                public Vector4       texelSize;
-            }
+            class PassData { }
 
-            // Grid CRTs published to the fixture-body surface shaders from inside this pass
-            // (which runs BeforeRenderingOpaques) via SetGlobalTextureAfterPass — NOT via
-            // Shader.SetGlobalTexture on the manager. A global texture set outside RenderGraph
-            // binds to scene shaders as a 1x1 black fallback, so the surface decoded a black
-            // grid (every bar dark) while the compute, which binds the handle in-pass, read the
-            // real data. Global vectors (e.g. _VRSLDMXTexelSize) don't suffer the same fallback.
             static readonly int s_DMXGrid         = Shader.PropertyToID("_VRSLU_DMXGridRenderTexture");
             static readonly int s_DMXGridMovement = Shader.PropertyToID("_VRSLU_DMXGridRenderTextureMovement");
             static readonly int s_DMXGridStrobe   = Shader.PropertyToID("_VRSLU_DMXGridStrobeOutput");
@@ -85,121 +74,26 @@ namespace VRSL.URP
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
                 var mgr = VRSL_URPLightManager.Instance;
-                if (mgr == null || mgr.FixtureCount == 0
-                    || mgr.computeShader == null
-                    || mgr.FixtureConfigBuffer == null
-                    || mgr.ChannelBuffer == null
-                    || mgr.SpinPhaseBuffer == null
-                    || mgr.StrobePhaseBuffer == null
-                    || mgr.MovementBuffer == null
-                    || mgr.DMXMainHandle == null) return;
+                if (mgr == null || mgr.FixtureCount == 0 || mgr.DMXMainHandle == null) return;
 
-                using var builder = rg.AddComputePass<PassData>("VRSL DMX Light Compute", out var d);
-
-                // URP's RenderGraph would otherwise cull this pass under stereo XR
-                // because _VRSLLights is consumed by the lighting/volumetric shaders
-                // via SetGlobalBuffer rather than a tracked read on the same handle,
-                // so the graph sees the compute write as a dead store. The compute
-                // is always wanted whenever fixtures exist, so opt out of culling.
+                using var builder = rg.AddRasterRenderPass<PassData>("VRSL DMX Grid Textures", out _);
                 builder.AllowPassCulling(false);
+                builder.AllowGlobalStateModification(true);
 
-                d.fixtureConfigBuffer = rg.ImportBuffer(mgr.FixtureConfigBuffer);
-                d.lightDataBuffer     = rg.ImportBuffer(mgr.LightDataBuffer);
-                // The manager keeps this allocated even with no source publishing,
-                // so the binding is always valid and only the count varies.
-                d.channelBuffer       = rg.ImportBuffer(mgr.ChannelBuffer);
-                // Read-only here. The manager integrates it once per frame in
-                // LateUpdate; this pass runs per camera and must not advance it.
-                d.spinPhaseBuffer     = rg.ImportBuffer(mgr.SpinPhaseBuffer);
-                d.strobePhaseBuffer   = rg.ImportBuffer(mgr.StrobePhaseBuffer);
-                d.movementBuffer      = rg.ImportBuffer(mgr.MovementBuffer);
-                d.strobeStatic        = mgr.strobeRate == VRSL_URPLightManager.StrobeRate.Dynamic ? 0 : 1;
-                // x is unused: the sub-0.2 rate it carried can never reach the output,
-                // because the same threshold that selects it also holds the fixture fully
-                // on. The vector keeps its shape so the compute's layout is untouched.
-                d.strobeFreqs         = new Vector4(0f, mgr.strobeMedFrequency,
-                                                    mgr.strobeHighFrequency, mgr.maxStrobeFrequency);
-                // Sampled here rather than in the shader so both eyes and every mirror
-                // in a frame strobe together; Time.timeSinceLevelLoad is constant across
-                // the frame where a per-camera read would not be.
-                d.timeY               = Time.timeSinceLevelLoad;
-                d.strobeDisabled      = mgr.disableStrobe ? 1 : 0;
-                d.channelCount        = mgr.ChannelCount;
-                d.dmxMainTex          = rg.ImportTexture(mgr.DMXMainHandle);
-                d.dmxMovementTex      = mgr.DMXMovementHandle != null
-                    ? rg.ImportTexture(mgr.DMXMovementHandle)
-                    : TextureHandle.nullHandle;
-                d.dmxStrobeTex        = mgr.DMXStrobeHandle != null
-                    ? rg.ImportTexture(mgr.DMXStrobeHandle)
-                    : TextureHandle.nullHandle;
-                d.dmxSpinTimerTex     = mgr.DMXSpinTimerHandle != null
-                    ? rg.ImportTexture(mgr.DMXSpinTimerHandle)
-                    : TextureHandle.nullHandle;
+                Publish(rg, builder, mgr.DMXMainHandle,      s_DMXGrid);
+                Publish(rg, builder, mgr.DMXMovementHandle,  s_DMXGridMovement);
+                Publish(rg, builder, mgr.DMXStrobeHandle,    s_DMXGridStrobe);
+                Publish(rg, builder, mgr.DMXSpinTimerHandle, s_DMXGridSpin);
 
-                d.cs           = mgr.computeShader;
-                d.kernel       = mgr.ComputeKernel;
-                d.fixtureCount = mgr.FixtureCount;
-                d.goboCount    = mgr.GoboCount;
-                d.texelSize    = new Vector4(
-                    1f / mgr.dmxMainTexture.width,
-                    1f / mgr.dmxMainTexture.height,
-                    mgr.dmxMainTexture.width,
-                    mgr.dmxMainTexture.height);
+                builder.SetRenderFunc(static (PassData p, RasterGraphContext ctx) => { });
+            }
 
-                builder.UseBuffer(d.fixtureConfigBuffer, AccessFlags.Read);
-                builder.UseBuffer(d.lightDataBuffer,     AccessFlags.Write);
-                builder.UseBuffer(d.channelBuffer,       AccessFlags.Read);
-                builder.UseBuffer(d.spinPhaseBuffer,     AccessFlags.Read);
-                builder.UseBuffer(d.strobePhaseBuffer,   AccessFlags.Read);
-                builder.UseBuffer(d.movementBuffer,      AccessFlags.Read);
-                builder.UseTexture(d.dmxMainTex,         AccessFlags.Read);
-                if (d.dmxMovementTex.IsValid())
-                    builder.UseTexture(d.dmxMovementTex, AccessFlags.Read);
-                if (d.dmxStrobeTex.IsValid())
-                    builder.UseTexture(d.dmxStrobeTex,   AccessFlags.Read);
-                if (d.dmxSpinTimerTex.IsValid())
-                    builder.UseTexture(d.dmxSpinTimerTex, AccessFlags.Read);
-
-                // Make the grid CRTs visible to the fixture-body surface shaders (opaque pass).
-                builder.SetGlobalTextureAfterPass(d.dmxMainTex, s_DMXGrid);
-                if (d.dmxMovementTex.IsValid())
-                    builder.SetGlobalTextureAfterPass(d.dmxMovementTex, s_DMXGridMovement);
-                if (d.dmxStrobeTex.IsValid())
-                    builder.SetGlobalTextureAfterPass(d.dmxStrobeTex,   s_DMXGridStrobe);
-                if (d.dmxSpinTimerTex.IsValid())
-                    builder.SetGlobalTextureAfterPass(d.dmxSpinTimerTex, s_DMXGridSpin);
-
-                builder.SetRenderFunc((PassData p, ComputeGraphContext ctx) =>
-                {
-                    var cmd = ctx.cmd;
-                    cmd.SetComputeVectorParam( p.cs,           "_VRSLDMXTexelSize", p.texelSize);
-                    cmd.SetComputeIntParam(    p.cs,           "_FixtureCount",     p.fixtureCount);
-                    cmd.SetComputeIntParam(    p.cs,           "_VRSLGoboCount",    p.goboCount);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_FixtureConfigs",   p.fixtureConfigBuffer);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_LightData",        p.lightDataBuffer);
-                    // Bound explicitly rather than relying on the manager's global:
-                    // compute kernels take their buffers per dispatch, and the count
-                    // is what decides whether the kernel reads this or the CRTs.
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXChannels", p.channelBuffer);
-                    cmd.SetComputeIntParam(    p.cs,           "_VRSLU_DMXChannelCount", p.channelCount);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXSpinPhase", p.spinPhaseBuffer);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXStrobePhase", p.strobePhaseBuffer);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_VRSLU_DMXMovement",   p.movementBuffer);
-                    cmd.SetComputeIntParam(    p.cs,           "_VRSLU_StrobeStatic",   p.strobeStatic);
-                    cmd.SetComputeVectorParam( p.cs,           "_VRSLU_StrobeFreqs",    p.strobeFreqs);
-                    cmd.SetComputeFloatParam(  p.cs,           "_VRSLU_TimeY",          p.timeY);
-                    cmd.SetComputeIntParam(    p.cs,           "_VRSLU_StrobeDisabled", p.strobeDisabled);
-                    cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXMainTex",       p.dmxMainTex);
-
-                    if (p.dmxMovementTex.IsValid())
-                        cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXMovementTex", p.dmxMovementTex);
-                    if (p.dmxStrobeTex.IsValid())
-                        cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXStrobeTex",   p.dmxStrobeTex);
-                    if (p.dmxSpinTimerTex.IsValid())
-                        cmd.SetComputeTextureParam(p.cs, p.kernel, "_DMXSpinTimerTex", p.dmxSpinTimerTex);
-
-                    cmd.DispatchCompute(p.cs, p.kernel, Mathf.CeilToInt(p.fixtureCount / 64f), 1, 1);
-                });
+            static void Publish(RenderGraph rg, IRasterRenderGraphBuilder builder, RTHandle handle, int id)
+            {
+                if (handle == null) return;
+                var tex = rg.ImportTexture(handle);
+                builder.UseTexture(tex, AccessFlags.Read);
+                builder.SetGlobalTextureAfterPass(tex, id);
             }
         }
 

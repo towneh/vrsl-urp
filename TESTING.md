@@ -48,7 +48,8 @@ The **Measurement harness** rows (H1-H9) are in the same assembly and run the sa
 measure rather than decode, so they are the slow part of a full run; H7 is a plain unit row
 and costs nothing, as are H8 and H9.
 
-The **Wiring** rows (W1-W9) and the **Image regression** ones are in it too. The wiring
+The **Wiring** rows (W1-W9), the **Image regression** ones and the **Cameras** rows M5 and
+M7 to M9 (`VRSLCameraPolicyTests`) are in it too. The wiring
 rows are editor-only and cost nothing. W10 to W12 are hand rows and are marked as such:
 three are judged by looking at an inspector (W10, W11 and W11b), and W12 is a player
 comparison through `bench.sh`.
@@ -565,12 +566,33 @@ reads a zero here should first ask whether a frame was collected at all.
 
 ### Cameras
 
+`VRSLCameraPolicyTests` in the suite covers M5, M7, M8 and M9. M2 to M4 and the main-view
+half of M5 want a mirror and eyes; M6 is a `bench.sh` pair.
+
+`secondaryCameraMode` is a policy with four values: `Match`, `Reduced` (the default),
+`SurfaceOnly` and `Skip`. `Match` is what `Full` was. A camera that renders into a texture
+is a secondary camera to the policy whatever it is for, which includes the test rig's own
+camera and the sweep's: both register theirs as the player's view, so every row measures the
+level it is labelled with, and a row about the policy adds mirror cameras of its own.
+
 | # | Path | Scenario | Expected |
 |---|---|---|---|
 | M1 | D | Scene with a DMX screen reader | `Log Decoded Fixture Light Data` unaffected by fixture proximity to the reader quad. **Guards additive light corrupting the decode chain** |
-| M2 | — | Mirror pointed at the rig, `secondaryCameraMode = Full` | Beams and lighting appear in the mirror |
+| M2 | — | Mirror pointed at the rig, `secondaryCameraMode = Match` | Beams and lighting appear in the mirror, at the scene's level |
 | M3 | — | `SurfaceOnly` | Surface lighting in the mirror, no volumetric cones |
 | M4 | — | `Skip` | No VRSL lighting in the mirror |
+| M5 | — | `Reduced` in a scene at `Standard` with a mirror pointed at the rig. By hand for the look, and `VRSLCameraPolicyTests.M5` in the suite on a mirror camera the rig adds | Beams appear in the mirror at `Low`, visibly cheaper than `Match`, with no missing fixtures and no difference in the main view. Measured 2026-09-03: the main view is pixel-identical across `Match` and `Reduced` (0 px); the mirror renders at `Low` where the scene is `Standard`; its frame differs from `SurfaceOnly` on 15.6% of pixels (the beams are there) and from `Match` by at most 3 of 255 on 0.26% of them; the raymarch counters from the mirror alone march the same lights (22037 of 22037) at fewer steps each, 4.67 against 7.78. The rig's own camera renders into a texture, so it is registered as the player's view (`VRSLCameraFilter.RegisterMainView`) the way a stream camera would be; without that every row would measure `Low` |
+| M6 | — | `VRSL_BENCH_ARGS=-vrsl-mirrors bash .compilecheck/bench.sh sweep` on the build before the decode moved once per frame and on the build after, compared with `bench.sh compare` | 18 rows: 50 fixtures inside the cones at `Standard` and `High`, with none, one and three mirrors under each policy. Each row names the camera count, the policy and the level the mirrors rendered at. Against the before build, the rows with mirrors cost no more and the saving grows with the camera count; within a build, `Reduced` sits between `Match` and `SurfaceOnly` at both scene levels. **Read the deltas and the ratios rather than the verdict**: the stored floor over-covers |
+| M7 | D | `VRSLCameraPolicyTests.M7`: four cameras rendering every frame (the rig's and three secondary) for ten seconds of captured time, against the same rig with one | Every spinning fixture's phase advances at the rate its channel asks for, as N8 judges it, and the frame of light data (direction, spin, colour) matches the one-camera rig's to 1e-3. **An integrator that has drifted into a per-camera pass advances four times as far** |
+| M8 | D | `VRSLCameraPolicyTests.M8`: a mirror toggled through main-only, mirror-only and both across 45 frames, under `Sweep` at a speed that moves every channel far each frame | On every frame the decoded colour equals the bytes the manager uploaded last, whichever cameras rendered, and the mirror's frame is not black on any frame it rendered. A one-frame-old colour is a decode that did not run for that frame's cameras; a black mirror is the grid textures unbound or the light path skipping it |
+| M9 | — | `VRSLCameraPolicyTests.M9`: the camera filter as a function | `Match` renders everything at the scene's level; `SurfaceOnly` the same without beams; `Skip` nothing; `Reduced` everything one level below (`High` to `Standard`, `Standard` to `Low`, `Off` and `Low` unchanged). A camera with no target keeps the scene's level under every value. `Low` draws beams at fewer steps and wider spacing than `Standard` with no contact shadows, and is not in the sweep's level list. Reflection probes, registered data readers and cameras rendering into a texture the manager consumes stay skipped |
+
+**The decode runs once per frame, from the first camera VRSL renders.** It used to be a
+graph pass per camera. Nothing in it depends on the camera, so every camera in a frame reads
+one buffer; the DMX grid textures are still published from inside the graph, by an
+attachment-less pass, because a global texture set outside it binds as black. M7 and M8 are
+the rows that catch it drifting back, and N1 to N15 are unchanged by it: the dispatch reads
+the same buffers and the same clock the per-camera pass did.
 
 ### DMX channel buffer
 

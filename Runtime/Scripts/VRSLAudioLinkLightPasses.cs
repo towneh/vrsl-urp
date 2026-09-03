@@ -21,18 +21,17 @@ using UnityEngine.Rendering.RenderGraphModule;
 namespace VRSL.URP
 {
     /// <summary>
-    /// Holds the three Render Graph pass classes that make up the VRSL URP
-    /// AudioLink realtime-light pipeline:
+    /// Holds the two Render Graph pass classes that make up the VRSL URP
+    /// AudioLink realtime-light pipeline. The decode (VRSLAudioLinkLightUpdate.compute,
+    /// sampling the AudioLink texture and writing VRSLLightData entries) is
+    /// camera-independent and the manager dispatches it once per frame, before the
+    /// first camera's passes record.
     ///
-    ///   1. ComputePass — dispatches VRSLAudioLinkLightUpdate.compute, samples the
-    ///      AudioLink texture for amplitude and colour, reads world-space fixture
-    ///      config from the StructuredBuffer, and writes VRSLLightData entries.
-    ///
-    ///   2. LightingPass — reuses Hidden/VRSL-URP/DeferredLighting; identical to the
+    ///   1. LightingPass — reuses Hidden/VRSL-URP/DeferredLighting; identical to the
     ///      DMX realtime light path. The two paths share the same lighting shader
     ///      and the same _VRSLLights / _VRSLLightCount globals.
     ///
-    ///   3. VolumetricPass — three Render Graph sub-passes (depth downsample,
+    ///   2. VolumetricPass — three Render Graph sub-passes (depth downsample,
     ///      half-res raymarch, bilateral upsample composite) using
     ///      Hidden/VRSL-URP/VolumetricLighting.
     ///
@@ -48,83 +47,6 @@ namespace VRSL.URP
     /// </summary>
     public static class VRSLAudioLinkLightPasses
     {
-        // ── Compute pass: AudioLink → light buffer ─────────────────────────────
-        public class ComputePass : ScriptableRenderPass
-        {
-            class PassData
-            {
-                public BufferHandle  fixtureConfigBuffer;
-                public BufferHandle  lightDataBuffer;
-                public TextureHandle audioLinkTex;
-                public TextureHandle samplingTex;
-                public ComputeShader cs;
-                public int           kernel;
-                public int           fixtureCount;
-                public int           goboCount;
-                public float         time;
-            }
-
-            public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
-            {
-                var mgr = VRSL_AudioLinkURPLightManager.Instance;
-                if (mgr == null || mgr.FixtureCount == 0
-                    || mgr.computeShader    == null
-                    || mgr.FixtureConfigBuffer == null
-                    || mgr.AudioLinkHandle  == null) return;
-
-                using var builder = rg.AddComputePass<PassData>("VRSL AudioLink Light Compute", out var d);
-
-                // URP's RenderGraph would otherwise cull this pass under stereo XR
-                // because _VRSLLights is consumed by the lighting/volumetric shaders
-                // via SetGlobalBuffer rather than a tracked read on the same handle,
-                // so the graph sees the compute write as a dead store. The compute
-                // is always wanted whenever fixtures exist, so opt out of culling.
-                builder.AllowPassCulling(false);
-
-                d.fixtureConfigBuffer = rg.ImportBuffer(mgr.FixtureConfigBuffer);
-                d.lightDataBuffer     = rg.ImportBuffer(mgr.LightDataBuffer);
-                d.audioLinkTex        = rg.ImportTexture(mgr.AudioLinkHandle);
-                // Sampling texture handle should be set up by OnEnable / LateUpdate,
-                // but if for any reason it isn't valid, reuse audioLinkTex so the
-                // compute kernel still gets *something* bound to the sampling slot
-                // (Unity 6 fails the dispatch otherwise). Mode-0 fixtures don't read
-                // the slot anyway; mode-6/7 fixtures fall back to sampling the
-                // AudioLink atlas in this degraded path.
-                d.samplingTex         = mgr.SamplingTextureHandle != null
-                                            ? rg.ImportTexture(mgr.SamplingTextureHandle)
-                                            : d.audioLinkTex;
-                d.cs                  = mgr.computeShader;
-                d.kernel              = mgr.ComputeKernel;
-                d.fixtureCount        = mgr.FixtureCount;
-                d.goboCount           = mgr.GoboCount;
-                // Captured here so the render graph lambda doesn't read Time.* off thread.
-                // timeSinceLevelLoad resets on scene reload, which is the desirable behaviour
-                // for gobo spin — phase restarts cleanly with the scene.
-                d.time                = Time.timeSinceLevelLoad;
-
-                builder.UseBuffer( d.fixtureConfigBuffer, AccessFlags.Read);
-                builder.UseBuffer( d.lightDataBuffer,     AccessFlags.Write);
-                builder.UseTexture(d.audioLinkTex,        AccessFlags.Read);
-                // Skip a duplicate UseTexture if samplingTex aliases audioLinkTex
-                // (degraded fallback path).
-                if (mgr.SamplingTextureHandle != null)
-                    builder.UseTexture(d.samplingTex,     AccessFlags.Read);
-
-                builder.SetRenderFunc((PassData p, ComputeGraphContext ctx) =>
-                {
-                    var cmd = ctx.cmd;
-                    cmd.SetComputeIntParam(    p.cs,           "_FixtureCount",            p.fixtureCount);
-                    cmd.SetComputeIntParam(    p.cs,           "_VRSLGoboCount",           p.goboCount);
-                    cmd.SetComputeFloatParam(  p.cs,           "_VRSLTime",                p.time);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_ALFixtureConfigs",        p.fixtureConfigBuffer);
-                    cmd.SetComputeBufferParam( p.cs, p.kernel, "_LightData",               p.lightDataBuffer);
-                    cmd.SetComputeTextureParam(p.cs, p.kernel, "_AudioTexture",            p.audioLinkTex);
-                    cmd.SetComputeTextureParam(p.cs, p.kernel, "_VRSLALSamplingTexture",   p.samplingTex);
-                    cmd.DispatchCompute(p.cs, p.kernel, Mathf.CeilToInt(p.fixtureCount / 64f), 1, 1);
-                });
-            }
-        }
-
         // ── Fullscreen additive pass: illuminate scene geometry ────────────────
         // Identical to the DMX path's LightingPass — the deferred lighting shader
         // reads _VRSLLights / _VRSLLightCount regardless of which compute pass wrote them.

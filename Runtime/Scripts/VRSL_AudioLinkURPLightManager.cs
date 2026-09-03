@@ -259,11 +259,18 @@ namespace VRSL.URP
         RenderTexture _fallbackBlackRT;
 
         // Render-pass instances. Allocated in OnEnable, reused across cameras and
-        // frames, dropped in OnDisable. Stateless beyond renderPassEvent and
-        // ConfigureInput flags, so a single instance per pass type is correct
-        // even with multiple cameras.
-        VRSLAudioLinkLightPasses.ComputePass    _computePass;
+        // frames, dropped in OnDisable. Stateless beyond renderPassEvent, the
+        // ConfigureInput flags and the per-camera level, all set before each
+        // enqueue, so a single instance per pass type is correct even with
+        // multiple cameras.
         VRSLSurfacePrepass                      _surfacePrepass;
+
+        // The decode is dispatched from here rather than from a graph pass: nothing
+        // in it depends on the camera, so once per frame is the whole of it however
+        // many cameras render. Executed immediately, ahead of whatever the first
+        // camera's graph submits. Marked with the name the harness looks for.
+        CommandBuffer _decodeCommands;
+        int           _decodedFrame = -1;
 
         /// <summary>The surface prepass this manager enqueues, for its counters.</summary>
         public VRSLSurfacePrepass SurfacePrepass => _surfacePrepass;
@@ -453,6 +460,9 @@ namespace VRSL.URP
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
                 Marshal.SizeOf<LightDataStride>());        // 64 bytes
+            // A fresh buffer holds nothing, so the next camera decodes again even
+            // when one already has this frame.
+            _decodedFrame = -1;
 
             VolumetricStats.Allocate();
 
@@ -486,6 +496,61 @@ namespace VRSL.URP
             TryRefreshAudioLinkHandle();
             TryRefreshSamplingTextureHandle();
             VolumetricStats.Tick();
+        }
+
+        // ── The decode ────────────────────────────────────────────────────────
+        static readonly int s_FixtureCount     = Shader.PropertyToID("_FixtureCount");
+        static readonly int s_GoboCount        = Shader.PropertyToID("_VRSLGoboCount");
+        static readonly int s_Time             = Shader.PropertyToID("_VRSLTime");
+        static readonly int s_ALFixtureConfigs = Shader.PropertyToID("_ALFixtureConfigs");
+        static readonly int s_LightData        = Shader.PropertyToID("_LightData");
+        static readonly int s_AudioTexture     = Shader.PropertyToID("_AudioTexture");
+        static readonly int s_SamplingTexture  = Shader.PropertyToID("_VRSLALSamplingTexture");
+
+        /// <summary>The marker the decode dispatch is recorded under, which the
+        /// benchmark reads per pass.</summary>
+        public const string DecodeMarker = "VRSL AudioLink Light Compute";
+
+        /// <summary>
+        /// Sample AudioLink into the light buffer, once per frame. Called from the
+        /// first camera this manager renders each frame, after that frame's config
+        /// upload, so a frame nobody renders decodes nothing and every camera in a
+        /// frame reads one buffer.
+        /// </summary>
+        void DispatchDecode()
+        {
+            if (_decodedFrame == Time.frameCount) return;
+            _decodedFrame = Time.frameCount;
+
+            if (FixtureCount == 0
+                || computeShader       == null
+                || FixtureConfigBuffer == null
+                || LightDataBuffer     == null
+                || _cachedAudioTex     == null) return;
+
+            // The kernel needs something in the sampling slot every dispatch. The
+            // fallback, when the manager holds no sampling texture, is the AudioLink
+            // atlas itself: mode-0 fixtures never read the slot, and the texture modes
+            // then sample the atlas, which is the degraded path they always had.
+            Texture sampling = _cachedSamplingTex != null ? _cachedSamplingTex : _cachedAudioTex;
+
+            var cs  = computeShader;
+            int k   = ComputeKernel;
+            var cmd = _decodeCommands ??= new CommandBuffer { name = DecodeMarker };
+            cmd.Clear();
+            cmd.BeginSample(DecodeMarker);
+            cmd.SetComputeIntParam(    cs,    s_FixtureCount,     FixtureCount);
+            cmd.SetComputeIntParam(    cs,    s_GoboCount,        GoboCount);
+            // timeSinceLevelLoad resets on scene reload, which is the desirable behaviour
+            // for gobo spin — phase restarts cleanly with the scene.
+            cmd.SetComputeFloatParam(  cs,    s_Time,             Time.timeSinceLevelLoad);
+            cmd.SetComputeBufferParam( cs, k, s_ALFixtureConfigs, FixtureConfigBuffer);
+            cmd.SetComputeBufferParam( cs, k, s_LightData,        LightDataBuffer);
+            cmd.SetComputeTextureParam(cs, k, s_AudioTexture,     _cachedAudioTex);
+            cmd.SetComputeTextureParam(cs, k, s_SamplingTexture,  sampling);
+            cmd.DispatchCompute(cs, k, Mathf.CeilToInt(FixtureCount / 64f), 1, 1);
+            cmd.EndSample(DecodeMarker);
+            Graphics.ExecuteCommandBuffer(cmd);
         }
 
         void UploadFixtureConfigs()
@@ -731,10 +796,6 @@ namespace VRSL.URP
         {
             if (_injectionSubscribed) return;
 
-            _computePass    ??= new VRSLAudioLinkLightPasses.ComputePass
-            {
-                renderPassEvent = RenderPassEvent.BeforeRenderingOpaques,
-            };
             _surfacePrepass ??= new VRSLSurfacePrepass(surfacePropertiesShader);
             _tileCullPass   ??= new VRSLTileCullPass(lightCullShader, this);
             _lightingPass   ??= new VRSLAudioLinkLightPasses.LightingPass
@@ -755,8 +816,11 @@ namespace VRSL.URP
             if (!_injectionSubscribed) return;
             RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
             _injectionSubscribed = false;
-            // Re-upload on the next enable's first camera render.
+            // Re-upload and decode on the next enable's first camera render.
             _lastPerFrameFrame = -1;
+            _decodedFrame      = -1;
+            _decodeCommands?.Release();
+            _decodeCommands = null;
         }
 
         void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
@@ -811,7 +875,10 @@ namespace VRSL.URP
                 Shader.SetGlobalTexture("_VRSLVolNoise", _volumetricNoise);
             }
 
-            renderer.EnqueuePass(_computePass);
+            // Before anything of this camera's records. The first camera of the frame
+            // pays for it and the rest read what it wrote.
+            DispatchDecode();
+
             // The surface prepass costs two opaque geometry draws and writes the
             // same targets regardless of which manager drives it, so when a DMX
             // manager is present and will draw it for this camera, it owns the
