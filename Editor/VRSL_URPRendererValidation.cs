@@ -77,33 +77,29 @@ namespace VRSL.URP.EditorScripts
         /// </summary>
         static void ReportNormalsSource(UniversalRenderPipelineAsset urp, StringBuilder report)
         {
-            // The DMX manager draws the prepass wherever it renders, so its mask is
-            // the one that applies there; the AudioLink manager's applies only where
-            // the DMX manager does not draw. Reported for the DMX manager's where
-            // there is one.
-            bool anyManager = false, forceOwn = false;
-            LayerMask mask = ~0;
+            // Which manager's settings apply is per camera, the way the runtime decides
+            // it: the DMX manager draws the prepass for every camera it renders with
+            // fixtures to light, and the AudioLink manager only where it does not.
+            // Resolved here with the same camera filter, and with the scene's fixtures
+            // standing in for a fixture count the manager only has in play mode.
+            VRSL_URPLightManager dmx = null;
             foreach (var m in Object.FindObjectsByType<VRSL_URPLightManager>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-                if (m != null && m.isActiveAndEnabled)
-                {
-                    if (!anyManager) mask = m.prepassLayers;
-                    anyManager = true; forceOwn |= m.forceOwnNormals;
-                }
+                if (m != null && m.isActiveAndEnabled) { dmx = m; break; }
+            VRSL_AudioLinkURPLightManager audioLink = null;
             foreach (var m in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
-                if (m != null && m.isActiveAndEnabled)
-                {
-                    if (!anyManager) mask = m.prepassLayers;
-                    anyManager = true; forceOwn |= m.forceOwnNormals;
-                }
+                if (m != null && m.isActiveAndEnabled) { audioLink = m; break; }
+
+            bool dmxHasFixtures = Application.isPlaying
+                ? dmx != null && dmx.FixtureCount > 0
+                : Object.FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(
+                      FindObjectsInactive.Exclude, FindObjectsSortMode.None).Length > 0;
 
             report.AppendLine("Where VRSL's surface normals come from:");
-            if (!anyManager)
-            {
+            if (dmx == null && audioLink == null)
                 report.AppendLine("      NOT CHECKED — no VRSL light manager switched on in the open "
-                                + "scene. Below is what one would do on each camera.");
-            }
+                                + "scene. Below is what one would do on each camera, at its defaults.");
 
             int defaultIndex = -1;
             var assetSo = new SerializedObject(urp);
@@ -115,6 +111,38 @@ namespace VRSL.URP.EditorScripts
                          FindObjectsInactive.Exclude, FindObjectsSortMode.None))
             {
                 if (camera == null || !camera.isActiveAndEnabled) continue;
+                seen++;
+
+                bool dmxRenders = dmx != null
+                    && VRSLCameraFilter.Evaluate(camera, dmx.secondaryCameraMode, null)
+                       != VRSLCameraDecision.Skip;
+                bool audioLinkRenders = audioLink != null
+                    && VRSLCameraFilter.Evaluate(camera, audioLink.secondaryCameraMode, null)
+                       != VRSLCameraDecision.Skip;
+
+                string who; bool forceOwn; LayerMask mask;
+                if (dmxRenders && dmxHasFixtures)
+                {
+                    who = dmx.name; forceOwn = dmx.forceOwnNormals; mask = dmx.prepassLayers;
+                }
+                else if (audioLinkRenders)
+                {
+                    who = audioLink.name; forceOwn = audioLink.forceOwnNormals; mask = audioLink.prepassLayers;
+                }
+                else if (dmx != null || audioLink != null)
+                {
+                    report.AppendLine($"      {camera.name}: VRSL draws no prepass here — "
+                                    + (dmxRenders
+                                        ? "the DMX manager has no fixtures to light and no "
+                                          + "AudioLink manager renders this camera."
+                                        : "every manager skips this camera (Secondary cameras)."));
+                    continue;
+                }
+                else
+                {
+                    who = "no manager"; forceOwn = false; mask = ~0;
+                }
+
                 int index = defaultIndex;
                 var data = camera.GetComponent<UniversalAdditionalCameraData>();
                 if (data != null)
@@ -127,8 +155,7 @@ namespace VRSL.URP.EditorScripts
                                  : null;
                 int msaa = VRSLPrepassPolicy.PredictMsaa(camera, urp);
                 var decision = VRSLPrepassPolicy.Decide(msaa, rendererData, forceOwn, mask);
-                report.AppendLine($"      {camera.name}: {decision.Reason}");
-                seen++;
+                report.AppendLine($"      {camera.name} ({who}): {decision.Reason}");
             }
             if (seen == 0)
                 report.AppendLine("      No camera switched on in the open scene, so there is no "
