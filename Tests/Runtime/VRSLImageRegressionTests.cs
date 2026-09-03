@@ -316,7 +316,7 @@ namespace VRSL.URP.Tests
             Texture2D previous = null;
             try
             {
-                string path = VRSLImageCompare.LocalPath("rig-default");
+                string path = VRSLImageCompare.LocalPath(VRSLDMXRig.CaptureName("rig-default"));
                 previous = VRSLImageCompare.Load(path);
 
                 if (previous == null)
@@ -388,7 +388,7 @@ namespace VRSL.URP.Tests
 
             try
             {
-                string path = Path.Combine(golden, "rig-default.png");
+                string path = Path.Combine(golden, VRSLDMXRig.CaptureName("rig-default") + ".png");
                 reference = VRSLImageCompare.Load(path);
                 if (reference == null)
                 {

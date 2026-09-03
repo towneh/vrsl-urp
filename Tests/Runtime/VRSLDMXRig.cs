@@ -86,6 +86,20 @@ namespace VRSL.URP.Tests
         /// 256 square there is not enough of it to clear the noise.</summary>
         public const int TargetSize = 256;
 
+        /// <summary>
+        /// Which shape of frame a frozen capture produces. Part of the name every
+        /// stored capture and reference frame is filed under, so a change to what
+        /// the freeze does, what the source publishes or how the rig is lit makes
+        /// the rows seed afresh rather than report the old frame as a regression.
+        /// Bump it with any such change. 2: beams aimed down at intensity 60 under
+        /// the static Fixtures pattern, host lighting removed.
+        /// </summary>
+        public const int CaptureVersion = 2;
+
+        /// <summary>The name a stored capture or reference frame of this shape is
+        /// filed under.</summary>
+        public static string CaptureName(string scene) => $"{scene}-v{CaptureVersion}";
+
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
                                        int targetSize = TargetSize)
         {

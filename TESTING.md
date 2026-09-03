@@ -344,8 +344,10 @@ intensity, under the host's own lighting — and the package moved 228 pixels of
 intensity of 60, in a frame with nothing else lighting it, and the capture helpers
 drive the source with the `Fixtures` pattern held still, every dimmer at full, where
 `Ramp` gave the fixtures in view channels of a few percent. What an image row compares
-is the package's light. Every machine's stored capture and the committed reference are
-stale from that commit and re-seed on the next run.
+is the package's light. Stored captures and reference frames are filed under a name
+that carries the rig's `CaptureVersion`, `rig-default-v2` now, so a change of shape
+seeds afresh rather than comparing against a frame of the old one. Bump the constant
+with any change to what a frozen capture contains.
 
 A failing row writes `-expected`, `-actual` and an amplified `-diff` PNG under
 `VRSL-Benchmarks/image-failures/`, because a number cannot distinguish a global
