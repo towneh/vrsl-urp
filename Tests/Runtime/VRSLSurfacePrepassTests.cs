@@ -588,6 +588,77 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// S14. A surface keeps its captured colour and gloss under depth priming
+        /// with MSAA on.
+        ///
+        /// Volumetrics off, priming Forced, the floor lit at MSAA 1 and at MSAA 2
+        /// (the sample count Basis ships), against the same frame at 2x with the
+        /// floor left out of the prepass so it lights from the neutral fallback. The
+        /// floor at 2x has to shade as it does at 1x, not as the fallback.
+        ///
+        /// What this row found on 2026-09-03, and what it fails on today: under
+        /// priming with MSAA, <c>_CameraDepthTexture</c> is a resolve of the
+        /// multisampled depth attachment, which takes the farthest sample, and on a
+        /// surface seen at a grazing angle that sits several centimetres from the
+        /// depth the prepass rasterised at the pixel centre. The surface-data gate
+        /// (<c>VRSL_SurfaceDataCovers</c>) allows 0.05% of eye depth, a few
+        /// millimetres at these distances, so it rejects the whole floor and the
+        /// lighting pass falls back to mid-grey. Widening the tolerance to 2% for
+        /// one run made 1x and 2x agree to 0.25% of pixels, which is how the
+        /// mechanism was confirmed. Without priming the depth prepass writes the
+        /// camera depth texture directly at one sample and the gate holds.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S14_SurfacesKeepTheirDataUnderPrimingWithMsaa()
+        {
+            var renderers = Renderers();
+            if (renderers.Count == 0)
+                Assert.Ignore("No Universal Renderer on the active pipeline asset.");
+            var restore = new Dictionary<UniversalRendererData, DepthPrimingMode>();
+            foreach (var r in renderers) restore[r] = r.depthPrimingMode;
+
+            Texture2D at1 = null, at2 = null, at2Fallback = null;
+            try
+            {
+                yield return CaptureSurfaceOnly(1, DepthPrimingMode.Forced, false, t => at1 = t);
+                yield return CaptureSurfaceOnly(2, DepthPrimingMode.Forced, false, t => at2 = t);
+                yield return CaptureSurfaceOnly(2, DepthPrimingMode.Forced, true,  t => at2Fallback = t);
+
+                var mean1  = LitMean(at1);
+                var mean2  = LitMean(at2);
+                var meanFb = LitMean(at2Fallback);
+                Debug.Log($"[S14] lit mean at 1x {mean1:F2}, at 2x {mean2:F2}, at 2x with the floor on the "
+                        + $"fallback {meanFb:F2}; 1x vs 2x {VRSLImageCompare.Compare(at1, at2)}");
+
+                Assert.Greater(LitPercent(at1), 5f, "the 1x frame is nearly dark, so the row has nothing to judge");
+
+                // The floor's data has to be making a difference at 1x for the row to
+                // have anything to protect at 2x.
+                float apart = 0f;
+                for (int c = 0; c < 3; c++) apart = Mathf.Max(apart, Mathf.Abs(mean1[c] - meanFb[c]));
+                if (apart <= 2f)
+                    Assert.Inconclusive("the floor lights the same with and without its captured data, "
+                                      + "so this row cannot tell whether that data reached the lighting pass");
+
+                for (int c = 0; c < 3; c++)
+                    Assert.AreEqual(mean1[c], mean2[c], 2f,
+                        $"channel {c}: the lit mean is {mean2[c]:F1} at MSAA 2x against {mean1[c]:F1} at 1x, "
+                      + $"and {meanFb[c]:F1} with the floor on the neutral fallback. Under priming with "
+                      + "MSAA the surface-data gate is rejecting the resolved camera depth and every "
+                      + "surface lights as mid-grey. See VRSL_SurfaceDataCovers and "
+                      + "VRSL_SURFACE_DEPTH_TOLERANCE.");
+            }
+            finally
+            {
+                foreach (var pair in restore)
+                    if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
+                if (at1         != null) Object.DestroyImmediate(at1);
+                if (at2         != null) Object.DestroyImmediate(at2);
+                if (at2Fallback != null) Object.DestroyImmediate(at2Fallback);
+            }
+        }
+
+        /// <summary>
         /// S12. Geometry on a layer the prepass mask leaves out lights as neutral grey
         /// rather than black, and geometry inside the mask is unaffected.
         ///
