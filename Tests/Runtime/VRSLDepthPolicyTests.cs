@@ -241,8 +241,12 @@ namespace VRSL.URP.Tests
                 // Sampled while the rig is up. The rig is disposed when the capture
                 // coroutine ends, so a light it had built would already be gone and the
                 // scan would pass against an empty scene whatever had been there.
-                () => lights = Object.FindObjectsByType<Light>(
-                    FindObjectsInactive.Exclude, FindObjectsSortMode.None));
+                // Enabled lights only. The rig switches the host scene's lights off
+                // for its lifetime rather than removing them, and a light that is
+                // off is not lighting anything.
+                () => lights = System.Array.FindAll(
+                    Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude, FindObjectsSortMode.None),
+                    light => light.enabled));
 
             try
             {
