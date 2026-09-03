@@ -198,6 +198,8 @@ namespace VRSL.URP
             readonly UnityEngine.Random.State _randomWas;
             readonly UniversalRenderPipelineAsset _urp;
             readonly int    _msaaWas;
+            readonly UniversalRendererData _renderer;
+            readonly DepthPrimingMode      _primingWas;
             readonly float  _capturePinned;
 
             public DeterminismScope(VRSLBenchmarkSettings settings)
@@ -208,6 +210,16 @@ namespace VRSL.URP
                 _randomWas  = UnityEngine.Random.state;
                 _urp        = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
                 _msaaWas    = _urp != null ? _urp.msaaSampleCount : 0;
+
+                // Depth priming, held the same way as MSAA and for the same reason. A
+                // host quality module rewrites the renderer's priming mode per tier
+                // at a moment of its own, so two launches of one player stamped
+                // Disabled and Forced half a minute apart and the gate refused the
+                // pair. The renderer in slot 0, which is the one the stamp names.
+                if (_urp != null)
+                    foreach (var data in _urp.rendererDataList)
+                        if (data is UniversalRendererData universal) { _renderer = universal; break; }
+                _primingWas = _renderer != null ? _renderer.depthPrimingMode : DepthPrimingMode.Disabled;
 
                 _capturePinned = settings.captureDeltaTime;
 
@@ -239,11 +251,17 @@ namespace VRSL.URP
                 Application.targetFrameRate = -1;
                 if (_urp != null && _msaaWas > 0 && _urp.msaaSampleCount != _msaaWas)
                     _urp.msaaSampleCount = _msaaWas;
+                if (_renderer != null && _renderer.depthPrimingMode != _primingWas)
+                    _renderer.depthPrimingMode = _primingWas;
             }
 
             /// <summary>The MSAA the capture is holding, so a report states what it
             /// measured at rather than what the asset happens to say afterwards.</summary>
             public int PinnedMsaa => _msaaWas;
+
+            /// <summary>The depth-priming mode the capture is holding, or null when
+            /// there is no Universal renderer to hold it on.</summary>
+            public DepthPrimingMode? PinnedPriming => _renderer != null ? _primingWas : null;
 
             public void Dispose()
             {
@@ -254,6 +272,7 @@ namespace VRSL.URP
                 Application.targetFrameRate = _targetWas;
                 UnityEngine.Random.state    = _randomWas;
                 if (_urp != null && _msaaWas > 0) _urp.msaaSampleCount = _msaaWas;
+                if (_renderer != null) _renderer.depthPrimingMode = _primingWas;
             }
         }
 

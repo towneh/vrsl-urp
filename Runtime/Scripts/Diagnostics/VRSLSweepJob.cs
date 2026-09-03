@@ -128,6 +128,8 @@ namespace VRSL.URP
             // 2x and 1x while their VRSL-disabled frames agreed to 0.001 ms, which is
             // what a stamp disagreeing with its own run looks like.
             if (determinism.PinnedMsaa > 0) run.environment.msaaSamples = determinism.PinnedMsaa;
+            if (determinism.PinnedPriming.HasValue)
+                run.environment.depthPrimingMode = determinism.PinnedPriming.Value.ToString();
             // The size actually rendered, which is not the screen's.
             run.environment.captureWidth  = VRSLBenchmarkScene.CaptureWidth;
             run.environment.captureHeight = VRSLBenchmarkScene.CaptureHeight;
