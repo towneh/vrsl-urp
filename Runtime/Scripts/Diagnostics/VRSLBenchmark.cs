@@ -800,6 +800,13 @@ namespace VRSL.URP
                           : audioLink.UsesUrpNormalsFor(expectedTileCamera))
                 : (useDmx ? dmx.UsesUrpNormals : audioLink.UsesUrpNormals);
 
+            // The level that camera rendered at. A camera rendering into a texture is
+            // a secondary camera to the policy, and the sweep's own is one.
+            var level = expectedTileCamera != null
+                ? (useDmx ? dmx.QualityFor(expectedTileCamera) : audioLink.QualityFor(expectedTileCamera))
+                : null;
+            counters.cameraQuality = level.HasValue ? level.Value.ToString() : "";
+
             // Recorded as false rather than omitted so the row shape does not change
             // when it lands, and noted so a permanently-false flag is not read as a
             // regression.

@@ -361,6 +361,55 @@ namespace VRSL.URP
         }
 
         /// <summary>
+        /// Add cameras rendering into their own textures, posed on the far side of
+        /// the truss looking back at it, the way mirrors in a venue face the stage.
+        /// </summary>
+        /// <remarks>
+        /// Each renders at the capture size, so a mirror is one more full view and a
+        /// row reads as "the main view plus N of it". They render before the main
+        /// camera: one cull pass serves every camera and the last record wins, so
+        /// the tile figures stay the main view's. Enabled, so the player loop renders
+        /// them; the sweep's own camera is enabled too.
+        /// </remarks>
+        public static List<Camera> AddSecondaryCameras(GameObject root, int count)
+        {
+            var cameras = new List<Camera>();
+            if (root == null) return cameras;
+            for (int i = 0; i < count; i++)
+            {
+                var target = new RenderTexture(CaptureWidth, CaptureHeight, 24)
+                { name = $"VRSL sweep mirror {i}" };
+                var camera = new GameObject($"Mirror Camera {i}").AddComponent<Camera>();
+                camera.transform.SetParent(root.transform, false);
+                float x = (i - (count - 1) * 0.5f) * 8f;
+                camera.transform.SetPositionAndRotation(
+                    new Vector3(x, 3f, 28f), Quaternion.Euler(5f, 180f, 0f));
+                camera.clearFlags      = CameraClearFlags.SolidColor;
+                camera.backgroundColor = Color.black;
+                camera.targetTexture   = target;
+                camera.depth           = -10 - i;
+                cameras.Add(camera);
+            }
+            return cameras;
+        }
+
+        /// <summary>Remove what <see cref="AddSecondaryCameras"/> added, textures
+        /// included.</summary>
+        public static void RemoveSecondaryCameras(List<Camera> cameras)
+        {
+            if (cameras == null) return;
+            foreach (var camera in cameras)
+            {
+                if (camera == null) continue;
+                var target = camera.targetTexture;
+                camera.targetTexture = null;
+                if (target != null) { target.Release(); Object.DestroyImmediate(target); }
+                Object.DestroyImmediate(camera.gameObject);
+            }
+            cameras.Clear();
+        }
+
+        /// <summary>
         /// Switch off every rendering camera but <paramref name="keep"/>, adding the
         /// ones switched off to <paramref name="into"/> so they can be put back.
         /// </summary>
@@ -380,13 +429,20 @@ namespace VRSL.URP
         /// running.
         /// </remarks>
         /// <returns>How many this call switched off.</returns>
-        public static int SuppressOtherCameras(Camera keep)
+        public static int SuppressOtherCameras(Camera keep) => SuppressOtherCameras(new[] { keep });
+
+        /// <summary>The same, keeping every camera in <paramref name="keep"/>: the
+        /// sweep's own and the mirrors it posed.</summary>
+        public static int SuppressOtherCameras(IReadOnlyList<Camera> keep)
         {
             int suppressed = 0;
             foreach (var camera in Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude))
             {
                 if (camera == null || !camera.enabled) continue;
-                if (ReferenceEquals(camera, keep)) continue;
+                bool kept = false;
+                for (int i = 0; i < keep.Count; i++)
+                    if (ReferenceEquals(camera, keep[i])) { kept = true; break; }
+                if (kept) continue;
                 camera.enabled = false;
                 s_Suppressed.Add(camera);
                 suppressed++;

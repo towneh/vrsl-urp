@@ -450,15 +450,16 @@ namespace VRSL.URP
                         + "wider. The figure a verdict should actually be judged against comes "
                         + "from a null run on this machine, not from this column.");
             sb.AppendLine();
-            sb.AppendLine("| Fixtures | Emitting | Camera | Quality | Package cost | +- | Basis | GPU frame | CPU frame | Lights/tile | Empty tiles | Steps/light | Lights/pixel | Skipped | Source |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| Fixtures | Emitting | Camera | Quality | Mirrors | Package cost | +- | Basis | GPU frame | CPU frame | Lights/tile | Empty tiles | Steps/light | Lights/pixel | Skipped | Source |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (var row in run.rows)
             {
                 sb.AppendLine(
                     $"| {row.config.fixtureCount} "
                   + $"| {(row.counters.emittingFixtures == 0 ? "**none**" : row.counters.emittingFixtures.ToString())} "
                   + $"| {row.config.cameraVariant} "
-                  + $"| {row.config.quality} "
+                  + $"| {row.config.quality}{(string.IsNullOrEmpty(row.counters.cameraQuality) || row.counters.cameraQuality == row.config.quality ? "" : $" (rendered {row.counters.cameraQuality})")} "
+                  + $"| {row.config.Mirrors}{(string.IsNullOrEmpty(row.counters.secondaryQuality) ? "" : $" at {row.counters.secondaryQuality}")} "
                   + $"| {(row.timings.Usable ? $"{row.timings.CostMs:F3} ms" : "**not usable**")} "
                   + $"| {row.timings.Noise:F3} ms "
                   + $"| {row.timings.CostBasis} "
@@ -523,14 +524,14 @@ namespace VRSL.URP
 
             sb.AppendLine(comparison.VerdictLine);
             sb.AppendLine();
-            sb.AppendLine("| Fixtures | Camera | Quality | Verdict | Package cost Δ | Frame Δ | Basis | Noise floor | Counters that moved |");
-            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+            sb.AppendLine("| Fixtures | Camera | Quality | Mirrors | Verdict | Package cost Δ | Frame Δ | Basis | Noise floor | Counters that moved |");
+            sb.AppendLine("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
             foreach (var row in comparison.rows)
             {
                 if (row.verdict == VRSLVerdict.Missing)
                 {
                     sb.AppendLine($"| {row.config.fixtureCount} | {row.config.cameraVariant} "
-                                + $"| {row.config.quality} | **Missing** | — | — | — | — | — |");
+                                + $"| {row.config.quality} | {row.config.Mirrors} | **Missing** | — | — | — | — | — |");
                     continue;
                 }
                 string sign = row.packageCostDeltaMs >= 0 ? "+" : "";
@@ -541,6 +542,7 @@ namespace VRSL.URP
                     $"| {row.config.fixtureCount} "
                   + $"| {row.config.cameraVariant} "
                   + $"| {row.config.quality} "
+                  + $"| {row.config.Mirrors} "
                   + $"| {(row.verdict == VRSLVerdict.Regressed ? "**Regressed**" : row.verdict.ToString())} "
                   + $"| {sign}{row.packageCostDeltaMs:F3} ms ({sign}{row.packageCostDeltaPercent:F1}%) "
                   + $"| {(row.frameDeltaMs >= 0 ? "+" : "")}{row.frameDeltaMs:F3} ms "

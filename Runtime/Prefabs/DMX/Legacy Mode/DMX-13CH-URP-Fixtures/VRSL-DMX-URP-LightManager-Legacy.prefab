@@ -78,7 +78,7 @@ MonoBehaviour:
   - {fileID: 2800000, guid: c9ce909bb29e6898ea7808fd7d8196ff, type: 3}
   - {fileID: 2800000, guid: de2e2f340b0b44b4946a9bd5f7e52697, type: 3}
   - {fileID: 2800000, guid: f8f0801130c0a1d0e3862e4ad9106fe1, type: 3}
-  secondaryCameraMode: 0
+  secondaryCameraMode: 3
   outputDebugLogs: 0
   strobeRate: 0
   strobeLowFrequency: 25

@@ -71,14 +71,26 @@ namespace VRSL.URP
         public string cameraVariant = "";
         public string quality       = "";
         public string scene         = "";
+        /// <summary>Cameras rendering into a texture beside the main one, each
+        /// pointed at the rig. Zero on the standard sweep.</summary>
+        public int    secondaryCameras;
+        /// <summary>The secondary-camera policy those rendered under. Empty
+        /// where there were none.</summary>
+        public string secondaryPolicy = "";
 
         /// <summary>Identity for matching a row against a baseline. Two runs
         /// describe the same configuration when this matches; nothing else is
-        /// compared.</summary>
-        public string Key => scene + "|" + fixtureCount + "|" + cameraVariant + "|" + quality;
+        /// compared. The mirror axis joins the key only where a row has one, so
+        /// a run recorded before it existed still matches.</summary>
+        public string Key => scene + "|" + fixtureCount + "|" + cameraVariant + "|" + quality
+                           + (secondaryCameras > 0 ? "|" + secondaryCameras + "|" + secondaryPolicy : "");
 
         public override string ToString() =>
-            $"{fixtureCount} fixtures, {cameraVariant}, quality {quality}";
+            $"{fixtureCount} fixtures, {cameraVariant}, quality {quality}"
+          + (secondaryCameras > 0 ? $", {secondaryCameras} mirror(s) {secondaryPolicy}" : "");
+
+        /// <summary>The mirror axis for a table cell.</summary>
+        public string Mirrors => secondaryCameras > 0 ? $"{secondaryCameras} {secondaryPolicy}" : "-";
     }
 
     /// <summary>
@@ -316,6 +328,13 @@ namespace VRSL.URP
         public int   channelCount;
 
         public bool tileCullEngaged;
+        /// <summary>The quality level the row's camera rendered at, as the manager
+        /// recorded it. The scene's level for the main view; empty when no camera was
+        /// named or none has rendered.</summary>
+        public string cameraQuality = "";
+        /// <summary>The level the secondary cameras rendered at, which under the
+        /// Reduced policy is one no inspector shows. Empty where there were none.</summary>
+        public string secondaryQuality = "";
         /// <summary>Set by M4. False until then, and the run notes say so rather than
         /// letting a permanently-false flag read as a regression.</summary>
         public bool normalsReuseEngaged;

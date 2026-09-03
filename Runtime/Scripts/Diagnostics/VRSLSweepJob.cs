@@ -41,13 +41,18 @@ namespace VRSL.URP
         /// where the policy would otherwise read URP's. The other half of a pair that
         /// measures what the reuse is worth; the run is labelled so the two are not
         /// mistaken for each other.</param>
+        /// <param name="mirrors">Measure the mirror matrix instead of the standard one:
+        /// one fixture count and camera variant, with none, one and three extra cameras
+        /// rendering into textures at each secondary-camera policy and at Standard and
+        /// High. What a world with mirrors pays, and what each policy gives back.</param>
         public static IEnumerator Run(VRSLSweepOutcome outcome, Action<VRSLBenchmarkRun> stampEnvironment,
-                                      bool forceOwnNormals = false)
+                                      bool forceOwnNormals = false, bool mirrors = false)
         {
             var settings = new VRSLBenchmarkSettings();
             var run      = new VRSLBenchmarkRun
             {
-                label = forceOwnNormals ? "standard-sweep-own-normals" : "standard-sweep",
+                label = mirrors ? "mirror-sweep"
+                      : forceOwnNormals ? "standard-sweep-own-normals" : "standard-sweep",
             };
             var root     = GameObject.Find(VRSLBenchmarkScene.RootName);
             var camera   = VRSLBenchmarkScene.FindCamera(root);
@@ -81,6 +86,12 @@ namespace VRSL.URP
             manager.ChannelSource = source;
             bool forceOwnNormalsWas = manager.forceOwnNormals;
             manager.forceOwnNormals = forceOwnNormals;
+            // The sweep's camera renders into a texture, which makes it a secondary
+            // camera to the policy. Held at Match so a row measures the level it is
+            // labelled with; the mirror matrix sets the policy per row and this is
+            // what it goes back to between them.
+            var policyWas = manager.secondaryCameraMode;
+            manager.secondaryCameraMode = SecondaryCameraMode.Match;
             if (forceOwnNormals)
                 run.Note("VRSL drew its own normals prepass on every camera (forceOwnNormals), "
                        + "so normalsReuseEngaged is false by request rather than by policy.");
@@ -105,6 +116,11 @@ namespace VRSL.URP
             // the finally nor the host — the host reports that case for itself.
             bool completed = false;
             VRSLQualityPreset.Session quality = null;
+            var mirrorCameras = new List<Camera>();
+            // Whether anything but the sweep's own cameras rendered during a
+            // configuration. Checked per configuration, since the count a mirror row
+            // expects is its own.
+            bool shared = false;
             try
             {
             // Allocated inside the try, and first. The finally below is the only
@@ -147,6 +163,14 @@ namespace VRSL.URP
             run.environment.captureWidth  = VRSLBenchmarkScene.CaptureWidth;
             run.environment.captureHeight = VRSLBenchmarkScene.CaptureHeight;
 
+            if (mirrors)
+            {
+                var mirrorJob = RunMirrors(settings, run, root, camera, manager, quality,
+                                           determinism, mirrorCameras, v => shared |= v);
+                while (mirrorJob.MoveNext()) yield return mirrorJob.Current;
+            }
+            else
+            {
             int done = 0;
             int total = VRSLBenchmarkScene.FixtureCounts.Length
                       * VRSLBenchmarkScene.CameraVariants.Length
@@ -198,20 +222,31 @@ namespace VRSL.URP
                     }
                 }
             }
+            }
 
             // Two separate claims, and the second does not imply the first. Who else
             // rendered decides what the timings are of; which camera's record survived
             // decides what the tile figures are of. A host camera that renders before
             // the sweep's leaves the counters looking local while the timings still
             // carry both.
-            ReportOtherCameras(run, camerasAtStart);
+            if (mirrors)
+            {
+                if (shared)
+                    run.Note("Cameras other than the sweep's own and its mirrors were rendering "
+                           + "during at least one configuration, so those timings are of more "
+                           + "than the view each row is labelled with.");
+            }
+            else
+                ReportOtherCameras(run, camerasAtStart);
             ReportTileCamera(run, camera);
 
             // Recorded from what happened rather than from what was attempted, so a
             // comparison refuses across the change instead of quietly spanning it: a
-            // run that shared the frame measured more than this one did.
+            // run that shared the frame measured more than this one did. On the mirror
+            // matrix the frame is the sweep's alone when nothing but its own cameras
+            // rendered; the mirrors are its own.
             run.environment.soleCamera =
-                VRSLBenchmarkScene.RenderingCameraCount() <= 1
+                (mirrors ? !shared : VRSLBenchmarkScene.RenderingCameraCount() <= 1)
                 && AllRowsUsedTheSweepsCamera(run);
 
             if (VRSLBenchmarkScene.SuppressedCameraCount > 0)
@@ -226,7 +261,12 @@ namespace VRSL.URP
             finally
             {
                 quality?.Restore();
-                if (manager != null) manager.forceOwnNormals = forceOwnNormalsWas;
+                if (manager != null)
+                {
+                    manager.forceOwnNormals     = forceOwnNormalsWas;
+                    manager.secondaryCameraMode = policyWas;
+                }
+                VRSLBenchmarkScene.RemoveSecondaryCameras(mirrorCameras);
                 VRSLBenchmarkScene.RestoreCameras();
                 camera.targetTexture = null;
                 if (target != null) { target.Release(); UnityEngine.Object.DestroyImmediate(target); }
@@ -242,6 +282,107 @@ namespace VRSL.URP
                                   + "the exception; nothing was written.";
             }
             if (completed) outcome.run = run;
+        }
+
+        /// <summary>Extra cameras the mirror matrix renders beside the main one:
+        /// none, one, and three, for one, two and four cameras in the frame.</summary>
+        public static readonly int[] MirrorCounts = { 0, 1, 3 };
+
+        /// <summary>The policies the mirror matrix measures, in the order the
+        /// inspector lists them.</summary>
+        public static readonly SecondaryCameraMode[] MirrorPolicies =
+        {
+            SecondaryCameraMode.Match, SecondaryCameraMode.Reduced,
+            SecondaryCameraMode.SurfaceOnly, SecondaryCameraMode.Skip,
+        };
+
+        /// <summary>Fixture count and camera variant the mirror matrix holds still.
+        /// One of each: the axis under test is the cameras, and the standard sweep
+        /// already covers the other two.</summary>
+        public const int MirrorFixtures = 50;
+        public const VRSLBenchmarkScene.CameraVariant MirrorVariant =
+            VRSLBenchmarkScene.CameraVariant.InsideCones;
+
+        /// <summary>The scene levels the mirror matrix runs at. Both that have a
+        /// level below them, since that is what Reduced does.</summary>
+        static readonly VRSLQuality[] MirrorLevels = { VRSLQuality.Standard, VRSLQuality.High };
+
+        /// <summary>
+        /// The mirror matrix: with no mirrors, then with one and three at each policy,
+        /// at each scene level. Rows carry how many cameras rendered, under which
+        /// policy, and the level the mirrors rendered at, which under Reduced is one no
+        /// inspector shows.
+        /// </summary>
+        static IEnumerator RunMirrors(VRSLBenchmarkSettings settings, VRSLBenchmarkRun run,
+                                      GameObject root, Camera camera, VRSL_URPLightManager manager,
+                                      VRSLQualityPreset.Session quality,
+                                      VRSLBenchmark.DeterminismScope determinism,
+                                      List<Camera> mirrorCameras, Action<bool> sharedFrame)
+        {
+            int fixtures = VRSLBenchmarkScene.SetActiveFixtures(root, MirrorFixtures);
+            VRSLBenchmarkScene.PoseCamera(camera, MirrorVariant);
+            run.Note($"Mirror rows: each mirror renders the rig from the far side of the truss "
+                   + $"into its own {VRSLBenchmarkScene.CaptureWidth}x{VRSLBenchmarkScene.CaptureHeight} "
+                   + "texture, before the main camera, so the tile figures are the main view's "
+                   + "and a mirror is one more full view of the same scene.");
+
+            int done = 0;
+            int total = MirrorLevels.Length * (1 + (MirrorCounts.Length - 1) * MirrorPolicies.Length);
+            var keep = new List<Camera>();
+
+            foreach (var level in MirrorLevels)
+            {
+                quality.Apply(level);
+                foreach (int count in MirrorCounts)
+                {
+                    VRSLBenchmarkScene.RemoveSecondaryCameras(mirrorCameras);
+                    mirrorCameras.AddRange(VRSLBenchmarkScene.AddSecondaryCameras(root, count));
+                    keep.Clear();
+                    keep.Add(camera);
+                    keep.AddRange(mirrorCameras);
+
+                    // With no mirrors the policy decides nothing, so one row rather
+                    // than four identical ones.
+                    var policies = count == 0 ? new[] { SecondaryCameraMode.Match } : MirrorPolicies;
+                    foreach (var policy in policies)
+                    {
+                        manager.secondaryCameraMode = policy;
+                        var config = new VRSLRowConfig
+                        {
+                            scene            = "standard",
+                            fixtureCount     = fixtures,
+                            cameraVariant    = MirrorVariant.ToString(),
+                            quality          = level.ToString(),
+                            secondaryCameras = count,
+                            secondaryPolicy  = count > 0 ? policy.ToString() : "",
+                        };
+                        Debug.Log($"[VRSL sweep] {config} ({++done} of {total})");
+
+                        VRSLBenchmarkScene.SuppressOtherCameras(keep);
+                        determinism.Reassert();
+                        sharedFrame(VRSLBenchmarkScene.RenderingCameraCount() > keep.Count);
+
+                        var capture = VRSLBenchmark.CaptureRow(
+                            settings, config, run, expectedTileCamera: camera);
+                        while (capture.MoveNext()) yield return capture.Current;
+
+                        sharedFrame(VRSLBenchmarkScene.RenderingCameraCount() > keep.Count);
+                        if (count > 0 && run.rows.Count > 0)
+                        {
+                            var rendered = manager.QualityFor(mirrorCameras[0]);
+                            run.rows[run.rows.Count - 1].counters.secondaryQuality =
+                                rendered.HasValue ? rendered.Value.ToString()
+                                                  : policy == SecondaryCameraMode.Skip ? "skipped" : "";
+                        }
+                    }
+                    // The policy the sweep's own camera measures under. Set back here
+                    // rather than left at whatever the last row used, since the next
+                    // count's first row is Match anyway and a Skip left behind would
+                    // skip the sweep's camera too.
+                    manager.secondaryCameraMode = SecondaryCameraMode.Match;
+                }
+            }
+            VRSLBenchmarkScene.RemoveSecondaryCameras(mirrorCameras);
         }
 
         /// <summary>Whether every row's tile figures came from the sweep's own camera.

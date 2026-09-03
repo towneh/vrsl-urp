@@ -262,6 +262,10 @@ namespace VRSL.URP.Tests
             var mgrGo = UnityEngine.Object.Instantiate(Load<GameObject>(ManagerPrefab), rig._root.transform);
             mgrGo.name = "Light Manager";
             rig.Manager = mgrGo.GetComponent<VRSL_URPLightManager>();
+            // The rig's camera renders into a texture, which makes it a secondary
+            // camera to the policy. Held at Match so every row measures the level it
+            // sets; a row about the policy sets it itself.
+            rig.Manager.secondaryCameraMode = SecondaryCameraMode.Match;
             // Instantiating an active prefab runs Awake and OnEnable before this
             // returns, so the manager collected whatever existed at that moment.
             // The fixtures above already do, but a caller adding more later has

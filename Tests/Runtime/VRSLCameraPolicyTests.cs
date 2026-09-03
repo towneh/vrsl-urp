@@ -130,10 +130,13 @@ namespace VRSL.URP.Tests
         }
 
         [UnityTest]
-        public IEnumerator M5_a_mirror_under_Reduced_keeps_its_beams_at_a_lower_price_and_leaves_the_main_view_alone()
+        public IEnumerator M5_a_mirror_under_Reduced_keeps_its_beams_at_a_lower_price()
         {
-            Texture2D mainMatch = null, mirrorMatch = null, mainReduced = null, mirrorReduced = null,
-                      mirrorSurface = null;
+            // The rig's own camera renders into a texture, so to the policy it is a
+            // secondary camera as well: this row is about the mirror, and the main
+            // view's independence from the policy is M9's claim (a camera with no
+            // target keeps the scene's level under every value) and M5's by hand.
+            Texture2D mirrorMatch = null, mirrorReduced = null, mirrorSurface = null;
             var rig = VRSLDMXRig.Build(targetSize: 512);
             try
             {
@@ -148,7 +151,6 @@ namespace VRSL.URP.Tests
                 rig.FreezeForImageCapture();
 
                 for (int i = 0; i < WarmUpFrames; i++) { yield return null; rig.RenderFrame(); }
-                mainMatch   = VRSLImageCompare.Read(rig.Target);
                 mirrorMatch = VRSLImageCompare.Read(mirror.Target);
                 Assert.AreEqual(VRSLQuality.Standard, rig.Manager.QualityFor(mirror.Camera),
                     "under Match the mirror renders at the scene's level");
@@ -157,12 +159,9 @@ namespace VRSL.URP.Tests
 
                 rig.Manager.secondaryCameraMode = SecondaryCameraMode.Reduced;
                 for (int i = 0; i < 10; i++) { yield return null; rig.RenderFrame(); }
-                mainReduced   = VRSLImageCompare.Read(rig.Target);
                 mirrorReduced = VRSLImageCompare.Read(mirror.Target);
                 Assert.AreEqual(VRSLQuality.Low, rig.Manager.QualityFor(mirror.Camera),
                     "under Reduced a Standard scene's mirror renders at Low");
-                Assert.AreEqual(VRSLQuality.Standard, rig.Manager.QualityFor(rig.Camera),
-                    "the main view stays at the scene's level");
                 yield return CollectFromMirror(rig, mirror);
                 var atReduced = rig.Manager.VolumetricStats.Last;
 
@@ -170,14 +169,9 @@ namespace VRSL.URP.Tests
                 for (int i = 0; i < 10; i++) { yield return null; rig.RenderFrame(); }
                 mirrorSurface = VRSLImageCompare.Read(mirror.Target);
 
-                var main = VRSLImageCompare.Compare(mainMatch, mainReduced);
-                Debug.Log($"[M5] main view, Match vs Reduced: {main}");
-                Assert.IsFalse(main.SizeMismatch);
-                Assert.LessOrEqual(main.Max, VRSLImageCompare.Threshold,
-                    $"the policy changed the main view ({main}); it is only about secondary cameras");
-
                 var beams = VRSLImageCompare.Compare(mirrorReduced, mirrorSurface);
                 Debug.Log($"[M5] mirror, Reduced vs SurfaceOnly: {beams}");
+                Assert.IsFalse(beams.SizeMismatch);
                 Assert.Greater(beams.DifferingPixels, 0,
                     "the mirror at Reduced looks the same as with no beams at all, so Reduced "
                   + "dropped them rather than drawing them cheaper");
@@ -199,10 +193,12 @@ namespace VRSL.URP.Tests
                   + $"{atMatch.StepsPerLight:F1}, so the mirror is not cheaper");
                 Assert.LessOrEqual(atReduced.StepsPerLight, VRSLQualityLevel.For(VRSLQuality.Low).VolumetricMaxSteps,
                     "the mirror marched past Low's ceiling");
+                Debug.Log($"[M5] steps per light: Match {atMatch.StepsPerLight:F2}, Reduced {atReduced.StepsPerLight:F2}; "
+                        + $"lights marched {atMatch.LightsMarched} / {atReduced.LightsMarched}");
             }
             finally
             {
-                foreach (var t in new[] { mainMatch, mirrorMatch, mainReduced, mirrorReduced, mirrorSurface })
+                foreach (var t in new[] { mirrorMatch, mirrorReduced, mirrorSurface })
                     if (t != null) Object.DestroyImmediate(t);
                 rig.Dispose();
             }

@@ -39,6 +39,9 @@ namespace VRSL.URP
         /// <summary>Present on the command line: draw VRSL's own normals everywhere,
         /// for the half of a pair that measures what reading URP's is worth.</summary>
         const string ForceOwnNormalsArgument = "-vrsl-force-own-normals";
+        /// <summary>Present on the command line: measure the mirror matrix rather
+        /// than the standard one.</summary>
+        const string MirrorsArgument = "-vrsl-mirrors";
 
         /// <summary>What a script greps the log for. The player writes the folder
         /// itself rather than the caller guessing at a timestamp.</summary>
@@ -69,7 +72,8 @@ namespace VRSL.URP
 
             var outcome = new VRSLSweepOutcome();
             bool forceOwnNormals = Array.IndexOf(Environment.GetCommandLineArgs(), ForceOwnNormalsArgument) >= 0;
-            var job     = VRSLSweepJob.Run(outcome, Stamp, forceOwnNormals);
+            bool mirrors         = Array.IndexOf(Environment.GetCommandLineArgs(), MirrorsArgument) >= 0;
+            var job     = VRSLSweepJob.Run(outcome, Stamp, forceOwnNormals, mirrors);
 
             // Stepped by hand so a throw can be caught. A coroutine that dies of an
             // exception simply stops, and this one is the only thing that ever quits:
