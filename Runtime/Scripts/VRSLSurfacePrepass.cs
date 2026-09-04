@@ -41,7 +41,7 @@ namespace VRSL.URP
     /// neutral fallback surface with a depth-derived normal. Renderers batched by
     /// the GPU Resident Drawer contribute normals through their own pass but no
     /// albedo or material: the drawer ignores override shaders, so they light as
-    /// the neutral fallback too (<see cref="GpuResidentDrawerActive"/>).
+    /// the neutral fallback too (<see cref="GpuResidentDrawerConfigured"/>).
     ///
     /// Both <see cref="VRSL_URPLightManager"/> (DMX) and
     /// <see cref="VRSL_AudioLinkURPLightManager"/> (AudioLink) instantiate this
@@ -106,14 +106,20 @@ namespace VRSL.URP
         public bool UrpNormals { get; set; }
 
         /// <summary>
-        /// Whether the active pipeline asset has the GPU Resident Drawer switched
-        /// on. While it is, every mesh the drawer batches lights as the neutral
-        /// fallback rather than in its own colour and gloss; the diagnostics line
-        /// and Validate Renderer Setup say so, with the ways round it.
+        /// Whether the active pipeline asset has the GPU Resident Drawer switched on
+        /// and its renderers can carry it. While that holds, every mesh the drawer
+        /// batches lights as the neutral fallback rather than in its own colour and
+        /// gloss; the diagnostics line and Validate Renderer Setup say so, with the
+        /// ways round it. Configured rather than running: the drawer's remaining
+        /// gates (the graphics API's buffer target, the project's BatchRendererGroup
+        /// stripping setting, edit mode) are internal to Unity, so a project that
+        /// fails one of them reads as configured here while nothing is batched, and
+        /// the line then describes a limitation that is not in effect.
         /// </summary>
-        public static bool GpuResidentDrawerActive
+        public static bool GpuResidentDrawerConfigured
             => GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp
-            && urp.gpuResidentDrawerMode != GPUResidentDrawerMode.Disabled;
+            && urp.gpuResidentDrawerMode != GPUResidentDrawerMode.Disabled
+            && urp.IsGPUResidentDrawerSupportedBySRP(out _, out _);
 
         /// <summary>How many camera renders drew VRSL's own normals, and how many
         /// read URP's. For the diagnostics line and row S11.</summary>

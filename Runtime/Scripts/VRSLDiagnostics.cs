@@ -300,7 +300,7 @@ namespace VRSL.URP
         /// and the two ways round it; null while it is off.</summary>
         public static string GpuResidentDrawerStatus()
         {
-            if (!VRSLSurfacePrepass.GpuResidentDrawerActive) return null;
+            if (!VRSLSurfacePrepass.GpuResidentDrawerConfigured) return null;
             return "GPU Resident Drawer: ON in the pipeline asset, so the meshes it batches light as "
                  + "neutral mid-grey rather than in their own colour and gloss (Unity draws them with "
                  + "their own shader, so VRSL cannot read their material). To light one in its own "
