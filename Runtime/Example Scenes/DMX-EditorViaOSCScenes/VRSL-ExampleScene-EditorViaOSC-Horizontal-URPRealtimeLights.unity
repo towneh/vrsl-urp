@@ -4157,10 +4157,6 @@ PrefabInstance:
       propertyPath: m_IsActive
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: serializedProgramAsset
-      value: 
-      objectReference: {fileID: 11400000, guid: 22e316583460f1841815b2f0855900d0, type: 2}
     - target: {fileID: 5530545822595038121, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -4273,22 +4269,6 @@ PrefabInstance:
       propertyPath: bloomAnimator
       value: 
       objectReference: {fileID: 124970265}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: fixtureDefGUID
-      value: 4d88361aa1276d64d8a60009bfb590ed
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: fixtureSaveFile
-      value: 129b581964fb4634ea42628511524b31
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: useExtendedUniverses
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: serializationData.Prefab
-      value: 
-      objectReference: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
     - target: {fileID: 8192770596087319596, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0

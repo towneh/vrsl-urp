@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **The control panel is a local overlay on the light managers, and optional.** `VRSL_LocalUIControlPanel` finds the scene's DMX and AudioLink light managers and adjusts them for the local user: the Volumetrics buttons set the managers' quality (High, Standard, Off), the beams slider scales `volumetricIntensity`, and the slider that used to drive the projection meshes now scales the light every fixture casts. Both sliders scale what the scene was authored to rather than replacing it, and on start the panel shows the manager's own quality, so dropping the prefab into a scene changes nothing until a button is pressed. The strobe toggle reaches the manager and the strobe decode material. The body glow, lens flare, discoball and laser controls still act on materials, found by walking the scene once at start; the panel no longer carries material lists, CRT arrays or DMX mode switching, all of which the managers own. The three projection quality menus are gone from the prefab, and the prefab's buttons and sliders are wired to the panel again (they had pointed at the stripped VRChat target since the initial release).
+- **`lightIntensity` on both light managers.** A scene-wide multiplier on the light every fixture casts, the sibling of `volumetricIntensity`. 1 leaves the scene as authored; the beams follow it since they are the same light.
+
+### Fixed
+
+- **The lens flare, laser and discoball shaders compile their stereo-instanced variant.** Under single-pass instanced VR they had no render-target eye index and drew in one eye. The AudioLink laser also lacked the stereo output field on its varyings and wiped its instance id by zero-initialising after the transfer. Both DMX and AudioLink versions of all three are covered. Not yet checked in a headset; the par and blinder bodies named in the rc.2 known issue were already fixed in `1746a30`, and their projection meshes are not used by the URP prefabs.
 
 ## [0.2.0-rc.2] — 2026-09-03
 

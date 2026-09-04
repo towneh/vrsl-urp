@@ -215,6 +215,9 @@ and Q6 is judged by looking at the inspector.
 | Q4 | — | `VRSLQualityLevel.For(Standard)` against the defaults the package shipped | Identical: 24 steps, 8 contact steps, 1.5 m, 0.5 m, noise on at 0.3 / 0.1 / 0.7. A scene authored before the quality field opens at `Standard` and costs what it did. An unrecognised level falls back to `Standard` rather than to something that draws nothing |
 | Q5 | — | Both managers at each level | The same step, density, contact and noise parameters from each. A scene carrying both paths must not march at two budgets depending on which manager owns the pass |
 | Q6 | — | Both manager inspectors, **judged by reading them as a world author would** | One quality control, then the look controls it governs. At `Off` those are greyed out rather than gone, with a line saying why — an author who forgot they switched it off should see the controls sitting there, not conclude the package is broken. No numeric cost knob anywhere, and no advanced foldout hiding one |
+| Q7 | — | The control panel prefab dropped into a scene with a manager at `High`, enter play | Nothing changes: the beams march at `High`, the High button reads as selected, every slider sits at full and the light and beams are at what the scene was authored to. The panel is an overlay for the local user, not a second owner of the scene's settings |
+| Q8 | — | Same, press Standard then Off, then drag the light and beams sliders | The manager's `quality` follows the buttons (both managers where the scene has both). The beams slider scales `volumetricIntensity` and the light slider scales `lightIntensity`, both as a share of the authored value, so a scene authored at 2 reaches 1 at half. Removing the panel from the scene changes nothing |
+| Q9 | — | `lightIntensity` at 0.5 on the manager, no panel | Every fixture casts half the light and the beams dim with it; the fixture bodies glow as before, since the body glow is the material's and not the manager's |
 
 ### Wiring
 
@@ -679,6 +682,7 @@ scene-owned player.
 | X2 | — | Volumetric cones in headset | Cones in the same world position in both eyes |
 | X3 | — | Diagnostics, tile culling active | No vertical mirroring of lighting between eyes. Mirroring points at the `renderIntoTexture` inference in `VRSLTileCullPass`; clearing `lightCullShader` isolates it |
 | X4 | — | Fixture body meshes in headset | Visible in both eyes |
+| X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye. **Written 2026-09-04, not yet run in a headset:** the stereo-instanced variant is compiled for all six shaders; whether it draws right is the row |
 
 ---
 

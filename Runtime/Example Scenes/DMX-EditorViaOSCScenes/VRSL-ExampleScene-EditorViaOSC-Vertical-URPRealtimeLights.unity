@@ -2416,74 +2416,6 @@ PrefabInstance:
       propertyPath: m_Name
       value: VRSL-LocalUIControlPanel
       objectReference: {fileID: 0}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: serializedProgramAsset
-      value: 
-      objectReference: {fileID: 11400000, guid: 22e316583460f1841815b2f0855900d0, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: serializedPublicVariablesBytesString
-      value: Ai8AAAAAATIAAABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgAuAFUAZABvAG4AVgBhAHIAaQBhAGIAbABlAFQAYQBiAGwAZQAsACAAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4AAAAAAAYBAAAAAAAAACcBBAAAAHQAeQBwAGUAAWgAAABTAHkAcwB0AGUAbQAuAEMAbwBsAGwAZQBjAHQAaQBvAG4AcwAuAEcAZQBuAGUAcgBpAGMALgBMAGkAcwB0AGAAMQBbAFsAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4ALgBJAG4AdABlAHIAZgBhAGMAZQBzAC4ASQBVAGQAbwBuAFYAYQByAGkAYQBiAGwAZQAsACAAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4AXQBdACwAIABtAHMAYwBvAHIAbABpAGIAAQEJAAAAVgBhAHIAaQBhAGIAbABlAHMALwEAAAABaAAAAFMAeQBzAHQAZQBtAC4AQwBvAGwAbABlAGMAdABpAG8AbgBzAC4ARwBlAG4AZQByAGkAYwAuAEwAaQBzAHQAYAAxAFsAWwBWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgAuAEkAbgB0AGUAcgBmAGEAYwBlAHMALgBJAFUAZABvAG4AVgBhAHIAaQBhAGIAbABlACwAIABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgBdAF0ALAAgAG0AcwBjAG8AcgBsAGkAYgABAAAABgIAAAAAAAAAAi8CAAAAAUsAAABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgAuAFUAZABvAG4AVgBhAHIAaQBhAGIAbABlAGAAMQBbAFsAUwB5AHMAdABlAG0ALgBCAG8AbwBsAGUAYQBuACwAIABtAHMAYwBvAHIAbABpAGIAXQBdACwAIABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgACAAAABgIAAAAAAAAAJwEEAAAAdAB5AHAAZQABFwAAAFMAeQBzAHQAZQBtAC4AUwB0AHIAaQBuAGcALAAgAG0AcwBjAG8AcgBsAGkAYgAnAQoAAABTAHkAbQBiAG8AbABOAGEAbQBlAAErAAAAXwBfAF8AVQBkAG8AbgBTAGgAYQByAHAAQgBlAGgAYQB2AGkAbwB1AHIASABhAHMARABvAG4AZQBTAGMAZQBuAGUAVQBwAGcAcgBhAGQAZQBfAF8AXwAnAQQAAAB0AHkAcABlAAEYAAAAUwB5AHMAdABlAG0ALgBCAG8AbwBsAGUAYQBuACwAIABtAHMAYwBvAHIAbABpAGIAKwEFAAAAVgBhAGwAdQBlAAEHBQIvAwAAAAFJAAAAVgBSAEMALgBVAGQAbwBuAC4AQwBvAG0AbQBvAG4ALgBVAGQAbwBuAFYAYQByAGkAYQBiAGwAZQBgADEAWwBbAFMAeQBzAHQAZQBtAC4ASQBuAHQAMwAyACwAIABtAHMAYwBvAHIAbABpAGIAXQBdACwAIABWAFIAQwAuAFUAZABvAG4ALgBDAG8AbQBtAG8AbgADAAAABgIAAAAAAAAAJwEEAAAAdAB5AHAAZQABFwAAAFMAeQBzAHQAZQBtAC4AUwB0AHIAaQBuAGcALAAgAG0AcwBjAG8AcgBsAGkAYgAnAQoAAABTAHkAbQBiAG8AbABOAGEAbQBlAAEfAAAAXwBfAF8AVQBkAG8AbgBTAGgAYQByAHAAQgBlAGgAYQB2AGkAbwB1AHIAVgBlAHIAcwBpAG8AbgBfAF8AXwAnAQQAAAB0AHkAcABlAAEWAAAAUwB5AHMAdABlAG0ALgBJAG4AdAAzADIALAAgAG0AcwBjAG8AcgBsAGkAYgAXAQUAAABWAGEAbAB1AGUAAgAAAAcFBwUHBQ==
-      objectReference: {fileID: 0}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: publicVariablesUnityEngineObjects.Array.size
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[99]'
-      value: 
-      objectReference: {fileID: 8600000, guid: f51fa799ef0abde489235f40fc0328ef, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[100]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 9bc2d5eee51d6e2cf09f27fe7f828b10, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[101]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 555ce9e464c9a54c9d331e0030c258ef, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[102]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 63c403376634fef0560b44d7f19aedaa, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[103]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 5bee9c07b3305e88be89de0d01fc2f07, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[104]'
-      value: 
-      objectReference: {fileID: 8600000, guid: e6641cd38ad1a21be3425ab43ecc2506, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[105]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 78c70f9c712bd81bf5c13a40970fd79b, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[106]'
-      value: 
-      objectReference: {fileID: 8600000, guid: c6d6373129a6cae52b02e2b675ad7e86, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[107]'
-      value: 
-      objectReference: {fileID: 8600000, guid: da695f1470322a477c370746a7a2571f, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[108]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 954ba27aa605bf10c6625c64c834303f, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[109]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 17f83f063191dbffbaae01943cc9c235, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[110]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 015583c6b281a3ff6b1af6d872ac4610, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[111]'
-      value: 
-      objectReference: {fileID: 8600000, guid: a997187a06df0deca7f350bc32369b8f, type: 2}
-    - target: {fileID: 5530545822544342666, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: 'publicVariablesUnityEngineObjects.Array.data[112]'
-      value: 
-      objectReference: {fileID: 8600000, guid: 66a7e6c0f0eebb9378d52ca3820d9ccb, type: 2}
     - target: {fileID: 5530545822595038121, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
@@ -2591,43 +2523,15 @@ PrefabInstance:
     - target: {fileID: 5530545824087885516, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: m_AnchorMax.y
       value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: DMXMode
-      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: bloomAnimator
       value: 
       objectReference: {fileID: 566825316}
     - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: fixtureGizmos
-      value: 2
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: panRangeTarget
-      value: 180
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: tiltRangeTarget
-      value: -180
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: discoballQuality
       value: 1
       objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: isUsingAudioLink
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: useLegacyStaticLights
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
-      propertyPath: serializationData.Prefab
-      value: 
-      objectReference: {fileID: 5595631434132784427, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
     - target: {fileID: 8192770596087319596, guid: 544971241f2210aa6def9a21156cbb61, type: 3}
       propertyPath: m_AnchorMax.x
       value: 0
