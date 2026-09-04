@@ -138,6 +138,21 @@ namespace VRSL.URP
         public bool enableGoboSpin = true;
 
         // ──────────────────────────────────────────────────────────────────────────
+        // Discoball
+        // ──────────────────────────────────────────────────────────────────────────
+        [Range(-180f, 180f)]
+        [Tooltip("How fast the ball turns, in degrees per second. Negative turns it the other "
+               + "way. The dots sweep the room at this rate; a real ball on a motor does "
+               + "about 8.")]
+        public float discoballSpinSpeed = 8.2f;
+
+        [Tooltip("Draw the dots in the haze as well as on surfaces. Hundreds of thin beams, "
+               + "which looks the part in a dark room and costs a cubemap fetch per raymarch "
+               + "step for this one light across everything its range covers. Off, the dots "
+               + "land on surfaces only.")]
+        public bool discoballBeams = false;
+
+        // ──────────────────────────────────────────────────────────────────────────
         // Pan / Tilt (for moving-head fixtures)
         // ──────────────────────────────────────────────────────────────────────────
         [Tooltip("Read pan and tilt channels and apply Rodrigues rotation on the GPU.")]
@@ -287,5 +302,8 @@ namespace VRSL.URP
         StaticParLight   = 3,
         Custom           = 4,
         StaticPointLight = 5,
+        /// <summary>One channel, the dimmer. A point light whose dots come from the
+        /// manager's discoball cubemap, spinning about the fixture's up axis.</summary>
+        Discoball        = 6,
     }
 }

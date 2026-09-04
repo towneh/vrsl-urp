@@ -173,7 +173,8 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                                               light.positionAndRange.xyz,
                                               light.directionAndType.xyz,
                                               light.spotParams.y,
-                                              light.spotParams.z);
+                                              light.spotParams.z)
+                                 * VRSL_DiscoballMask(light, posWS);
 
                     // Costliest term in the loop — a depth-buffer march per
                     // light — so it runs last, only for lights still reaching

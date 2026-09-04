@@ -24,7 +24,8 @@
 struct VRSLFixtureConfig
 {
     float4 positionAndRange;    // xyz = world position,  w = attenuation range
-    float4 forwardAndType;      // xyz = base forward dir, w = light type (0=spot, 1=point)
+    float4 forwardAndType;      // xyz = base forward dir, w = light type (0=spot, 1=point,
+                                //       2=discoball: xyz is then the spin axis)
     float4 rightAndMaxIntensity;// xyz = local +X in world space (tilt rotation axis), w = max intensity scalar
     float4 spotAngles;          // x = inner-to-outer ratio (0..1), y = max outer half-angle (deg),
                                 // z = finalIntensity cap,          w = min outer half-angle (deg)
@@ -35,7 +36,9 @@ struct VRSLFixtureConfig
     float4 tiltSettings;        // x = maxMinTilt (deg), y = tiltOffset (deg),
                                 // z = invertTilt (0/1), w = enableGobo (0/1)
     float4 extras;              // x = emitterDepth (m), y = 5-channel mode flag,
-                                // z = curveMod (body-glow dimmer-response match), w = reserved
+                                // z = curveMod (body-glow dimmer-response match),
+                                // w = discoball beams (1 = the raymarch draws its dots)
+    float4 tintAndSpin;         // xyz = discoball colour (linear), w = spin (deg/s)
 };
 
 // Per-fixture light state computed by the compute shader every frame.
@@ -44,34 +47,41 @@ struct VRSLFixtureConfig
 struct VRSLLightData
 {
     float4 positionAndRange;    // xyz = world position, w = range
-    float4 directionAndType;    // xyz = normalised direction (spot),
+    float4 directionAndType;    // xyz = normalised direction (spot) or spin axis (discoball),
                                 // w   = light type and gobo slice, packed (see below)
     float4 colorAndIntensity;   // xyz = linear RGB, w = intensity (0 = inactive, skip)
     float4 spotParams;          // x = cos(inner half-angle), y = cos(outer half-angle),
                                 // z = emitterDepth (m) — virtual cone-apex pushback,
-                                // w = gobo spin phase (radians, wrapped to ±2π)
+                                //     or, for a discoball, 1 when the raymarch draws it
+                                // w = spin phase (radians, wrapped to ±2π): the gobo's
+                                //     for a spot, the ball's for a discoball
 };
 
 // directionAndType.w carries two integers in one float: the light type in the
-// low bit and the gobo slice above it, biased by one so "no gobo" (-1) survives.
-// Both are small integers and floats represent those exactly, so this costs no
-// precision — unlike packing them as halves, which would quantise the spin phase
-// and stipple a slowly rotating gobo.
+// low two bits and the gobo slice above it, biased by one so "no gobo" (-1)
+// survives. Both are small integers and floats represent those exactly, so this
+// costs no precision — unlike packing them as halves, which would quantise the
+// spin phase and stipple a slowly rotating gobo.
 float VRSL_PackTypeAndGobo(float lightType, int goboIndex)
 {
-    return lightType + (float)(goboIndex + 1) * 2.0;
+    return lightType + (float)(goboIndex + 1) * 4.0;
 }
 
-// 0 = spot, 1 = point.
+// 0 = spot, 1 = point, 2 = discoball. Anything but a spot is omnidirectional.
 float VRSL_LightType(VRSLLightData light)
 {
-    return fmod(light.directionAndType.w, 2.0);
+    return fmod(light.directionAndType.w, 4.0);
+}
+
+bool VRSL_IsDiscoball(VRSLLightData light)
+{
+    return VRSL_LightType(light) > 1.5;
 }
 
 // -1 = no gobo, 0+ = slice in _VRSLGobos.
 float VRSL_GoboIndex(VRSLLightData light)
 {
-    return floor(light.directionAndType.w * 0.5) - 1.0;
+    return floor(light.directionAndType.w * 0.25) - 1.0;
 }
 
 // An inactive fixture emits nothing, so intensity doubles as the active flag and
@@ -315,6 +325,33 @@ float SampleGobo(float goboIdx, float spinAngle, float3 posWS,
 
     return _VRSLGobos.SampleLevel(sampler_linear_clamp,
                                   float3(u, v, goboIdx), 0).r;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Discoball — a point light masked by a cubemap of its dots
+// ──────────────────────────────────────────────────────────────────────────────
+
+// One cubemap for every discoball in the scene, bound by the manager beside the
+// gobo wheel. _VRSLDiscoballCubeBound is 0 when the manager has none, and the
+// ball then lights as a plain point light.
+TextureCube _VRSLDiscoballCube;
+float       _VRSLDiscoballCubeBound;
+
+// The dot pattern reaching a world-space point: the cubemap looked up along the
+// direction from the ball, turned back by the ball's spin about its axis so the
+// pattern turns with the ball. Coloured cubemaps tint their dots. Returns 1 for
+// any light that is not a discoball, so it can sit in the loop beside SampleGobo.
+float3 VRSL_DiscoballMask(VRSLLightData light, float3 posWS)
+{
+    if (!VRSL_IsDiscoball(light) || _VRSLDiscoballCubeBound < 0.5) return 1.0;
+
+    float3 d    = normalize(posWS - light.positionAndRange.xyz);
+    float3 axis = light.directionAndType.xyz;
+    float  a    = -light.spotParams.w;
+    float  c    = cos(a), s = sin(a);
+    d = d * c + cross(axis, d) * s + axis * dot(axis, d) * (1.0 - c);
+
+    return _VRSLDiscoballCube.SampleLevel(sampler_linear_clamp, d, 0).rgb;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

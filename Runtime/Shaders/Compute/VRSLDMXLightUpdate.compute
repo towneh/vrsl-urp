@@ -264,18 +264,22 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     //    5-channel: dimmer +0, RGB +1/2/3, strobe +4 (compressed static layout, for
     //               fixtures patched 5 channels apart). extras.y carries the flag.
     bool fiveCh   = cfg.extras.y > 0.5;
+    // A discoball is one channel: its dimmer. Colour comes from the fixture's tint,
+    // it has no strobe, pan, tilt, zoom or gobo channels, and it spins on its own
+    // clock at a fixed rate rather than on a channel.
+    bool discoball = cfg.forwardAndType.w > 1.5;
     uint dimmerCh = fiveCh ? absChannel     : absChannel + 5;
     uint rCh      = fiveCh ? absChannel + 1 : absChannel + 7;
     uint gCh      = fiveCh ? absChannel + 2 : absChannel + 8;
     uint bCh      = fiveCh ? absChannel + 3 : absChannel + 9;
     uint strobeCh = fiveCh ? absChannel + 4 : absChannel + 6;
 
-    float intensity = MainChannel(dimmerCh);
-    float r = MainChannel(rCh);
-    float g = MainChannel(gCh);
-    float b = MainChannel(bCh);
+    float intensity = discoball ? MainChannel(absChannel) : MainChannel(dimmerCh);
+    float r = discoball ? cfg.tintAndSpin.x : MainChannel(rCh);
+    float g = discoball ? cfg.tintAndSpin.y : MainChannel(gCh);
+    float b = discoball ? cfg.tintAndSpin.z : MainChannel(bCh);
     float strobe = 1.0;
-    if (enableStrobe)
+    if (enableStrobe && !discoball)
         strobe = StrobeValue(strobeCh);
 
     float combinedIntensity =
@@ -300,7 +304,7 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     float3 baseForward = cfg.forwardAndType.xyz;
     float3 finalDir    = baseForward;
 
-    if (enablePanTilt)
+    if (enablePanTilt && !discoball)
     {
         float maxMinPan  = cfg.panSettings.x;
         float panOffset  = cfg.panSettings.y;
@@ -364,8 +368,8 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // Mirrors getDMXGoboSelection() in VRSL-DMXFunctions: round(raw*255/30), clamp 1..N
     // 5-channel fixtures have no gobo/spin channels — those offsets (+10/+11) belong
     // to the next fixture in a 5-apart patch, so suppress the reads in 5CH mode.
-    bool  enableGoboSpin = cfg.panSettings.w > 0.5 && !fiveCh;
-    bool  enableGobo     = cfg.tiltSettings.w > 0.5 && !fiveCh;
+    bool  enableGoboSpin = cfg.panSettings.w > 0.5 && !fiveCh && !discoball;
+    bool  enableGobo     = cfg.tiltSettings.w > 0.5 && !fiveCh && !discoball;
     float spinStatus = MainChannel   (absChannel + 10);                   // DMX value — picks direction
     float spinPhase  = SpinPhase(absChannel + 10);
     float goboRaw    = enableGobo ? MainChannel(absChannel + 11) : 0.0;
@@ -380,6 +384,10 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
         float angle = (spinStatus > 0.5) ? -spinPhase * 4.0 : spinPhase * 4.0;
         spinSpeed = fmod(angle, 6.28318530718);
     }
+    // The ball turns at its authored rate on the manager's clock, the same clock the
+    // static strobe uses, so every camera sees the dots in one place.
+    if (discoball)
+        spinSpeed = fmod(_VRSLU_TimeY * radians(cfg.tintAndSpin.w), 6.28318530718);
     // Gobo projection is a spot-cone effect — SampleGobo masks everything outside the
     // cone and behind the light axis. Point lights are omnidirectional, so leave goboIdx
     // at -1 (the SampleGobo no-op) for them; otherwise their spill is masked down to a
@@ -395,7 +403,10 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
 
     light.directionAndType = float4(normalize(finalDir),
                                     VRSL_PackTypeAndGobo(cfg.forwardAndType.w, goboIdx));
-    light.spotParams       = float4(innerCos, outerCos, cfg.extras.x, spinSpeed);
+    // spotParams.z carries the emitter depth for a spot; a discoball has none, and the
+    // slot says instead whether the raymarch should draw its dots.
+    light.spotParams       = float4(innerCos, outerCos,
+                                    discoball ? cfg.extras.w : cfg.extras.x, spinSpeed);
     _LightData[idx] = light;
 }
 

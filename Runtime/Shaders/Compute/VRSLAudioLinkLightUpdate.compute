@@ -193,6 +193,10 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // (spinSpeed *= -goboSpinSpeed in VRSL-StandardMover-VolumetricFrag.cginc).
     // fmod to [-2π, 2π] bounds precision for long-running scenes.
     float spinPhase = fmod(cfg.reserved.y * _VRSLTime * -0.34906585, 6.28318530718);
+    // A discoball turns at its authored rate in degrees per second about its axis.
+    bool discoball = lightType == 2;
+    if (discoball)
+        spinPhase = fmod(_VRSLTime * radians(cfg.reserved.y), 6.28318530718);
     // Gobo selection, mirroring the DMX kernel's guards.
     //   - reserved.x is already 0-based (the inspector field is 1-based, so its 0
     //     "open beam" arrives here as -1). -1 must survive as the SampleGobo no-op.
@@ -208,6 +212,10 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
         goboIdx = min(goboIdx, (int)_VRSLGoboCount - 1);
 
     light.directionAndType  = float4(dir, VRSL_PackTypeAndGobo((float)lightType, goboIdx));
-    light.spotParams        = float4(innerCos, outerCos, cfg.spotAngles.z, spinPhase);
+    // spotParams.z is a spot's emitter depth; for a discoball it says whether the
+    // raymarch draws its dots (intensityParams.w).
+    light.spotParams        = float4(innerCos, outerCos,
+                                     discoball ? cfg.intensityParams.w : cfg.spotAngles.z,
+                                     spinPhase);
     _LightData[idx] = light;
 }

@@ -56,6 +56,8 @@ namespace VRSL.URP
         // Fixture Shell
         SerializedProperty _fixtureShellRenderers;
         SerializedProperty _shellEmissionTint;
+        SerializedProperty _discoballSpinSpeed;
+        SerializedProperty _discoballBeams;
 
         static GUIStyle MakeSectionLabel()
         {
@@ -111,6 +113,8 @@ namespace VRSL.URP
 
             _fixtureShellRenderers = serializedObject.FindProperty("fixtureShellRenderers");
             _shellEmissionTint     = serializedObject.FindProperty("shellEmissionTint");
+            _discoballSpinSpeed    = serializedObject.FindProperty("discoballSpinSpeed");
+            _discoballBeams        = serializedObject.FindProperty("discoballBeams");
         }
 
         public override void OnInspectorGUI()
@@ -132,6 +136,11 @@ namespace VRSL.URP
                              || type == DMXFixtureType.Custom;
             // Static point light: omnidirectional archetype — no spot/cone/pan-tilt/gobo.
             bool isStaticPoint = type == DMXFixtureType.StaticPointLight;
+            // Discoball: one channel, the dimmer; omnidirectional, colour from the tint,
+            // dots from the manager's cubemap. Nothing about cones, movement, strobe,
+            // gobos or the light axis applies.
+            bool isDiscoball   = type == DMXFixtureType.Discoball;
+            bool isOmni        = isStaticPoint || isDiscoball;
 
             EditorGUILayout.Space();
             EditorGUILayout.Space();
@@ -139,8 +148,11 @@ namespace VRSL.URP
             // ── DMX Settings ──────────────────────────────────────────────────
             GUILayout.Label("DMX Settings", _sectionLabel);
             EditorGUILayout.PropertyField(_enableDMXChannels);
-            EditorGUILayout.PropertyField(_enableFineChannels);
-            EditorGUILayout.PropertyField(_use5ChannelMode, new GUIContent("Use 5 Channel Mode", _use5ChannelMode.tooltip));
+            if (!isDiscoball)
+            {
+                EditorGUILayout.PropertyField(_enableFineChannels);
+                EditorGUILayout.PropertyField(_use5ChannelMode, new GUIContent("Use 5 Channel Mode", _use5ChannelMode.tooltip));
+            }
             EditorGUILayout.PropertyField(_useLegacySectorMode);
             if (_useLegacySectorMode.boolValue)
             {
@@ -163,7 +175,7 @@ namespace VRSL.URP
             EditorGUILayout.PropertyField(_curveMod);
             // StaticPointLight implies point emission (forced in the manager), so the
             // toggle is hidden — showing it would suggest the mode is optional here.
-            if (!isStaticPoint)
+            if (!isOmni)
                 EditorGUILayout.PropertyField(_isPointLight);
 
             // Cone-width controls. Spotlights (and Custom) have a zoom motor on
@@ -185,7 +197,7 @@ namespace VRSL.URP
                 if (_enableConeWidth.boolValue)
                     _enableConeWidth.boolValue = false;
                 // A point light is omnidirectional — no cone angle to author.
-                if (!isStaticPoint)
+                if (!isOmni)
                     EditorGUILayout.PropertyField(
                         _maxSpotAngle,
                         new GUIContent("Spot Angle", _maxSpotAngle.tooltip));
@@ -193,14 +205,25 @@ namespace VRSL.URP
             EditorGUILayout.PropertyField(_range);
             // Emitter depth only meaningfully affects spot cones; hide for point lights
             // since the math collapses back to a point source regardless.
-            if (!_isPointLight.boolValue && !isStaticPoint)
+            if (!_isPointLight.boolValue && !isOmni)
                 EditorGUILayout.PropertyField(_emitterDepth);
             // lensTransform is a spot-cone anchor; for the omnidirectional StaticPointLight
             // archetype the origin comes from the shell-mesh centre + lightOriginOffset, so
             // hide the lens field for it. lightOriginOffset stays available for all types.
-            if (!isStaticPoint)
+            if (!isOmni)
                 EditorGUILayout.PropertyField(_lensTransform);
             EditorGUILayout.PropertyField(_lightOriginOffset);
+
+            if (isDiscoball)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.Space();
+                GUILayout.Label("Discoball", _sectionLabel);
+                EditorGUILayout.PropertyField(_shellEmissionTint, new GUIContent("Colour", "The colour of the dots, on top of whatever the cubemap carries."));
+                EditorGUILayout.PropertyField(_discoballSpinSpeed, new GUIContent("Spin Speed", _discoballSpinSpeed.tooltip));
+                EditorGUILayout.PropertyField(_discoballBeams, new GUIContent("Dots In The Haze", _discoballBeams.tooltip));
+                EditorGUILayout.HelpBox("The dot pattern is the light manager's Discoball Cubemap, shared by every discoball in the scene. The ball spins about this object's up axis.", MessageType.None);
+            }
 
             EditorGUILayout.Space();
             EditorGUILayout.Space();
@@ -228,13 +251,16 @@ namespace VRSL.URP
             }
 
             // ── Fixture Settings ──────────────────────────────────────────────
-            // Strobe is universal (all fixture types support it). Gobo is split
+            // Strobe is universal apart from the one-channel discoball. Gobo is split
             // into its own conditional section below for spotlight-only display.
-            GUILayout.Label("Fixture Settings", _sectionLabel);
-            EditorGUILayout.PropertyField(_enableStrobe);
+            if (!isDiscoball)
+            {
+                GUILayout.Label("Fixture Settings", _sectionLabel);
+                EditorGUILayout.PropertyField(_enableStrobe);
 
-            EditorGUILayout.Space();
-            EditorGUILayout.Space();
+                EditorGUILayout.Space();
+                EditorGUILayout.Space();
+            }
 
             // ── Gobo Settings ─────────────────────────────────────────────────
             // Spotlights and Custom show gobo selection. Washlights, Blinders,
@@ -251,7 +277,7 @@ namespace VRSL.URP
 
             // ── Light Output Axis ─────────────────────────────────────────────
             // Omnidirectional point lights ignore the output axis — hide it.
-            if (!isStaticPoint)
+            if (!isOmni)
             {
                 GUILayout.Label("Light Output Axis", _sectionLabel);
                 EditorGUILayout.PropertyField(_localLightDirection);
@@ -261,9 +287,14 @@ namespace VRSL.URP
             }
 
             // ── Fixture Shell ─────────────────────────────────────────────────
-            GUILayout.Label("Fixture Shell", _sectionLabel);
-            EditorGUILayout.PropertyField(_fixtureShellRenderers, true);
-            EditorGUILayout.PropertyField(_shellEmissionTint);
+            // A discoball's sphere is a plain lit material with nothing to drive, and
+            // its tint is drawn above as the colour of the dots.
+            if (!isDiscoball)
+            {
+                GUILayout.Label("Fixture Shell", _sectionLabel);
+                EditorGUILayout.PropertyField(_fixtureShellRenderers, true);
+                EditorGUILayout.PropertyField(_shellEmissionTint);
+            }
 
             serializedObject.ApplyModifiedProperties();
         }

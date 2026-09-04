@@ -97,6 +97,21 @@ namespace VRSL.URP
         [Tooltip("Gobo rotation speed. 0 = no spin, negative = anti-clockwise, positive = clockwise. Matches the volumetric shader's spin range.")]
         public float goboSpinSpeed = 0f;
 
+        // ──────────────────────────────────────────────────────────────────────────
+        // Discoball
+        // ──────────────────────────────────────────────────────────────────────────
+        [Range(-180f, 180f)]
+        [Tooltip("How fast the ball turns, in degrees per second. Negative turns it the other "
+               + "way. The dots sweep the room at this rate; a real ball on a motor does "
+               + "about 8.")]
+        public float discoballSpinSpeed = 8.2f;
+
+        [Tooltip("Draw the dots in the haze as well as on surfaces. Hundreds of thin beams, "
+               + "which looks the part in a dark room and costs a cubemap fetch per raymarch "
+               + "step for this one light across everything its range covers. Off, the dots "
+               + "land on surfaces only.")]
+        public bool discoballBeams = false;
+
         [Range(0f, 1f)]
         [Tooltip("User-side intensity cap, equivalent to Final Intensity on shader fixtures.")]
         public float finalIntensity = 1f;
@@ -265,6 +280,10 @@ namespace VRSL.URP
         StaticBlinder  = 2,
         StaticParLight = 3,
         Custom         = 4,
+        /// <summary>A point light whose dots come from the manager's discoball cubemap,
+        /// spinning about the fixture's up axis. Brightness follows the band like any
+        /// other AudioLink fixture.</summary>
+        Discoball      = 5,
     }
 
     /// <summary>Color source for <see cref="VRStageLighting_AudioLink_RealtimeLight"/>.</summary>

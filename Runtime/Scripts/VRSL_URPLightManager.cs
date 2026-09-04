@@ -145,6 +145,11 @@ namespace VRSL.URP
                + "DMX channel +11 selects the slot (0 = open/no gobo). Order matches DMX value range.")]
         public Texture2D[] goboTextures;
 
+        [Tooltip("The dot pattern every discoball fixture in the scene throws, as a cubemap. "
+               + "The one that ships is a plain mirror ball. Leave empty and a discoball "
+               + "lights as an ordinary point light, with no dots.")]
+        public Cubemap discoballCubemap;
+
         [Header("Secondary cameras")]
         [Tooltip("How VRSL lights cameras that render into a texture rather than to the "
                + "player's view: mirrors, portals, camera props. Each one pays for the whole "
@@ -375,7 +380,9 @@ namespace VRSL.URP
                                                //   z=enablePanTilt, w=enableFineChannels
             public Vector4 panSettings;         // x=maxMinPan, y=panOffset, z=invertPan, w=enableGoboSpin
             public Vector4 tiltSettings;        // x=maxMinTilt,y=tiltOffset,z=invertTilt,w=enableGobo
-            public Vector4 extras;              // x=emitterDepth(m), yzw=reserved
+            public Vector4 extras;              // x=emitterDepth(m), y=5ch flag, z=curveMod,
+                                               //   w=discoball beams
+            public Vector4 tintAndSpin;         // xyz=discoball colour (linear), w=spin deg/s
         }
 
         // 4 × float4 = 64 bytes — must match VRSLLightData in VRSLLightingLibrary.hlsl,
@@ -1022,7 +1029,7 @@ namespace VRSL.URP
             FixtureConfigBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
-                Marshal.SizeOf<VRSLFixtureConfig>());   // 112 bytes
+                Marshal.SizeOf<VRSLFixtureConfig>());   // 128 bytes
 
             LightDataBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
@@ -1109,6 +1116,10 @@ namespace VRSL.URP
                                       ? f.localLightDirection.normalized
                                       : Vector3.forward;
             Vector3 baseForward = f.transform.TransformDirection(localDir);
+            // A discoball hangs and turns about its own up axis, which is what the
+            // compute rotates the dot pattern around; it has no light axis of its own.
+            bool discoball = f.fixtureType == DMXFixtureType.Discoball;
+            if (discoball) baseForward = f.transform.up;
             // Local +X in world space — used by the compute shader as the tilt rotation axis.
             // The volumetric mover shader rotates object-space X by the tilt matrix; we need the
             // same axis in world space since the compute shader has no ObjectToWorld matrix.
@@ -1116,7 +1127,9 @@ namespace VRSL.URP
 
             // StaticPointLight emits omnidirectionally regardless of the isPointLight
             // toggle (which the inspector hides for that archetype).
-            int   lightType    = (f.isPointLight || f.fixtureType == DMXFixtureType.StaticPointLight) ? 1 : 0;
+            int   lightType    = discoball ? 2
+                               : (f.isPointLight || f.fixtureType == DMXFixtureType.StaticPointLight) ? 1 : 0;
+            Color tint         = f.shellEmissionTint.linear;
             float outerHalf    = f.maxSpotAngle * 0.5f;
             // When enableConeWidth is false, collapse minOuter == outerHalf so the compute
             // shader's lerp over DMX ch+4 is a no-op and the cone stays fixed at maxSpotAngle.
@@ -1162,8 +1175,9 @@ namespace VRSL.URP
                 // the compressed static DMX layout instead of the 13-channel layout.
                 // extras.z carries _CurveMod so the point light reproduces the body-glow
                 // surface's non-linear dimmer response (kept in sync via the shell MPB).
+                tintAndSpin  = new Vector4(tint.r, tint.g, tint.b, f.discoballSpinSpeed),
                 extras       = new Vector4(f.emitterDepth, f.use5ChannelMode ? 1f : 0f,
-                                           f.curveMod, 0f),
+                                           f.curveMod, discoball && f.discoballBeams ? 1f : 0f),
             };
         }
 
@@ -1481,6 +1495,9 @@ namespace VRSL.URP
             CompleteGoboArray();
             if (GoboArray != null)
                 Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
+            if (discoballCubemap != null)
+                Shader.SetGlobalTexture("_VRSLDiscoballCube", discoballCubemap);
+            Shader.SetGlobalFloat("_VRSLDiscoballCubeBound", discoballCubemap != null ? 1f : 0f);
 
             // Baked here rather than on enable so a level switched at runtime from
             // Off finds one. Bound the way the gobo wheel is: it is not a graph

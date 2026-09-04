@@ -130,6 +130,11 @@ namespace VRSL.URP
                + "Each fixture selects a slot via its Gobo Index field. -1 = no gobo (open beam).")]
         public Texture2D[] goboTextures;
 
+        [Tooltip("The dot pattern every discoball fixture in the scene throws, as a cubemap. "
+               + "The one that ships is a plain mirror ball. Leave empty and a discoball "
+               + "lights as an ordinary point light, with no dots.")]
+        public Cubemap discoballCubemap;
+
         [Header("AudioLink")]
         [Tooltip("Scene-wide texture sampled by every AudioLink fixture in ColorTexture / "
                + "ColorTextureTraditional color modes. Mirrors the legacy AudioLink Static "
@@ -594,8 +599,12 @@ namespace VRSL.URP
         {
             Vector3 pos     = f.GetWorldPosition();
             Vector3 forward = f.GetWorldForward();
+            // A discoball turns about its own up axis, which is what the compute rotates
+            // the dot pattern around; it has no light axis of its own.
+            bool  discoball  = f.fixtureType == AudioLinkFixtureType.Discoball;
+            if (discoball) forward = f.transform.up;
 
-            int   lightType  = f.isPointLight ? 1 : 0;
+            int   lightType  = discoball ? 2 : f.isPointLight ? 1 : 0;
             float outerHalf  = f.spotAngle * 0.5f;
             // Inner-to-outer ratio (0..1). Wash movers keep most of the cone bright with
             // a longer soft feather at the outer edge — broad diffuse beam without reading
@@ -617,7 +626,7 @@ namespace VRSL.URP
                     f.maxIntensity * lightIntensity,
                     f.finalIntensity * f.globalIntensity,
                     f.enableAudioLink ? 1f : 0f,
-                    0f),
+                    discoball && f.discoballBeams ? 1f : 0f),
                 // spotAngles.x = inner-to-outer ratio (0..1) — applied to the outer
                 // half-angle in the compute shader.
                 // spotAngles.z = emitter depth in metres (virtual cone-apex pushback for
@@ -636,7 +645,7 @@ namespace VRSL.URP
                 //               only when colorMode == ColorTexture (6).
                 reserved         = new Vector4(
                     f.goboIndex - 1f,
-                    f.goboSpinSpeed,
+                    discoball ? f.discoballSpinSpeed : f.goboSpinSpeed,
                     f.textureSamplingCoordinates.x,
                     f.textureSamplingCoordinates.y),
             };
@@ -872,6 +881,9 @@ namespace VRSL.URP
             CompleteGoboArray();
             if (GoboArray != null)
                 Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
+            if (discoballCubemap != null)
+                Shader.SetGlobalTexture("_VRSLDiscoballCube", discoballCubemap);
+            Shader.SetGlobalFloat("_VRSLDiscoballCubeBound", discoballCubemap != null ? 1f : 0f);
 
             // Baked here rather than on enable so a level switched at runtime from
             // Off finds one. Bound the way the gobo wheel is: it is not a graph

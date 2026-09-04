@@ -41,6 +41,8 @@ namespace VRSL.URP
         // Fixture Settings
         SerializedProperty _goboIndex;
         SerializedProperty _goboSpinSpeed;
+        SerializedProperty _discoballSpinSpeed;
+        SerializedProperty _discoballBeams;
 
         // Fixture Shell
         SerializedProperty _fixtureShellRenderers;
@@ -86,6 +88,8 @@ namespace VRSL.URP
 
             _goboIndex       = serializedObject.FindProperty("goboIndex");
             _goboSpinSpeed   = serializedObject.FindProperty("goboSpinSpeed");
+            _discoballSpinSpeed = serializedObject.FindProperty("discoballSpinSpeed");
+            _discoballBeams     = serializedObject.FindProperty("discoballBeams");
 
             _fixtureShellRenderers = serializedObject.FindProperty("fixtureShellRenderers");
         }
@@ -107,6 +111,9 @@ namespace VRSL.URP
             bool showMovement = isMover || type == AudioLinkFixtureType.Custom;
             bool showGobo     = type == AudioLinkFixtureType.MoverSpotlight
                              || type == AudioLinkFixtureType.Custom;
+            // Discoball: omnidirectional, dots from the manager's cubemap. Nothing about
+            // cones, movement, gobos or the lens applies.
+            bool isDiscoball  = type == AudioLinkFixtureType.Discoball;
 
             EditorGUILayout.Space();
             EditorGUILayout.Space();
@@ -136,14 +143,28 @@ namespace VRSL.URP
                   || mode == ALRealtimeColorMode.ColorTextureTraditional)
                 EditorGUILayout.PropertyField(_textureSamplingCoordinates);
 
-            EditorGUILayout.PropertyField(_isPointLight);
-            EditorGUILayout.PropertyField(_spotAngle);
-            EditorGUILayout.PropertyField(_range, new GUIContent("Spot Range", _range.tooltip));
+            if (!isDiscoball)
+            {
+                EditorGUILayout.PropertyField(_isPointLight);
+                EditorGUILayout.PropertyField(_spotAngle);
+            }
+            EditorGUILayout.PropertyField(_range, new GUIContent(isDiscoball ? "Range" : "Spot Range", _range.tooltip));
             // Emitter depth only meaningfully affects spot cones; hide for point lights
             // since the math collapses back to a point source regardless.
-            if (!_isPointLight.boolValue)
+            if (!_isPointLight.boolValue && !isDiscoball)
                 EditorGUILayout.PropertyField(_emitterDepth);
-            EditorGUILayout.PropertyField(_lensTransform);
+            if (!isDiscoball)
+                EditorGUILayout.PropertyField(_lensTransform);
+
+            if (isDiscoball)
+            {
+                EditorGUILayout.Space();
+                EditorGUILayout.Space();
+                GUILayout.Label("Discoball", _sectionLabel);
+                EditorGUILayout.PropertyField(_discoballSpinSpeed, new GUIContent("Spin Speed", _discoballSpinSpeed.tooltip));
+                EditorGUILayout.PropertyField(_discoballBeams, new GUIContent("Dots In The Haze", _discoballBeams.tooltip));
+                EditorGUILayout.HelpBox("The dot pattern is the light manager's Discoball Cubemap, shared by every discoball in the scene. The ball spins about this object's up axis.", MessageType.None);
+            }
 
             EditorGUILayout.Space();
             EditorGUILayout.Space();
@@ -177,8 +198,12 @@ namespace VRSL.URP
             }
 
             // ── Fixture Shell ─────────────────────────────────────────────────
-            GUILayout.Label("Fixture Shell", _sectionLabel);
-            EditorGUILayout.PropertyField(_fixtureShellRenderers, true);
+            // A discoball's sphere is a plain lit material with nothing to drive.
+            if (!isDiscoball)
+            {
+                GUILayout.Label("Fixture Shell", _sectionLabel);
+                EditorGUILayout.PropertyField(_fixtureShellRenderers, true);
+            }
 
             serializedObject.ApplyModifiedProperties();
         }
