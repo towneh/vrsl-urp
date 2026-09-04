@@ -4,6 +4,12 @@
 
 Nothing yet.
 
+## [0.2.0-rc.2] — 2026-09-03
+
+### Fixed
+
+- **The package declares `com.unity.ugui` as a dependency.** Three runtime scripts (the control panel, the AudioLink smoothing panel, the AudioLink laser) use `UnityEngine.UI`, and a project without Unity UI installed met 75 compile errors on adding the package. The Package Manager now adds Unity UI itself, as it already did for URP. Projects that have it already, which is nearly all of them, see no change. Found by installing rc.1 from its tag into an empty project.
+
 ## [0.2.0-rc.1] — 2026-09-03
 
 The first release candidate after 0.1.0. Surfaces are lit with a real material response, beams cost what they cross rather than a fixed budget, one quality level replaces nine tuning fields, mirrors get their own policy, and there are tools that say what the package costs and whether it is working. Two changes need a look when you upgrade; they are marked **Breaking** below.
