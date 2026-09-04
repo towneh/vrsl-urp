@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **The discoball is a realtime light.** `Discoball` on both fixture components is a point light whose dots come from a cubemap on the manager (`discoballCubemap`, the stock mirror-ball pattern on the shipped manager prefabs), looked up along the direction from the ball and turned about the fixture's up axis at `discoballSpinSpeed`. On DMX it is one channel, the dimmer, coloured by the fixture's tint; on AudioLink it follows its band. The dots land on surfaces through the lighting pass; `discoballBeams` draws them in the haze as well, off by default because it costs a cubemap fetch per raymarch step. New prefabs `VRSL-DMX-URP-Discoball-1CH` (one for every DMX mode) and `VRSL-AudioLink-Discoball-URP`; the three example scenes use them, switched on where the old projector was off. The migration pairs upstream's discoballs, Legacy mode included, with them. Rows K1 and K2 in the suite.
+
 ### Changed
 
 - **The control panel is a local overlay on the light managers, and optional.** `VRSL_LocalUIControlPanel` finds the scene's DMX and AudioLink light managers and adjusts them for the local user: the Volumetrics buttons set the managers' quality (High, Standard, Off), the beams slider scales `volumetricIntensity`, and the slider that used to drive the projection meshes now scales the light every fixture casts. Both sliders scale what the scene was authored to rather than replacing it, and on start the panel shows the manager's own quality, so dropping the prefab into a scene changes nothing until a button is pressed. The strobe toggle reaches the manager and the strobe decode material. The body glow, lens flare, discoball and laser controls still act on materials, found by walking the scene once at start; the panel no longer carries material lists, CRT arrays or DMX mode switching, all of which the managers own. The three projection quality menus are gone from the prefab, and the prefab's buttons and sliders are wired to the panel again (they had pointed at the stripped VRChat target since the initial release).

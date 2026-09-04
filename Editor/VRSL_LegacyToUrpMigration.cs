@@ -70,19 +70,22 @@ namespace VRSL.URP.EditorScripts
             // Shader-driven fixtures: the URP prefab keeps the same Static (or Laser) component
             // as upstream, and the fields copy across by name.
             new PrefabPair("75c269de381facb4cae616c67f83f519", "4a8f7532473a5e9bf1361da1fe4b77a4", "AudioLink Basic Laser",       FixtureKind.AudioLink),
-            new PrefabPair("a7acda2f5fe7dfd4aaa49ec10a2d5586", "71517ea8acb753e2d610495940ee4e86", "AudioLink Discoball",         FixtureKind.AudioLink),
+            // The discoballs become realtime lights; upstream's root is a 25 m projection
+            // volume, so its scale is not carried over.
+            new PrefabPair("a7acda2f5fe7dfd4aaa49ec10a2d5586", "5e2a7c4b9d1f4e8a8b3c2d1e0f9a8b7c", "AudioLink Discoball",         FixtureKind.AudioLink, matchScale: false),
             new PrefabPair("092158b73b160384f904e33d35a09123", "9e7791cf3563706421af503421e7aa61", "AudioLink Static Flasher",    FixtureKind.AudioLink),
             new PrefabPair("c33f8d4d996a9ba47b86d420e4cdb05b", "7d6e97747390e7734fb4ae838b5f9667", "AudioLink Static Lightbar",   FixtureKind.AudioLink),
 
             new PrefabPair("3d6c0b40980bcd34aba9183a62ecbd21", "9c1eb5ab51addbc7b6095123da60df6a", "DMX H 13CH Static Laser",     FixtureKind.Dmx),
-            new PrefabPair("22192b7ad03f22a4db578b035fdca38d", "53bc7bd2ad2eded5995bf4784bb84988", "DMX H 1CH Static Discoball",  FixtureKind.Dmx),
+            new PrefabPair("22192b7ad03f22a4db578b035fdca38d", "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c", "DMX H 1CH Discoball",         FixtureKind.Dmx, matchScale: false),
             new PrefabPair("6d00d693f1608ab49ad08d18dbe1fa02", "5404970a7e74686098d7d8dfef0597f2", "DMX H 1CH Static Flasher",    FixtureKind.Dmx),
             new PrefabPair("96ffbd2a722ae324e892d303e2ee9a2a", "2e796cb68041073f45927683e29e808f", "DMX H 13CH Static LightBar",  FixtureKind.Dmx),
             new PrefabPair("c19e8fd46b4abdf49bb7b6cdc62acdde", "cc5c662de3ca6d24fc0081cbf207613c", "DMX H 15CH Static MultiLightBar", FixtureKind.Dmx),
             new PrefabPair("46d1954298362974887b80dc3d70ee5f", "6ba550857dbb8b35cdd51d4d4a127435", "DMX H 5CH Static 6x4 Strobe", FixtureKind.Dmx),
 
             new PrefabPair("55058c5ef8c22d04991b48a99a10acfe", "97c0bfb4d24415d89174bdeec0068d50", "DMX V 13CH Static Laser",     FixtureKind.Dmx),
-            new PrefabPair("8bb1407f1f0e2cc48b9bbf35ca1951a6", "601028a8877b69560ad548ec4a4bce57", "DMX V 1CH Static Discoball",  FixtureKind.Dmx),
+            new PrefabPair("8bb1407f1f0e2cc48b9bbf35ca1951a6", "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c", "DMX V 1CH Discoball",         FixtureKind.Dmx, matchScale: false),
+            new PrefabPair("65a96b17618e51548a669749173d48ff", "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c", "DMX L 1CH Discoball",         FixtureKind.Dmx, matchScale: false),
             new PrefabPair("1c08f57da0cd0414c85f64b373431921", "1d6e08d6803e8af6b1c636ef1fdfa3c5", "DMX V 1CH Static Flasher",    FixtureKind.Dmx),
             new PrefabPair("b2a0b640363bc10408fb7a3803939fa0", "c95416bf6eef62f2a394420e7f9eb36d", "DMX V 13CH Static LightBar",  FixtureKind.Dmx),
             new PrefabPair("b8873da88b401dd4ab93b061c5ddf750", "a0940e84628bd52352bbe8a8c7825f32", "DMX V 15CH Static MultiLightBar", FixtureKind.Dmx),
@@ -98,7 +101,6 @@ namespace VRSL.URP.EditorScripts
         static readonly Dictionary<string, string> UNPORTED_UPSTREAM = new Dictionary<string, string>
         {
             { "55ac9bf95dc63bb4fb6ba2095d73cde2", "DMX L 13CH Static Laser" },
-            { "65a96b17618e51548a669749173d48ff", "DMX L 1CH Static Discoball" },
             { "a38b2f56984259247bded9aa1b1ee149", "DMX L 1CH Static Flasher" },
             { "b1b81594f59ca5d469ad06808051c682", "DMX L 13CH Static LightBar" },
             { "dd68d30b9f0b34442aac2fb4540ae553", "DMX L 15CH Static MultiLightBar" },
@@ -375,7 +377,7 @@ namespace VRSL.URP.EditorScripts
             // Match world transform: parent under same node, copy local scale (since they
             // share a parent the world scale will match), then explicitly write world pos+rot.
             instance.transform.SetParent(source.parent, worldPositionStays: false);
-            instance.transform.localScale = source.localScale;
+            if (pair.MatchScale) instance.transform.localScale = source.localScale;
             instance.transform.SetPositionAndRotation(source.position, source.rotation);
             instance.transform.SetSiblingIndex(source.GetSiblingIndex() + 1);
 
@@ -706,13 +708,17 @@ namespace VRSL.URP.EditorScripts
             public readonly string UrpGuid;
             public readonly string FriendlyName;
             public readonly FixtureKind Kind;
+            /// <summary>Copy the source's local scale onto the sibling. Off for a source
+            /// whose root scale is a projection volume rather than the fixture.</summary>
+            public readonly bool MatchScale;
 
-            public PrefabPair(string upstream, string urp, string friendly, FixtureKind kind)
+            public PrefabPair(string upstream, string urp, string friendly, FixtureKind kind, bool matchScale = true)
             {
                 UpstreamGuid = upstream;
                 UrpGuid = urp;
                 FriendlyName = friendly;
                 Kind = kind;
+                MatchScale = matchScale;
             }
         }
 

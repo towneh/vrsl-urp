@@ -118,6 +118,11 @@ namespace VRSL.URP
         readonly List<Material> _discoBallMaterials = new();
         readonly List<Material> _laserMaterials     = new();
 
+        // Realtime discoballs and what each was authored to, so the discoball slider
+        // scales them the way the beam and light sliders scale the managers.
+        readonly List<(VRStageLighting_DMX_RealtimeLight light, float authored)>       _dmxDiscoballs = new();
+        readonly List<(VRStageLighting_AudioLink_RealtimeLight light, float authored)> _alDiscoballs  = new();
+
         // What the managers were authored to, so the sliders scale the scene's own values
         // rather than replacing them.
         float _dmxAuthoredLight = 1f, _dmxAuthoredBeams = 1f;
@@ -218,6 +223,13 @@ namespace VRSL.URP
             _lensFlareMaterials.Clear();
             _discoBallMaterials.Clear();
             _laserMaterials.Clear();
+            _dmxDiscoballs.Clear();
+            _alDiscoballs.Clear();
+
+            foreach (var f in FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Include))
+                if (f.fixtureType == DMXFixtureType.Discoball) _dmxDiscoballs.Add((f, f.globalIntensity));
+            foreach (var f in FindObjectsByType<VRStageLighting_AudioLink_RealtimeLight>(FindObjectsInactive.Include))
+                if (f.fixtureType == AudioLinkFixtureType.Discoball) _alDiscoballs.Add((f, f.globalIntensity));
 
             var seen = new HashSet<Material>();
             foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsInactive.Include))
@@ -512,6 +524,8 @@ namespace VRSL.URP
                 lightSliderText.text = Mathf.Round(lightSlider.value * 100.0f).ToString();
         }
 
+        /// <summary>The discoballs: realtime ones as a share of what each was authored to,
+        /// and any still on the shader path through their material.</summary>
         public void _SetDiscoBallIntensity()
         {
             if (discoBallSlider == null) return;
@@ -520,6 +534,11 @@ namespace VRSL.URP
             {
                 mat.SetFloat(s_UniversalIntensity, value);
             }
+            foreach (var (light, authored) in _dmxDiscoballs)
+                if (light != null) light.globalIntensity = authored * value;
+            foreach (var (light, authored) in _alDiscoballs)
+                if (light != null) light.globalIntensity = authored * value;
+            if (_dmxDiscoballs.Count > 0 && dmxManager != null) dmxManager.MarkConfigDirty();
             if (discoBallSliderText != null)
                 discoBallSliderText.text = Mathf.Round(discoBallSlider.value * 100.0f).ToString();
         }
