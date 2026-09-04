@@ -138,7 +138,7 @@ namespace VRSL.URP
             {
                 defaultColorBlock = volumetricHighButton.colors;
                 cbOn = defaultColorBlock;
-                cbOn.normalColor = new Color(cbOn.normalColor.r + 0.35f, cbOn.normalColor.r + 0.35f, cbOn.normalColor.g + 0.35f, 1.0f);
+                cbOn.normalColor = new Color(cbOn.normalColor.r + 0.35f, cbOn.normalColor.g + 0.35f, cbOn.normalColor.b + 0.35f, 1.0f);
             }
             if (bloomAnimator == null)
             {
@@ -594,6 +594,17 @@ namespace VRSL.URP
             }
         }
 
+#if UNITY_EDITOR
+        /// <summary>The materials the panel writes to are shared assets; an edit made from
+        /// the inspector has to be marked for saving or it is lost on the next reload.</summary>
+        public void MarkMaterialsDirty()
+        {
+            foreach (var list in new[] { _fixtureMaterials, _lensFlareMaterials, _discoBallMaterials, _laserMaterials })
+                foreach (var mat in list)
+                    UnityEditor.EditorUtility.SetDirty(mat);
+        }
+#endif
+
         void SetDiscoballQuality()
         {
             foreach (Material target in _discoBallMaterials)
@@ -694,6 +705,7 @@ namespace VRSL.URP
                 controlPanel.ResolveManagers();
                 controlPanel.CollectMaterials();
                 controlPanel._ForceUpdateVideoSampleTexture();
+                controlPanel.MarkMaterialsDirty();
                 if (controlPanel.audioLinkManager != null) EditorUtility.SetDirty(controlPanel.audioLinkManager);
             }
             EditorGUILayout.Space();
@@ -703,6 +715,7 @@ namespace VRSL.URP
                 controlPanel.ResolveManagers();
                 controlPanel.CollectMaterials();
                 controlPanel._UpdateAllQualityModes();
+                controlPanel.MarkMaterialsDirty();
                 if (controlPanel.dmxManager != null) EditorUtility.SetDirty(controlPanel.dmxManager);
                 if (controlPanel.audioLinkManager != null) EditorUtility.SetDirty(controlPanel.audioLinkManager);
             }
