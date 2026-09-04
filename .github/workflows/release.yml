@@ -1,0 +1,55 @@
+name: Release
+
+# Pushing a tag named v<version> cuts the release: the tag's content is packed
+# as a UPM tarball, the matching section of CHANGELOG.md becomes the notes, and
+# a GitHub release is created with the tarball attached. A version with a
+# pre-release suffix (v0.2.0-rc.3) is marked as a pre-release. The tag, the
+# package.json version and Runtime/VERSION.txt have to agree, or the run stops
+# before it publishes anything.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the version agrees everywhere
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          PACKAGE=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
+          FILE=$(tr -d '[:space:]' < Runtime/VERSION.txt)
+          if [ "$PACKAGE" != "$VERSION" ] || [ "$FILE" != "$VERSION" ]; then
+            echo "tag says $VERSION, package.json says $PACKAGE, VERSION.txt says $FILE"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$VERSION" in
+            *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
+            *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+          esac
+
+      - name: Pack the UPM tarball
+        run: |
+          git archive --format=tar --prefix=package/ "$GITHUB_REF_NAME" \
+            | gzip -9 > "town.mr.vrsl-urp-${{ steps.version.outputs.version }}.tgz"
+          ls -l "town.mr.vrsl-urp-${{ steps.version.outputs.version }}.tgz"
+
+      - name: Take the notes from the changelog
+        run: python3 .github/scripts/release_notes.py "${{ steps.version.outputs.version }}" > notes.md
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: VRSL for URP ${{ steps.version.outputs.version }}
+          body_path: notes.md
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          make_latest: ${{ steps.version.outputs.prerelease == 'false' }}
+          files: town.mr.vrsl-urp-${{ steps.version.outputs.version }}.tgz
