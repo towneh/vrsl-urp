@@ -59,6 +59,14 @@ namespace VRSL.URP
                + "and its own mask applies instead of this one.")]
         public LayerMask prepassLayers = ~0;
 
+        [Range(0f, 4f)]
+        [Tooltip("How bright every fixture's light is, all of them at once, on top of what "
+               + "each fixture is already set to. 1 leaves them alone. The beams follow it, "
+               + "since they are the same light seen in the haze; Volumetric Intensity then "
+               + "scales the beams on their own. A control panel in the scene drives this for "
+               + "the local user.")]
+        public float lightIntensity = 1f;
+
         [Header("Performance")]
         [Tooltip("How much of the frame VRSL may use.\n\n"
                + "Standard suits most worlds. High marches the beams more finely and traces "
@@ -606,7 +614,7 @@ namespace VRSL.URP
                 // scalar (folded CPU-side so the compute shader stays oblivious to the split).
                 // intensityParams.z = AudioLink active flag (1 = sample amplitude, 0 = static full).
                 intensityParams  = new Vector4(
-                    f.maxIntensity,
+                    f.maxIntensity * lightIntensity,
                     f.finalIntensity * f.globalIntensity,
                     f.enableAudioLink ? 1f : 0f,
                     0f),

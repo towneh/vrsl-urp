@@ -74,6 +74,14 @@ namespace VRSL.URP
                + "and you can accept it lighting grey.")]
         public LayerMask prepassLayers = ~0;
 
+        [Range(0f, 4f)]
+        [Tooltip("How bright every fixture's light is, all of them at once, on top of what "
+               + "each fixture is already set to. 1 leaves them alone. The beams follow it, "
+               + "since they are the same light seen in the haze; Volumetric Intensity then "
+               + "scales the beams on their own. A control panel in the scene drives this for "
+               + "the local user.")]
+        public float lightIntensity = 1f;
+
         [Header("Performance")]
         [Tooltip("How much of the frame VRSL may use.\n\n"
                + "Standard suits most worlds. High marches the beams more finely and traces "
@@ -483,8 +491,14 @@ namespace VRSL.URP
 
         #if UNITY_EDITOR
         /// <summary>Fill any wiring an author has emptied. Deferred to the next
-        /// editor tick — see VRSLWiring.ResolveOnValidate for why.</summary>
-        void OnValidate() => VRSLWiring.ResolveOnValidate(this);
+        /// editor tick — see VRSLWiring.ResolveOnValidate for why. Also re-uploads the
+        /// fixture configs, so a value baked into them, such as lightIntensity, takes
+        /// effect when edited in play mode.</summary>
+        void OnValidate()
+        {
+            VRSLWiring.ResolveOnValidate(this);
+            MarkConfigDirty();
+        }
         #endif
 
         void OnEnable()
@@ -1119,7 +1133,7 @@ namespace VRSL.URP
             {
                 positionAndRange     = new Vector4(pos.x, pos.y, pos.z, f.range),
                 forwardAndType       = new Vector4(baseForward.x, baseForward.y, baseForward.z, lightType),
-                rightAndMaxIntensity = new Vector4(baseRight.x, baseRight.y, baseRight.z, f.maxIntensity),
+                rightAndMaxIntensity = new Vector4(baseRight.x, baseRight.y, baseRight.z, f.maxIntensity * lightIntensity),
                 // spotAngles.x = inner-to-outer ratio (0..1) — applied to the dynamic
                 // outer half-angle in the compute shader so it tracks ch+4 cone width.
                 // spotAngles.y = max outer half-angle, spotAngles.w = min outer half-angle.
