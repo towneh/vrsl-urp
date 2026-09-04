@@ -9,6 +9,7 @@
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.GPUDriven.Runtime",
         "Unity.Collections"
     ],
     "includePlatforms": [],

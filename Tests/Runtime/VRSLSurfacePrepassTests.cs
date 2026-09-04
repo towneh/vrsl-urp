@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The surface prepass rows, S10 to S14: what it draws, for whom, where its
+    /// The surface prepass rows, S10 to S15: what it draws, for whom, where its
     /// normals may come from instead, and whether what it captured reaches the
     /// lighting pass.
     ///
@@ -669,6 +669,288 @@ namespace VRSL.URP.Tests
                 if (at2         != null) Object.DestroyImmediate(at2);
                 if (at2Fallback != null) Object.DestroyImmediate(at2Fallback);
             }
+        }
+
+        /// <summary>What the surface prepass captured for the floor, as the mean of
+        /// the floor's pixels in 0..255, beside the state of the GPU Resident Drawer
+        /// while it was captured.</summary>
+        sealed class SurfaceReadback
+        {
+            public GPUResidentDrawerMode modeAsked, modeSeen;
+            public bool    drawerInitialised;
+            public string  drawerSupport;
+            public int     floorPixels, captured;
+            public Vector3 albedo, litMean;
+            public float   smoothness, metallic, litPercent;
+            public readonly List<string> errors = new();
+
+            public override string ToString()
+                => $"drawer {modeAsked} (asset read {modeSeen}, drawer "
+                 + $"{(drawerInitialised ? "initialised" : "not initialised")}"
+                 + (string.IsNullOrEmpty(drawerSupport) ? "" : $", project support: {drawerSupport}")
+                 + $"): floor pixels {floorPixels}, captured by the prepass {captured}, "
+                 + $"albedo {albedo:F1}, smoothness {smoothness:F1}, metallic {metallic:F1}, "
+                 + $"frame lit {litPercent:F2}% at mean {litMean:F1}, errors {errors.Count}"
+                 + (errors.Count > 0 ? $" — first: {errors[0]}" : "");
+        }
+
+        /// <summary>Whether the drawer is up, and if the project cannot support it,
+        /// why. Both are internal to the core package; reflection is the only way a
+        /// row can say "the drawer was not running" rather than guess it.</summary>
+        static bool DrawerInitialised(out string support)
+        {
+            support = null;
+            var type = typeof(GPUResidentDrawer);
+            var flags = System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic;
+            var initialised = type.GetMethod("IsInitialized", flags);
+            var supported   = type.GetMethod("IsProjectSupported", flags, null,
+                new[] { typeof(string).MakeByRefType(), typeof(LogType).MakeByRefType() }, null);
+            if (supported != null)
+            {
+                var args = new object[] { null, LogType.Log };
+                bool ok = (bool)supported.Invoke(null, args);
+                if (!ok) support = args[0] as string;
+            }
+            return initialised != null && (bool)initialised.Invoke(null, null);
+        }
+
+        /// <summary>
+        /// Render the rig with the floor on a URP Lit material of known colour, gloss
+        /// and metallic, under the given drawer mode, and read back what the surface
+        /// prepass captured for it, beside how the frame lit. The floor is found
+        /// through VRSL's own normals texture: the one surface in view facing up; a
+        /// floor pixel counts as captured where the prepass wrote its depth. Yields
+        /// <c>null</c> itself: the runner drives one level of nesting.
+        /// </summary>
+        static IEnumerator CaptureSurfaceData(GPUResidentDrawerMode mode, Color baseColor,
+                                              float smoothness, float metallic,
+                                              System.Action<SurfaceReadback> done)
+        {
+            var readback = new SurfaceReadback { modeAsked = mode };
+            var asset    = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+
+            void OnLog(string condition, string stack, LogType type)
+            {
+                if (type == LogType.Error || type == LogType.Exception) readback.errors.Add(condition);
+            }
+            Application.logMessageReceived += OnLog;
+
+            Material probeMaterial = null, floorMaterial = null;
+            RenderTexture normalsRt = null, urpRt = null, albedoRt = null, materialRt = null,
+                          cameraDepthRt = null, surfaceDepthRt = null;
+            RTHandle normalsHandle = null, urpHandle = null, albedoHandle = null, materialHandle = null,
+                     cameraDepthHandle = null, surfaceDepthHandle = null;
+            Texture2D normalsTex = null, albedoTex = null, materialTex = null, depthTex = null, frame = null;
+            System.Action<ScriptableRenderContext, Camera> enqueue = null;
+            try
+            {
+                var shader = Shader.Find("Hidden/VRSL-URP/Tests/NormalsProbe");
+                Assert.IsNotNull(shader, "the probe shader did not compile or is not in the project");
+                var lit = Shader.Find("Universal Render Pipeline/Lit");
+                Assert.IsNotNull(lit, "URP Lit is not in the project");
+
+                probeMaterial  = new Material(shader);
+                normalsRt      = ProbeTarget("VRSL surface probe (normals)");
+                urpRt          = ProbeTarget("VRSL surface probe (unused)");
+                albedoRt       = ProbeTarget("VRSL surface probe (albedo)");
+                materialRt     = ProbeTarget("VRSL surface probe (material)");
+                cameraDepthRt  = ProbeTarget("VRSL surface probe (camera depth)");
+                surfaceDepthRt = ProbeTarget("VRSL surface probe (surface depth)");
+                normalsHandle      = RTHandles.Alloc(normalsRt);
+                urpHandle          = RTHandles.Alloc(urpRt);
+                albedoHandle       = RTHandles.Alloc(albedoRt);
+                materialHandle     = RTHandles.Alloc(materialRt);
+                cameraDepthHandle  = RTHandles.Alloc(cameraDepthRt);
+                surfaceDepthHandle = RTHandles.Alloc(surfaceDepthRt);
+                // The probe's extras are copied in pass order: albedo, material, camera
+                // depth, surface depth. The camera depth is along for the ride.
+                var probe = new ProbePass(probeMaterial, normalsHandle, urpHandle, requestNormals: false)
+                {
+                    Extras = new[] { albedoHandle, materialHandle, cameraDepthHandle, surfaceDepthHandle },
+                };
+
+                // The rig holds the drawer mode on the asset at every render, the way
+                // it holds priming: the host rewrites the asset at a moment of its own.
+                using var rig = VRSLDMXRig.Build(targetSize: ImageSize, drawer: mode);
+                rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
+                rig.Source.speed   = 0f;
+                rig.Manager.quality = VRSLQuality.Off;
+                rig.Manager.enabled = false;
+                rig.Manager.enabled = true;
+                rig.FreezeForImageCapture();
+
+                floorMaterial = new Material(lit) { name = "VRSL surface probe floor" };
+                floorMaterial.SetColor("_BaseColor", baseColor);
+                floorMaterial.SetFloat("_Smoothness", smoothness);
+                floorMaterial.SetFloat("_Metallic", metallic);
+                rig.Floor.GetComponent<Renderer>().sharedMaterial = floorMaterial;
+
+                var target = rig.Camera;
+                enqueue = (ctx, cam) =>
+                {
+                    if (cam != target) return;
+                    cam.GetUniversalAdditionalCameraData()?.scriptableRenderer?.EnqueuePass(probe);
+                };
+                RenderPipelineManager.beginCameraRendering += enqueue;
+
+                for (int i = 0; i < WarmUpFrames; i++)
+                {
+                    yield return null;
+                    rig.RenderFrame();
+                }
+
+                RenderPipelineManager.beginCameraRendering -= enqueue;
+                enqueue = null;
+
+                readback.modeSeen          = asset != null ? asset.gpuResidentDrawerMode : GPUResidentDrawerMode.Disabled;
+                readback.drawerInitialised = DrawerInitialised(out readback.drawerSupport);
+
+                normalsTex  = VRSLImageCompare.Read(normalsRt);
+                albedoTex   = VRSLImageCompare.Read(albedoRt);
+                materialTex = VRSLImageCompare.Read(materialRt);
+                depthTex    = VRSLImageCompare.Read(surfaceDepthRt);
+                frame       = VRSLImageCompare.Read(rig.Target);
+                var normals  = normalsTex.GetPixels32();
+                var albedo   = albedoTex.GetPixels32();
+                var material = materialTex.GetPixels32();
+                var depth    = depthTex.GetPixels32();
+                Vector3 albedoSum = Vector3.zero;
+                float smoothSum = 0f, metalSum = 0f;
+                for (int i = 0; i < normals.Length; i++)
+                {
+                    if (normals[i].a <= 127 || Decode(normals[i]).y < 0.9f) continue;
+                    readback.floorPixels++;
+                    // The prepass depth is cleared to the far plane, which the probe
+                    // copies out as linear 1.0; anything nearer was drawn.
+                    if (depth[i].r < 250) readback.captured++;
+                    albedoSum += new Vector3(albedo[i].r, albedo[i].g, albedo[i].b);
+                    smoothSum += albedo[i].a;
+                    metalSum  += material[i].r;
+                }
+                readback.litPercent = LitPercent(frame);
+                readback.litMean    = LitMean(frame);
+                if (readback.floorPixels > 0)
+                {
+                    readback.albedo     = albedoSum / readback.floorPixels;
+                    readback.smoothness = smoothSum / readback.floorPixels;
+                    readback.metallic   = metalSum  / readback.floorPixels;
+                }
+            }
+            finally
+            {
+                if (enqueue != null) RenderPipelineManager.beginCameraRendering -= enqueue;
+                Application.logMessageReceived -= OnLog;
+                foreach (var tex in new[] { normalsTex, albedoTex, materialTex, depthTex, frame })
+                    if (tex != null) Object.DestroyImmediate(tex);
+                normalsHandle?.Release();
+                urpHandle?.Release();
+                albedoHandle?.Release();
+                materialHandle?.Release();
+                cameraDepthHandle?.Release();
+                surfaceDepthHandle?.Release();
+                foreach (var rt in new[] { normalsRt, urpRt, albedoRt, materialRt, cameraDepthRt, surfaceDepthRt })
+                    if (rt != null) { rt.Release(); Object.DestroyImmediate(rt); }
+                if (probeMaterial != null) Object.DestroyImmediate(probeMaterial);
+                if (floorMaterial != null) Object.DestroyImmediate(floorMaterial);
+            }
+
+            done(readback);
+        }
+
+        /// <summary>
+        /// S15. A renderer the GPU Resident Drawer batches is left out of the surface
+        /// prepass and lights as the neutral fallback, not as whatever the drawer drew.
+        ///
+        /// The floor on a URP Lit material of known colour, gloss and metallic,
+        /// captured with the drawer Disabled and then with it on, the rig holding the
+        /// mode on the pipeline asset per render. The Disabled capture is the control:
+        /// the prepass has to read the material back as authored, or the row is about
+        /// something other than the drawer. With the drawer on, the floor must not be
+        /// captured at all, and the frame must still light it. The drawer draws its batches with each material's own shader and
+        /// ignores the override shader the prepass draws through, so a batched
+        /// renderer left in the list lands its lit colour in the albedo target and an
+        /// opaque alpha of 1 in the smoothness channel: a dark, fully glossy surface.
+        /// Left out, it gets no surface data and shades as mid-grey, the same as a
+        /// layer outside the prepass mask (S12). The drawer needs Forward+, a
+        /// compute-capable API and the project's BatchRendererGroup variants kept; a
+        /// capture where it did not come up says so and the row is inconclusive
+        /// rather than green.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S15_ABatchedRendererLightsAsTheFallbackNotAsGarbage()
+        {
+            if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset)
+                Assert.Ignore("No Universal Render Pipeline asset is active.");
+
+            // Mid-range values, none at a limit, so a default, a zero and a one are
+            // each distinguishable from the authored value.
+            var   baseColor  = new Color(0.8f, 0.5f, 0.2f, 1f);
+            const float smoothness = 0.3f, metallic = 0.25f;
+
+            // The prepass sees the material's colour as URP Lit does, linear under a
+            // linear project; the albedo target is sRGB and the probe decodes it, so
+            // what comes back is the linear value in 0..255.
+            var linear = QualitySettings.activeColorSpace == ColorSpace.Linear ? baseColor.linear : baseColor;
+            var expectedAlbedo = new Vector3(linear.r, linear.g, linear.b) * 255f;
+            float expectedSmoothness = smoothness * 255f;
+            float expectedMetallic   = metallic   * 255f;
+
+            SurfaceReadback plain = null, batched = null;
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled,         baseColor, smoothness, metallic, r => plain   = r);
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.InstancedDrawing, baseColor, smoothness, metallic, r => batched = r);
+
+            Debug.Log($"[S15] authored albedo {expectedAlbedo:F1}, smoothness {expectedSmoothness:F1}, "
+                    + $"metallic {expectedMetallic:F1}\n[S15] {plain}\n[S15] {batched}");
+
+            Assert.AreEqual(0, plain.errors.Count,   $"errors while capturing without the drawer: {plain}");
+            Assert.AreEqual(0, batched.errors.Count, $"errors while capturing with the drawer: {batched}");
+            Assert.Greater(plain.floorPixels, 1000, "the floor covers too little of the frame to judge");
+            Assert.Greater(plain.litPercent, 5f, "the frame without the drawer is nearly dark, so the row has nothing to judge");
+
+            // The control: the prepass reads the material. Two 8-bit quantisations
+            // either side of the sRGB transfer cost the darkest channel a few steps;
+            // a wrong read is tens or hundreds of steps away.
+            const float tolerance = 6f;
+            Assert.GreaterOrEqual(plain.captured, 0.95f * plain.floorPixels,
+                $"with the drawer Disabled the prepass captured {plain.captured} of the floor's "
+              + $"{plain.floorPixels} pixels, so the row cannot say anything about the drawer");
+            AssertSurface(plain, expectedAlbedo, expectedSmoothness, expectedMetallic, tolerance,
+                "with the drawer Disabled the prepass read the floor's material wrongly, so the row "
+              + "cannot say anything about the drawer");
+
+            if (!batched.drawerInitialised)
+                Assert.Inconclusive("the GPU Resident Drawer did not come up with InstancedDrawing set, so "
+                                  + "the floor was never batched and this row compared the control with "
+                                  + $"itself: {batched.drawerSupport ?? "no reason given"}");
+            Assert.Greater(batched.floorPixels, 1000, "the floor covers too little of the batched frame to judge");
+
+            // Left out: the drawer's batch layers are excluded from the override draw.
+            Assert.LessOrEqual(batched.captured, 0.01f * batched.floorPixels,
+                $"with the GPU Resident Drawer batching the floor, the surface prepass captured "
+              + $"{batched.captured} of its {batched.floorPixels} pixels. The drawer ignores the override "
+              + "shader, so whatever it captured is the floor's own forward pass, not its material; "
+              + "the prepass has to leave the drawer's batch layers out (VRSLSurfacePrepass)");
+            Assert.Less(batched.smoothness, 8f,
+                $"the batched floor reads smoothness {batched.smoothness:F1} of 255 where nothing should "
+              + "have been written: an opaque alpha of 1 landing in the smoothness channel is the "
+              + "signature of the floor's own forward pass drawing into the prepass target");
+
+            // Still lit, as the neutral fallback: grey, not black. Same bar as S12.
+            Assert.GreaterOrEqual(batched.litPercent, 0.9f * plain.litPercent,
+                $"the lit area fell from {plain.litPercent:F2}% to {batched.litPercent:F2}% with the "
+              + "floor batched by the drawer. A surface the prepass left out must still light as "
+              + "neutral grey; going dark means the lighting pass is rejecting it rather than "
+              + "falling back");
+        }
+
+        static void AssertSurface(SurfaceReadback r, Vector3 albedo, float smoothness, float metallic,
+                                  float tolerance, string because)
+        {
+            Assert.AreEqual(albedo.x,   r.albedo.x,   tolerance, $"{because} (albedo red: {r})");
+            Assert.AreEqual(albedo.y,   r.albedo.y,   tolerance, $"{because} (albedo green: {r})");
+            Assert.AreEqual(albedo.z,   r.albedo.z,   tolerance, $"{because} (albedo blue: {r})");
+            Assert.AreEqual(smoothness, r.smoothness, tolerance, $"{because} (smoothness: {r})");
+            Assert.AreEqual(metallic,   r.metallic,   tolerance, $"{because} (metallic: {r})");
         }
 
         /// <summary>

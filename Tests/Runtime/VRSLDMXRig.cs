@@ -70,6 +70,8 @@ namespace VRSL.URP.Tests
         int           _msaa;
         UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset _asset;
         int           _assetMsaaWas;
+        GPUResidentDrawerMode? _drawer;
+        GPUResidentDrawerMode  _drawerWas;
         UnityEngine.Rendering.Universal.DepthPrimingMode? _priming;
         readonly Dictionary<UnityEngine.Rendering.Universal.UniversalRendererData,
                             UnityEngine.Rendering.Universal.DepthPrimingMode> _primingWas = new();
@@ -133,6 +135,14 @@ namespace VRSL.URP.Tests
         public const UnityEngine.Rendering.Universal.DepthPrimingMode DefaultPriming =
             UnityEngine.Rendering.Universal.DepthPrimingMode.Forced;
 
+        /// <summary>The GPU Resident Drawer mode the pipeline asset is held at while
+        /// the rig stands, unless <see cref="Build"/> was told to hold none. Disabled,
+        /// so the floor's own material reaches the surface prepass: a mesh the drawer
+        /// batches lights as the neutral fallback instead (row S15), and the host
+        /// switches the drawer on and off with its quality tier at moments of its
+        /// own, which is one way a frozen frame stops reproducing.</summary>
+        public const GPUResidentDrawerMode DefaultDrawer = GPUResidentDrawerMode.Disabled;
+
         /// <param name="msaa">Samples on the render target. A camera rendering into a
         /// texture takes its MSAA from the texture rather than from the pipeline
         /// asset, so this, not the asset, is what the rig's frame is multisampled at.</param>
@@ -143,9 +153,14 @@ namespace VRSL.URP.Tests
         /// whatever the host left: two captures meant to differ in priming came back
         /// bit-identical, and the frame a stored capture was seeded from stopped
         /// reproducing on the same code.</param>
+        /// <param name="drawer">GPU Resident Drawer mode, held on the pipeline asset at
+        /// every render and put back on dispose; null holds nothing. Setting the
+        /// asset's mode recreates the pipeline, so it is written only when it
+        /// differs.</param>
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
                                        int targetSize = TargetSize, int msaa = 1,
-                                       UnityEngine.Rendering.Universal.DepthPrimingMode? priming = DefaultPriming)
+                                       UnityEngine.Rendering.Universal.DepthPrimingMode? priming = DefaultPriming,
+                                       GPUResidentDrawerMode? drawer = DefaultDrawer)
         {
             VRSLDMXRig building = null;
             try
@@ -228,6 +243,9 @@ namespace VRSL.URP.Tests
             rig._asset = GraphicsSettings.currentRenderPipeline
                              as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
             rig._assetMsaaWas = rig._asset != null ? rig._asset.msaaSampleCount : 0;
+            rig._drawer    = drawer;
+            rig._drawerWas = rig._asset != null ? rig._asset.gpuResidentDrawerMode : GPUResidentDrawerMode.Disabled;
+            rig.HoldDrawer();
             rig._camera = new GameObject("Camera").AddComponent<Camera>();
             rig._camera.transform.SetParent(rig._root.transform, false);
             // Aimed across the near end of the truss and down at the floor, so several
@@ -411,11 +429,22 @@ namespace VRSL.URP.Tests
             if (_asset != null && _msaa > 1 && _asset.msaaSampleCount != _msaa)
                 _asset.msaaSampleCount = _msaa;
             HoldPriming();
+            HoldDrawer();
             camera.Render();
         }
 
         /// <summary>The priming mode the rig is holding, or null.</summary>
         public UnityEngine.Rendering.Universal.DepthPrimingMode? Priming => _priming;
+
+        /// <summary>The GPU Resident Drawer mode the rig is holding, or null.</summary>
+        public GPUResidentDrawerMode? Drawer => _drawer;
+
+        void HoldDrawer()
+        {
+            if (!_drawer.HasValue || _asset == null) return;
+            if (_asset.gpuResidentDrawerMode != _drawer.Value)
+                _asset.gpuResidentDrawerMode = _drawer.Value;
+        }
 
         void HoldPriming()
         {
@@ -698,6 +727,9 @@ namespace VRSL.URP.Tests
             if (_root != null) UnityEngine.Object.DestroyImmediate(_root);
             _root = null;
             if (_asset != null && _assetMsaaWas > 0) _asset.msaaSampleCount = _assetMsaaWas;
+            if (_asset != null && _drawer.HasValue && _asset.gpuResidentDrawerMode != _drawerWas)
+                _asset.gpuResidentDrawerMode = _drawerWas;
+            _drawer = null;
             _asset = null;
             foreach (var pair in _primingWas)
                 if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
