@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0-rc.3] — 2026-09-04
+
 ### Added
 
 - **The discoball is a realtime light.** `Discoball` on both fixture components is a point light whose dots come from a cubemap on the manager (`discoballCubemap`, the stock mirror-ball pattern on the shipped manager prefabs), looked up along the direction from the ball and turned about the fixture's up axis at `discoballSpinSpeed`. On DMX it is one channel, the dimmer, coloured by the fixture's tint; on AudioLink it follows its band. The dots land on surfaces through the lighting pass; `discoballBeams` draws them in the haze as well, off by default because it costs a cubemap fetch per raymarch step. New prefabs `VRSL-DMX-URP-Discoball-1CH` (one for every DMX mode) and `VRSL-AudioLink-Discoball-URP`; the three example scenes use them, switched on where the old projector was off. The migration pairs upstream's discoballs, Legacy mode included, with them. Rows K1 and K2 in the suite.
