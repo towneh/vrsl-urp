@@ -8,9 +8,9 @@ Substantial portions of this package are derived from [VR Stage Lighting](https:
 
 The following are direct derivatives of upstream — copied (with renames for coexistence) from the AcChosen package:
 
-- All visible-mesh fixture shaders: FixtureMesh, ProjectionMesh, VolumetricMesh, LensFlare for AudioLink and DMX variants of Static (Blinder, ParLight) and Mover (Spotlight, Washlight) fixtures.
+- The fixture-body and lens-flare shaders (FixtureMesh, LensFlare) for AudioLink and DMX variants of Static (Blinder, ParLight) and Mover (Spotlight, Washlight) fixtures.
 - Discoball and BasicLaser shaders (AudioLink and DMX variants).
-- The `VRSL-URP/Standard Static/Surface Shaders/*` shader family (Opaque, AlphaCutout, Transparent, 12 Channel Bar).
+- The `VRSL-URP/Standard Static/Surface Shaders/*` shader family (Opaque, 12 Channel Bar).
 - The DMX CRT decode chain: all five `DMXRTShader-*.shader` files plus their CustomRenderTexture assets, materials, and output `RenderTexture` assets.
 - Shared HLSL includes: `VRSL-Defines-URP.hlsl`, `VRSL-DMXFunctions-URP.hlsl`, `VRSL-AudioLink-Functions-URP.hlsl`, `VRSL-LightingFunctions.cginc`, `VRSL-StandardLighting.cginc`, the per-fixture vertex / projection / volumetric `.cginc` includes.
 - The fixture geometry FBX meshes (Mover Spotlight HQ, Mover Washlight HQ, ParLight, StrobeLight, etc.).

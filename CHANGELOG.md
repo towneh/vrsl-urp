@@ -13,6 +13,10 @@
 - **The migration recognises every stock fixture.** The sibling pass pairs the laser, discoball, flasher, light bars and 6x4 strobe with their URP prefabs in Horizontal and Vertical mode on both the DMX and AudioLink sides, and the 5-channel light bar with the point bar; those fixtures keep their Static or Laser component and copy their fields by name. Legacy-mode fixtures other than the movers, blinder and par have no URP prefab, and the summary now names the ones it left where they were. The in-place pass converts the AudioLink laser as well.
 - **`lightIntensity` on both light managers.** A scene-wide multiplier on the light every fixture casts, the sibling of `volumetricIntensity`. 1 leaves the scene as authored; the beams follow it since they are the same light.
 
+### Removed
+
+- **The projection and volumetric mesh assets.** Ten shaders, three includes, thirty materials and six textures that drew the old Built-in projection cones and volumetric beams, superseded by the realtime lighting and raymarch passes and referenced by nothing since the control panel stopped carrying material lists. A project that assigned one of those materials by hand needs the URP fixture prefab instead.
+
 ### Fixed
 
 - **The lens flare, laser and discoball shaders compile their stereo-instanced variant.** Under single-pass instanced VR they had no render-target eye index and drew in one eye. The AudioLink laser also lacked the stereo output field on its varyings and wiped its instance id by zero-initialising after the transfer. Both DMX and AudioLink versions of all three are covered. Not yet checked in a headset; the par and blinder bodies named in the rc.2 known issue were already fixed in `1746a30`, and their projection meshes are not used by the URP prefabs.
