@@ -60,6 +60,7 @@
             // make fog work
             //#pragma multi_compile_fog
             #pragma multi_compile_instancing
+            #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
             #include "UnityCG.cginc"
             #define LASER

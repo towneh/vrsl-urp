@@ -70,6 +70,7 @@
              uniform samplerCUBE _Cube;
              #define VRSL_AUDIOLINK
              #pragma multi_compile_local _ _ALPHATEST_ON
+             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
              float4 _Cube_ST;
              float _RotationSpeed;
              #include "UnityCG.cginc"

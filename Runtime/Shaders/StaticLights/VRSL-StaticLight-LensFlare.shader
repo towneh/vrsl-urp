@@ -99,6 +99,7 @@
             // make fog work
             // #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
             #include "UnityCG.cginc"
 
@@ -380,6 +381,8 @@
 
             fixed4 frag(v2f i) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+                UNITY_SETUP_INSTANCE_ID(i);
                 #if _ALPHATEST_ON
                     float2 pos = i.screenPos.xy / i.screenPos.w;
                     pos *= _ScreenParams.xy;

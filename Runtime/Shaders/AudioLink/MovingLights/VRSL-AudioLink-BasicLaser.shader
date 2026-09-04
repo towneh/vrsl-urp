@@ -74,6 +74,7 @@
             // make fog work
             #pragma multi_compile_fog
             #pragma multi_compile_instancing
+            #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
             #define VRSL_AUDIOLINK
 
             #include "UnityCG.cginc"
@@ -100,6 +101,7 @@
                 float4 flatnessBeamCountSpinThickness : TEXCOORD6; //ch 5,6,7,12
                 float4 rgbIntensity : TEXCOORD7; // ch 8,9,10,11
                 UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             sampler2D _MainTex, _SamplingTexture;
@@ -372,8 +374,9 @@
             {
                 v2f o;
                 UNITY_SETUP_INSTANCE_ID(v);
-                UNITY_TRANSFER_INSTANCE_ID(v, o);
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
                 o.rgbIntensity.w = 1;
                 if (getGlobalIntensity() <= 0.05 || getFinalIntensity() <= 0.05 || _UniversalIntensity <= 0.05 || o.
       rgbIntensity.w <= 0.05)
@@ -420,6 +423,7 @@
 
             fixed4 frag(v2f i) : SV_Target
             {
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 UNITY_SETUP_INSTANCE_ID(i);
                 i.rgbIntensity.w = GetAudioReactAmplitude();
                 if (getGlobalIntensity() <= 0.05 || getFinalIntensity() <= 0.05 || _UniversalIntensity <= 0.05 || i.

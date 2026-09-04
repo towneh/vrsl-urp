@@ -55,6 +55,7 @@
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_local _ _ALPHATEST_ON
+            #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
             #define VRSL_DMX
             uniform samplerCUBE _Cube;
             float4 _Cube_ST;
