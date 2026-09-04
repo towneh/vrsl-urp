@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **The surface prepass reads metallic-smoothness maps.** Where a material uses one, metallic comes from the map's red channel and smoothness from its alpha scaled by the material's smoothness value, the way URP Lit and the Standard shader read theirs, so a floor whose gloss varies across a texture lights that way under the fixtures instead of as one flat value. The map keyword decides, as it does in the material's own shader: with the keyword off the scalars are read even if a map is assigned. Smoothness from the base map's alpha is honoured too. Row S16 in the suite.
+
 ### Fixed
 
 - **Meshes batched by the GPU Resident Drawer no longer light as dark, fully glossy surfaces.** The drawer draws its batches with each material's own shader and ignores the override shader the surface prepass draws through, so a batched mesh landed its lit colour in the albedo capture and an opaque alpha of 1 as its smoothness: near-black and mirror-glossy under every fixture. The prepass now leaves the drawer's batches out, and they light as the neutral mid-grey surface, the same as a layer left out of `prepassLayers`. VRSL cannot read the colour, gloss or metallic of a mesh the drawer batches, since Unity offers no pass in Forward+ that exposes them; `VRSL Diagnostics` and `Validate Renderer Setup` say when the drawer is on, and that a mesh lights in its own colour again with Unity's Disallow GPU Driven Rendering component on it, or with the drawer off on the URP asset. Row S15 in the suite. Reported against rc.3.

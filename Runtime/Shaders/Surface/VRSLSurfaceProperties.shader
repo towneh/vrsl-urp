@@ -9,6 +9,13 @@
 //   SV_Target0 (_VRSLAlbedoTexture)   rgb = base colour, a = smoothness
 //   SV_Target1 (_VRSLMaterialTexture) r   = metallic
 //
+// Metallic and smoothness come from the material's metallic-smoothness map
+// where it has one, resolved the way URP Lit and the Standard shader resolve
+// theirs: under the material's own map keyword, metallic is the map's red
+// channel and smoothness its alpha scaled by the scalar; without it, the
+// scalars. A material's keywords carry into an override draw, so this shader
+// declares the same keywords as multi_compile and reads them.
+//
 // Pass 0 draws the plain opaque queue; pass 1 draws the alpha-test queue and
 // clips on _Cutoff. The manager splits the renderer list by queue range so an
 // opaque material whose base map stores non-colour data in alpha is never
@@ -30,6 +37,10 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
         _Glossiness ("Smoothness (legacy)",       Float) = 0
         _Metallic   ("Metallic",                  Float) = 0
         _Cutoff     ("Alpha Cutoff",              Float) = 0.5
+        // Metallic in R, smoothness in A, under both naming conventions. Read
+        // only under the map keyword, so the default is never sampled.
+        _MetallicGlossMap ("Metallic (R) Smoothness (A)", 2D) = "white" {}
+        _GlossMapScale    ("Smoothness scale (legacy)",   Float) = 0
     }
 
     SubShader
@@ -45,6 +56,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
 
         TEXTURE2D(_BaseMap); SAMPLER(sampler_BaseMap);
         TEXTURE2D(_MainTex); SAMPLER(sampler_MainTex);
+        TEXTURE2D(_MetallicGlossMap); SAMPLER(sampler_MetallicGlossMap);
 
         CBUFFER_START(UnityPerMaterial)
             float4 _BaseMap_ST;
@@ -55,6 +67,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             half   _Glossiness;
             half   _Metallic;
             half   _Cutoff;
+            half   _GlossMapScale;
         CBUFFER_END
 
         struct Attributes
@@ -102,15 +115,57 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
         // resolves to that texture once instead of squaring it. Where a material
         // genuinely populates both with different values the darker wins, which
         // under-applies light rather than blowing it out.
-        half4 SampleBaseColor(Varyings i)
+        //
+        // textureAlpha is the base texture's own alpha before the tint, which is
+        // what the albedo-alpha smoothness mode reads; min() of the two slots for
+        // the same reason as the colour.
+        half4 SampleBaseColor(Varyings i, out half textureAlpha)
         {
-            half4 urp    = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, i.uvBase) * _BaseColor;
-            half4 legacy = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uvMain) * _Color;
+            half4 urpTex    = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, i.uvBase);
+            half4 legacyTex = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, i.uvMain);
+            textureAlpha = min(urpTex.a, legacyTex.a);
+
+            half4 urp    = urpTex    * _BaseColor;
+            half4 legacy = legacyTex * _Color;
 
             if (_BaseColor.a <= 0) urp    = half4(1, 1, 1, 1);
             if (_Color.a    <= 0) legacy = half4(1, 1, 1, 1);
 
             return min(urp, legacy);
+        }
+
+        // Metallic and smoothness as URP Lit (_METALLICSPECGLOSSMAP, scaled by
+        // _Smoothness) and the Standard shader (_METALLICGLOSSMAP, scaled by
+        // _GlossMapScale) resolve them. Both scalar names default to 0 here, so
+        // max() picks whichever one the material declares; likewise the two
+        // scales. A material with the map assigned but the keyword off reads
+        // its scalars, which is what its own shader would do.
+        void SampleMetallicSmoothness(Varyings i, half textureAlpha,
+                                      out half metallic, out half smoothness)
+        {
+        #if defined(_METALLICSPECGLOSSMAP) || defined(_METALLICGLOSSMAP)
+            #if defined(_METALLICSPECGLOSSMAP)
+                float2 uv = i.uvBase;
+            #else
+                float2 uv = i.uvMain;
+            #endif
+            half4 map   = SAMPLE_TEXTURE2D(_MetallicGlossMap, sampler_MetallicGlossMap, uv);
+            half  scale = max(_Smoothness, _GlossMapScale);
+            metallic = map.r;
+            #if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+                smoothness = textureAlpha * scale;
+            #else
+                smoothness = map.a * scale;
+            #endif
+        #else
+            half scalar = max(_Smoothness, _Glossiness);
+            metallic = _Metallic;
+            #if defined(_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A)
+                smoothness = textureAlpha * scalar;
+            #else
+                smoothness = scalar;
+            #endif
+        #endif
         }
 
         // Discard fragments the camera didn't keep.
@@ -159,14 +214,13 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             clip(VRSL_SURFACE_DEPTH_TOLERANCE(cameraEye) - abs(fragEye - cameraEye));
         }
 
-        void WriteSurface(half4 baseColor,
+        void WriteSurface(Varyings i, half4 baseColor, half textureAlpha,
                           out half4 outAlbedo, out half4 outMaterial)
         {
-            // Both smoothness names default to 0 here, so max() picks whichever
-            // one the material actually declares.
-            half smoothness = max(_Smoothness, _Glossiness);
+            half metallic, smoothness;
+            SampleMetallicSmoothness(i, textureAlpha, metallic, smoothness);
             outAlbedo   = half4(baseColor.rgb, smoothness);
-            outMaterial = half4(_Metallic, 0, 0, 0);
+            outMaterial = half4(metallic, 0, 0, 0);
         }
         ENDHLSL
 
@@ -189,6 +243,11 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             // neither eye. Losing the GPU-instancing variant costs some batching
             // on this prepass; drawing nothing costs the whole feature.
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+            // The material's own map keywords, as multi_compile: no material
+            // references this hidden shader, so shader_feature variants would be
+            // stripped from every build and the maps never read in a player.
+            #pragma multi_compile_local _ _METALLICSPECGLOSSMAP _METALLICGLOSSMAP
+            #pragma multi_compile_local _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
 
             void frag(Varyings i, out half4 outAlbedo : SV_Target0,
                                   out half4 outMaterial : SV_Target1)
@@ -196,7 +255,9 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
                 UNITY_SETUP_INSTANCE_ID(i);
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 ClipToCameraDepth(i.positionCS);
-                WriteSurface(SampleBaseColor(i), outAlbedo, outMaterial);
+                half textureAlpha;
+                half4 baseColor = SampleBaseColor(i, textureAlpha);
+                WriteSurface(i, baseColor, textureAlpha, outAlbedo, outMaterial);
             }
             ENDHLSL
         }
@@ -220,6 +281,8 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             // neither eye. Losing the GPU-instancing variant costs some batching
             // on this prepass; drawing nothing costs the whole feature.
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+            #pragma multi_compile_local _ _METALLICSPECGLOSSMAP _METALLICGLOSSMAP
+            #pragma multi_compile_local _ _SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A
 
             void frag(Varyings i, out half4 outAlbedo : SV_Target0,
                                   out half4 outMaterial : SV_Target1)
@@ -229,9 +292,10 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
 
                 ClipToCameraDepth(i.positionCS);
 
-                half4 baseColor = SampleBaseColor(i);
+                half textureAlpha;
+                half4 baseColor = SampleBaseColor(i, textureAlpha);
                 clip(baseColor.a - _Cutoff);
-                WriteSurface(baseColor, outAlbedo, outMaterial);
+                WriteSurface(i, baseColor, textureAlpha, outAlbedo, outMaterial);
             }
             ENDHLSL
         }

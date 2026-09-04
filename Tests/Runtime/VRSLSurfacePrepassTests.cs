@@ -715,15 +715,15 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// Render the rig with the floor on a URP Lit material of known colour, gloss
-        /// and metallic, under the given drawer mode, and read back what the surface
-        /// prepass captured for it, beside how the frame lit. The floor is found
+        /// Render the rig with the floor on a fresh URP Lit material set up by
+        /// <paramref name="configure"/>, under the given drawer mode, and read back
+        /// what the surface prepass captured for it, beside how the frame lit. The floor is found
         /// through VRSL's own normals texture: the one surface in view facing up; a
         /// floor pixel counts as captured where the prepass wrote its depth. Yields
         /// <c>null</c> itself: the runner drives one level of nesting.
         /// </summary>
-        static IEnumerator CaptureSurfaceData(GPUResidentDrawerMode mode, Color baseColor,
-                                              float smoothness, float metallic,
+        static IEnumerator CaptureSurfaceData(GPUResidentDrawerMode mode,
+                                              System.Action<Material> configure,
                                               System.Action<SurfaceReadback> done)
         {
             var readback = new SurfaceReadback { modeAsked = mode };
@@ -780,9 +780,7 @@ namespace VRSL.URP.Tests
                 rig.FreezeForImageCapture();
 
                 floorMaterial = new Material(lit) { name = "VRSL surface probe floor" };
-                floorMaterial.SetColor("_BaseColor", baseColor);
-                floorMaterial.SetFloat("_Smoothness", smoothness);
-                floorMaterial.SetFloat("_Metallic", metallic);
+                configure(floorMaterial);
                 rig.Floor.GetComponent<Renderer>().sharedMaterial = floorMaterial;
 
                 var target = rig.Camera;
@@ -895,9 +893,15 @@ namespace VRSL.URP.Tests
             float expectedSmoothness = smoothness * 255f;
             float expectedMetallic   = metallic   * 255f;
 
+            void Configure(Material m)
+            {
+                m.SetColor("_BaseColor", baseColor);
+                m.SetFloat("_Smoothness", smoothness);
+                m.SetFloat("_Metallic", metallic);
+            }
             SurfaceReadback plain = null, batched = null;
-            yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled,         baseColor, smoothness, metallic, r => plain   = r);
-            yield return CaptureSurfaceData(GPUResidentDrawerMode.InstancedDrawing, baseColor, smoothness, metallic, r => batched = r);
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled,         Configure, r => plain   = r);
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.InstancedDrawing, Configure, r => batched = r);
 
             Debug.Log($"[S15] authored albedo {expectedAlbedo:F1}, smoothness {expectedSmoothness:F1}, "
                     + $"metallic {expectedMetallic:F1}\n[S15] {plain}\n[S15] {batched}");
@@ -951,6 +955,105 @@ namespace VRSL.URP.Tests
             Assert.AreEqual(albedo.z,   r.albedo.z,   tolerance, $"{because} (albedo blue: {r})");
             Assert.AreEqual(smoothness, r.smoothness, tolerance, $"{because} (smoothness: {r})");
             Assert.AreEqual(metallic,   r.metallic,   tolerance, $"{because} (metallic: {r})");
+        }
+
+        /// <summary>A one-colour texture in linear space, the way a metallic map is
+        /// imported. Destroyed by the caller.</summary>
+        static Texture2D SolidTexture(Color value, string name)
+        {
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false, linear: true) { name = name };
+            var pixels = new Color[16];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = value;
+            tex.SetPixels(pixels);
+            tex.Apply(false, false);
+            return tex;
+        }
+
+        /// <summary>
+        /// S16. The surface prepass reads a material's metallic-smoothness map the way
+        /// the material's own shader does.
+        ///
+        /// The floor on URP Lit with a one-colour metallic map (metallic in red,
+        /// smoothness in alpha) and scalar metallic and smoothness that disagree with
+        /// it, captured three ways. With the map keyword on, Lit takes metallic from
+        /// the map and smoothness from the map's alpha scaled by the scalar, and the
+        /// capture has to match that. With the keyword off and the map still
+        /// assigned, Lit ignores the map, and so must the capture: the same material
+        /// reads its scalars. With the keyword on and the albedo-alpha mode as well,
+        /// smoothness comes from the base texture's alpha instead of the map's. The
+        /// prepass draws through an override shader, so the row is also the proof
+        /// that a material's keywords reach it; the keyword-off capture is what
+        /// separates "read the keyword" from "always read the map".
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S16_ThePrepassReadsTheMetallicSmoothnessMap()
+        {
+            if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset)
+                Assert.Ignore("No Universal Render Pipeline asset is active.");
+
+            // The map and the scalars disagree on purpose, so which one the capture
+            // read is unambiguous. The base texture's alpha is a third value again.
+            const float mapMetallic = 0.75f, mapSmoothness = 0.5f, baseAlpha = 0.6f;
+            const float scalarMetallic = 0.1f, scalarSmoothness = 0.8f;
+            var baseColor = new Color(0.8f, 0.5f, 0.2f, 1f);
+            var linear = QualitySettings.activeColorSpace == ColorSpace.Linear ? baseColor.linear : baseColor;
+            var expectedAlbedo = new Vector3(linear.r, linear.g, linear.b) * 255f;
+
+            Texture2D map = null, baseMap = null;
+            SurfaceReadback withMap = null, withoutKeyword = null, albedoAlpha = null;
+            try
+            {
+                map     = SolidTexture(new Color(mapMetallic, 0f, 0f, mapSmoothness), "VRSL S16 metallic map");
+                baseMap = SolidTexture(new Color(1f, 1f, 1f, baseAlpha), "VRSL S16 base map");
+
+                void Common(Material m)
+                {
+                    m.SetColor("_BaseColor", baseColor);
+                    m.SetTexture("_BaseMap", baseMap);
+                    m.SetTexture("_MetallicGlossMap", map);
+                    m.SetFloat("_Metallic", scalarMetallic);
+                    m.SetFloat("_Smoothness", scalarSmoothness);
+                }
+                yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled,
+                    m => { Common(m); m.EnableKeyword("_METALLICSPECGLOSSMAP"); },
+                    r => withMap = r);
+                yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled,
+                    m => { Common(m); m.DisableKeyword("_METALLICSPECGLOSSMAP"); },
+                    r => withoutKeyword = r);
+                yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled,
+                    m => { Common(m); m.EnableKeyword("_METALLICSPECGLOSSMAP");
+                           m.EnableKeyword("_SMOOTHNESS_TEXTURE_ALBEDO_CHANNEL_A"); },
+                    r => albedoAlpha = r);
+
+                Debug.Log($"[S16] map keyword on: {withMap}\n[S16] keyword off: {withoutKeyword}\n"
+                        + $"[S16] albedo-alpha smoothness: {albedoAlpha}");
+
+                foreach (var r in new[] { withMap, withoutKeyword, albedoAlpha })
+                {
+                    Assert.AreEqual(0, r.errors.Count, $"errors while capturing: {r}");
+                    Assert.Greater(r.floorPixels, 1000, "the floor covers too little of the frame to judge");
+                    Assert.GreaterOrEqual(r.captured, 0.95f * r.floorPixels,
+                        $"the prepass captured {r.captured} of the floor's {r.floorPixels} pixels");
+                }
+
+                const float tolerance = 6f;
+                AssertSurface(withMap, expectedAlbedo, mapSmoothness * scalarSmoothness * 255f, mapMetallic * 255f, tolerance,
+                    "with the map keyword on, the prepass did not read metallic from the map's red "
+                  + "channel and smoothness from its alpha scaled by _Smoothness, as URP Lit does. Either "
+                  + "the material's keyword did not reach the override draw or the map was not sampled");
+                AssertSurface(withoutKeyword, expectedAlbedo, scalarSmoothness * 255f, scalarMetallic * 255f, tolerance,
+                    "with the map assigned but its keyword off, the prepass did not read the scalars. "
+                  + "URP Lit ignores the map without the keyword, and a capture that reads it regardless "
+                  + "lights the surface differently from its own shader");
+                AssertSurface(albedoAlpha, expectedAlbedo, baseAlpha * scalarSmoothness * 255f, mapMetallic * 255f, tolerance,
+                    "with smoothness taken from the base map's alpha, the prepass did not read that "
+                  + "alpha scaled by _Smoothness");
+            }
+            finally
+            {
+                if (map     != null) Object.DestroyImmediate(map);
+                if (baseMap != null) Object.DestroyImmediate(baseMap);
+            }
         }
 
         /// <summary>
