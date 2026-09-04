@@ -1387,6 +1387,7 @@ namespace VRSL.URP
                 sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
                 sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
                 sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
+                VRSLDiagnostics.AppendGpuResidentDrawerStatus(sb, "  ");
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
                 sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));
                 sb.AppendLine("  Enter play mode and run this again for the rest.");
@@ -1403,6 +1404,7 @@ namespace VRSL.URP
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
             sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));
+            VRSLDiagnostics.AppendGpuResidentDrawerStatus(sb, "  ");
             sb.AppendLine("  Normals: " + (NormalsSource ?? "no camera has rendered yet"));
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Decode compute", computeShader, "UpdateLights"));
             sb.AppendLine("  " + VRSLDiagnostics.ComputeStatus("Cull compute", lightCullShader, "CullLights"));

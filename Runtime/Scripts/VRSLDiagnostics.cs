@@ -296,6 +296,26 @@ namespace VRSL.URP
             return $"Light data: {emitting}/{fixtureCount} emitting, peak intensity {peak:G4}{faint}";
         }
 
+        /// <summary>What the GPU Resident Drawer does to lit surfaces while it is on,
+        /// and the two ways round it; null while it is off.</summary>
+        public static string GpuResidentDrawerStatus()
+        {
+            if (!VRSLSurfacePrepass.GpuResidentDrawerActive) return null;
+            return "GPU Resident Drawer: ON in the pipeline asset, so the meshes it batches light as "
+                 + "neutral mid-grey rather than in their own colour and gloss (Unity draws them with "
+                 + "their own shader, so VRSL cannot read their material). To light one in its own "
+                 + "colour, add Unity's Disallow GPU Driven Rendering component to it; to light every "
+                 + "surface in its own colour, turn the drawer off under Rendering on the URP asset.";
+        }
+
+        /// <summary>Appends <see cref="GpuResidentDrawerStatus"/> as a line while the
+        /// drawer is on; nothing while it is off.</summary>
+        public static void AppendGpuResidentDrawerStatus(System.Text.StringBuilder sb, string indent)
+        {
+            var status = GpuResidentDrawerStatus();
+            if (status != null) sb.AppendLine(indent + status);
+        }
+
         public static string SurfacePrepassStatus(Shader surfacePropertiesShader)
         {
             if (surfacePropertiesShader == null)

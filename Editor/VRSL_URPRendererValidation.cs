@@ -204,6 +204,7 @@ namespace VRSL.URP.EditorScripts
             if (seen == 0)
                 report.AppendLine("      NOT CHECKED — no VRSL light manager switched on in the "
                                 + "open scene, so there is no prepass layer mask to read.");
+            VRSLDiagnostics.AppendGpuResidentDrawerStatus(report, "      ");
             report.AppendLine();
         }
 

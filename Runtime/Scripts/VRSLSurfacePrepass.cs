@@ -38,7 +38,10 @@ namespace VRSL.URP
     ///
     /// Both draws honour <see cref="Layers"/>. Geometry on a layer outside it is
     /// not drawn into either target, and the lighting pass shades it as the
-    /// neutral fallback surface with a depth-derived normal.
+    /// neutral fallback surface with a depth-derived normal. Renderers batched by
+    /// the GPU Resident Drawer contribute normals through their own pass but no
+    /// albedo or material: the drawer ignores override shaders, so they light as
+    /// the neutral fallback too (<see cref="GpuResidentDrawerActive"/>).
     ///
     /// Both <see cref="VRSL_URPLightManager"/> (DMX) and
     /// <see cref="VRSL_AudioLinkURPLightManager"/> (AudioLink) instantiate this
@@ -101,6 +104,16 @@ namespace VRSL.URP
         /// anyway, the draw runs as it always has.
         /// </summary>
         public bool UrpNormals { get; set; }
+
+        /// <summary>
+        /// Whether the active pipeline asset has the GPU Resident Drawer switched
+        /// on. While it is, every mesh the drawer batches lights as the neutral
+        /// fallback rather than in its own colour and gloss; the diagnostics line
+        /// and Validate Renderer Setup say so, with the ways round it.
+        /// </summary>
+        public static bool GpuResidentDrawerActive
+            => GraphicsSettings.currentRenderPipeline is UniversalRenderPipelineAsset urp
+            && urp.gpuResidentDrawerMode != GPUResidentDrawerMode.Disabled;
 
         /// <summary>How many camera renders drew VRSL's own normals, and how many
         /// read URP's. For the diagnostics line and row S11.</summary>
@@ -307,12 +320,24 @@ namespace VRSL.URP
             using var builder = rg.AddRasterRenderPass<SurfacePassData>(
                 "VRSL Surface Properties Prepass", out var data);
 
+            // Renderers the GPU Resident Drawer has taken over are left out. The
+            // drawer draws its batches with each material's own shader and ignores
+            // the override, so with them in the list this pass captured lit colour
+            // as albedo and an opaque alpha of 1 as smoothness. Left out, they get
+            // no surface data and the lighting pass shades them as the neutral
+            // fallback, the same as a layer outside the mask.
+            var opaqueFilter = new FilteringSettings(s_OpaqueRange, Layers)
+            {
+                batchLayerMask = ~BatchLayer.InstanceCullingMask,
+            };
+            var alphaTestFilter = new FilteringSettings(s_AlphaTestRange, Layers)
+            {
+                batchLayerMask = ~BatchLayer.InstanceCullingMask,
+            };
             data.opaqueList = rg.CreateRendererList(new RendererListParams(
-                renderingData.cullResults, opaqueSettings,
-                new FilteringSettings(s_OpaqueRange, Layers)));
+                renderingData.cullResults, opaqueSettings, opaqueFilter));
             data.alphaTestList = rg.CreateRendererList(new RendererListParams(
-                renderingData.cullResults, alphaTestSettings,
-                new FilteringSettings(s_AlphaTestRange, Layers)));
+                renderingData.cullResults, alphaTestSettings, alphaTestFilter));
 
             builder.UseRendererList(data.opaqueList);
             builder.UseRendererList(data.alphaTestList);
