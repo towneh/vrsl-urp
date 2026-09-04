@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: VRSL-MirrorBallStandard
+  m_Name: VRSL-Discoball-Sphere
   m_Shader: {fileID: 4800000, guid: 4073c25553c6630c3022bf1255af1c95, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0

@@ -166,7 +166,7 @@ GameObject:
   - component: {fileID: 4247945514820447809}
   - component: {fileID: 4247945514820447822}
   m_Layer: 24
-  m_Name: MirrorBallMesh
+  m_Name: Discoball-Sphere
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
