@@ -65,16 +65,55 @@ namespace VRSL.URP.EditorScripts
             new PrefabPair("6a94fea4f85300a44b9e29ba54430110", "e0009838b6fe1c3137b25f4e3658ae65", "DMX H 5CH Static ParLight",  FixtureKind.Dmx),
             new PrefabPair("94d6ff221dc5748458941750e422114f", "4138d57a3de4cdd841630c4e41cfed3d", "DMX V 5CH Static Blinder",   FixtureKind.Dmx),
             new PrefabPair("3b7bdfab2bd7abf4295be3356f6f3617", "6b5a89d8241bd316dc7ff37e0135e98c", "DMX V 5CH Static ParLight",  FixtureKind.Dmx),
+            new PrefabPair("fbb24c41d42d23c4296c31f5aca73942", "345a06b27d787f46fdcdf223175c83ef", "DMX H 5CH Static LightBar",  FixtureKind.Dmx),
+
+            // Shader-driven fixtures: the URP prefab keeps the same Static (or Laser) component
+            // as upstream, and the fields copy across by name.
+            new PrefabPair("75c269de381facb4cae616c67f83f519", "4a8f7532473a5e9bf1361da1fe4b77a4", "AudioLink Basic Laser",       FixtureKind.AudioLink),
+            new PrefabPair("a7acda2f5fe7dfd4aaa49ec10a2d5586", "71517ea8acb753e2d610495940ee4e86", "AudioLink Discoball",         FixtureKind.AudioLink),
+            new PrefabPair("092158b73b160384f904e33d35a09123", "9e7791cf3563706421af503421e7aa61", "AudioLink Static Flasher",    FixtureKind.AudioLink),
+            new PrefabPair("c33f8d4d996a9ba47b86d420e4cdb05b", "7d6e97747390e7734fb4ae838b5f9667", "AudioLink Static Lightbar",   FixtureKind.AudioLink),
+
+            new PrefabPair("3d6c0b40980bcd34aba9183a62ecbd21", "9c1eb5ab51addbc7b6095123da60df6a", "DMX H 13CH Static Laser",     FixtureKind.Dmx),
+            new PrefabPair("22192b7ad03f22a4db578b035fdca38d", "53bc7bd2ad2eded5995bf4784bb84988", "DMX H 1CH Static Discoball",  FixtureKind.Dmx),
+            new PrefabPair("6d00d693f1608ab49ad08d18dbe1fa02", "5404970a7e74686098d7d8dfef0597f2", "DMX H 1CH Static Flasher",    FixtureKind.Dmx),
+            new PrefabPair("96ffbd2a722ae324e892d303e2ee9a2a", "2e796cb68041073f45927683e29e808f", "DMX H 13CH Static LightBar",  FixtureKind.Dmx),
+            new PrefabPair("c19e8fd46b4abdf49bb7b6cdc62acdde", "cc5c662de3ca6d24fc0081cbf207613c", "DMX H 15CH Static MultiLightBar", FixtureKind.Dmx),
+            new PrefabPair("46d1954298362974887b80dc3d70ee5f", "6ba550857dbb8b35cdd51d4d4a127435", "DMX H 5CH Static 6x4 Strobe", FixtureKind.Dmx),
+
+            new PrefabPair("55058c5ef8c22d04991b48a99a10acfe", "97c0bfb4d24415d89174bdeec0068d50", "DMX V 13CH Static Laser",     FixtureKind.Dmx),
+            new PrefabPair("8bb1407f1f0e2cc48b9bbf35ca1951a6", "601028a8877b69560ad548ec4a4bce57", "DMX V 1CH Static Discoball",  FixtureKind.Dmx),
+            new PrefabPair("1c08f57da0cd0414c85f64b373431921", "1d6e08d6803e8af6b1c636ef1fdfa3c5", "DMX V 1CH Static Flasher",    FixtureKind.Dmx),
+            new PrefabPair("b2a0b640363bc10408fb7a3803939fa0", "c95416bf6eef62f2a394420e7f9eb36d", "DMX V 13CH Static LightBar",  FixtureKind.Dmx),
+            new PrefabPair("b8873da88b401dd4ab93b061c5ddf750", "a0940e84628bd52352bbe8a8c7825f32", "DMX V 15CH Static MultiLightBar", FixtureKind.Dmx),
+            new PrefabPair("51b428740444288448e19c88c64d5311", "49912180c2c2cec3d31d578111f9c053", "DMX V 5CH Static 6x4 Strobe", FixtureKind.Dmx),
+            new PrefabPair("6b906c7cc969ac346a656210549c02c7", "91cec4a5ecd89a3b271d226cf9bc78f4", "DMX V 5CH Example Surface",   FixtureKind.Dmx),
         };
 
         static readonly Dictionary<string, PrefabPair> PAIRS_BY_UPSTREAM_GUID =
             PREFAB_PAIRS.ToDictionary(p => p.UpstreamGuid);
+
+        // Upstream fixture prefabs this package ships no twin for. Named in the summary so an
+        // author knows which instances were passed over, rather than finding out in the headset.
+        static readonly Dictionary<string, string> UNPORTED_UPSTREAM = new Dictionary<string, string>
+        {
+            { "55ac9bf95dc63bb4fb6ba2095d73cde2", "DMX L 13CH Static Laser" },
+            { "65a96b17618e51548a669749173d48ff", "DMX L 1CH Static Discoball" },
+            { "a38b2f56984259247bded9aa1b1ee149", "DMX L 1CH Static Flasher" },
+            { "b1b81594f59ca5d469ad06808051c682", "DMX L 13CH Static LightBar" },
+            { "dd68d30b9f0b34442aac2fb4540ae553", "DMX L 15CH Static MultiLightBar" },
+            { "6f5c5d0af7e69e242ad56ac13882e04e", "DMX L 5CH Static 6x4 Strobe" },
+            { "27dc7840f76fbc1469f1e64bdbc9991a", "DMX L 5CH Example Surface" },
+            { "8c5b2abb4f158154cad77f35b9ce2643", "DMX H 5CH Example Surface" },
+            { "78bf4380452cfbe4aa8154e17a189b28", "DMX V 5CH Static LightBar" },
+        };
 
         // Upstream component type names we look up by string (no compile-time reference to upstream).
         const string UPSTREAM_AL_STATIC    = "VRSL.VRStageLighting_AudioLink_Static";
         const string UPSTREAM_AL_REALTIME  = "VRSL.VRStageLighting_AudioLink_RealtimeLight";
         const string UPSTREAM_DMX_STATIC   = "VRSL.VRStageLighting_DMX_Static";
         const string UPSTREAM_DMX_REALTIME = "VRSL.VRStageLighting_DMX_RealtimeLight";
+        const string UPSTREAM_AL_LASER     = "VRSL.VRStageLighting_AudioLink_Laser";
 
         // Upstream component FullName -> URP twin Type, for the in-place conversion path. Both
         // twins keep the upstream field layout, so values copy across by name with no translation.
@@ -82,6 +121,7 @@ namespace VRSL.URP.EditorScripts
         {
             (UPSTREAM_DMX_STATIC, typeof(VRStageLighting_DMX_Static)),
             (UPSTREAM_AL_STATIC,  typeof(VRStageLighting_AudioLink_Static)),
+            (UPSTREAM_AL_LASER,   typeof(VRStageLighting_AudioLink_Laser)),
         };
 
         // Fields on the modern upstream RealtimeLight components we should NOT copy via name-match
@@ -109,6 +149,7 @@ namespace VRSL.URP.EditorScripts
             // Snapshot candidates before mutating — otherwise we'd walk into the URP siblings
             // we just inserted and try to migrate them too.
             var candidates = new List<(GameObject go, PrefabPair pair)>();
+            var unported = new Dictionary<string, int>();
             foreach (var root in scene.GetRootGameObjects())
             {
                 foreach (var t in root.GetComponentsInChildren<Transform>(includeInactive: true))
@@ -116,6 +157,11 @@ namespace VRSL.URP.EditorScripts
                     if (!TryGetSourceGuid(t.gameObject, out string sourceGuid)) continue;
                     if (PAIRS_BY_UPSTREAM_GUID.TryGetValue(sourceGuid, out var pair))
                         candidates.Add((t.gameObject, pair));
+                    else if (UNPORTED_UPSTREAM.TryGetValue(sourceGuid, out var name))
+                    {
+                        unported.TryGetValue(name, out int n);
+                        unported[name] = n + 1;
+                    }
                 }
             }
 
@@ -161,6 +207,9 @@ namespace VRSL.URP.EditorScripts
             if (perKind.Count > 0)
                 summary += "\n\nBy fixture:\n" + string.Join("\n",
                     perKind.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
+            if (unported.Count > 0)
+                summary += "\n\nLeft as they are, no URP prefab exists for them yet:\n" + string.Join("\n",
+                    unported.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
 
             Debug.Log("[VRSL Migration] " + summary.Replace("\n", "  "));
             EditorUtility.DisplayDialog("VRSL Migration", summary, "OK");
@@ -350,7 +399,12 @@ namespace VRSL.URP.EditorScripts
         static void CopyAudioLinkParameters(GameObject source, GameObject target)
         {
             var dst = target.GetComponentInChildren<VRStageLighting_AudioLink_RealtimeLight>(includeInactive: true);
-            if (dst == null) return;
+            if (dst == null)
+            {
+                if (!CopyTwinParameters(source, target, UPSTREAM_AL_STATIC, typeof(VRStageLighting_AudioLink_Static)))
+                    CopyTwinParameters(source, target, UPSTREAM_AL_LASER, typeof(VRStageLighting_AudioLink_Laser));
+                return;
+            }
 
             // Prefer modern upstream RealtimeLight if it's also present (effectively identical layout).
             var srcModern = FindComponentByTypeName(source, UPSTREAM_AL_REALTIME);
@@ -406,7 +460,11 @@ namespace VRSL.URP.EditorScripts
         static void CopyDmxParameters(GameObject source, GameObject target)
         {
             var dst = target.GetComponentInChildren<VRStageLighting_DMX_RealtimeLight>(includeInactive: true);
-            if (dst == null) return;
+            if (dst == null)
+            {
+                CopyTwinParameters(source, target, UPSTREAM_DMX_STATIC, typeof(VRStageLighting_DMX_Static));
+                return;
+            }
 
             var srcModern = FindComponentByTypeName(source, UPSTREAM_DMX_REALTIME);
             if (srcModern != null)
@@ -439,6 +497,21 @@ namespace VRSL.URP.EditorScripts
             CopyField(srcStatic, dst, srcName: "enableAutoSpin",     dstName: "enableGoboSpin");
 
             EditorUtility.SetDirty(dst);
+        }
+
+        // A URP prefab with no RealtimeLight is a shader-driven fixture (laser, discoball,
+        // flasher, light bar) carrying the same component type as upstream. Every same-named
+        // field copies across; references into the source's own hierarchy are skipped so the URP
+        // prefab keeps its own renderers.
+        static bool CopyTwinParameters(GameObject source, GameObject target, string upstreamTypeName, Type urpType)
+        {
+            var src = FindComponentByTypeName(source, upstreamTypeName);
+            if (src == null) return false;
+            var dst = target.GetComponentInChildren(urpType, includeInactive: true);
+            if (dst == null) return false;
+            CopyAllNamedFields(src, dst, source);
+            EditorUtility.SetDirty(dst);
+            return true;
         }
 
         // ── Reflection helpers ────────────────────────────────────────────────────
