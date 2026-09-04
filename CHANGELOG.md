@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0-rc.4] — 2026-09-04
+
 ### Added
 
 - **The surface prepass reads metallic-smoothness maps.** Where a material uses one, metallic comes from the map's red channel and smoothness from its alpha scaled by the material's smoothness value, the way URP Lit and the Standard shader read theirs, so a floor whose gloss varies across a texture lights that way under the fixtures instead of as one flat value. The map keyword decides, as it does in the material's own shader: with the keyword off the scalars are read even if a map is assigned. Smoothness from the base map's alpha is honoured too. Row S16 in the suite.
