@@ -14,7 +14,7 @@ Nothing yet.
 
 The first release candidate after 0.1.0. Surfaces are lit with a real material response, beams cost what they cross rather than a fixed budget, one quality level replaces nine tuning fields, mirrors get their own policy, and there are tools that say what the package costs and whether it is working. Two changes need a look when you upgrade; they are marked **Breaking** below.
 
-### Highlights, in plain terms
+### Highlights
 
 - **Surfaces keep their own colour and gloss when lit.** A lit floor looks like that floor, not like a white wash over it, and glossy and metal surfaces respond as they should.
 - **Beams cost what they cross.** A fixture that fills little of the view now costs a fraction of one that fills all of it, and the picture is unchanged.
