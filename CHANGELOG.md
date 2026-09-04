@@ -19,7 +19,11 @@
 
 ### Fixed
 
-- **The lens flare, laser and discoball shaders compile their stereo-instanced variant.** Under single-pass instanced VR they had no render-target eye index and drew in one eye. The AudioLink laser also lacked the stereo output field on its varyings and wiped its instance id by zero-initialising after the transfer. Both DMX and AudioLink versions of all three are covered. Not yet checked in a headset; the par and blinder bodies named in the rc.2 known issue were already fixed in `1746a30`, and their projection meshes are not used by the URP prefabs.
+- **The lens flare, laser and discoball shaders compile their stereo-instanced variant.** Under single-pass instanced VR they had no render-target eye index and drew in one eye. The AudioLink laser also lacked the stereo output field on its varyings and wiped its instance id by zero-initialising after the transfer. Both DMX and AudioLink versions of all three are covered and render on desktop. The par and blinder bodies named in the rc.2 known issue were already fixed in `1746a30`, and their projection meshes are not used by the URP prefabs.
+
+### Known issues
+
+- **The lens flare, laser and discoball stereo fix has not been seen in a headset.** They compile with the stereo-instanced variant and render on desktop; whether both eyes draw them is unconfirmed until someone with a headset looks. Moving heads, the fixture bodies, the surface lighting and the beams are known good in both eyes.
 
 ## [0.2.0-rc.2] — 2026-09-03
 

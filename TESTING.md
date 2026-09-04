@@ -692,7 +692,7 @@ scene-owned player.
 | X2 | — | Volumetric cones in headset | Cones in the same world position in both eyes |
 | X3 | — | Diagnostics, tile culling active | No vertical mirroring of lighting between eyes. Mirroring points at the `renderIntoTexture` inference in `VRSLTileCullPass`; clearing `lightCullShader` isolates it |
 | X4 | — | Fixture body meshes in headset | Visible in both eyes |
-| X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye. **Written 2026-09-04, not yet run in a headset:** the stereo-instanced variant is compiled for all six shaders; whether it draws right is the row |
+| X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye. **Written 2026-09-04, not yet run in a headset:** the stereo-instanced variant is compiled for all six shaders, and the lens flare and the discoball render on desktop (Matt, 2026-09-04); whether both eyes draw them is the row and needs a headset |
 
 ---
 
