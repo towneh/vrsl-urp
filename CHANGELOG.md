@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0-rc.5] — 2026-09-07
+
 ### Fixed
 
 - **The package compiles against the stock Basis media player.** The Truss SEI DMX source subscribed to the player's `UserDataReceived` event at compile time, and the media player Basis ships does not have one, so every project with `com.basis.mediaplayer` failed to compile the package's Basis integration on install. The source now binds the event by name at runtime: where the player raises it, records arrive as before; where it does not, the source logs one warning saying the player cannot feed it and stays idle. The video-to-DMX source is unaffected either way.
