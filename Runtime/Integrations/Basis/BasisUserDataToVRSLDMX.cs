@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Unity.Collections;
 using UnityEngine;
 #if VRSL_CILBOX_PRESENT
@@ -72,6 +73,20 @@ namespace VRSL.URP.BasisIntegration
         // One bit per Result, so each reason logs once.
         int  _logged;
         BasisMediaPlayer _subscribed;
+        Delegate         _handler;
+        bool             _warnedNoUserData;
+
+        // The stock Basis media player has no UserDataReceived; only a player
+        // built to surface SEI user data does. Bound by name so this assembly
+        // compiles against either, which it can because the handler's signature
+        // is framework types only: the delegate type is the player's, the
+        // parameters are not.
+        static readonly EventInfo s_UserDataEvent =
+            typeof(BasisMediaPlayer).GetEvent("UserDataReceived", BindingFlags.Instance | BindingFlags.Public);
+
+        /// <summary>Whether the media player in this project publishes SEI user
+        /// data at all. False means this source can never receive a record.</summary>
+        public static bool PlayerPublishesUserData => s_UserDataEvent != null;
         VRSL_URPLightManager _manager;
 
         void OnEnable()
@@ -117,11 +132,33 @@ namespace VRSL.URP.BasisIntegration
 
         void Subscribe(BasisMediaPlayer player)
         {
+            if (s_UserDataEvent == null)
+            {
+                _subscribed = player;
+                if (player != null && !_warnedNoUserData)
+                {
+                    _warnedNoUserData = true;
+                    Debug.LogWarning("[VRSL URP] This Basis media player does not publish SEI user data, "
+                                   + "so the Truss SEI DMX Output can never receive a DMX record from the "
+                                   + "stream and the fixtures will stay dark. It needs a media player "
+                                   + "that raises UserDataReceived; feed the manager another way until then.",
+                                     this);
+                }
+                return;
+            }
+
             // By reference: a destroyed player compares equal to null the Unity
             // way while the managed object still holds the delegate.
-            if (!ReferenceEquals(_subscribed, null)) _subscribed.UserDataReceived -= OnUserData;
+            if (!ReferenceEquals(_subscribed, null) && _handler != null)
+                s_UserDataEvent.RemoveEventHandler(_subscribed, _handler);
             _subscribed = player;
-            if (_subscribed != null) _subscribed.UserDataReceived += OnUserData;
+            if (_subscribed != null)
+            {
+                _handler ??= Delegate.CreateDelegate(
+                    s_UserDataEvent.EventHandlerType, this,
+                    GetType().GetMethod(nameof(OnUserData), BindingFlags.Instance | BindingFlags.NonPublic));
+                s_UserDataEvent.AddEventHandler(_subscribed, _handler);
+            }
         }
 
         void OnUserData(long ptsUs, Guid uuid, ReadOnlySpan<byte> payload)
