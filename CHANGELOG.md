@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.2.0-rc.6] — 2026-10-05
+
 ### Added
 
 - **A DMX source that listens for Truss records over OSC** (`VRSLTrussOscDmxSource`, menu `VRSL → URP → DMX Config → Add Truss OSC DMX Source`), so a VJ can see in the Editor what they are sending with no encoder, ingest or player running. `truss-relay --osc <this machine>:12100` sends every record it builds as one OSC message, `/truss/dmx`, with the record as its single blob argument, carrying the same payload the stream carries, so the fixtures show what viewers would get, universes, ages and budget included. Only that one message shape is read; a bundle, a message under another address or with another argument type, or something that is not OSC at all is counted as ignored and never reaches the decoder, so another sender on the port cannot take the source down or light a fixture. In Play mode the inspector shows whether the socket is open, what has arrived and what became of it, and says what to check when nothing is lighting. A port already held is reported in the inspector and the console rather than thrown. Rows N27 and N28.
