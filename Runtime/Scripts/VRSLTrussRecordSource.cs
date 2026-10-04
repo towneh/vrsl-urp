@@ -6,9 +6,9 @@ namespace VRSL.URP
 {
     /// <summary>
     /// Feeds the DMX channel buffer from Truss records, whichever way they
-    /// arrived. A record is the desk's DMX snapshot as Truss frames it: the
-    /// bytes a stream carries as SEI user data are the same bytes the relay
-    /// sends over OSC, so one decoder and one hand-over serve both.
+    /// arrived. A record is the desk's DMX snapshot as Truss frames it, whether
+    /// a stream carried it as SEI user data or the relay sent it over OSC, so
+    /// one decoder and one hand-over serve both.
     ///
     /// A subclass owns the delivery and nothing else. It hands each record's
     /// bytes to <see cref="Accept"/> on the main thread; this decodes them,

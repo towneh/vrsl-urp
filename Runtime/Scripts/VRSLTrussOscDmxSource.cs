@@ -10,10 +10,11 @@ namespace VRSL.URP
     /// <summary>
     /// Feeds the DMX channel buffer from Truss records arriving over OSC, which
     /// is how <c>truss-relay --osc</c> delivers them: one message, <c>/truss/dmx</c>,
-    /// with the record as its single blob argument. The bytes are the record the
+    /// with the record as its single blob argument. The payload is the one the
     /// stream carries, so a VJ sees in the Editor what viewers would get from the
-    /// stream, universes, ages and budget included, with no encoder, ingest or
-    /// player running.
+    /// stream, universes, ages and budget included, with nothing else running.
+    /// The record's outer frame is the lane's own: the relay numbers OSC records
+    /// from the first it sent, under its own carrier.
     ///
     /// Only that one message shape is read. A bundle, a message with another
     /// address or argument type, or something that is not OSC at all is counted
