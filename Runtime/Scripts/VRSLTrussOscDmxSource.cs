@@ -22,7 +22,10 @@ namespace VRSL.URP
     ///
     /// The socket is read on its own thread, which cuts the record out of each
     /// datagram and queues it; the records are decoded on the main thread, in
-    /// the frame they are handed to the manager.
+    /// the frame they are handed to the manager. A thread lives exactly as long
+    /// as its socket is the current one, so a thread still winding down when
+    /// the component is re-enabled can neither read the new socket nor queue
+    /// a record behind the old one.
     /// </summary>
     [AddComponentMenu("VRSL-URP/VRSL Truss OSC DMX Source")]
     [DisallowMultipleComponent]
@@ -65,9 +68,8 @@ namespace VRSL.URP
         List<byte[]> _pending  = new List<byte[]>();
         List<byte[]> _draining = new List<byte[]>();
         long _received, _ignored;
-        UdpClient _socket;
-        Thread    _thread;
-        volatile bool _running;
+        volatile UdpClient _socket;
+        Thread _thread;
 
         protected override void OnEnable()
         {
@@ -105,35 +107,57 @@ namespace VRSL.URP
 
         void Open()
         {
+            if (!IPAddress.TryParse(listenAddress, out var address))
+            {
+                Fail($"\"{listenAddress}\" is not an IP address. Use 0.0.0.0 to hear every "
+                   + "adapter, or 127.0.0.1 to hear only this machine.");
+                return;
+            }
+            if (port < 1 || port > 65535)
+            {
+                Fail($"port {port} is not between 1 and 65535. truss-relay --osc sends to 12100 "
+                   + "unless told otherwise.");
+                return;
+            }
+            UdpClient socket;
             try
             {
-                var endpoint = new IPEndPoint(IPAddress.Parse(listenAddress), port);
-                var socket = new UdpClient(endpoint);
+                socket = new UdpClient(new IPEndPoint(address, port));
                 socket.Client.ReceiveTimeout = ReceiveTimeoutMs;
-                _socket  = socket;
-                _running = true;
-                _thread  = new Thread(() => Receive(socket))
-                {
-                    IsBackground = true,
-                    Name         = "VRSL Truss OSC",
-                };
-                _thread.Start();
+            }
+            catch (SocketException e) when (e.SocketErrorCode == SocketError.AddressAlreadyInUse)
+            {
+                Fail($"port {port} is held by another program. Stop it, or change the port "
+                   + "here and in truss-relay --osc.");
+                return;
             }
             catch (Exception e)
             {
-                _socket   = null;
-                LastError = e.Message;
-                Debug.LogError($"[VRSL URP] The Truss OSC DMX Source cannot listen on "
-                             + $"{listenAddress}:{port}, so no DMX will arrive this way: {e.Message}. "
-                             + "If another tool holds the port, stop it or change the port here "
-                             + "and in truss-relay --osc.", this);
+                Fail(e.Message);
+                return;
             }
+            _socket = socket;
+            _thread = new Thread(() => Receive(socket))
+            {
+                IsBackground = true,
+                Name         = "VRSL Truss OSC",
+            };
+            _thread.Start();
+        }
+
+        void Fail(string why)
+        {
+            _socket   = null;
+            LastError = why;
+            Debug.LogError($"[VRSL URP] The Truss OSC DMX Source cannot listen on "
+                         + $"{listenAddress}:{port}, so no DMX will arrive this way: {why}", this);
         }
 
         void Close()
         {
-            _running = false;
             var socket = _socket;
+            // Cleared before the close, so the thread sees it is no longer
+            // current before its receive returns.
             _socket = null;
             // Closing the socket is what unblocks a receive in progress.
             socket?.Close();
@@ -149,7 +173,7 @@ namespace VRSL.URP
         void Receive(UdpClient socket)
         {
             var from = new IPEndPoint(IPAddress.Any, 0);
-            while (_running)
+            while (ReferenceEquals(_socket, socket))
             {
                 byte[] datagram;
                 try
@@ -174,6 +198,10 @@ namespace VRSL.URP
                     return;
                 }
 
+                // A datagram that arrived as the socket was being replaced
+                // belongs to nobody: counting or queueing it would land a
+                // stale record behind a queue Close has already cleared.
+                if (!ReferenceEquals(_socket, socket)) return;
                 Interlocked.Increment(ref _received);
                 if (!TryReadBlob(datagram, out int offset, out int length))
                 {
@@ -184,6 +212,7 @@ namespace VRSL.URP
                 Buffer.BlockCopy(datagram, offset, record, 0, length);
                 lock (_lock)
                 {
+                    if (!ReferenceEquals(_socket, socket)) return;
                     if (_pending.Count >= MaxPending) _pending.RemoveAt(0);
                     _pending.Add(record);
                 }

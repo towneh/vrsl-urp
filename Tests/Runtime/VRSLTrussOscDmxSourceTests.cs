@@ -205,18 +205,32 @@ namespace VRSL.URP.Tests
         }
 
         [UnityTest]
-        public IEnumerator N28_a_port_already_held_is_reported_not_thrown()
+        public IEnumerator N28_a_port_already_held_or_a_bad_address_is_reported_not_thrown()
         {
             int port = FreePort();
             using var holder = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
-            LogAssert.Expect(LogType.Error, new Regex("cannot listen on 127\\.0\\.0\\.1:" + port));
+            LogAssert.Expect(LogType.Error, new Regex("cannot listen on 127\\.0\\.0\\.1:" + port
+                                                   + ".*held by another program"));
             var rig = Open(port);
             try
             {
                 yield return rig.Scene.Step(1);
                 Assert.IsFalse(rig.Source.Listening);
-                Assert.IsNotNull(rig.Source.LastError);
+                StringAssert.Contains("held by another program", rig.Source.LastError);
                 Assert.AreEqual(0UL, rig.Source.DatagramsReceived);
+
+                // A typing error in the address is told apart from a held port.
+                LogAssert.Expect(LogType.Error, new Regex("not an IP address"));
+                var host = new GameObject("Bad address");
+                host.transform.SetParent(rig.Scene.Manager.transform.parent, false);
+                host.SetActive(false);
+                var bad = host.AddComponent<VRSLTrussOscDmxSource>();
+                bad.listenAddress = "not-an-address";
+                bad.port          = FreePort();
+                host.SetActive(true);
+                yield return rig.Scene.Step(1);
+                Assert.IsFalse(bad.Listening);
+                StringAssert.Contains("not an IP address", bad.LastError);
             }
             finally
             {
