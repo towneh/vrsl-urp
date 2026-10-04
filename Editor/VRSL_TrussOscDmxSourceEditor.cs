@@ -64,7 +64,7 @@ namespace VRSL.URP
                 EditorGUILayout.HelpBox(
                     $"Every record so far was dropped ({source.LastResult}). The relay and this "
                   + "package disagree about the record format, or the bytes are damaged in "
-                  + "transit; the DMX Monitor and truss-detect osc will say which.",
+                  + "transit; the DMX Monitor and truss-detect osc:// will say which.",
                     MessageType.Warning);
         }
     }
