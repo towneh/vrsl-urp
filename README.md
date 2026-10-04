@@ -11,7 +11,7 @@ The package is a standalone fork of [VR Stage Lighting](https://github.com/AcCho
 | Get a rig lit in ten minutes | [Your first rig](#your-first-rig) below |
 | Step-by-step guides in plain language | The [wiki](https://github.com/towneh/vrsl-urp/wiki) |
 | Every inspector field, for both data paths | [Fixture Configuration Reference](https://github.com/towneh/vrsl-urp/wiki/Fixture-Configuration-Reference) |
-| DMX as bytes rather than as a video grid, including from a Basis media player | [DMX Channel Sources](https://github.com/towneh/vrsl-urp/wiki/DMX-Channel-Sources) |
+| DMX as bytes rather than as a video grid, from a Basis media player or over OSC from Truss | [DMX Channel Sources](https://github.com/towneh/vrsl-urp/wiki/DMX-Channel-Sources) |
 | See every channel's value live | [DMX Monitor](https://github.com/towneh/vrsl-urp/wiki/DMX-Monitor) |
 | How it works inside, and its limits | [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) |
 | What changed, and known issues | [`CHANGELOG.md`](CHANGELOG.md) |

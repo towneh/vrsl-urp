@@ -22,7 +22,7 @@ namespace VRSL.URP.Tests
         [OneTimeTearDown]
         public void LetTheHostSpeak() => VRSLHostQuiet.Restore();
 
-        struct Block
+        internal struct Block
         {
             public int universe, start; public uint age; public byte[] values;
         }
@@ -35,7 +35,7 @@ namespace VRSL.URP.Tests
         static void PutU64(List<byte> b, ulong v) { PutU32(b, (uint)(v >> 32)); PutU32(b, (uint)v); }
 
         /// <summary>A <c>DMXS</c> payload, as Truss's <c>payload::encode</c> lays it out.</summary>
-        static byte[] Payload(params Block[] blocks)
+        internal static byte[] Payload(params Block[] blocks)
         {
             var b = new List<byte> { (byte)'D', (byte)'M', (byte)'X', (byte)'S', 1, 0x01 };
             PutU16(b, blocks.Length);
@@ -52,7 +52,7 @@ namespace VRSL.URP.Tests
 
         /// <summary>A <c>TRUSSDMX</c> record around a payload, CRC included, as
         /// Truss's <c>Record::encode</c> lays it out.</summary>
-        static byte[] Record(byte[] payload, uint seq = 7, uint frame = 42,
+        internal static byte[] Record(byte[] payload, uint seq = 7, uint frame = 42,
                              ulong sendNanos = 1_700_000_000_000_000_000UL, byte carrier = 1,
                              byte version = 1)
         {
@@ -69,7 +69,7 @@ namespace VRSL.URP.Tests
             return b.ToArray();
         }
 
-        static byte[] Ramp(int length, int from = 0)
+        internal static byte[] Ramp(int length, int from = 0)
         {
             var v = new byte[length];
             for (int i = 0; i < length; i++) v[i] = (byte)((from + i) % 251);
