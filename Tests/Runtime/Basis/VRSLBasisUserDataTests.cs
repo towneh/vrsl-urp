@@ -64,6 +64,7 @@ namespace VRSL.URP.Tests
             // Assigned rather than left to the source's OnEnable, which only
             // lands if the manager already claimed the singleton.
             rig.Scene.Manager.ChannelSource = rig.Source;
+            BasisPlayerApproval.Approve(rig.Player, fixture);
             rig.Player.Open(fixture);
             rig.Player.Play();
             return rig;
@@ -87,8 +88,8 @@ namespace VRSL.URP.Tests
                 if (rig.Player.State == BmState.Ended) endedFor++;
                 Assert.IsTrue(endedFor < 60 && Time.realtimeSinceStartup - started < RealSecondsLimit,
                     $"{rig.Source.RecordsDecoded} records; wanted {records}. Player {rig.Player.State} "
-                  + $"at {rig.Player.PositionSeconds:F3} s of {rig.Player.DurationSeconds:F3} s, "
-                  + $"presented {rig.Player.FramesPresented}, decoded {rig.Player.FramesDecoded}, "
+                  + $"at {rig.Player.Position.TotalSeconds:F3} s of {rig.Player.Duration.TotalSeconds:F3} s, "
+                  + $"presented {rig.Player.PresentedFrameCount}, decoded {rig.Player.FramesDecoded}, "
                   + $"dropped {rig.Source.RecordsDropped}, last result {rig.Source.LastResult}");
                 yield return rig.Scene.Step(1);
             }
@@ -141,7 +142,7 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                rig.Player.Close();
+                rig.Player.Stop();
                 rig.Scene.Dispose();
             }
         }
@@ -174,7 +175,7 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                rig.Player.Close();
+                rig.Player.Stop();
                 rig.Scene.Dispose();
             }
         }
@@ -209,11 +210,11 @@ namespace VRSL.URP.Tests
                 Assert.AreEqual(VRSLTrussDmx.Result.Ok, rig.Source.LastResult);
                 Assert.AreEqual(BaseUniverses, rig.Source.UniverseCount,
                     "the buffer stays at the configured size");
-                Assert.Greater(rig.Player.FramesPresented, 0UL, "the picture itself plays");
+                Assert.Greater(rig.Player.PresentedFrameCount, 0L, "the picture itself plays");
             }
             finally
             {
-                rig.Player.Close();
+                rig.Player.Stop();
                 rig.Scene.Dispose();
             }
         }
@@ -278,9 +279,25 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                rig.Player.Close();
+                rig.Player.Stop();
                 rig.Scene.Dispose();
             }
+        }
+    }
+
+    static class BasisPlayerApproval
+    {
+        // The player asks the user before opening a URL it does not trust, and a
+        // headless run has nobody to answer. A local path or an rtsp:// lane cannot
+        // go on the trusted list (it takes https:// only, and persists), so the rows
+        // grant the approval a player keeps for the URL it was last allowed to open.
+        static readonly System.Reflection.FieldInfo s_Approved = typeof(BasisMediaPlayer).GetField(
+            "_approvedUrl", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        internal static void Approve(BasisMediaPlayer player, string url)
+        {
+            Assert.IsNotNull(s_Approved, "BasisMediaPlayer has no _approvedUrl to grant the fixture's approval through");
+            s_Approved.SetValue(player, url);
         }
     }
 }

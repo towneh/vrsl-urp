@@ -114,7 +114,9 @@ namespace VRSL.URP.Tests
                 rig.Video.uvTL = UvTL;
             }
 
-            rig.Player.Open(Fixture());
+            string url = Fixture();
+            BasisPlayerApproval.Approve(rig.Player, url);
+            rig.Player.Open(url);
             rig.Player.Play();
             return rig;
         }
@@ -123,7 +125,7 @@ namespace VRSL.URP.Tests
         {
             // The scene root and the captureDeltaTime override outlive a failed
             // close otherwise, and every row after this one inherits them.
-            try { rig.Player.Close(); }
+            try { rig.Player.Stop(); }
             finally { rig.Scene.Dispose(); }
         }
 
@@ -131,19 +133,19 @@ namespace VRSL.URP.Tests
         /// enough in, or the wall clock runs out. The engine paces on wall time
         /// whatever captureDeltaTime says, so this is a real-time wait with a
         /// render each frame.</summary>
-        static IEnumerator Until(Rig rig, uint records, ulong presented)
+        static IEnumerator Until(Rig rig, uint records, long presented)
         {
             float started = Time.realtimeSinceStartup;
             int endedFor = 0;
             while ((rig.Source != null && rig.Source.RecordsDecoded < records)
-                || (rig.Source == null && rig.Player.FramesPresented < presented))
+                || (rig.Source == null && rig.Player.PresentedFrameCount < presented))
             {
                 Assert.AreNotEqual(BmState.Error, rig.Player.State,
                     $"the player errored ({rig.Player.ErrorCode}) before the stream got going");
                 if (rig.Player.State == BmState.Ended) endedFor++;
                 Assert.IsTrue(endedFor < 60 && Time.realtimeSinceStartup - started < RealSecondsLimit,
                     $"waited out the clock. Player {rig.Player.State} at "
-                  + $"{rig.Player.PositionSeconds:F3} s, presented {rig.Player.FramesPresented}, "
+                  + $"{rig.Player.Position.TotalSeconds:F3} s, presented {rig.Player.PresentedFrameCount}, "
                   + $"records {(rig.Source != null ? rig.Source.RecordsDecoded : 0)}");
                 yield return rig.Scene.Step(1);
             }
