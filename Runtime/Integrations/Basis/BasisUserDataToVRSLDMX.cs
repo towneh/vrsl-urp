@@ -31,13 +31,13 @@ namespace VRSL.URP.BasisIntegration
         Delegate         _handler;
         bool             _warnedNoUserData;
 
-        // The stock Basis media player has no UserDataReceived; only a player
-        // built to surface SEI user data does. Bound by name so this assembly
+        // Basis's C media player has no OnUserDataReceived; the Rust one raises
+        // it. Bound by name so this assembly
         // compiles against either, which it can because the handler's signature
         // is framework types only: the delegate type is the player's, the
         // parameters are not.
         static readonly EventInfo s_UserDataEvent =
-            typeof(BasisMediaPlayer).GetEvent("UserDataReceived", BindingFlags.Instance | BindingFlags.Public);
+            typeof(BasisMediaPlayer).GetEvent("OnUserDataReceived", BindingFlags.Instance | BindingFlags.Public);
 
         /// <summary>Whether the media player in this project publishes SEI user
         /// data at all. False means this source can never receive a record.</summary>
@@ -70,10 +70,9 @@ namespace VRSL.URP.BasisIntegration
                 if (player != null && !_warnedNoUserData)
                 {
                     _warnedNoUserData = true;
-                    Debug.LogWarning("[VRSL URP] This Basis media player does not publish SEI user data, "
-                                   + "so the Truss SEI DMX Output can never receive a DMX record from the "
-                                   + "stream and the fixtures will stay dark. It needs a media player "
-                                   + "that raises UserDataReceived; feed the manager another way until then.",
+                    Debug.LogWarning("[VRSL URP] This Basis media player doesn't pass on stream data, so the "
+                                   + "Truss SEI DMX Output will stay dark. Update Basis, or feed the manager "
+                                   + "another way.",
                                      this);
                 }
                 return;
