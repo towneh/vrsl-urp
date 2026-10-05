@@ -8,12 +8,15 @@ Nothing yet.
 
 ### Added
 
-- **A DMX source that listens for Truss records over OSC** (`VRSLTrussOscDmxSource`, menu `VRSL → URP → DMX Config → Add Truss OSC DMX Source`), so a VJ can see in the Editor what they are sending with no encoder, ingest or player running. `truss-relay --osc <this machine>:12100` sends every record it builds as one OSC message, `/truss/dmx`, with the record as its single blob argument, carrying the same payload the stream carries, so the fixtures show what viewers would get, universes, ages and budget included. Only that one message shape is read; a bundle, a message under another address or with another argument type, or something that is not OSC at all is counted as ignored and never reaches the decoder, so another sender on the port cannot take the source down or light a fixture. In Play mode the inspector shows whether the socket is open, what has arrived and what became of it, and says what to check when nothing is lighting. A port already held is reported in the inspector and the console rather than thrown. Rows N27 and N28.
-- `VRSLTrussRecordSource`, the part of the Basis SEI source that was never about Basis, as a base class in the core assembly: a subclass hands it a record's bytes on the main thread and it decodes, counts, grows the universe count and feeds the light manager. `BasisUserDataToVRSLDMX` is that class plus the subscription to the media player, with the same fields, counters and behaviour as before.
+- **Truss OSC DMX source.** Lights the rig straight from `truss-relay --osc`, so you can check what a desk is sending in the Editor with no encoder, ingest or player running. Add it from **VRSL → URP → DMX Config → Add Truss OSC DMX Source**.
+  - It reads the same records the stream carries, so the fixtures show what viewers would see.
+  - Only Truss's `/truss/dmx` message is read. Anything else on the port is counted as ignored and can't light a fixture or stop the source.
+  - In Play mode the inspector shows whether it's listening, what has arrived, and what to check when nothing lights. A port already in use is reported, not thrown.
+- **`VRSLTrussRecordSource`**, a base class in the core assembly for any source of Truss records: hand it a record's bytes on the main thread and it decodes them and feeds the light manager. The Basis SEI source now builds on it and behaves as before.
 
 ### Fixed
 
-- **The Truss SEI DMX source receives records from Basis's media player.** The player raises SEI user data as `OnUserDataReceived`; the source looked for `UserDataReceived`, found nothing, warned that the player does not publish user data, and left the fixtures dark.
+- **The Truss SEI DMX source works with Basis's media player.** It listened for `UserDataReceived`, but the player raises `OnUserDataReceived`, so the source warned that no stream data was available and the fixtures stayed dark.
 
 ## [0.2.0-rc.5] — 2026-09-07
 
@@ -25,17 +28,17 @@ Nothing yet.
 
 ### Added
 
-- **The surface prepass reads metallic-smoothness maps.** Where a material uses one, metallic comes from the map's red channel and smoothness from its alpha scaled by the material's smoothness value, the way URP Lit and the Standard shader read theirs, so a floor whose gloss varies across a texture lights that way under the fixtures instead of as one flat value. The map keyword decides, as it does in the material's own shader: with the keyword off the scalars are read even if a map is assigned. Smoothness from the base map's alpha is honoured too. Row S16 in the suite.
+- **The surface prepass reads metallic-smoothness maps.** Where a material uses one, metallic comes from the map's red channel and smoothness from its alpha scaled by the material's smoothness value, the way URP Lit and the Standard shader read theirs, so a floor whose gloss varies across a texture lights that way under the fixtures instead of as one flat value. The map keyword decides, as it does in the material's own shader: with the keyword off the scalars are read even if a map is assigned. Smoothness from the base map's alpha is honoured too.
 
 ### Fixed
 
-- **Meshes batched by the GPU Resident Drawer no longer light as dark, fully glossy surfaces.** The drawer draws its batches with each material's own shader and ignores the override shader the surface prepass draws through, so a batched mesh landed its lit colour in the albedo capture and an opaque alpha of 1 as its smoothness: near-black and mirror-glossy under every fixture. The prepass now leaves the drawer's batches out, and they light as the neutral mid-grey surface, the same as a layer left out of `prepassLayers`. VRSL cannot read the colour, gloss or metallic of a mesh the drawer batches, since Unity offers no pass in Forward+ that exposes them; `VRSL Diagnostics` and `Validate Renderer Setup` say when the drawer is on, and that a mesh lights in its own colour again with Unity's Disallow GPU Driven Rendering component on it, or with the drawer off on the URP asset. Row S15 in the suite. Reported against rc.3.
+- **Meshes batched by the GPU Resident Drawer no longer light as dark, fully glossy surfaces.** The drawer draws its batches with each material's own shader and ignores the override shader the surface prepass draws through, so a batched mesh landed its lit colour in the albedo capture and an opaque alpha of 1 as its smoothness: near-black and mirror-glossy under every fixture. The prepass now leaves the drawer's batches out, and they light as the neutral mid-grey surface, the same as a layer left out of `prepassLayers`. VRSL cannot read the colour, gloss or metallic of a mesh the drawer batches, since Unity offers no pass in Forward+ that exposes them; `VRSL Diagnostics` and `Validate Renderer Setup` say when the drawer is on, and that a mesh lights in its own colour again with Unity's Disallow GPU Driven Rendering component on it, or with the drawer off on the URP asset. Reported against rc.3.
 
 ## [0.2.0-rc.3] — 2026-09-04
 
 ### Added
 
-- **The discoball is a realtime light.** `Discoball` on both fixture components is a point light whose dots come from a cubemap on the manager (`discoballCubemap`, the stock mirror-ball pattern on the shipped manager prefabs), looked up along the direction from the ball and turned about the fixture's up axis at `discoballSpinSpeed`. On DMX it is one channel, the dimmer, coloured by the fixture's tint; on AudioLink it follows its band. The dots land on surfaces through the lighting pass; `discoballBeams` draws them in the haze as well, off by default because it costs a cubemap fetch per raymarch step. New prefabs `VRSL-DMX-URP-Discoball-1CH` (one for every DMX mode) and `VRSL-AudioLink-Discoball-URP`; the three example scenes use them, switched on where the old projector was off. The migration pairs upstream's discoballs, Legacy mode included, with them. Rows K1 and K2 in the suite.
+- **The discoball is a realtime light.** `Discoball` on both fixture components is a point light whose dots come from a cubemap on the manager (`discoballCubemap`, the stock mirror-ball pattern on the shipped manager prefabs), looked up along the direction from the ball and turned about the fixture's up axis at `discoballSpinSpeed`. On DMX it is one channel, the dimmer, coloured by the fixture's tint; on AudioLink it follows its band. The dots land on surfaces through the lighting pass; `discoballBeams` draws them in the haze as well, off by default because it costs a cubemap fetch per raymarch step. New prefabs `VRSL-DMX-URP-Discoball-1CH` (one for every DMX mode) and `VRSL-AudioLink-Discoball-URP`; the three example scenes use them, switched on where the old projector was off. The migration pairs upstream's discoballs, Legacy mode included, with them.
 
 ### Changed
 
