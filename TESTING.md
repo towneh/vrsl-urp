@@ -281,6 +281,24 @@ first.
 | W12 | — | The player sweep before and after the wiring change, compared against a floor measured on the same machine | **Every row unchanged.** Measured 2026-08-31, RTX 3090, IL2CPP player, 30 configurations: 30 unchanged, none regressed, largest movement -0.595 ms against a 1.086 ms floor. **Read it as a confirmation, not as the evidence.** A floor that size calls almost anything unchanged, and the structural argument is stronger: every line the wiring adds to the runtime assembly is inside `#if UNITY_EDITOR`, so none of it exists in a player, and the only change that does ship is a prefab's strobe-timer reference in a scene that drives DMX from a channel source and never samples the CRT chain. Derive the floor on the machine that judges the comparison; `Compare` refuses a reference from another GPU |
 | W13 | — | Each of the fifteen slots in the shipped Grid Textures asset, against the GUID of the texture that layout ships | Every slot holds its own layout's texture, the Vertical and Legacy strobe timers included. Those two are the reason for the row: the 0.2.0-rc.6 Vertical and Legacy managers both pointed at the Horizontal strobe timer, so their strobes took their phase from a grid nothing wrote to, and the same slip inside the asset would look just as healthy |
 
+### Grid layouts
+
+`VRSLGridLayoutTests` in the suite. The DMX manager reads one of three grid layouts,
+Horizontal, Vertical or Legacy, from its DMX Input setting (`dmxInput`), and takes that layout's
+decode textures from a Grid Textures asset. A manager saved with 0.2.0-rc.6 named its five
+decode textures directly instead; its main texture survives in a hidden field, and the
+upgrade reads the layout off it. Without the upgrade a Vertical or Legacy world comes up on
+the Horizontal grid and lights the wrong fixtures with nothing in the Console. It runs on
+the enable path, the deferred validate path and a scene build step, which Unity also calls
+for scenes built into AssetBundles (checked 2026-10-09 on 6000.7.0b4 against
+`BuildPipeline.BuildAssetBundles(BuildAssetBundlesParameters)`, the call Basis builds worlds
+with).
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| G1 | — | A switched-off manager staged with an rc.6 main texture through the hidden field, once per shipped layout, brought across by each of the enable path, the deferred validate path and the scene build step | Comes up in the layout its texture belonged to, with the hidden field cleared and its live main texture that layout's from the shipped asset. Nine cases, because a path that only handled Horizontal would pass the Horizontal ones by doing nothing |
+| G2 | — | The same with a texture that is none of the package's, on each path; then the manager given a Grid Textures asset of its own | Stays Horizontal, keeps the old texture and warns that it needs a Grid Textures asset made from its textures. Once it has an asset that is not the package's, the next upgrade clears the field and says nothing more. Guessing a layout from an author's own texture would be wrong as often as right, and dropping the reference would lose what the author needs to build the asset |
+
 ### Measurement harness
 
 These judge the instrument rather than the package, and they exist because a measurement
