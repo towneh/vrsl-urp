@@ -1,0 +1,32 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 478ae638d47f4740b7a385540515156c, type: 3}
+  m_Name: VRSL-DMX-GridTextures
+  m_EditorClassIdentifier: 
+  horizontal:
+    main: {fileID: 8600000, guid: 555ce9e464c9a54c9d331e0030c258ef, type: 2}
+    movement: {fileID: 8600000, guid: 63c403376634fef0560b44d7f19aedaa, type: 2}
+    strobe: {fileID: 8600000, guid: e3fa773f91559868d4104ab3ce54bf79, type: 2}
+    strobeTimer: {fileID: 8600000, guid: e6641cd38ad1a21be3425ab43ecc2506, type: 2}
+    spinTimer: {fileID: 8600000, guid: 5bee9c07b3305e88be89de0d01fc2f07, type: 2}
+  vertical:
+    main: {fileID: 8600000, guid: 78c70f9c712bd81bf5c13a40970fd79b, type: 2}
+    movement: {fileID: 8600000, guid: c6d6373129a6cae52b02e2b675ad7e86, type: 2}
+    strobe: {fileID: 8600000, guid: 6f30f578d96c57d49dc9297f12e7fb0b, type: 2}
+    strobeTimer: {fileID: 8600000, guid: 954ba27aa605bf10c6625c64c834303f, type: 2}
+    spinTimer: {fileID: 8600000, guid: da695f1470322a477c370746a7a2571f, type: 2}
+  legacy:
+    main: {fileID: 8600000, guid: 17f83f063191dbffbaae01943cc9c235, type: 2}
+    movement: {fileID: 8600000, guid: 015583c6b281a3ff6b1af6d872ac4610, type: 2}
+    strobe: {fileID: 8600000, guid: a928e074dadf56e05191a31cd701f480, type: 2}
+    strobeTimer: {fileID: 8600000, guid: 66a7e6c0f0eebb9378d52ca3820d9ccb, type: 2}
+    spinTimer: {fileID: 8600000, guid: a997187a06df0deca7f350bc32369b8f, type: 2}
