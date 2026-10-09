@@ -240,6 +240,9 @@ namespace VRSL.URP.EditorScripts
             foreach (var manager in managers)
             {
                 if (VRSLWiring.FieldsFor(manager) == null) continue;
+                // Also how a prefab asset still carrying an rc.6 manager is brought
+                // across, since automatic resolution never touches assets.
+                if (manager is VRSL_URPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
                 // No Undo.RecordObject here: Resolve writes through SerializedObject,
                 // which registers its own undo. Recording as well would put two entries
                 // on the stack for one repair, so undoing it would take two presses.
