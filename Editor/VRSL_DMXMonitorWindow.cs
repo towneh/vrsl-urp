@@ -313,7 +313,7 @@ namespace VRSL.URP.EditorScripts
                         break;
                 }
 
-                if (feed != Feed.Buffer && mgr.dmxMainTexture != null)
+                if (feed != Feed.Buffer && mgr.LiveTextures.main != null)
                     EditorGUILayout.LabelField(" ",
                         "Decoded through the compute shader's IndustryRead path — a legacy-mode "
                         + "or nine-universe grid will not read correctly here.",
@@ -323,7 +323,7 @@ namespace VRSL.URP.EditorScripts
 
         static string GridDescription(VRSL_URPLightManager mgr)
         {
-            var rt = mgr.dmxMainTexture;
+            var rt = mgr.LiveTextures.main;
             if (rt == null) return "none assigned — nothing to read";
             return $"{rt.name}  {rt.width}×{rt.height}  ({GridUniverses(rt)} universe(s))";
         }
@@ -333,7 +333,7 @@ namespace VRSL.URP.EditorScripts
         {
             if (mgr == null) return 0;
             if (mgr.ChannelCount > 0) return mgr.UniverseCount;
-            return GridUniverses(mgr.dmxMainTexture);
+            return GridUniverses(mgr.LiveTextures.main);
         }
 
         /// <summary>Universes the decode grid holds. The grid is 13 cells wide and each
@@ -394,7 +394,7 @@ namespace VRSL.URP.EditorScripts
 
             var cs = mgr.computeShader;
             if (cs == null) return;
-            if (!compare && mgr.dmxMainTexture == null) return;
+            if (!compare && mgr.LiveTextures.main == null) return;
 
             int kernel;
             try { kernel = cs.FindKernel("ValidateChannels"); }
@@ -414,12 +414,12 @@ namespace VRSL.URP.EditorScripts
             // supplied here even though the manager already publishes them as globals.
             cs.SetBuffer(kernel, "_VRSLU_DMXChannels", mgr.ChannelBuffer);
             cs.SetInt("_VRSLU_DMXChannelCount", mgr.ChannelCount);
-            if (mgr.dmxMainTexture != null)
+            var main = mgr.LiveTextures.main;
+            if (main != null)
             {
-                cs.SetTexture(kernel, "_DMXMainTex", mgr.dmxMainTexture);
+                cs.SetTexture(kernel, "_DMXMainTex", main);
                 cs.SetVector("_VRSLDMXTexelSize", new Vector4(
-                    1f / mgr.dmxMainTexture.width, 1f / mgr.dmxMainTexture.height,
-                    mgr.dmxMainTexture.width,      mgr.dmxMainTexture.height));
+                    1f / main.width, 1f / main.height, main.width, main.height));
             }
             cs.SetBuffer(kernel, "_VRSLU_ValidationOut", _readback);
             cs.SetInt("_VRSLU_ValidationStart", origin + 1);   // the kernel counts from channel 1

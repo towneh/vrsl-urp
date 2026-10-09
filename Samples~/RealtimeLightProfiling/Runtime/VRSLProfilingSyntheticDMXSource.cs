@@ -11,8 +11,8 @@ namespace VRSL.URP.Profiling
     /// Authors a small CPU-side pixel buffer that matches the format the URP
     /// compute shader and legacy fragment shaders consume after the existing
     /// CRT decode chain, then publishes that buffer as the four DMX globals
-    /// (read by legacy fixtures) and assigns it to the URP manager's texture
-    /// references (read by the URP compute). With this active, the GridReader
+    /// (read by legacy fixtures) and hands it to the URP manager as its Grid
+    /// Textures (read by the URP compute). With this active, the GridReader
     /// camera and CustomRenderTexture chain do not need to run, so frame-to-
     /// frame variance from video decode and CRT scheduling is eliminated and
     /// the profile reflects only the cost of the lighting paths under test.
@@ -71,6 +71,11 @@ namespace VRSL.URP.Profiling
         Color32[] _mainPixels, _movementPixels, _strobePixels, _spinPixels;
         Texture2D _mainSrc,    _movementSrc,    _strobeSrc,    _spinSrc;
         RenderTexture _mainRT, _movementRT,     _strobeRT,     _spinRT;
+#if VRSL_URP
+        VRSLGridTextures     _gridTextures;
+        // The manager handed _gridTextures, so it can be taken back before it is destroyed.
+        VRSL_URPLightManager _boundManager;
+#endif
 
         // Match VRSL_LocalUIControlPanel's property names so the volumetric
         // mesh fixtures (which read these _VRSLU_-prefixed globals) bind correctly.
@@ -93,6 +98,9 @@ namespace VRSL.URP.Profiling
 
         void OnDisable()
         {
+#if VRSL_URP
+            var mgr = UnbindFromManager();
+#endif
             ReleaseRT(ref _mainRT);
             ReleaseRT(ref _movementRT);
             ReleaseRT(ref _strobeRT);
@@ -101,7 +109,41 @@ namespace VRSL.URP.Profiling
             ReleaseTex(ref _movementSrc);
             ReleaseTex(ref _strobeSrc);
             ReleaseTex(ref _spinSrc);
+#if VRSL_URP
+            if (_gridTextures != null)
+            {
+                if (Application.isPlaying) Destroy(_gridTextures); else DestroyImmediate(_gridTextures);
+                _gridTextures = null;
+            }
+            // Last, once nothing of this source is left to bind: a running manager holds
+            // handles on the released textures until a bounce rebuilds them, the same
+            // way BindToManager makes it take them. Releasing a handle that only wraps a
+            // texture leaves the texture alone, so the order is safe.
+            BounceManager(mgr);
+#endif
         }
+
+#if VRSL_URP
+        /// <summary>Take this source's Grid Textures back off the manager it was given
+        /// to. Returns that manager when it was still using them.</summary>
+        VRSL_URPLightManager UnbindFromManager()
+        {
+            var mgr = _boundManager;
+            _boundManager = null;
+            if (mgr == null || _gridTextures == null || mgr.gridTextures != _gridTextures) return null;
+            mgr.gridTextures = null;
+            return mgr;
+        }
+
+        static void BounceManager(VRSL_URPLightManager mgr)
+        {
+            // Not while the scene is unloading: the manager is about to go too, and
+            // allocating on a component mid-teardown is where Unity starts logging.
+            if (mgr == null || !mgr.isActiveAndEnabled || !mgr.gameObject.scene.isLoaded) return;
+            mgr.enabled = false;
+            mgr.enabled = true;
+        }
+#endif
 
         void OnValidate()
         {
@@ -284,7 +326,7 @@ namespace VRSL.URP.Profiling
             Shader.SetGlobalTexture(IDSpinTimer,    _spinRT);
         }
 
-        // Manager allocates RTHandles in OnEnable, so swap fields and bounce the
+        // Manager allocates RTHandles in OnEnable, so swap its Grid Textures and bounce the
         // component to force a re-allocation against our synthetic textures.
         // No-op when URP isn't installed — the legacy mesh-shader path reads the
         // global textures published in PublishGlobals directly, no manager rebind
@@ -295,12 +337,28 @@ namespace VRSL.URP.Profiling
             var mgr = FindAnyObjectByType<VRSL_URPLightManager>();
             if (mgr == null) return;
 
+            // The same set for every layout, so the manager reads the synthetic grid
+            // whichever layout it is set to.
+            if (_gridTextures == null)
+            {
+                _gridTextures = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                _gridTextures.name      = "VRSL_Profiling_GridTextures";
+                _gridTextures.hideFlags = HideFlags.DontSave;
+            }
+            var set = new VRSLGridTextures.Set
+            {
+                main        = _mainRT,
+                movement    = _movementRT,
+                strobe      = _strobeRT,
+                strobeTimer = _strobeRT,
+                spinTimer   = _spinRT,
+            };
+            _gridTextures.horizontal = _gridTextures.vertical = _gridTextures.legacy = set;
+
             bool wasEnabled = mgr.enabled;
             mgr.enabled = false;
-            mgr.dmxMainTexture     = _mainRT;
-            mgr.dmxMovementTexture = _movementRT;
-            mgr.dmxStrobeTexture   = _strobeRT;
-            mgr.dmxSpinTimerTexture = _spinRT;
+            mgr.gridTextures = _gridTextures;
+            _boundManager    = mgr;
             if (wasEnabled) mgr.enabled = true;
 #endif
         }

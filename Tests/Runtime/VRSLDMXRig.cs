@@ -538,7 +538,7 @@ namespace VRSL.URP.Tests
         /// session: a row that drives the texture path writes the raw grid and
         /// every CRT downstream of it, and the next rig's fixture bodies read the
         /// leftovers through the <c>_VRSLU_DMX*</c> globals. A rig built first in a
-        /// session sees the assets as imported instead. Clearing the manager's
+        /// session sees the assets as imported instead. Clearing the live layout's
         /// five and whatever their materials sample puts both on the same footing.
         /// </summary>
         static void ClearDmxTextures(VRSL_URPLightManager manager)
@@ -555,11 +555,12 @@ namespace VRSL.URP.Tests
                 GL.Clear(false, true, Color.black);
                 RenderTexture.active = previous;
             }
-            Clear(manager.dmxMainTexture);
-            Clear(manager.dmxMovementTexture);
-            Clear(manager.dmxStrobeTexture);
-            Clear(manager.dmxStrobeTimerTexture);
-            Clear(manager.dmxSpinTimerTexture);
+            var live = manager.LiveTextures;
+            Clear(live.main);
+            Clear(live.movement);
+            Clear(live.strobe);
+            Clear(live.strobeTimer);
+            Clear(live.spinTimer);
         }
 
         /// <summary>
@@ -645,7 +646,7 @@ namespace VRSL.URP.Tests
             // with no grid assigned is a legitimate buffer-only scene, so it gets
             // something to bind rather than an assertion.
             cs.SetTexture(_validateKernel, "_DMXMainTex",
-                          (Texture)Manager.dmxMainTexture ?? Texture2D.blackTexture);
+                          (Texture)Manager.LiveTextures.main ?? Texture2D.blackTexture);
             return Validate(cs, count);
         }
 
@@ -665,7 +666,7 @@ namespace VRSL.URP.Tests
         {
             var cs = Manager.computeShader;
             Assert(cs != null, "the manager has no compute shader");
-            var grid = Manager.dmxMainTexture;
+            var grid = Manager.LiveTextures.main;
             Assert(grid != null, "the manager has no DMX grid texture");
             if (_validateKernel < 0) _validateKernel = cs.FindKernel("ValidateChannels");
 

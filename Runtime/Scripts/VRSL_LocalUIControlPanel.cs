@@ -432,7 +432,7 @@ namespace VRSL.URP
             if (dmxManager != null)
             {
                 dmxManager.disableStrobe = _globalDisableStrobe;
-                if (dmxManager.dmxStrobeTexture is CustomRenderTexture strobe
+                if (dmxManager.LiveTextures.strobe is CustomRenderTexture strobe
                     && strobe.material != null && strobe.material.HasProperty(s_DisableStrobe))
                 {
                     strobe.material.SetFloat(s_DisableStrobe, _globalDisableStrobe ? 1f : 0f);

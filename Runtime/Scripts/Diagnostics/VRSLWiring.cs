@@ -37,12 +37,11 @@ namespace VRSL.URP
         /// <summary>
         /// Whether empty is a choice rather than a fault.
         ///
-        /// Four of these document "leave empty" in their own tooltips — it disables tile
-        /// culling, skips the surface prepass, or says this scene does not strobe — and
-        /// quality Off works by emptying the volumetric shader. Filling those in
-        /// automatically would take a documented capability away and make an author's
-        /// deliberate clear impossible to express. They are offered by a repair and never
-        /// forced.
+        /// Three of these may be left empty: the tile-cull and surface-properties tooltips say
+        /// so (empty disables tile culling, or skips the surface prepass), and quality Off
+        /// works by emptying the volumetric shader. Filling them in automatically would take
+        /// a documented capability away and make an author's deliberate clear impossible to
+        /// express. They are offered by a repair and never forced.
         /// </summary>
         public bool Optional;
     }
@@ -67,31 +66,19 @@ namespace VRSL.URP
         /// about what "inside" means.</summary>
         public const string PackageRoot = "Packages/town.mr.vrsl-urp/";
 
+        /// <summary>The package's own <see cref="VRSLGridTextures"/>, holding its decode
+        /// textures for every grid layout.</summary>
+        public const string GridTexturesGuid = "12d2839adb19481aa06544b434fb6f0e";
+
         /// <summary>
-        /// The DMX manager's ten. Every one has a single correct value, none of them can
+        /// The DMX manager's six. Every one has a single correct value, none of them can
         /// be worked out by an author, and each fails without an error.
         /// </summary>
         public static readonly VRSLWiringField[] Dmx =
         {
-            new() { Field = "dmxMainTexture",
-                    Guid  = "555ce9e464c9a54c9d331e0030c258ef",
-                    Consequence = "every channel reads zero, so nothing lights at all" },
-            new() { Field = "dmxMovementTexture",
-                    Guid  = "63c403376634fef0560b44d7f19aedaa",
-                    Consequence = "moving heads stay where they are" },
-            new() { Field = "dmxStrobeTexture",
-                    Guid  = "e3fa773f91559868d4104ab3ce54bf79",
-                    Consequence = "strobe does nothing" },
-            // The one the tooltip calls optional and the shipped prefabs leave empty.
-            // Optional only in a scene that never strobes: the StrobeOutput CRT's decode
-            // shader samples this, so where strobe is used a missing one takes the whole
-            // rig dark rather than merely stopping the flash.
-            new() { Optional = true, Field = "dmxStrobeTimerTexture",
-                    Guid  = "e6641cd38ad1a21be3425ab43ecc2506",
-                    Consequence = "every fixture goes dark wherever strobe is used" },
-            new() { Field = "dmxSpinTimerTexture",
-                    Guid  = "5bee9c07b3305e88be89de0d01fc2f07",
-                    Consequence = "gobos stop spinning" },
+            new() { Field = "gridTextures",
+                    Guid  = GridTexturesGuid,
+                    Consequence = "nothing lights from the video at all" },
             new() { Field = "computeShader",
                     Guid  = "213d3149ed0cbc73835aee17d5180332",
                     Consequence = "nothing lights at all" },
@@ -197,7 +184,7 @@ namespace VRSL.URP
                 var prop = so.FindProperty(field.Field);
                 // Pinned by a row, so this is a table that has drifted rather than a
                 // condition to expect. Skipped rather than thrown: one stale entry should
-                // not stop the other nine being filled.
+                // not stop the rest being filled.
                 if (prop == null) { result.Unresolved.Add(field); continue; }
                 if (prop.objectReferenceValue != null) continue;
                 // Left alone unless asked for. Empty means something on these, so filling

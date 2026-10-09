@@ -24,8 +24,9 @@ namespace VRSL.URP
     /// per camera, so no ScriptableRendererFeature is required on the URP
     /// Renderer asset.
     ///
-    /// Setup: add this component to any scene object, assign the three VRSL
-    /// CustomRenderTextures, and assign the VRSLDMXLightUpdate compute shader.
+    /// Setup: add this component to any scene object and set DMX Input to what the
+    /// show sends: the grid layout the video carries, or Stream data. Its decode
+    /// textures, compute and shaders fill themselves in.
     /// </summary>
     [AddComponentMenu("VRSL/URP Light Manager")]
     public class VRSL_URPLightManager : MonoBehaviour, IVRSLLightSource
@@ -33,18 +34,23 @@ namespace VRSL.URP
         public static VRSL_URPLightManager Instance { get; private set; }
 
         // ── Inspector ─────────────────────────────────────────────────────────
-        [Header("DMX Render Textures")]
-        public RenderTexture dmxMainTexture;
-        public RenderTexture dmxMovementTexture;
-        public RenderTexture dmxStrobeTexture;
-        [Tooltip("StrobeTimings CRT producing the strobe phase. Published as the "
-               + "_VRSLU_DMXGridStrobeTimer global, which the StrobeOutput CRT's decode shader "
-               + "samples to compute the strobe gate. Leave empty if strobe isn't used.")]
-        public RenderTexture dmxStrobeTimerTexture;
-        [Tooltip("SpinnerTimer CRT (the CRT fed by DMXRTShader-SpinnerTimer). The URP path "
-               + "samples its accumulated phase to drive gobo spin, matching the volumetric "
-               + "shader's getGoboSpinSpeed() so rate changes don't cause visible jumps.")]
-        public RenderTexture dmxSpinTimerTexture;
+        [Tooltip("Which DMX grid your video carries. Pick the one your desk or encoder "
+               + "sends; the wrong one lights the wrong fixtures, or none. Has no effect "
+               + "while a channel source such as Truss SEI is publishing.")]
+        public VRSLDmxInput dmxInput = VRSLDmxInput.HorizontalGrid;
+
+        [Tooltip("The textures that decode the video's grid, a set for each layout. Fills "
+               + "in with the package's own. Point it at a Grid Textures asset of your own "
+               + "to decode through textures you made.")]
+        public VRSLGridTextures gridTextures;
+
+        // A manager saved with 0.2.0-rc.6 named its main decode texture directly. Kept,
+        // hidden, for one release so the editor can tell which layout it was set up for
+        // (VRSLGridUpgrade).
+#pragma warning disable 0169, 0649
+        [SerializeField, HideInInspector, UnityEngine.Serialization.FormerlySerializedAs("dmxMainTexture")]
+        RenderTexture rc6MainTexture;
+#pragma warning restore 0169, 0649
 
         [Header("Compute")]
         public ComputeShader computeShader;
@@ -178,6 +184,14 @@ namespace VRSL.URP
                + "normals texture in the wrong space looks like, and say which URP version "
                + "you are on. With both managers in a scene, set it on both.")]
         public bool forceOwnNormals = false;
+
+        /// <summary>The grid layout <see cref="dmxInput"/> reads.</summary>
+        public VRSLGridLayout GridLayout => (VRSLGridLayout)dmxInput;
+
+        /// <summary>The decode textures for the layout this manager reads, or an empty
+        /// set when it has no Grid Textures.</summary>
+        public VRSLGridTextures.Set LiveTextures =>
+            gridTextures != null ? gridTextures.For(GridLayout) : default;
 
         /// <summary>The level this manager is running at.</summary>
         public VRSLQualityLevel Quality => VRSLQualityLevel.For(quality);
@@ -698,6 +712,7 @@ namespace VRSL.URP
             if (_decodedFrame == Time.frameCount) return;
             _decodedFrame = Time.frameCount;
 
+            var live = LiveTextures;
             if (FixtureCount == 0
                 || computeShader       == null
                 || FixtureConfigBuffer == null
@@ -706,7 +721,7 @@ namespace VRSL.URP
                 || SpinPhaseBuffer     == null
                 || StrobePhaseBuffer   == null
                 || MovementBuffer      == null
-                || dmxMainTexture      == null) return;
+                || live.main           == null) return;
 
             var cs  = computeShader;
             int k   = ComputeKernel;
@@ -714,8 +729,8 @@ namespace VRSL.URP
             cmd.Clear();
             cmd.BeginSample(DecodeMarker);
             cmd.SetComputeVectorParam(cs, s_DMXGridTexelSize, new Vector4(
-                1f / dmxMainTexture.width, 1f / dmxMainTexture.height,
-                dmxMainTexture.width,      dmxMainTexture.height));
+                1f / live.main.width, 1f / live.main.height,
+                live.main.width,      live.main.height));
             cmd.SetComputeIntParam(   cs,    s_FixtureCount,    FixtureCount);
             cmd.SetComputeIntParam(   cs,    s_GoboCount,       GoboCount);
             cmd.SetComputeBufferParam(cs, k, s_FixtureConfigs,  FixtureConfigBuffer);
@@ -734,10 +749,10 @@ namespace VRSL.URP
             // Sampled once per frame so both eyes and every mirror strobe together.
             cmd.SetComputeFloatParam( cs,    s_TimeY,           Time.timeSinceLevelLoad);
             cmd.SetComputeIntParam(   cs,    s_StrobeDisabled,  disableStrobe ? 1 : 0);
-            cmd.SetComputeTextureParam(cs, k, s_DMXMainTex, dmxMainTexture);
-            if (dmxMovementTexture  != null) cmd.SetComputeTextureParam(cs, k, s_DMXMovementTex, dmxMovementTexture);
-            if (dmxStrobeTexture    != null) cmd.SetComputeTextureParam(cs, k, s_DMXStrobeTex,   dmxStrobeTexture);
-            if (dmxSpinTimerTexture != null) cmd.SetComputeTextureParam(cs, k, s_DMXSpinTex,     dmxSpinTimerTexture);
+            cmd.SetComputeTextureParam(cs, k, s_DMXMainTex, live.main);
+            if (live.movement  != null) cmd.SetComputeTextureParam(cs, k, s_DMXMovementTex, live.movement);
+            if (live.strobe    != null) cmd.SetComputeTextureParam(cs, k, s_DMXStrobeTex,   live.strobe);
+            if (live.spinTimer != null) cmd.SetComputeTextureParam(cs, k, s_DMXSpinTex,     live.spinTimer);
             cmd.DispatchCompute(cs, k, Mathf.CeilToInt(FixtureCount / 64f), 1, 1);
             cmd.EndSample(DecodeMarker);
             Graphics.ExecuteCommandBuffer(cmd);
@@ -1184,10 +1199,11 @@ namespace VRSL.URP
         void CreateTextureHandles()
         {
             ReleaseTextureHandles();
-            if (dmxMainTexture      != null) DMXMainHandle      = RTHandles.Alloc(dmxMainTexture);
-            if (dmxMovementTexture  != null) DMXMovementHandle  = RTHandles.Alloc(dmxMovementTexture);
-            if (dmxStrobeTexture    != null) DMXStrobeHandle    = RTHandles.Alloc(dmxStrobeTexture);
-            if (dmxSpinTimerTexture != null) DMXSpinTimerHandle = RTHandles.Alloc(dmxSpinTimerTexture);
+            var live = LiveTextures;
+            if (live.main      != null) DMXMainHandle      = RTHandles.Alloc(live.main);
+            if (live.movement  != null) DMXMovementHandle  = RTHandles.Alloc(live.movement);
+            if (live.strobe    != null) DMXStrobeHandle    = RTHandles.Alloc(live.strobe);
+            if (live.spinTimer != null) DMXSpinTimerHandle = RTHandles.Alloc(live.spinTimer);
             PublishDMXGlobals();
         }
 
@@ -1206,11 +1222,12 @@ namespace VRSL.URP
 
         void PublishDMXGlobals()
         {
-            PublishDMX("Color/Intensity", s_DMXGrid,            dmxMainTexture);
-            PublishDMX("Movement",        s_DMXGridMovement,    dmxMovementTexture);
-            PublishDMX("Strobe Output",   s_DMXGridStrobe,      dmxStrobeTexture);
-            PublishDMX("Strobe Timings",  s_DMXGridStrobeTimer, dmxStrobeTimerTexture);
-            PublishDMX("Spin Timer",      s_DMXGridSpin,        dmxSpinTimerTexture);
+            var live = LiveTextures;
+            PublishDMX("Color/Intensity", s_DMXGrid,            live.main);
+            PublishDMX("Movement",        s_DMXGridMovement,    live.movement);
+            PublishDMX("Strobe Output",   s_DMXGridStrobe,      live.strobe);
+            PublishDMX("Strobe Timings",  s_DMXGridStrobeTimer, live.strobeTimer);
+            PublishDMX("Spin Timer",      s_DMXGridSpin,        live.spinTimer);
 
             // The surface decode (IndustryRead in VRSL-DMXFunctions-URP.hlsl) maps a channel to a
             // grid texel from a texel size. Publish it as our own global _VRSLDMXTexelSize — the
@@ -1219,10 +1236,10 @@ namespace VRSL.URP
             // texture (often with a wrong size). Without a correct texel size the surface's row UV
             // drifts with the texture aspect, worsening down the grid, so the highest-patched bars
             // decode the wrong (often black) cell while the render-pass light stays correct.
-            if (dmxMainTexture != null)
+            if (live.main != null)
                 Shader.SetGlobalVector(s_DMXGridTexelSize, new Vector4(
-                    1f / dmxMainTexture.width, 1f / dmxMainTexture.height,
-                    dmxMainTexture.width,      dmxMainTexture.height));
+                    1f / live.main.width, 1f / live.main.height,
+                    live.main.width,      live.main.height));
         }
 
         void PublishDMX(string label, int globalId, RenderTexture tex)
@@ -1353,11 +1370,12 @@ namespace VRSL.URP
         Texture[] OwnedSources()
         {
             _ownedSources ??= new Texture[5];
-            _ownedSources[0] = dmxMainTexture;
-            _ownedSources[1] = dmxMovementTexture;
-            _ownedSources[2] = dmxStrobeTexture;
-            _ownedSources[3] = dmxStrobeTimerTexture;
-            _ownedSources[4] = dmxSpinTimerTexture;
+            var live = LiveTextures;
+            _ownedSources[0] = live.main;
+            _ownedSources[1] = live.movement;
+            _ownedSources[2] = live.strobe;
+            _ownedSources[3] = live.strobeTimer;
+            _ownedSources[4] = live.spinTimer;
             return _ownedSources;
         }
 

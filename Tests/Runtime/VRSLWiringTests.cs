@@ -77,34 +77,34 @@ namespace VRSL.URP.Tests
         {
             var go = new GameObject("wiring row");
             go.SetActive(false);   // no Awake, so the manager never claims the singleton
+            var somebodyElses = ScriptableObject.CreateInstance<VRSLGridTextures>();
             try
             {
                 var manager = go.AddComponent<VRSL_URPLightManager>();
 
-                // A deliberate override: the wrong asset for this field, which is exactly
-                // what R-M7-3 protects. Resolution that "knows better" would replace it,
-                // and an author who set something unusual on purpose would find it
-                // silently undone.
-                var somebodyElses = VRSLWiring.Load(FieldNamed("dmxSpinTimerTexture"));
-                Assert.IsFalse(FieldNamed("dmxMainTexture").Optional,
+                // A deliberate override: an author's own grid textures rather than the
+                // package's, which is exactly what never filling a set field protects. Resolution that
+                // "knows better" would replace it, and an author who set something on
+                // purpose would find it silently undone.
+                Assert.IsFalse(FieldNamed("gridTextures").Optional,
                     "this row subtracts one from the mandatory count for the overridden "
                   + "field, so it fails by one if that field is ever made optional - and "
                   + "the failure would name resolution rather than the table");
-                manager.dmxMainTexture = (RenderTexture)somebodyElses;
+                manager.gridTextures = somebodyElses;
 
                 var result = VRSLWiring.Resolve(manager);
 
-                Assert.AreSame(somebodyElses, manager.dmxMainTexture,
+                Assert.AreSame(somebodyElses, manager.gridTextures,
                     "resolution overwrote a field the author had set");
                 Assert.That(result.Filled.Select(f => f.Field),
-                    Does.Not.Contain("dmxMainTexture"),
+                    Does.Not.Contain("gridTextures"),
                     "a field that was already set was reported as filled");
 
                 // Everything else was empty and should now be the package's own asset.
                 Assert.IsEmpty(result.Unresolved,
                     "nothing should be unresolvable in a project that has this package: "
                   + string.Join(", ", result.Unresolved.Select(f => f.Field)));
-                // The mandatory ones, minus the overridden field. The four that document
+                // The mandatory ones, minus the overridden field. The three that document
                 // a meaning when empty are not filled unless somebody asks.
                 int expected = VRSLWiring.Dmx.Count(f => !f.Optional) - 1;
                 Assert.AreEqual(expected, result.Filled.Count,
@@ -119,11 +119,15 @@ namespace VRSL.URP.Tests
                     "something was still empty after an explicit repair");
 
                 // Idempotent: a second pass has nothing left to do, so a repair an author
-                // presses twice does not report ten changes it did not make.
+                // presses twice does not report changes it did not make.
                 var again = VRSLWiring.Resolve(manager);
                 Assert.IsFalse(again.ChangedAnything, "a second resolve changed something");
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+                Object.DestroyImmediate(somebodyElses);
+            }
         }
 
         [Test]
@@ -227,8 +231,8 @@ namespace VRSL.URP.Tests
                 // nothing here is the enable path doing the work instead.
                 VRSLWiring.ResolveOnValidate(manager);
 
-                // The mandatory subset, not every field: the optional four are never
-                // filled by this path, so judging all ten would leave the assertion
+                // The mandatory subset, not every field: the optional three are never
+                // filled by this path, so judging all six would leave the assertion
                 // non-empty whether or not the resolve was deferred.
                 Assert.IsNotEmpty(Required(VRSLWiring.Empty(manager)),
                     "resolution ran during OnValidate rather than after it, which is where "
@@ -264,24 +268,24 @@ namespace VRSL.URP.Tests
         {
             var go = new GameObject("override row");
             go.SetActive(false);
+            var somebodyElses = ScriptableObject.CreateInstance<VRSLGridTextures>();
             try
             {
                 var manager = go.AddComponent<VRSL_URPLightManager>();
 
-                // Deliberately the wrong asset for this field, and deliberately alone in
-                // being set: everything else is empty and wants filling, which is what a
-                // repair on a real scene looks like.
-                var somebodyElses = (RenderTexture)VRSLWiring.Load(FieldNamed("dmxSpinTimerTexture"));
+                // Deliberately not the package's asset, and deliberately alone in being
+                // set: everything else is empty and wants filling, which is what a repair
+                // on a real scene looks like.
                 var so = new SerializedObject(manager);
                 foreach (var field in VRSLWiring.Dmx)
                     so.FindProperty(field.Field).objectReferenceValue = null;
-                so.FindProperty("dmxMainTexture").objectReferenceValue = somebodyElses;
+                so.FindProperty("gridTextures").objectReferenceValue = somebodyElses;
                 so.ApplyModifiedProperties();
 
                 // The enable path, which is what entering and leaving play mode runs.
                 go.SetActive(true);
                 yield return null;
-                Assert.AreSame(somebodyElses, manager.dmxMainTexture,
+                Assert.AreSame(somebodyElses, manager.gridTextures,
                     "enabling the manager overwrote a field the author had set");
 
                 // Checked here rather than only at the end. Asserting once, after both
@@ -294,7 +298,7 @@ namespace VRSL.URP.Tests
                 // Emptied again so the validate path has something of its own to do, and
                 // never the overridden field: the claim is that a repair leaves it alone
                 // while repairing around it.
-                var other = VRSLWiring.Dmx.First(f => f.Field != "dmxMainTexture" && !f.Optional);
+                var other = VRSLWiring.Dmx.First(f => f.Field != "gridTextures" && !f.Optional);
                 var again = new SerializedObject(manager);
                 again.FindProperty(other.Field).objectReferenceValue = null;
                 again.ApplyModifiedProperties();
@@ -306,12 +310,16 @@ namespace VRSL.URP.Tests
                 VRSLWiring.FlushPending(manager);
                 yield return null;
 
-                Assert.AreSame(somebodyElses, manager.dmxMainTexture,
+                Assert.AreSame(somebodyElses, manager.gridTextures,
                     "a validate pass overwrote a field the author had set");
                 Assert.IsEmpty(Required(VRSLWiring.Empty(manager)),
                     $"a validate pass did not fill {other.Field} back in");
             }
-            finally { Object.DestroyImmediate(go); }
+            finally
+            {
+                Object.DestroyImmediate(go);
+                Object.DestroyImmediate(somebodyElses);
+            }
         }
 
         /// <summary>
@@ -319,7 +327,7 @@ namespace VRSL.URP.Tests
         /// the project cannot be picked instead.
         ///
         /// The requirement is about coexisting with <c>com.acchosen.vr-stage-lighting</c>,
-        /// which ships CustomRenderTextures with exactly these names. Rather than gate
+        /// which ships its decode textures under exactly this package's names. Rather than gate
         /// this on that package being installed — it is not, here, so the row would
         /// compile out and prove nothing — it stages the fault itself: a decoy asset with
         /// the same name, which makes a name search genuinely ambiguous. That is the
@@ -329,7 +337,7 @@ namespace VRSL.URP.Tests
         [Test]
         public void AnIdenticallyNamedAssetElsewhereIsNotPickedInstead()
         {
-            var field = FieldNamed("dmxMainTexture");
+            var field = FieldNamed("gridTextures");
             string wanted = VRSLWiring.PathOf(field);
             string name   = System.IO.Path.GetFileNameWithoutExtension(wanted);
 
@@ -348,8 +356,9 @@ namespace VRSL.URP.Tests
                 mine = AssetDatabase.IsValidFolder(folder);
                 Assert.IsTrue(mine, "could not create the decoy folder");
 
-                AssetDatabase.CreateAsset(
-                    new CustomRenderTexture(4, 4) { name = name }, decoyPath);
+                var decoy = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                decoy.name = name;
+                AssetDatabase.CreateAsset(decoy, decoyPath);
                 AssetDatabase.Refresh();
 
                 // The row is worthless unless the decoy really does collide, so check
@@ -390,6 +399,66 @@ namespace VRSL.URP.Tests
         {
             foreach (var f in VRSLWiring.Dmx) if (f.Field == name) return f;
             throw new AssertionException($"no wiring field called {name}");
+        }
+
+        /// <summary>
+        /// W13. Every slot of the shipped Grid Textures holds its own layout's texture.
+        /// The strobe timers are the ones worth a row: 0.2.0-rc.6's Vertical and Legacy
+        /// managers both pointed at the Horizontal timer, so their strobes took their
+        /// phase from a grid nothing wrote to, and a slip of the same kind here would look
+        /// exactly as healthy.
+        /// </summary>
+        [Test]
+        public void TheShippedGridTexturesHoldEachLayoutsOwnTextures()
+        {
+            // Main, movement, strobe, strobe timer, spin timer, as each layout ships them.
+            var expected = new Dictionary<string, string[]>
+            {
+                ["horizontal"] = new[]
+                {
+                    "555ce9e464c9a54c9d331e0030c258ef", "63c403376634fef0560b44d7f19aedaa",
+                    "e3fa773f91559868d4104ab3ce54bf79", "e6641cd38ad1a21be3425ab43ecc2506",
+                    "5bee9c07b3305e88be89de0d01fc2f07",
+                },
+                ["vertical"] = new[]
+                {
+                    "78c70f9c712bd81bf5c13a40970fd79b", "c6d6373129a6cae52b02e2b675ad7e86",
+                    "6f30f578d96c57d49dc9297f12e7fb0b", "954ba27aa605bf10c6625c64c834303f",
+                    "da695f1470322a477c370746a7a2571f",
+                },
+                ["legacy"] = new[]
+                {
+                    "17f83f063191dbffbaae01943cc9c235", "015583c6b281a3ff6b1af6d872ac4610",
+                    "a928e074dadf56e05191a31cd701f480", "66a7e6c0f0eebb9378d52ca3820d9ccb",
+                    "a997187a06df0deca7f350bc32369b8f",
+                },
+            };
+
+            var asset = VRSLWiring.Load(FieldNamed("gridTextures")) as VRSLGridTextures;
+            Assert.IsNotNull(asset, "the shipped Grid Textures asset is not in this project");
+
+            static string GuidOf(Object o) => o == null
+                ? "(empty)"
+                : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(o));
+
+            var wrong = new List<string>();
+            foreach (var (layout, set) in new[]
+                     {
+                         ("horizontal", asset.horizontal), ("vertical", asset.vertical),
+                         ("legacy", asset.legacy),
+                     })
+            {
+                var slots = new (string Name, Object Texture)[]
+                {
+                    ("main", set.main), ("movement", set.movement), ("strobe", set.strobe),
+                    ("strobeTimer", set.strobeTimer), ("spinTimer", set.spinTimer),
+                };
+                for (int i = 0; i < slots.Length; i++)
+                    if (GuidOf(slots[i].Texture) != expected[layout][i])
+                        wrong.Add($"{layout}.{slots[i].Name} holds {GuidOf(slots[i].Texture)}, "
+                                + $"expected {expected[layout][i]}");
+            }
+            Assert.IsEmpty(wrong, string.Join("; ", wrong));
         }
 
         [Test]
