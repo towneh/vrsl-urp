@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
@@ -133,6 +134,169 @@ namespace VRSL.URP.Tests
                     VRSLGridUpgrade.UpgradeScene(go.scene);
                     yield return null;
                     break;
+            }
+        }
+
+        // ── Update modes ──────────────────────────────────────────────────────
+
+        static VRSLGridTextures ShippedGridTextures() =>
+            AssetDatabase.LoadAssetAtPath<VRSLGridTextures>(
+                AssetDatabase.GUIDToAssetPath(VRSLWiring.GridTexturesGuid));
+
+        static List<CustomRenderTexture> Crts(VRSLGridTextures.Set set)
+        {
+            var list = new List<CustomRenderTexture>();
+            foreach (var tex in new[] { set.main, set.movement, set.strobe, set.strobeTimer, set.spinTimer })
+                if (tex is CustomRenderTexture crt) list.Add(crt);
+            return list;
+        }
+
+        static List<CustomRenderTexture> AllCrts(VRSLGridTextures asset)
+        {
+            var all = new List<CustomRenderTexture>();
+            foreach (VRSLGridLayout layout in System.Enum.GetValues(typeof(VRSLGridLayout)))
+                all.AddRange(Crts(asset.For(layout)));
+            return all;
+        }
+
+        static Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode> Snapshot(
+            IEnumerable<CustomRenderTexture> crts)
+        {
+            var modes = new Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode>();
+            foreach (var crt in crts) modes[crt] = crt.updateMode;
+            return modes;
+        }
+
+        // In the editor an update mode set on an asset is written to the asset, so every
+        // row that stages modes puts the originals back however it ends.
+        static void Restore(Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode> modes)
+        {
+            foreach (var pair in modes) if (pair.Key != null) pair.Key.updateMode = pair.Value;
+        }
+
+        static readonly int s_GridLayout = Shader.PropertyToID("_VRSLU_DMXGridLayout");
+
+        /// <summary>
+        /// G4, the load half. With every one of the package's fifteen CRTs left
+        /// running, a manager coming up runs only its own layout's five. Staged Realtime
+        /// first: the package ships them OnDemand, so a clean project would pass this by
+        /// doing nothing.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator OnlyTheLiveLayoutsTexturesRunOnceAManagerIsUp(
+            [Values(VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy)]
+            VRSLGridLayout layout)
+        {
+            var asset = ShippedGridTextures();
+            Assert.IsNotNull(asset, "the shipped Grid Textures asset is not in this project");
+            var all = AllCrts(asset);
+            Assert.AreEqual(15, all.Count, "the shipped asset should hold fifteen CRTs");
+            var original = Snapshot(all);
+
+            var go = new GameObject("update modes row");
+            go.SetActive(false);
+            try
+            {
+                foreach (var crt in all) crt.updateMode = CustomRenderTextureUpdateMode.Realtime;
+
+                var manager = go.AddComponent<VRSL_URPLightManager>();
+                manager.dmxInput   = (VRSLDmxInput)layout;
+                go.SetActive(true);
+                yield return null;
+                Assert.AreSame(manager, VRSL_URPLightManager.Instance, "the row's manager does not own the singleton");
+
+                var live = Crts(asset.For(layout));
+                var wrong = new List<string>();
+                foreach (var crt in all)
+                {
+                    var expected = live.Contains(crt)
+                        ? CustomRenderTextureUpdateMode.Realtime
+                        : CustomRenderTextureUpdateMode.OnDemand;
+                    if (crt.updateMode != expected) wrong.Add($"{crt.name} is {crt.updateMode}, expected {expected}");
+                }
+                Assert.IsEmpty(wrong, string.Join("; ", wrong));
+                Assert.AreEqual((int)layout, Shader.GetGlobalInteger(s_GridLayout),
+                    "the layout global does not say which grid the manager reads");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+                Restore(original);
+            }
+        }
+
+        /// <summary>
+        /// G5. Every update mode is back as it was once the managers have let go,
+        /// across a hand-over, and the layout global reads Horizontal with nobody left.
+        ///
+        /// The modes are staged mixed, so putting back "OnDemand" everywhere cannot pass.
+        /// The hand-over is what makes the order matter: an owner that handed over before
+        /// restoring would leave its successor noting its own changes as the originals,
+        /// and the successor's restore would then put those back instead.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ReleasingPutsEveryModeBackAndTheLayoutGlobalToHorizontal()
+        {
+            var asset = ShippedGridTextures();
+            Assert.IsNotNull(asset, "the shipped Grid Textures asset is not in this project");
+            var all = AllCrts(asset);
+            var original = Snapshot(all);
+
+            var ownerGo   = new GameObject("update modes owner");
+            var standbyGo = new GameObject("update modes standby");
+            ownerGo.SetActive(false);
+            try
+            {
+                var cycle = new[]
+                {
+                    CustomRenderTextureUpdateMode.Realtime,
+                    CustomRenderTextureUpdateMode.OnDemand,
+                    CustomRenderTextureUpdateMode.OnLoad,
+                };
+                for (int i = 0; i < all.Count; i++) all[i].updateMode = cycle[i % cycle.Length];
+                var staged = Snapshot(all);
+
+                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+                owner.dmxInput   = VRSLDmxInput.VerticalGrid;
+                ownerGo.SetActive(true);
+                yield return null;
+                Assert.AreSame(owner, VRSL_URPLightManager.Instance, "the owner does not own the singleton");
+                Assert.AreEqual((int)VRSLGridLayout.Vertical, Shader.GetGlobalInteger(s_GridLayout));
+
+                // Added switched off and then switched on, the only way to an enabled
+                // manager that does not own the singleton: Awake destroys an enabled
+                // duplicate outright.
+                standbyGo.SetActive(false);
+                var standby = standbyGo.AddComponent<VRSL_URPLightManager>();
+                standby.enabled = false;
+                standby.dmxInput   = VRSLDmxInput.LegacyGrid;
+                standbyGo.SetActive(true);
+                standby.enabled = true;
+                yield return null;
+
+                owner.enabled = false;
+                yield return null;
+                Assert.AreSame(standby, VRSL_URPLightManager.Instance, "the standby was not handed the singleton");
+                Assert.AreEqual((int)VRSLGridLayout.Legacy, Shader.GetGlobalInteger(s_GridLayout),
+                    "the hand-over did not republish the layout");
+
+                standby.enabled = false;
+                yield return null;
+                Assert.IsNull(VRSL_URPLightManager.Instance, "a manager still owns the singleton");
+                Assert.AreEqual((int)VRSLGridLayout.Horizontal, Shader.GetGlobalInteger(s_GridLayout),
+                    "the layout global still names a layout with no manager running");
+
+                var wrong = new List<string>();
+                foreach (var pair in staged)
+                    if (pair.Key.updateMode != pair.Value)
+                        wrong.Add($"{pair.Key.name} is {pair.Key.updateMode}, was {pair.Value}");
+                Assert.IsEmpty(wrong, "update modes not put back: " + string.Join("; ", wrong));
+            }
+            finally
+            {
+                Object.DestroyImmediate(standbyGo);
+                Object.DestroyImmediate(ownerGo);
+                Restore(original);
             }
         }
     }

@@ -555,6 +555,7 @@ namespace VRSL.URP
             VRSLWiring.ResolveOnEnable(this);
 #endif
 
+            StopInactiveLayouts();
             CreateTextureHandles();
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would
@@ -606,8 +607,15 @@ namespace VRSL.URP
             // and the render pass sets the count on its own command buffer. A consumer
             // that ever does read them must check the count first, which is the contract
             // the compute already keeps.
+            // Before the hand-over, so a successor notes the assets as they really are
+            // rather than as this manager left them.
+            RestoreUpdateModes();
+
             if (wasOwner && !HandOverOwnership())
+            {
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
+                Shader.SetGlobalInteger(s_DMXGridLayout, 0);
+            }
         }
         /// <summary>
         /// Give the singleton to another manager that is still running.
@@ -1212,16 +1220,22 @@ namespace VRSL.URP
         // references so the manager alone drives both the render-pass lights and the surface
         // emissive — no control panel needed. Also force each CustomRenderTexture into Realtime
         // update mode, the role VRSL_LocalUIControlPanel.EnableCRTS used to fill, so the decode
-        // chain keeps producing live data without the panel present.
+        // chain keeps producing live data without the panel present. Noted, and put back when
+        // the manager releases the singleton.
         static readonly int s_DMXGrid            = Shader.PropertyToID("_VRSLU_DMXGridRenderTexture");
         static readonly int s_DMXGridMovement    = Shader.PropertyToID("_VRSLU_DMXGridRenderTextureMovement");
         static readonly int s_DMXGridStrobe      = Shader.PropertyToID("_VRSLU_DMXGridStrobeOutput");
         static readonly int s_DMXGridStrobeTimer = Shader.PropertyToID("_VRSLU_DMXGridStrobeTimer");
         static readonly int s_DMXGridSpin        = Shader.PropertyToID("_VRSLU_DMXGridSpinTimer");
         static readonly int s_DMXGridTexelSize   = Shader.PropertyToID("_VRSLDMXTexelSize");
+        static readonly int s_DMXGridLayout      = Shader.PropertyToID("_VRSLU_DMXGridLayout");
 
         void PublishDMXGlobals()
         {
+            // Unset, a global int reads 0, which is Horizontal: the default path and a scene
+            // with no DMX manager read the grid the way they always have.
+            Shader.SetGlobalInteger(s_DMXGridLayout, (int)GridLayout);
+
             var live = LiveTextures;
             PublishDMX("Color/Intensity", s_DMXGrid,            live.main);
             PublishDMX("Movement",        s_DMXGridMovement,    live.movement);
@@ -1251,14 +1265,81 @@ namespace VRSL.URP
                 return;
             }
             Shader.SetGlobalTexture(globalId, tex);
-            bool setRealtime = false;
-            if (tex is CustomRenderTexture crt && crt.updateMode != CustomRenderTextureUpdateMode.Realtime)
-            {
-                crt.updateMode = CustomRenderTextureUpdateMode.Realtime;
-                setRealtime = true;
-            }
+            bool setRealtime = tex is CustomRenderTexture crt
+                            && SetUpdateMode(crt, CustomRenderTextureUpdateMode.Realtime);
             if (outputDebugLogs)
                 Debug.Log($"[VRSL URP] DMX {label}: {tex.name}{(setRealtime ? " (set Realtime)" : "")}", this);
+        }
+
+        // ── CRT update modes ──────────────────────────────────────────────────
+        // In the editor an update mode set on a CRT asset is written to the asset, so
+        // anything this manager changes it puts back when it lets go of the singleton.
+
+        [System.Serializable]
+        struct UpdateModeNote
+        {
+            public CustomRenderTexture       texture;
+            public CustomRenderTextureUpdateMode mode;
+        }
+
+        // Each CRT's mode from before this manager first changed it. Serialised, though
+        // never shown or saved with a scene: Unity disables and re-enables a component
+        // around a Play-mode script reload, and a table lost there would note this
+        // manager's own changes as the originals.
+        [SerializeField, HideInInspector]
+        List<UpdateModeNote> _updateModeNotes = new();
+
+        /// <summary>Set <paramref name="crt"/>'s update mode, noting what it was the first
+        /// time. Returns whether anything changed.</summary>
+        bool SetUpdateMode(CustomRenderTexture crt, CustomRenderTextureUpdateMode mode)
+        {
+            if (crt == null || crt.updateMode == mode) return false;
+            bool noted = false;
+            for (int i = 0; i < _updateModeNotes.Count && !noted; i++)
+                noted = _updateModeNotes[i].texture == crt;
+            if (!noted)
+                _updateModeNotes.Add(new UpdateModeNote { texture = crt, mode = crt.updateMode });
+            crt.updateMode = mode;
+            return true;
+        }
+
+        /// <summary>
+        /// Stop the CRTs of the layouts not in use. The package ships every one OnDemand,
+        /// so in a clean project there is nothing to do; this is for assets an earlier
+        /// session or another tool left running, which would otherwise decode a grid
+        /// nothing reads, every frame.
+        /// </summary>
+        void StopInactiveLayouts()
+        {
+            if (gridTextures == null) return;
+            var live = LiveTextures;
+            for (int l = 0; l <= (int)VRSLGridLayout.Legacy; l++)
+            {
+                if (l == (int)GridLayout) continue;
+                var set = gridTextures.For((VRSLGridLayout)l);
+                StopUnlessLive(set.main,        live);
+                StopUnlessLive(set.movement,    live);
+                StopUnlessLive(set.strobe,      live);
+                StopUnlessLive(set.strobeTimer, live);
+                StopUnlessLive(set.spinTimer,   live);
+            }
+        }
+
+        void StopUnlessLive(RenderTexture tex, in VRSLGridTextures.Set live)
+        {
+            // An author's asset can share a texture between layouts.
+            if (tex is not CustomRenderTexture crt
+                || crt.updateMode != CustomRenderTextureUpdateMode.Realtime
+                || tex == live.main || tex == live.movement || tex == live.strobe
+                || tex == live.strobeTimer || tex == live.spinTimer) return;
+            SetUpdateMode(crt, CustomRenderTextureUpdateMode.OnDemand);
+        }
+
+        void RestoreUpdateModes()
+        {
+            foreach (var note in _updateModeNotes)
+                if (note.texture != null) note.texture.updateMode = note.mode;
+            _updateModeNotes.Clear();
         }
 
         // Reads the compute's decoded per-fixture light data back to the CPU and logs it.
