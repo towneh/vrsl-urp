@@ -9,13 +9,12 @@ namespace VRSL.URP.EditorScripts
     /// <summary>
     /// The manager inspector's wiring section: one line, a fold, and a repair.
     ///
-    /// Ten fields on the DMX manager have exactly one correct value each, none of which
-    /// an author can work out, and every one of them fails without an error. R-M7-4 asks
-    /// for that to be a status line rather than ten questions.
+    /// The wiring fields have exactly one correct value each, none of which an author
+    /// can work out, and every one of them fails without an error, so they get a status
+    /// line rather than a list of questions.
     ///
-    /// <b>Everything else is drawn exactly as Unity would.</b> The manager has 35 fields
-    /// and this milestone touches ten; the artistic fields belong to the author and the
-    /// cost knobs belong to M1. <c>DrawPropertiesExcluding</c> keeps the rest untouched,
+    /// <b>Everything else is drawn exactly as Unity would.</b> The artistic fields
+    /// belong to the author. <c>DrawPropertiesExcluding</c> keeps the rest untouched,
     /// which is the difference between adding a section and starting a redesign.
     /// </summary>
     abstract class VRSLLightManagerEditor : Editor
@@ -36,6 +35,7 @@ namespace VRSL.URP.EditorScripts
             if (fields != null)
             {
                 DrawStatus(fields);
+                DrawUpgradeNotice();
                 DrawFold(fields);
                 EditorGUILayout.Space();
             }
@@ -78,6 +78,13 @@ namespace VRSL.URP.EditorScripts
             var quality = serializedObject.FindProperty("quality");
             if (quality == null) return System.Array.Empty<string>();
 
+            // Above quality because it decides whether anything lights at all. The DMX
+            // manager only; the AudioLink one has no DMX input.
+            var input = serializedObject.FindProperty(nameof(VRSL_URPLightManager.dmxInput));
+            // Named here: Unity would title the field "Dmx Input".
+            if (input != null)
+                EditorGUILayout.PropertyField(input, new GUIContent("DMX Input", input.tooltip));
+
             EditorGUILayout.PropertyField(quality);
 
             // On a multi-selection whose managers disagree, enumValueIndex is one of
@@ -93,6 +100,7 @@ namespace VRSL.URP.EditorScripts
                     EditorStyles.wordWrappedMiniLabel);
 
             var drawn = new List<string> { "quality" };
+            if (input != null) drawn.Add(input.name);
             using (new EditorGUI.DisabledScope(off))
             {
                 foreach (var name in LookFields)
@@ -183,9 +191,28 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>
-        /// This manager's wiring fields, behind a fold labelled for who opens it. Ten on
-        /// the DMX manager and five on the AudioLink one, so nothing here may quote a
-        /// count or name a field only one of them has.
+        /// An rc.6 DMX manager that was on decode textures of its author's own, until the
+        /// author gives it a Grid Textures asset. The upgrade warns in the Console on every
+        /// enable as well; this is where the author is looking when they come to fix it.
+        /// </summary>
+        void DrawUpgradeNotice()
+        {
+            if (serializedObject.isEditingMultipleObjects) return;
+            var old = serializedObject.FindProperty(VRSLGridUpgrade.OldField);
+            if (old == null || old.objectReferenceValue == null) return;
+            EditorGUILayout.HelpBox(
+                $"This manager was set up with grid textures of your own "
+              + $"({old.objectReferenceValue.name}), and now takes them as one Grid Textures "
+              + "asset. Until you make one (Create → VRSL → URP → Grid Textures), fill in "
+              + "your textures and set it as Grid Textures under Asset references, the "
+              + "video is decoded through the package's own textures instead.",
+                MessageType.Warning);
+        }
+
+        /// <summary>
+        /// This manager's wiring fields, behind a fold labelled for who opens it. The DMX
+        /// manager has more than the AudioLink one, so nothing here may quote a count or
+        /// name a field only one of them has.
         ///
         /// Closed by default because an author has no reason to look, and present at all
         /// because somebody occasionally wants to point one somewhere else on purpose,
@@ -210,6 +237,13 @@ namespace VRSL.URP.EditorScripts
                     var prop = serializedObject.FindProperty(field.Field);
                     if (prop != null) EditorGUILayout.PropertyField(prop);
                 }
+
+                var input = serializedObject.FindProperty(nameof(VRSL_URPLightManager.dmxInput));
+                if (input != null && !input.hasMultipleDifferentValues)
+                    EditorGUILayout.LabelField(
+                        $"Grid Textures is read for the {input.enumDisplayNames[input.enumValueIndex]}, "
+                      + "which DMX Input sets.",
+                        EditorStyles.wordWrappedMiniLabel);
             }
         }
 
