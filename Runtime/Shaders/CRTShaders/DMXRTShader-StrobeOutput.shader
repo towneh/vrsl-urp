@@ -7,7 +7,6 @@
         _MaxStrobeFreq("Maximum Strobe Frequency", Range(1,100)) = 25
         [Toggle]_EnableCompatibilityMode("Compatibility Mode", Float) = 0
         [Toggle]_NineUniverseMode("Nine Universe Mode", Float) = 0
-        [Toggle]_DisableStrobe("Disable All Strobe", Float) = 0
      }
 
      SubShader
@@ -32,7 +31,8 @@
             Texture2D _VRSLU_DMXGridStrobeTimer;
             SamplerState VRSL_PointClampSampler;
             float _NineUniverseMode, _EnableCompatibilityMode;
-            uint _DisableStrobe;
+            // The DMX manager's disableStrobe, published as a global.
+            int _VRSLU_StrobeDisabled;
 
             #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
 
@@ -59,7 +59,7 @@
 
 
             {
-                    if(_DisableStrobe > 0){return float4(1,1,1,1);}
+                    if(_VRSLU_StrobeDisabled > 0){return float4(1,1,1,1);}
                 //CHILL FOR 1 SECOND TO ALLOW DATA TO COME IN
                 // if (_Time.y > 1.0)
                 // {

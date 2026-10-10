@@ -247,8 +247,9 @@ namespace VRSL.URP
         public float strobeHighFrequency = 65f;
         [Tooltip("Dynamic mode: phase integrates at the channel value times this.")]
         public float maxStrobeFrequency  = 185f;
-        [Tooltip("Hold every strobing fixture fully on. Mirrors the control panel's "
-               + "global strobe disable, which only reaches the CRT materials.")]
+        [Tooltip("Hold every strobing fixture fully on, whichever grid layout is live and "
+               + "whether DMX arrives as video or from a channel source. The control "
+               + "panel's strobe toggle sets this.")]
         public bool  disableStrobe;
 
         [Header("Movement smoothing")]
@@ -413,6 +414,13 @@ namespace VRSL.URP
         List<VRStageLighting_DMX_RealtimeLight> _fixtures = new();
         bool _configDirty = true;
 
+        // The input the owner last bound, so a dmxInput changed by anything (the
+        // inspector in Play mode, an Undo, a prefab revert, a script writing the field)
+        // reads as a switch. Null while this manager does not own the singleton.
+        VRSLDmxInput? _boundInput;
+        bool _fixtureRefreshPending;
+        bool _publishedStrobeDisabled;
+
         // Render-pass instances. Allocated in OnEnable, reused across cameras and
         // frames, dropped in OnDisable. Stateless beyond renderPassEvent, the
         // ConfigureInput flags and the per-camera level, all set before each
@@ -555,8 +563,7 @@ namespace VRSL.URP
             VRSLWiring.ResolveOnEnable(this);
 #endif
 
-            StopInactiveLayouts();
-            CreateTextureHandles();
+            BindInput();
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would
             // once have taken these with it. Allocated up front so the compute pass
@@ -610,11 +617,14 @@ namespace VRSL.URP
             // Before the hand-over, so a successor notes the assets as they really are
             // rather than as this manager left them.
             RestoreUpdateModes();
+            _boundInput = null;
+            _fixtureRefreshPending = false;
 
             if (wasOwner && !HandOverOwnership())
             {
                 Shader.SetGlobalInt(s_DMXChannelCount, 0);
                 Shader.SetGlobalInteger(s_DMXGridLayout, 0);
+                Shader.SetGlobalInteger(s_StrobeDisabled, 0);
             }
         }
         /// <summary>
@@ -682,6 +692,17 @@ namespace VRSL.URP
             // that is enabled but does not own the singleton has no business doing either,
             // and which of the two LateUpdates ran last would decide what stood.
             if (Instance != this) return;
+
+            if (_boundInput.HasValue && dmxInput != _boundInput.Value)
+                SwitchTo(dmxInput);
+            // After every Update has run, so fixtures switched on alongside the layout,
+            // in the same frame, are collected before anything renders.
+            if (_fixtureRefreshPending)
+            {
+                _fixtureRefreshPending = false;
+                RefreshFixturesIfChanged();
+            }
+            if (disableStrobe != _publishedStrobeDisabled) PublishStrobeDisabled();
 
             if (_configDirty)
             {
@@ -1094,6 +1115,109 @@ namespace VRSL.URP
         public void MarkConfigDirty() => _configDirty = true;
 
         /// <summary>
+        /// Choose the grid the lights read, while the world runs: 0 the Horizontal grid,
+        /// 1 the Vertical grid, 2 the Legacy grid. A number rather than
+        /// <see cref="VRSLDmxInput"/>, so a UI Dropdown's <c>On Value Changed (Int32)</c>
+        /// and an interpreted world script can call it.
+        /// </summary>
+        /// <remarks>
+        /// On the manager that owns the singleton, a grid's textures are bound and
+        /// published at once and every other layout's stop running. The realtime
+        /// fixtures are collected again in this manager's <c>LateUpdate</c>, before
+        /// anything renders this frame, so fixtures switched on in any <c>Update</c> or
+        /// ordinary coroutine this frame are picked up whether that ran before or after
+        /// this call. Fixtures switched on later in the frame than that (another
+        /// <c>LateUpdate</c> that runs after this manager's, <c>WaitForEndOfFrame</c>)
+        /// need <see cref="RefreshFixtures"/> afterwards.
+        ///
+        /// Each layout's textures decode their own grid from the video, so whatever
+        /// puts the video into a grid has to switch to the new layout's grid as well,
+        /// or the lights read a grid nothing is writing.
+        ///
+        /// A number outside 0 to 2, or a grid the Grid Textures asset has no textures
+        /// for, is refused with a warning, and nothing changes. Choosing what is already
+        /// chosen changes nothing. On a manager that does not own the singleton this only
+        /// changes the setting, which it reads once it takes over.
+        /// </remarks>
+        public void SetDmxInput(int input)
+        {
+            if (input < (int)VRSLDmxInput.HorizontalGrid || input > (int)VRSLDmxInput.LegacyGrid)
+            {
+                Debug.LogWarning($"[VRSL URP] There's no DMX input {input}. Use 0 for the Horizontal "
+                               + "grid, 1 for the Vertical grid or 2 for the Legacy grid. "
+                               + $"The lights stay on {Describe(_boundInput ?? dmxInput)}.", this);
+                return;
+            }
+            var value = (VRSLDmxInput)input;
+            // On the owner the field may already have been written without a bind, so the
+            // input it reads is the one to compare with, and asking for it puts the field
+            // back rather than leaving LateUpdate to switch away from it.
+            bool owner = Instance == this && _boundInput.HasValue;
+            if (value == (owner ? _boundInput.Value : dmxInput))
+            {
+                dmxInput = value;
+                return;
+            }
+            if (!CanRead(value)) return;
+            dmxInput = value;
+            if (owner) SwitchTo(value);
+        }
+
+        /// <summary>An input as the lights' messages name it.</summary>
+        static string Describe(VRSLDmxInput input) => $"the {(VRSLGridLayout)input} grid";
+
+        /// <summary>Whether this manager can read <paramref name="input"/>, warning when
+        /// it cannot.</summary>
+        bool CanRead(VRSLDmxInput input)
+        {
+            var layout = (VRSLGridLayout)input;
+            if (gridTextures != null && gridTextures.For(layout).main != null) return true;
+            Debug.LogWarning(gridTextures == null
+                ? $"[VRSL URP] Can't switch to {Describe(input)}: this manager has no Grid Textures, "
+                + $"so it has nothing to decode a grid with. The lights stay on {Describe(_boundInput ?? dmxInput)}."
+                : $"[VRSL URP] Can't switch to {Describe(input)}: {gridTextures.name} has no textures "
+                + $"for it. The lights stay on {Describe(_boundInput ?? dmxInput)}. Fill in its {layout} set, or point "
+                + "the manager at a Grid Textures asset that has one.", this);
+            return false;
+        }
+
+        /// <summary>Bind <paramref name="input"/> on the owner. Reached from
+        /// <see cref="SetDmxInput"/>, and from <c>LateUpdate</c> when the field changed
+        /// some other way.</summary>
+        void SwitchTo(VRSLDmxInput input)
+        {
+            if (!CanRead(input))
+            {
+                // The inspector, an Undo or a script set the field. Put it back, or the
+                // setting would name an input the manager is not reading.
+                dmxInput = _boundInput ?? VRSLDmxInput.HorizontalGrid;
+                return;
+            }
+            dmxInput = input;
+            BindInput();
+            _fixtureRefreshPending = true;
+            MarkConfigDirty();
+        }
+
+        readonly HashSet<VRStageLighting_DMX_RealtimeLight> _foundFixtures = new();
+
+        /// <summary>Collect the fixtures again, and rebuild only when they are not the
+        /// ones already held. A switch usually leaves the same fixtures lit, and the
+        /// rebuild (the fixture buffers and the gobo array) is most of what a switch
+        /// costs.</summary>
+        void RefreshFixturesIfChanged()
+        {
+            _foundFixtures.Clear();
+            foreach (var f in FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Exclude))
+                _foundFixtures.Add(f);
+            bool same = _foundFixtures.Count == _fixtures.Count;
+            for (int i = 0; same && i < _fixtures.Count; i++)
+                same = _fixtures[i] != null && _foundFixtures.Contains(_fixtures[i]);
+            _foundFixtures.Clear();
+            if (!same) RefreshFixtures();
+        }
+
+        /// <summary>
         /// Where DMX channel values come from, when they arrive as bytes rather
         /// than as a video frame. Null leaves the CRT decode chain in charge, which
         /// is the unmodified behaviour.
@@ -1217,6 +1341,15 @@ namespace VRSL.URP
             };
         }
 
+        /// <summary>Make <see cref="dmxInput"/> what this manager reads: the other
+        /// layouts' textures stopped, this one's bound and published.</summary>
+        void BindInput()
+        {
+            StopInactiveLayouts();
+            CreateTextureHandles();
+            _boundInput = dmxInput;
+        }
+
         void CreateTextureHandles()
         {
             ReleaseTextureHandles();
@@ -1249,6 +1382,7 @@ namespace VRSL.URP
             // Unset, a global int reads 0, which is Horizontal: the default path and a scene
             // with no DMX manager read the grid the way they always have.
             Shader.SetGlobalInteger(s_DMXGridLayout, (int)GridLayout);
+            PublishStrobeDisabled();
 
             var live = LiveTextures;
             PublishDMX("Color/Intensity", s_DMXGrid,            live.main);
@@ -1272,6 +1406,14 @@ namespace VRSL.URP
                 Shader.SetGlobalVector(s_DMXGridTexelSize, new Vector4(
                     1f / live.main.width, 1f / live.main.height,
                     live.main.width,      live.main.height));
+        }
+
+        // Read by the strobe output decode as well as the compute, so holding strobe
+        // open reaches the fixture bodies on every layout without writing to a material.
+        void PublishStrobeDisabled()
+        {
+            _publishedStrobeDisabled = disableStrobe;
+            Shader.SetGlobalInteger(s_StrobeDisabled, disableStrobe ? 1 : 0);
         }
 
         void PublishDMX(string label, int globalId, RenderTexture tex)

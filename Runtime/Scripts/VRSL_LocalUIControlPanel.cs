@@ -97,9 +97,9 @@ namespace VRSL.URP
         [SerializeField]
         private bool _globalDisableStrobe = false;
 
-        /// <summary>Hold every strobing fixture fully on. Reaches the DMX manager, which
-        /// gates the cast light and the beams, and the strobe decode material the fixture
-        /// bodies sample.</summary>
+        /// <summary>Hold every strobing fixture fully on, through the DMX manager's
+        /// <c>disableStrobe</c>, which reaches the cast light, the beams and the fixture
+        /// bodies on every grid layout.</summary>
         public bool GlobalDisableStrobe
         {
             set
@@ -130,7 +130,6 @@ namespace VRSL.URP
 
         static readonly int s_UniversalIntensity = Shader.PropertyToID("_UniversalIntensity");
         static readonly int s_SamplingTexture    = Shader.PropertyToID("_SamplingTexture");
-        static readonly int s_DisableStrobe      = Shader.PropertyToID("_DisableStrobe");
 
         public void _ToggleGlobalStrobe()
         {
@@ -429,15 +428,7 @@ namespace VRSL.URP
 
         void SetStrobeStatus()
         {
-            if (dmxManager != null)
-            {
-                dmxManager.disableStrobe = _globalDisableStrobe;
-                if (dmxManager.LiveTextures.strobe is CustomRenderTexture strobe
-                    && strobe.material != null && strobe.material.HasProperty(s_DisableStrobe))
-                {
-                    strobe.material.SetFloat(s_DisableStrobe, _globalDisableStrobe ? 1f : 0f);
-                }
-            }
+            if (dmxManager != null) dmxManager.disableStrobe = _globalDisableStrobe;
             SetGlobalStrobeUI();
         }
 

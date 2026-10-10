@@ -253,10 +253,12 @@ namespace VRSL.URP.Tests
         /// The rig's realtime movers and <paramref name="prefabs"/> in a row, lit from
         /// <paramref name="values"/> painted in <paramref name="layout"/> and handed to
         /// the manager, which is set to that layout. Captured from a camera in front of
-        /// the prefabs.
+        /// the prefabs. With <paramref name="switchAtRuntime"/> the manager comes up on
+        /// Horizontal, renders a few frames reading the grid wrongly, and is switched by
+        /// <c>SetDmxInput</c> instead.
         /// </summary>
         static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
-                                         System.Action<Texture2D> onCaptured)
+                                         System.Action<Texture2D> onCaptured, bool switchAtRuntime = false)
         {
             using var rig = VRSLDMXRig.Build();
             var painted = new List<VRSLDMXRig.PaintedGrid>();
@@ -313,10 +315,19 @@ namespace VRSL.URP.Tests
                 rig.Manager.ChannelSource = null;
                 rig.Manager.enabled      = false;
                 rig.Manager.gridTextures = grid;
-                rig.Manager.dmxInput     = (VRSLDmxInput)layout;
+                rig.Manager.dmxInput     = (VRSLDmxInput)(switchAtRuntime ? VRSLGridLayout.Horizontal : layout);
                 rig.Manager.enabled      = true;
                 rig.Manager.RefreshFixtures();
                 rig.FreezeForImageCapture();
+                if (switchAtRuntime)
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        yield return null;
+                        rig.RenderFrame();
+                    }
+                    rig.Manager.SetDmxInput((int)layout);
+                }
 
                 // Far enough back for all ten prefabs, at a size where their bodies are
                 // more than a few pixels.
@@ -370,15 +381,18 @@ namespace VRSL.URP.Tests
                     "the Horizontal frame is nearly black, so the comparison would prove nothing");
 
                 foreach (var layout in new[] { VRSLGridLayout.Legacy, VRSLGridLayout.Vertical })
+                foreach (bool switched in new[] { false, true })
                 {
-                    yield return CaptureLayout(HorizontalPrefabs, layout, values, t => other = t);
+                    string how = switched ? "switched to at runtime" : "set before the manager came up";
+                    yield return CaptureLayout(HorizontalPrefabs, layout, values, t => other = t, switched);
                     var result = VRSLImageCompare.Compare(horizontal, other);
-                    Debug.Log($"[G8] {layout} against Horizontal: {result}");
+                    Debug.Log($"[G8] {layout}, {how}, against Horizontal: {result}");
                     if (result.DifferingPercent > EdgeBudget)
-                        VRSLImageCompare.WriteImages(EvidenceFolder, $"G8-{layout}", horizontal, other);
+                        VRSLImageCompare.WriteImages(EvidenceFolder, $"G8-{layout}{(switched ? "-switched" : "")}",
+                                                     horizontal, other);
                     Assert.LessOrEqual(result.DifferingPercent, EdgeBudget,
                         $"the fixtures render differently on a {layout} grid carrying the same "
-                      + $"values ({result}). Images in {EvidenceFolder}");
+                      + $"values, {how} ({result}). Images in {EvidenceFolder}");
                     Object.DestroyImmediate(other);
                     other = null;
                 }

@@ -555,7 +555,11 @@ namespace VRSL.URP.Tests
         /// session sees the assets as imported instead. Clearing the live layout's
         /// five and whatever their materials sample puts both on the same footing.
         /// </summary>
-        static void ClearDmxTextures(VRSL_URPLightManager manager)
+        static void ClearDmxTextures(VRSL_URPLightManager manager) => ClearGridTextures(manager.LiveTextures);
+
+        /// <summary>Clear one layout's decode chain to black, and whatever its
+        /// materials sample, the video grid included.</summary>
+        public static void ClearGridTextures(VRSLGridTextures.Set live)
         {
             var seen = new HashSet<RenderTexture>();
             void Clear(RenderTexture rt)
@@ -569,12 +573,50 @@ namespace VRSL.URP.Tests
                 GL.Clear(false, true, Color.black);
                 RenderTexture.active = previous;
             }
-            var live = manager.LiveTextures;
             Clear(live.main);
             Clear(live.movement);
             Clear(live.strobe);
             Clear(live.strobeTimer);
             Clear(live.spinTimer);
+        }
+
+        /// <summary>
+        /// Put <paramref name="values"/> (channel 1 first, 0..1) on the video grid a
+        /// layout's decode chain reads: the texture its main decode texture's material
+        /// samples. Each channel fills the block of video texels behind the decode
+        /// texel the fixtures read it from (<see cref="CellsOf"/>), so the layout's own
+        /// chain decodes it, strobe timing and output included, the way it decodes video.
+        /// </summary>
+        public static void PaintVideoGrid(VRSLGridTextures.Set set, VRSLGridLayout layout, float[] values)
+        {
+            var main = set.main as CustomRenderTexture;
+            Assert(main != null && main.material != null, $"the {layout} main texture is not a decode CRT");
+            var video = main.material.GetTexture("_DMXTexture") as RenderTexture;
+            Assert(video != null, $"the {layout} decode chain reads no video grid");
+            Assert(video.width % main.width == 0 && video.height % main.height == 0,
+                $"the {layout} video grid ({video.width}x{video.height}) is not a whole multiple of "
+              + $"its decode texture ({main.width}x{main.height})");
+            int sx = video.width / main.width, sy = video.height / main.height;
+
+            var cells  = CellsOf(values.Length, layout, main.width, main.height);
+            var pixels = new Color[video.width * video.height];
+            for (int i = 0; i < values.Length; i++)
+            {
+                var grey = new Color(values[i], values[i], values[i], 1f);
+                for (int dy = 0; dy < sy; dy++)
+                    for (int dx = 0; dx < sx; dx++)
+                        pixels[(cells[i].y * sy + dy) * video.width + cells[i].x * sx + dx] = grey;
+            }
+
+            var source = new Texture2D(video.width, video.height, TextureFormat.RGBAFloat, false, true)
+                         { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            try
+            {
+                source.SetPixels(pixels);
+                source.Apply(false);
+                Graphics.Blit(source, video);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(source); }
         }
 
         /// <summary>

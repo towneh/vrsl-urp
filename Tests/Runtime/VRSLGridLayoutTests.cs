@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// The DMX manager's DMX Input and Grid Textures, and how a manager saved with
     /// 0.2.0-rc.6 comes across to them.
     /// </summary>
-    public class VRSLGridLayoutTests
+    class VRSLGridLayoutTests : VRSLDMXTest
     {
         // Each layout's main decode texture as the package ships it.
         const string HorizontalMain = "555ce9e464c9a54c9d331e0030c258ef";
@@ -218,6 +218,80 @@ namespace VRSL.URP.Tests
                 Assert.IsEmpty(wrong, string.Join("; ", wrong));
                 Assert.AreEqual((int)layout, Shader.GetGlobalInteger(s_GridLayout),
                     "the layout global does not say which grid the manager reads");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+                Restore(original);
+            }
+        }
+
+        /// <summary>
+        /// G4, the switch half. With all fifteen staged Realtime again, a switch by
+        /// the call and then one by the field (what the inspector or an Undo does in Play
+        /// mode) leaves only the new layout's five running, and once the manager lets go
+        /// every one is back at Realtime, as staged.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator OnlyTheLiveLayoutsTexturesRunAfterASwitch()
+        {
+            var asset = ShippedGridTextures();
+            Assert.IsNotNull(asset, "the shipped Grid Textures asset is not in this project");
+            var all = AllCrts(asset);
+            var original = Snapshot(all);
+
+            var go = new GameObject("update modes switch row");
+            go.SetActive(false);
+            try
+            {
+                foreach (var crt in all) crt.updateMode = CustomRenderTextureUpdateMode.Realtime;
+                var manager = go.AddComponent<VRSL_URPLightManager>();
+                go.SetActive(true);
+                yield return null;
+                Assert.AreSame(manager, VRSL_URPLightManager.Instance, "the row's manager does not own the singleton");
+
+                void OnlyLive(VRSLGridLayout layout, string how)
+                {
+                    var live = Crts(asset.For(layout));
+                    var wrong = new List<string>();
+                    foreach (var crt in all)
+                    {
+                        var expected = live.Contains(crt)
+                            ? CustomRenderTextureUpdateMode.Realtime
+                            : CustomRenderTextureUpdateMode.OnDemand;
+                        if (crt.updateMode != expected) wrong.Add($"{crt.name} is {crt.updateMode}, expected {expected}");
+                    }
+                    Assert.IsEmpty(wrong, $"after a switch to {layout} {how}: " + string.Join("; ", wrong));
+                    Assert.AreEqual((int)layout, Shader.GetGlobalInteger(s_GridLayout),
+                        $"the layout global does not follow a switch {how}");
+                }
+
+                manager.SetDmxInput((int)VRSLDmxInput.VerticalGrid);
+                OnlyLive(VRSLGridLayout.Vertical, "by the call");
+
+                manager.dmxInput   = VRSLDmxInput.LegacyGrid;
+                yield return null;
+                OnlyLive(VRSLGridLayout.Legacy, "by the field");
+
+                // The field written and the call made in the same frame: the call binds
+                // at once rather than leaving it to LateUpdate.
+                manager.dmxInput   = VRSLDmxInput.VerticalGrid;
+                manager.SetDmxInput((int)VRSLDmxInput.VerticalGrid);
+                OnlyLive(VRSLGridLayout.Vertical, "by the field and then the call, in one frame");
+
+                // The field written, then the call asking for the layout already bound:
+                // the field goes back, and LateUpdate has nothing to switch to.
+                manager.dmxInput   = VRSLDmxInput.HorizontalGrid;
+                manager.SetDmxInput((int)VRSLDmxInput.VerticalGrid);
+                Assert.AreEqual(VRSLDmxInput.VerticalGrid, manager.dmxInput,
+                    "asking for the bound layout left the field on another one");
+                yield return null;
+                OnlyLive(VRSLGridLayout.Vertical, "back to the bound layout after the field moved");
+
+                manager.enabled = false;
+                var notBack = all.Where(c => c.updateMode != CustomRenderTextureUpdateMode.Realtime)
+                                 .Select(c => $"{c.name} is {c.updateMode}").ToList();
+                Assert.IsEmpty(notBack, "update modes not put back after two switches: " + string.Join("; ", notBack));
             }
             finally
             {

@@ -9,7 +9,8 @@
         "Unity.RenderPipelines.Universal.Runtime",
         "Unity.RenderPipelines.GPUDriven.Runtime",
         "Unity.Collections",
-        "Unity.Mathematics"
+        "Unity.Mathematics",
+        "UnityEngine.UI"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
