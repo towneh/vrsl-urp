@@ -90,19 +90,36 @@ uint _VRSLU_SlotsPerUniverse;
 SamplerState sampler_point_clamp;
 
 // ── DMX texture sampling ──────────────────────────────────────────────────────
-// Direct port of getValueAtCoords() from VRSL-DMXFunctions.cginc.
-// Supports IndustryRead (non-Legacy, non-NineUniverse) mode only.
+// Ports of getValueAtCoords() and getValueAtCoordsRaw() from VRSL-DMXFunctions.cginc,
+// in the manager's grid layout. Nine-universe mode is not read here.
 // Channel inputs are uint rather than int because DMX addresses are always
 // positive — this lets Metal/SPIR-V use the fast unsigned modulus path
 // instead of warning about slow signed modulus.
-float GetDMXValue(uint ch, Texture2D<float4> tex)
+
+// VRSLGridLayout: 0 Horizontal, 1 Vertical, 2 Legacy. Set per dispatch, like
+// every other input here.
+uint _VRSLU_DMXGridLayout;
+
+// LegacyRead() from the includes, taking the slot and sector as integers as they do.
+float2 LegacyCellUV(uint channel, uint sector)
+{
+    float x = 0.02 + (sector & 1u) * 0.50 + channel * 0.04;
+    float y = 0.02 + (sector >> 1u) * 0.04;
+    y -= sector >= 23u ? 0.025 : 0.0;
+    x -= sector >= 40u ? 0.01  : 0.0;
+    return float2(x, y);
+}
+
+// The grid cell a channel decodes from, in UV.
+float2 DMXCellUV(uint ch)
 {
     uint x = ch % 13u;
     if (x == 0u) x = 13u;
 
     float y = (ch % 13u == 0u) ? (ch / 13.0) - 1.0 : (ch / 13.0);
 
-    // Correction table for channel 13 in specific ranges (matches CGINC exactly)
+    // Correction table for channel 13 in specific ranges (matches CGINC exactly).
+    // Before the layout choice, as in the includes: both reads take the corrected row.
     if (x == 13u)
     {
         if (ch >= 90u   && ch <= 101u)  y -= 1.0;
@@ -111,6 +128,8 @@ float GetDMXValue(uint ch, Texture2D<float4> tex)
         if (ch >= 676u  && ch <= 819u)  y -= 1.0;
         if (ch >= 1339u)                y -= 1.0;
     }
+
+    if (_VRSLU_DMXGridLayout == 2u) return LegacyCellUV(x - 1u, (uint)y);
 
     float resMultX = _VRSLDMXTexelSize.z / 13.0;
     float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
@@ -121,8 +140,12 @@ float GetDMXValue(uint ch, Texture2D<float4> tex)
     // a row sampled the row below it, silently decoding a neighbouring fixture's
     // value. The offsets below are inherited from that path and left alone.
     float v = (floor(y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
+    return float2(u, v);
+}
 
-    float4 c = tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0);
+float GetDMXValue(uint ch, Texture2D<float4> tex)
+{
+    float4 c = tex.SampleLevel(sampler_point_clamp, saturate(DMXCellUV(ch)), 0);
 
     // LinearRgbToLuminance — matches CGINC standard (non-NineUniverse) path
     return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
@@ -162,35 +185,13 @@ float MovementChannel(uint ch)
     return _VRSLU_DMXMovement[index];
 }
 
-// Raw-channel variant — matches getValueAtCoordsRaw() in VRSL-DMXFunctions.cginc.
+// Raw-channel variant — matches getValueAtCoordsRaw() in VRSL-DMXFunctions.cginc,
+// except that it applies the 13th-channel correction where the includes do not.
+// That only matters for a spin channel on a sector's 13th slot.
 // Needed for the SpinnerTimer, whose red channel stores accumulated phase (not a color).
 float GetDMXValueRaw(uint ch, Texture2D<float4> tex)
 {
-    uint x = ch % 13u;
-    if (x == 0u) x = 13u;
-
-    float y = (ch % 13u == 0u) ? (ch / 13.0) - 1.0 : (ch / 13.0);
-
-    if (x == 13u)
-    {
-        if (ch >= 90u   && ch <= 101u)  y -= 1.0;
-        if (ch >= 160u  && ch <= 205u)  y -= 1.0;
-        if (ch >= 326u  && ch <= 404u)  y -= 1.0;
-        if (ch >= 676u  && ch <= 819u)  y -= 1.0;
-        if (ch >= 1339u)                y -= 1.0;
-    }
-
-    float resMultX = _VRSLDMXTexelSize.z / 13.0;
-    float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
-    // floor: the Built-in path calls IndustryRead(int x, int y), so the row is
-    // truncated to an integer before it is scaled into UV. Porting the call to
-    // float dropped that truncation, and the row coordinate then drifted by
-    // frac(channel / 13) of a row — enough that every channel past the second in
-    // a row sampled the row below it, silently decoding a neighbouring fixture's
-    // value. The offsets below are inherited from that path and left alone.
-    float v = (floor(y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
-
-    return tex.SampleLevel(sampler_point_clamp, float2(saturate(u), saturate(v)), 0).r;
+    return tex.SampleLevel(sampler_point_clamp, saturate(DMXCellUV(ch)), 0).r;
 }
 
 // Accumulated gobo-spin phase for a channel, from whichever source is live.
@@ -517,8 +518,8 @@ void AdvanceMovement(uint3 id : SV_DispatchThreadID)
 // on the texture path it returns the grid cell a fixture would decode, exception
 // table included. Driven by the editor tools; costs nothing when not dispatched.
 //
-// Texture-path readbacks inherit GetDMXValue's limits — IndustryRead only, so a
-// legacy-mode or nine-universe grid is not readable this way.
+// Texture-path readbacks read the layout the dispatcher sets, as the fixtures do;
+// a nine-universe grid is not readable this way.
 RWStructuredBuffer<float> _VRSLU_ValidationOut;
 uint _VRSLU_ValidationStart;   // 1-based channel of element 0
 uint _VRSLU_ValidationCount;

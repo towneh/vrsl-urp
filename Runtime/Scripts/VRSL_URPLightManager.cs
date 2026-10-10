@@ -707,6 +707,10 @@ namespace VRSL.URP
         /// benchmark reads per pass.</summary>
         public const string DecodeMarker = "VRSL DMX Light Compute";
 
+        /// <summary>What the decode binds in place of a grid texture the live layout
+        /// lacks. Black, so a texture-path read of it is a dark channel.</summary>
+        static Texture StandIn => Texture2D.blackTexture;
+
         /// <summary>
         /// Decode the grid, or the channel buffer, into the light buffer, once per
         /// frame. Called from the first camera this manager renders each frame, so a
@@ -728,8 +732,17 @@ namespace VRSL.URP
                 || ChannelBuffer       == null
                 || SpinPhaseBuffer     == null
                 || StrobePhaseBuffer   == null
-                || MovementBuffer      == null
-                || live.main           == null) return;
+                || MovementBuffer      == null) return;
+            // With a channel source publishing the kernel reads no grid at all, so a
+            // scene with none still lights; without one there is nothing to decode.
+            if (live.main == null && ChannelCount == 0) return;
+
+            // Every texture the kernel declares has to be bound, whichever branch it
+            // takes: an unbound compute texture is an error at dispatch.
+            var main     = live.main      != null ? live.main      : StandIn;
+            var movement = live.movement  != null ? live.movement  : StandIn;
+            var strobe   = live.strobe    != null ? live.strobe    : StandIn;
+            var spin     = live.spinTimer != null ? live.spinTimer : StandIn;
 
             var cs  = computeShader;
             int k   = ComputeKernel;
@@ -737,8 +750,8 @@ namespace VRSL.URP
             cmd.Clear();
             cmd.BeginSample(DecodeMarker);
             cmd.SetComputeVectorParam(cs, s_DMXGridTexelSize, new Vector4(
-                1f / live.main.width, 1f / live.main.height,
-                live.main.width,      live.main.height));
+                1f / main.width, 1f / main.height, main.width, main.height));
+            cmd.SetComputeIntParam(   cs,    s_DMXGridLayout,   (int)GridLayout);
             cmd.SetComputeIntParam(   cs,    s_FixtureCount,    FixtureCount);
             cmd.SetComputeIntParam(   cs,    s_GoboCount,       GoboCount);
             cmd.SetComputeBufferParam(cs, k, s_FixtureConfigs,  FixtureConfigBuffer);
@@ -757,10 +770,10 @@ namespace VRSL.URP
             // Sampled once per frame so both eyes and every mirror strobe together.
             cmd.SetComputeFloatParam( cs,    s_TimeY,           Time.timeSinceLevelLoad);
             cmd.SetComputeIntParam(   cs,    s_StrobeDisabled,  disableStrobe ? 1 : 0);
-            cmd.SetComputeTextureParam(cs, k, s_DMXMainTex, live.main);
-            if (live.movement  != null) cmd.SetComputeTextureParam(cs, k, s_DMXMovementTex, live.movement);
-            if (live.strobe    != null) cmd.SetComputeTextureParam(cs, k, s_DMXStrobeTex,   live.strobe);
-            if (live.spinTimer != null) cmd.SetComputeTextureParam(cs, k, s_DMXSpinTex,     live.spinTimer);
+            cmd.SetComputeTextureParam(cs, k, s_DMXMainTex,     main);
+            cmd.SetComputeTextureParam(cs, k, s_DMXMovementTex, movement);
+            cmd.SetComputeTextureParam(cs, k, s_DMXStrobeTex,   strobe);
+            cmd.SetComputeTextureParam(cs, k, s_DMXSpinTex,     spin);
             cmd.DispatchCompute(cs, k, Mathf.CeilToInt(FixtureCount / 64f), 1, 1);
             cmd.EndSample(DecodeMarker);
             Graphics.ExecuteCommandBuffer(cmd);

@@ -315,8 +315,8 @@ namespace VRSL.URP.EditorScripts
 
                 if (feed != Feed.Buffer && mgr.LiveTextures.main != null)
                     EditorGUILayout.LabelField(" ",
-                        "Decoded through the compute shader's IndustryRead path — a legacy-mode "
-                        + "or nine-universe grid will not read correctly here.",
+                        "Read the way the fixtures read it, in the manager's grid layout. A "
+                        + "nine-universe grid will not read correctly here.",
                         EditorStyles.wordWrappedMiniLabel);
             }
         }
@@ -325,7 +325,9 @@ namespace VRSL.URP.EditorScripts
         {
             var rt = mgr.LiveTextures.main;
             if (rt == null) return "none assigned — nothing to read";
-            return $"{rt.name}  {rt.width}×{rt.height}  ({GridUniverses(rt)} universe(s))";
+            int universes = GridUniverses(rt, mgr.GridLayout);
+            return $"{mgr.GridLayout}: {rt.name}  {rt.width}×{rt.height}  "
+                 + (universes == 1 ? "(1 universe)" : $"({universes} universes)");
         }
 
         // ── Sampling ──────────────────────────────────────────────────────────
@@ -333,14 +335,16 @@ namespace VRSL.URP.EditorScripts
         {
             if (mgr == null) return 0;
             if (mgr.ChannelCount > 0) return mgr.UniverseCount;
-            return GridUniverses(mgr.LiveTextures.main);
+            return GridUniverses(mgr.LiveTextures.main, mgr.GridLayout);
         }
 
-        /// <summary>Universes the decode grid holds. The grid is 13 cells wide and each
-        /// universe is 40 whole rows, so its capacity follows from its dimensions.</summary>
-        static int GridUniverses(RenderTexture rt)
+        /// <summary>Universes the decode grid holds. A Legacy grid holds one. The others
+        /// are 13 cells wide with each universe 40 whole rows, so their capacity follows
+        /// from their dimensions.</summary>
+        static int GridUniverses(RenderTexture rt, VRSLGridLayout layout)
         {
             if (rt == null || rt.width <= 0 || rt.height <= 0) return 0;
+            if (layout == VRSLGridLayout.Legacy) return 1;
             float cell = rt.width / 13f;
             if (cell <= 0f) return 0;
             int rows = Mathf.FloorToInt(rt.height / cell);
@@ -413,6 +417,7 @@ namespace VRSL.URP.EditorScripts
             // Buffers and textures bind per kernel, so the accessor's inputs have to be
             // supplied here even though the manager already publishes them as globals.
             cs.SetBuffer(kernel, "_VRSLU_DMXChannels", mgr.ChannelBuffer);
+            cs.SetInt("_VRSLU_DMXGridLayout", (int)mgr.GridLayout);
             cs.SetInt("_VRSLU_DMXChannelCount", mgr.ChannelCount);
             var main = mgr.LiveTextures.main;
             if (main != null)

@@ -87,8 +87,8 @@ int getTargetRGBValue(uint universe)
     //returns 0 for red, 1 for green, 2, for blue
 }
 
-//function for getting the value on the DMX Grid in the bottom right corner configuration
-half getValueAtCoords(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
+// The grid cell getValueAtCoords reads a channel from, in UV.
+float2 getDMXCellUV(uint DMXChannel)
 {
     uint universe = ceil(((int) DMXChannel)/512.0);
     int targetColor = getTargetRGBValue(universe);
@@ -111,7 +111,15 @@ half getValueAtCoords(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
         y = DMXChannel >= 1339 ? y - 1 : y;
     }
     
-    float2 xyUV = _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    return _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+}
+
+//function for getting the value on the DMX Grid in the bottom right corner configuration
+half getValueAtCoords(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
+{
+    uint universe = ceil(((int) DMXChannel)/512.0);
+    int targetColor = getTargetRGBValue(universe);
+    float2 xyUV = getDMXCellUV(DMXChannel);
         
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0, 0);
     half4 c = SAMPLE_TEXTURE2D_LOD(tex, sampler_point_clamp, xyUV, 0);
