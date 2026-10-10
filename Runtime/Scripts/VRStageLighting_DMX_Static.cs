@@ -18,20 +18,20 @@ namespace VRSL.URP
         public bool enableFineChannels = false;
         [Tooltip ("The ID number for this fixture. This is mostly for organizational purposes and is entirely optional. Most DMX software have an ID attached to each fixture to run the fixtures through commands more easily, and it is recommended to have those IDs lined up here as well for the sake simplicity. This ID is public and can also be used for Udon scripting as well.")]
         public int fixtureID;
-        [Tooltip ("The industry standard DMX Channel this fixture begins on. Most standard VRSL fixtures are 13 channels")]
+        [Tooltip ("The industry standard DMX Channel this fixture begins on. Most standard VRSL fixtures are 13 channels. To change this while the world runs, set it and then call ApplyAddress().")]
 
         public int dmxChannel = 1;
-        [Tooltip ("The industry standard Artnet Universe. Use this to choose which universe to read the DMX Channel from.")]
+        [Tooltip ("The industry standard Artnet Universe. Use this to choose which universe to read the DMX Channel from. To change this while the world runs, set it and then call ApplyAddress().")]
         public int dmxUniverse = 1;
         [Tooltip ("Enables 9-Universe mode for this fixture. The grid will be split up by RGB channels with each section and color representing a universe. Only availble on the Vertical and Horizontal Grid nodes.")]
         public bool nineUniverseMode;
 
-        [Tooltip ("Enables the legacy 'Sector' based method of assigning DMX Channels. Keep this unchecked to use industry standard DMX Channels.")]
+        [Tooltip ("Enables the legacy 'Sector' based method of assigning DMX Channels. Keep this unchecked to use industry standard DMX Channels. To change this while the world runs, set it and then call ApplyAddress().")]
 
         public bool useLegacySectorMode = false;
         [Tooltip ("Enables single channel DMX mode for this fixture. This is for single channeled fixtures instead of the standard 13-channeled ones. Currently, the 'Flasher' fixture is the only single-channeled fixture at the moment")]
         public bool singleChannelMode = false;
-        [Tooltip ("Chooses the DMX Address to start this fixture at. A Sector in this context is every 13 Channels. I.E Sector 0 is channels 1-13, Sector 1 is channels 14-26, etc.")]
+        [Tooltip ("Chooses the DMX Address to start this fixture at. A Sector in this context is every 13 Channels. I.E Sector 0 is channels 1-13, Sector 1 is channels 14-26, etc. To change this while the world runs, set it and then call ApplyAddress().")]
         public int sector;
         [Tooltip ("Chooses the which of the 13 Channels of the current sector to sample from when single channel mode is enabled. Do not worry about this value if you are not using a single-channeled fixture.")]
         [Range(0.0f, 12.0f)]
@@ -317,6 +317,18 @@ namespace VRSL.URP
                 }
             }
         }
+        /// <summary>
+        /// Apply a change to the address fields (<see cref="useLegacySectorMode"/>,
+        /// <see cref="sector"/>, <see cref="Channel"/>, <see cref="dmxChannel"/>,
+        /// <see cref="dmxUniverse"/>) made while the world runs. The fixture follows the
+        /// new address from the next frame. Calling it with the address unchanged
+        /// changes nothing.
+        /// </summary>
+        public void ApplyAddress()
+        {
+            _UpdateInstancedProperties();
+        }
+
         public void _UpdateInstancedPropertiesSansDMX()
         {
             if(props == null)

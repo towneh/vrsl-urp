@@ -46,16 +46,20 @@ namespace VRSL.URP
                + "Match this to the channel mode of the fixture-body surface shader.")]
         public bool use5ChannelMode = false;
 
-        [Tooltip("Use legacy sector-based addressing instead of industry-standard channels.")]
+        [Tooltip("Use legacy sector-based addressing instead of industry-standard channels. "
+               + "To change this while the world runs, set it and then call ApplyAddress().")]
         public bool useLegacySectorMode = false;
 
-        [Tooltip("Sector number when using legacy mode. Sector 0 = channels 1-13, Sector 1 = 14-26, etc.")]
+        [Tooltip("Sector number when using legacy mode. Sector 0 = channels 1-13, Sector 1 = 14-26, etc. "
+               + "To change this while the world runs, set it and then call ApplyAddress().")]
         public int sector = 0;
 
-        [Tooltip("Industry-standard DMX start channel (1-512 per universe).")]
+        [Tooltip("Industry-standard DMX start channel (1-512 per universe). "
+               + "To change this while the world runs, set it and then call ApplyAddress().")]
         public int dmxChannel = 1;
 
-        [Tooltip("Artnet universe (1-based).")]
+        [Tooltip("Artnet universe (1-based). "
+               + "To change this while the world runs, set it and then call ApplyAddress().")]
         public int dmxUniverse = 1;
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -204,13 +208,13 @@ namespace VRSL.URP
         public Color shellEmissionTint = Color.white;
 
         // ──────────────────────────────────────────────────────────────────────────
-        int _absChannel;
         MaterialPropertyBlock _shellProps;
 
         /// <summary>
         /// Fires when any inspector field on a VRStageLighting_DMX_RealtimeLight
-        /// changes. The URP light manager subscribes to this so a per-fixture
-        /// edit (e.g. emitterDepth) marks the GPU config buffer dirty and the
+        /// changes, and from <see cref="ApplyAddress"/>. The URP light manager
+        /// subscribes to this so a per-fixture edit (e.g. emitterDepth) or a
+        /// runtime re-address marks the GPU config buffer dirty and the
         /// next LateUpdate re-uploads with the new values. Static delegate so
         /// VRSL.Core does not have to reference the VRSL.URP manager assembly.
         /// </summary>
@@ -218,13 +222,24 @@ namespace VRSL.URP
 
         void Awake()
         {
-            _absChannel = ComputeAbsoluteChannel();
             DriveFixtureShells();
         }
 
         void OnValidate()
         {
-            _absChannel = ComputeAbsoluteChannel();
+            DriveFixtureShells();
+            ConfigChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Apply a change to the address fields (<see cref="useLegacySectorMode"/>,
+        /// <see cref="sector"/>, <see cref="dmxChannel"/>, <see cref="dmxUniverse"/>)
+        /// made while the world runs. The beam and the fixture body both follow the new
+        /// address from the next frame. Calling it with the address unchanged changes
+        /// nothing.
+        /// </summary>
+        public void ApplyAddress()
+        {
             DriveFixtureShells();
             ConfigChanged?.Invoke();
         }
@@ -250,7 +265,7 @@ namespace VRSL.URP
             // driver. Fields with no equivalent on this component use sensible
             // defaults (no NineUniverse, no legacy gobo range, no global brightness
             // override, no cone-mesh tuning since URP prefabs drop the cone mesh).
-            _shellProps.SetInt(  "_DMXChannel",          _absChannel);
+            _shellProps.SetInt(  "_DMXChannel",          ComputeAbsoluteChannel());
             _shellProps.SetInt(  "_NineUniverseMode",    0);
             _shellProps.SetInt(  "_PanInvert",           invertPan          ? 1 : 0);
             _shellProps.SetInt(  "_TiltInvert",          invertTilt         ? 1 : 0);
