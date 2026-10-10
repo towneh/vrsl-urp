@@ -43,6 +43,12 @@ namespace VRSL.URP
                + "UI Dropdown.")]
         public VRSLDmxInput dmxInput = VRSLDmxInput.HorizontalGrid;
 
+        // 0 until the editor's upgrade has looked at this manager or a call has chosen its
+        // input (VRSLGridUpgrade). Never 1 in code or in a prefab: a saved scene's manager
+        // inherits what its prefab says, and would never be looked at.
+        [SerializeField, HideInInspector] internal int dmxInputVersion;
+        internal const int CurrentDmxInputVersion = 1;
+
         [Tooltip("The textures that decode the video's grid, a set for each layout. Fills "
                + "in with the package's own. Point it at a Grid Textures asset of your own "
                + "to decode through textures you made.")]
@@ -1223,10 +1229,14 @@ namespace VRSL.URP
             if (value == (owner ? _boundInput.Value : dmxInput))
             {
                 dmxInput = value;
+                dmxInputVersion = CurrentDmxInputVersion;
                 return;
             }
             if (!CanRead(value)) return;
             dmxInput = value;
+            // Chosen by a call, so there is nothing left for the editor's upgrade to bring
+            // across, and it must not choose Stream data over it on a later look.
+            dmxInputVersion = CurrentDmxInputVersion;
             if (owner) SwitchTo(value);
         }
 

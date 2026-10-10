@@ -116,6 +116,101 @@ namespace VRSL.URP.Tests
             }
         }
 
+        /// <summary>A switched-off manager the upgrade hasn't looked at: its input, and a
+        /// version of 0 or <paramref name="version"/>.</summary>
+        static VRSL_URPLightManager StageNotLookedAt(GameObject go, VRSLDmxInput input, int version = 0)
+        {
+            go.SetActive(false);
+            var manager = go.AddComponent<VRSL_URPLightManager>();
+            var so = new SerializedObject(manager);
+            so.FindProperty(nameof(VRSL_URPLightManager.dmxInput)).intValue = (int)input;
+            so.FindProperty(VRSLGridUpgrade.VersionField).intValue = version;
+            so.ApplyModifiedProperties();
+            return manager;
+        }
+
+        /// <summary>
+        /// E6. A manager the upgrade hasn't looked at (saved with 0.2.0-rc.6, or added since)
+        /// keeps its grid input, or comes up on Stream data when its scene holds an enabled
+        /// channel source, on each path the upgrade runs on, and is marked as looked at.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator E6_a_manager_not_yet_looked_at_comes_up_on_its_grid_or_its_source(
+            [Values(VRSLDmxInput.HorizontalGrid, VRSLDmxInput.VerticalGrid, VRSLDmxInput.LegacyGrid)]
+            VRSLDmxInput saved,
+            [Values] bool sourceInScene,
+            [Values] UpgradePath path)
+        {
+            var go       = new GameObject("manager not yet looked at");
+            var sourceGo = sourceInScene ? new GameObject("channel source") : null;
+            try
+            {
+                if (sourceInScene) sourceGo.AddComponent<VRSL_SyntheticDMXChannelSource>();
+                var manager = StageNotLookedAt(go, saved);
+
+                yield return Run(manager, go, path);
+
+                var expected = sourceInScene ? VRSLDmxInput.StreamData : saved;
+                Assert.AreEqual(expected, manager.dmxInput,
+                    $"saved on {saved} {(sourceInScene ? "beside" : "without")} a source, it came up on "
+                  + $"{manager.dmxInput}");
+                Assert.AreEqual(VRSL_URPLightManager.CurrentDmxInputVersion,
+                    new SerializedObject(manager).FindProperty(VRSLGridUpgrade.VersionField).intValue,
+                    "the upgrade did not mark the manager as looked at");
+            }
+            finally
+            {
+                if (sourceGo != null) Object.DestroyImmediate(sourceGo);
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        /// <summary>
+        /// E6's other half. A manager the upgrade has looked at, or whose input a call
+        /// chose, keeps its grid beside a source; and an rc.6 manager beside one takes its
+        /// layout first and then Stream data.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator E6_a_manager_already_looked_at_keeps_its_grid_beside_a_source([Values] UpgradePath path)
+        {
+            var go       = new GameObject("manager after DMX Input");
+            var rc6Go    = new GameObject("rc6 manager");
+            var sourceGo = new GameObject("channel source");
+            try
+            {
+                sourceGo.AddComponent<VRSL_SyntheticDMXChannelSource>();
+                var manager = StageNotLookedAt(go, VRSLDmxInput.VerticalGrid,
+                                                  VRSL_URPLightManager.CurrentDmxInputVersion);
+                yield return Run(manager, go, path);
+                Assert.AreEqual(VRSLDmxInput.VerticalGrid, manager.dmxInput,
+                    "the upgrade chose Stream data over a manager it had already looked at");
+
+                // Chosen by a call, before the upgrade ever looked.
+                Object.DestroyImmediate(go);
+                go = new GameObject("manager chosen by a call");
+                manager = StageNotLookedAt(go, VRSLDmxInput.HorizontalGrid);
+                manager.gridTextures = ShippedGridTextures();
+                manager.SetDmxInput((int)VRSLDmxInput.LegacyGrid);
+                Assert.AreEqual(VRSLDmxInput.LegacyGrid, manager.dmxInput, "the call was refused");
+                yield return Run(manager, go, path);
+                Assert.AreEqual(VRSLDmxInput.LegacyGrid, manager.dmxInput,
+                    "the upgrade chose Stream data over an input a call had chosen");
+
+                var rc6 = StageRc6(rc6Go, Shipped(VerticalMain));
+                go.SetActive(false);
+                yield return Run(rc6, rc6Go, path);
+                Assert.AreEqual(VRSLDmxInput.StreamData, rc6.dmxInput,
+                    "an rc.6 manager beside a source did not come up on Stream data");
+                Assert.IsNull(OldMain(rc6), "the rc.6 rule did not run first");
+            }
+            finally
+            {
+                Object.DestroyImmediate(sourceGo);
+                Object.DestroyImmediate(rc6Go);
+                if (go != null) Object.DestroyImmediate(go);
+            }
+        }
+
         static IEnumerator Run(VRSL_URPLightManager manager, GameObject go, UpgradePath path)
         {
             switch (path)

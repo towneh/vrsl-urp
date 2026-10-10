@@ -8,7 +8,8 @@ using UnityEngine.SceneManagement;
 namespace VRSL.URP
 {
     /// <summary>
-    /// Brings a DMX manager saved with 0.2.0-rc.6 across to <see cref="VRSLGridTextures"/>.
+    /// Brings a DMX manager saved with 0.2.0-rc.6 across to <see cref="VRSLGridTextures"/>,
+    /// and decides once what a manager not yet looked at reads.
     /// </summary>
     /// <remarks>
     /// rc.6 managers named their five decode textures one by one, and the layout was
@@ -16,6 +17,9 @@ namespace VRSL.URP
     /// and is enough to tell which of the package's three layouts a manager was set up
     /// for. Without this a Vertical or Legacy world would come up reading the Horizontal
     /// grid and light the wrong fixtures, with no error anywhere. For one release only.
+    ///
+    /// 0.2.0-rc.6 read a channel source whenever one was sending, so a manager not yet
+    /// looked at whose scene holds one is brought up on Stream data.
     /// </remarks>
     static class VRSLGridUpgrade
     {
@@ -42,8 +46,8 @@ namespace VRSL.URP
         }
 
         /// <summary>
-        /// Upgrade one manager if it still carries an rc.6 main texture, and say what
-        /// happened.
+        /// Upgrade one manager if it still carries an rc.6 main texture or hasn't been
+        /// looked at, and say what happened to the rc.6 texture.
         /// </summary>
         /// <remarks>
         /// Through <see cref="SerializedObject"/>, like the wiring, so the change is undoable
@@ -53,7 +57,54 @@ namespace VRSL.URP
         {
             if (manager == null) return Outcome.None;
 
-            var so  = new SerializedObject(manager);
+            var so      = new SerializedObject(manager);
+            var outcome = UpgradeRc6(manager, so);
+            UpgradeInput(manager, so);
+            return outcome;
+        }
+
+        /// <summary>The hidden field saying whether this has looked at a manager yet.</summary>
+        public const string VersionField = nameof(VRSL_URPLightManager.dmxInputVersion);
+
+        /// <summary>
+        /// A manager not yet looked at, saved with 0.2.0-rc.6 or added since, comes up on
+        /// Stream data when its scene holds a channel source: 0.2.0-rc.6 read such a source
+        /// whenever it was publishing, so a world already lit from SEI or OSC stays lit.
+        /// Runs once per manager, after the rc.6 rule, which may have set its layout.
+        /// </summary>
+        static void UpgradeInput(VRSL_URPLightManager manager, SerializedObject so)
+        {
+            var version = so.FindProperty(VersionField);
+            if (version == null || version.intValue >= VRSL_URPLightManager.CurrentDmxInputVersion) return;
+
+            var source = ChannelSourceIn(manager.gameObject.scene);
+            if (source != null)
+            {
+                so.FindProperty(nameof(VRSL_URPLightManager.dmxInput)).intValue = (int)VRSLDmxInput.StreamData;
+                Debug.Log($"[VRSL] {manager.name} reads Stream data from {source.name}, the channel "
+                        + "source in its scene. Choose a grid under DMX Input to read the video instead. "
+                        + "Save the scene to keep the change; until then this happens again each time it "
+                        + "loads.", manager);
+            }
+            version.intValue = VRSL_URPLightManager.CurrentDmxInputVersion;
+            so.ApplyModifiedProperties();
+        }
+
+        /// <summary>An enabled channel source component in <paramref name="scene"/>, or
+        /// null. A prefab asset has no scene, so it never has one.</summary>
+        static MonoBehaviour ChannelSourceIn(Scene scene)
+        {
+            if (!scene.IsValid() || !scene.isLoaded) return null;
+            foreach (var root in scene.GetRootGameObjects())
+            foreach (var behaviour in root.GetComponentsInChildren<MonoBehaviour>(true))
+                if (behaviour is IVRSLDMXChannelSource && behaviour.enabled
+                    && behaviour.gameObject.activeInHierarchy)
+                    return behaviour;
+            return null;
+        }
+
+        static Outcome UpgradeRc6(VRSL_URPLightManager manager, SerializedObject so)
+        {
             var old = so.FindProperty(OldField);
             if (old == null || old.objectReferenceValue == null) return Outcome.None;
 

@@ -12,7 +12,7 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The DMX manager's DMX Input: three grids and Stream data, chosen while the world
     /// runs, a channel source on standby under a grid, and Stream data dark when nothing
-    /// is sending it. Rows E1 to E5 of TESTING.md.
+    /// is sending it. Rows E1 to E5 of TESTING.md (E6 is in VRSLGridLayoutTests).
     /// </summary>
     class VRSLDmxInputTests : VRSLDMXTest
     {
