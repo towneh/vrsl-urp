@@ -82,7 +82,7 @@ namespace VRSL.URP
             // tiles and culled them, and every tile came back empty because no channel
             // values ever reached a fixture. The PlayMode rig assigns it the same way,
             // for the same reason.
-            var source = UnityEngine.Object.FindFirstObjectByType<VRSL_SyntheticDMXChannelSource>();
+            var source = UnityEngine.Object.FindAnyObjectByType<VRSL_SyntheticDMXChannelSource>();
             if (source == null)
             {
                 outcome.error = "The sweep scene has no synthetic DMX source, so the fixtures "

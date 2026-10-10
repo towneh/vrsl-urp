@@ -84,17 +84,17 @@ namespace VRSL.URP.EditorScripts
             // standing in for a fixture count the manager only has in play mode.
             VRSL_URPLightManager dmx = null;
             foreach (var m in Object.FindObjectsByType<VRSL_URPLightManager>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
                 if (m != null && m.isActiveAndEnabled) { dmx = m; break; }
             VRSL_AudioLinkURPLightManager audioLink = null;
             foreach (var m in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
                 if (m != null && m.isActiveAndEnabled) { audioLink = m; break; }
 
             bool dmxHasFixtures = Application.isPlaying
                 ? dmx != null && dmx.FixtureCount > 0
                 : Object.FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(
-                      FindObjectsInactive.Exclude, FindObjectsSortMode.None).Length > 0;
+                      FindObjectsInactive.Exclude).Length > 0;
 
             report.AppendLine("Where VRSL's surface normals come from:");
             if (dmx == null && audioLink == null)
@@ -107,8 +107,7 @@ namespace VRSL.URP.EditorScripts
             if (defaultProperty != null) defaultIndex = defaultProperty.intValue;
 
             int seen = 0;
-            foreach (var camera in Object.FindObjectsByType<Camera>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            foreach (var camera in Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude))
             {
                 if (camera == null || !camera.isActiveAndEnabled) continue;
                 seen++;
@@ -186,7 +185,7 @@ namespace VRSL.URP.EditorScripts
             report.AppendLine("Surfaces VRSL lights in their own colour:");
             int seen = 0;
             foreach (var manager in Object.FindObjectsByType<VRSL_URPLightManager>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
             {
                 if (manager == null || !manager.isActiveAndEnabled) continue;
                 seen++;
@@ -194,7 +193,7 @@ namespace VRSL.URP.EditorScripts
                     $"{manager.name} (DMX)", manager.prepassLayers, report);
             }
             foreach (var manager in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
             {
                 if (manager == null || !manager.isActiveAndEnabled) continue;
                 seen++;
@@ -234,8 +233,7 @@ namespace VRSL.URP.EditorScripts
             // it. That camera renders through nothing, and letting it through would put
             // its renderer into `used` and silence the "no enabled camera picks this one"
             // line below on a renderer that genuinely nothing selects.
-            var found = Object.FindObjectsByType<Camera>(
-                FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+            var found = Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude);
             var cameras = new List<Camera>();
             int switchedOff = 0;
             foreach (var candidate in found)
@@ -436,8 +434,7 @@ namespace VRSL.URP.EditorScripts
             var missing = new List<string>();
             int examined = 0;
 
-            foreach (var renderer in Object.FindObjectsByType<Renderer>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var renderer in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include))
             {
                 if (renderer == null) continue;
                 bool onFixture = onFixtures.Contains(renderer);
@@ -524,7 +521,7 @@ namespace VRSL.URP.EditorScripts
         {
             var found = new HashSet<Renderer>();
             foreach (var fixture in Object.FindObjectsByType<MonoBehaviour>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
             {
                 if (fixture == null) continue;
                 if (!fixture.GetType().Name.StartsWith("VRStageLighting")) continue;

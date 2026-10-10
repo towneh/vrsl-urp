@@ -655,7 +655,7 @@ namespace VRSL.URP
             // and would leave a dangling reference behind on this one.
             var source = ChannelSource;
             foreach (var other in FindObjectsByType<VRSL_URPLightManager>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
             {
                 if (other == null || other == this || !other.isActiveAndEnabled) continue;
                 // Scene teardown disables every manager in turn. Handing over then would

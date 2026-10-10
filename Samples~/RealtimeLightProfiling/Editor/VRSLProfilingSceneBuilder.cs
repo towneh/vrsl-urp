@@ -164,7 +164,7 @@ namespace VRSL.URP.Profiling.Editor
         // depth-only directional for the legacy path.
         static void StripDirectionalLights()
         {
-            foreach (var light in Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            foreach (var light in Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude))
             {
                 if (light != null && light.type == LightType.Directional)
                     Undo.DestroyObjectImmediate(light.gameObject);

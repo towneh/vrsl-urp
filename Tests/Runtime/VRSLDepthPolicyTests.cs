@@ -248,7 +248,7 @@ namespace VRSL.URP.Tests
                 // for its lifetime rather than removing them, and a light that is
                 // off is not lighting anything.
                 () => lights = System.Array.FindAll(
-                    Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude, FindObjectsSortMode.None),
+                    Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude),
                     light => light.enabled));
 
             try

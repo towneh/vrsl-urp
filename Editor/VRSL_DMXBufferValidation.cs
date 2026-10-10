@@ -56,7 +56,7 @@ namespace VRSL.URP.EditorScripts
             // IVRSLDMXChannelSource the manager took instead would be compared against
             // a ramp it never published, and the result would read as a real pass or a
             // real failure. Only the manager knows who is publishing.
-            var source = Object.FindFirstObjectByType<VRSL_SyntheticDMXChannelSource>();
+            var source = Object.FindAnyObjectByType<VRSL_SyntheticDMXChannelSource>();
             if (source == null || !ReferenceEquals(mgr.ChannelSource, source))
             {
                 Debug.LogWarning("[VRSL URP] Validation compares against the synthetic source's Ramp "

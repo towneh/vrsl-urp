@@ -189,8 +189,7 @@ namespace VRSL.URP
             // Found by path rather than held as references, since neither a reference nor
             // a static list survives the domain reload between building this scene and
             // measuring it.
-            foreach (var light in Object.FindObjectsByType<Light>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var light in Object.FindObjectsByType<Light>(FindObjectsInactive.Include))
             {
                 if (light == null || light.type != LightType.Directional) continue;
                 if (paths.Contains(PathOf(light.gameObject))) light.gameObject.SetActive(true);
@@ -210,8 +209,7 @@ namespace VRSL.URP
         /// </summary>
         public static GameObject Populate()
         {
-            foreach (var stale in Object.FindObjectsByType<GameObject>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var stale in Object.FindObjectsByType<GameObject>(FindObjectsInactive.Include))
                 if (stale != null && stale.name == RootName)
                     Object.DestroyImmediate(stale);
 
@@ -229,8 +227,7 @@ namespace VRSL.URP
             // intervening RestoreScene would leave those lights off for good.
             RestoreScene();
             var disabled = new List<string>();
-            foreach (var light in Object.FindObjectsByType<Light>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var light in Object.FindObjectsByType<Light>(FindObjectsInactive.Include))
             {
                 if (light == null || light.type != LightType.Directional) continue;
                 if (!light.gameObject.activeSelf) continue;
@@ -490,8 +487,7 @@ namespace VRSL.URP
         public static int RenderingCameraCount()
         {
             int count = 0;
-            foreach (var camera in Object.FindObjectsByType<Camera>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            foreach (var camera in Object.FindObjectsByType<Camera>(FindObjectsInactive.Exclude))
                 if (camera != null && camera.enabled) count++;
             return count;
         }

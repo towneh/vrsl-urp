@@ -416,7 +416,7 @@ namespace VRSL.URP
         void HandOverOwnership()
         {
             foreach (var other in FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
             {
                 if (other == null || other == this || !other.isActiveAndEnabled) continue;
                 // Scene teardown disables every manager in turn. Handing over then would

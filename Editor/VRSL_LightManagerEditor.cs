@@ -375,9 +375,9 @@ namespace VRSL.URP.EditorScripts
             // components and two of them can be asked for directly.
             var managers = new List<Object>();
             managers.AddRange(Object.FindObjectsByType<VRSL_URPLightManager>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None));
+                FindObjectsInactive.Include));
             managers.AddRange(Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                FindObjectsInactive.Include, FindObjectsSortMode.None));
+                FindObjectsInactive.Include));
 
             if (managers.Count == 0)
             {

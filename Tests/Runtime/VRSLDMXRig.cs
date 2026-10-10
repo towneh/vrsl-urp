@@ -209,7 +209,7 @@ namespace VRSL.URP.Tests
             // rows had run first decided whether that highlight was there at all.
             rig._lightsWereOn = new List<Light>();
             foreach (var light in UnityEngine.Object.FindObjectsByType<Light>(
-                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+                         FindObjectsInactive.Exclude))
             {
                 if (light == null || !light.enabled) continue;
                 light.enabled = false;
@@ -232,7 +232,7 @@ namespace VRSL.URP.Tests
             // one destroys itself in Awake, and every read then comes back zero
             // with nothing in the log to say why.
             foreach (var stale in UnityEngine.Object.FindObjectsByType<GameObject>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+                         FindObjectsInactive.Include))
                 if (stale != null && stale.name == RootName)
                     UnityEngine.Object.DestroyImmediate(stale);
             Assert(VRSL_URPLightManager.Instance == null,

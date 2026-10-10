@@ -349,7 +349,7 @@ namespace VRSL.URP.Tests
         static bool FindSpareLayers(out int first, out int second)
         {
             var occupied = new HashSet<int>();
-            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var r in Object.FindObjectsByType<Renderer>(FindObjectsInactive.Include))
                 if (r != null) occupied.Add(r.gameObject.layer);
             first = second = -1;
             for (int layer = 31; layer >= 8; layer--)
