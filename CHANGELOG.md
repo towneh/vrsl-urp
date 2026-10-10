@@ -6,6 +6,7 @@
 
 - **One DMX manager for any grid.** **DMX Input** on the manager chooses which grid in the video the lights read: the **Horizontal**, **Vertical** or **Legacy grid**. Every fixture takes the layout from the manager, so one prefab works on any layout. A world can switch while it runs with `SetDmxInput` (0 to 2, ready for a UI Dropdown).
 - **Legacy grids and fixtures.** Realtime lights decode a Legacy grid, and the migration tool brings Legacy and Vertical fixtures, both of upstream's Legacy prefab sets included, onto the Horizontal prefabs.
+- **`ApplyAddress()` re-patches a DMX fixture while the world runs,** beam and body together.
 
 ### Changed
 
