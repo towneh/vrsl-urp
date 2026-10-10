@@ -103,6 +103,20 @@ namespace VRSL.URP.Tests
         /// movement damping reads its smoothness from.</summary>
         public static int SmoothnessChannel(int abs) => ((abs - 1) / 13 + 1) * 13;
 
+        /// <summary>The 13th channel of a sector that the compute's texture accessor
+        /// pulls a row down. <c>GetDMXValue</c> carries a hard-coded correction table
+        /// over five channel ranges, so on the grid path those channels read the value
+        /// 13 below their own, in every layout. It belongs to the compute's accessor:
+        /// the channel buffer has no equivalent, and the shader-driven fixtures' include,
+        /// as compiled, reads these channels from their own cells.</summary>
+        public static bool ShiftedThirteenth(int channel)
+            => channel % 13 == 0
+            && ((channel >= 90  && channel <= 101)
+             || (channel >= 160 && channel <= 205)
+             || (channel >= 326 && channel <= 404)
+             || (channel >= 676 && channel <= 819)
+             ||  channel >= 1339);
+
         /// <summary>The value the Ramp pattern puts on a 1-based channel.
         /// <c>RampValue</c> is indexed from 0, and mixing the two up shifts every
         /// prediction by one channel.</summary>
@@ -650,6 +664,136 @@ namespace VRSL.URP.Tests
             return Validate(cs, count);
         }
 
+        /// <summary>
+        /// For channels 1..<paramref name="count"/>, the texel of a
+        /// <paramref name="width"/> by <paramref name="height"/> grid in
+        /// <paramref name="layout"/> that the fixtures' include reads it from. Found on
+        /// the GPU by the GridCells test shader, so positions exactly on a texel edge
+        /// land where the sampler puts them.
+        /// </summary>
+        public static Vector2Int[] CellsOf(int count, VRSLGridLayout layout, int width, int height)
+        {
+            var shader = Shader.Find("Hidden/VRSL-URP/Tests/GridCells");
+            Assert(shader != null, "the GridCells test shader is not in this project");
+
+            // Every texel holds its own coordinates, in Unity's convention, which is the
+            // one the decode samples in.
+            var index = new Texture2D(width, height, TextureFormat.RGBAFloat, false, true)
+                        { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            var coords = new Color[width * height];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    coords[y * width + x] = new Color(x, y, 0f, 1f);
+            index.SetPixels(coords);
+            index.Apply(false);
+
+            var target   = new RenderTexture(count, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var readback = new Texture2D(count, 1, TextureFormat.RGBAFloat, false, true);
+            var material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            var cmd      = new CommandBuffer { name = "VRSL test grid cells" };
+            try
+            {
+                target.Create();
+                material.SetTexture("_VRSLTestIndex", index);
+                material.SetVector("_VRSLDMXTexelSize", new Vector4(1f / width, 1f / height, width, height));
+                material.SetInteger("_EnableCompatibilityMode", layout == VRSLGridLayout.Legacy ? 1 : 0);
+                cmd.SetRenderTarget(target);
+                cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 3);
+                Graphics.ExecuteCommandBuffer(cmd);
+
+                var previous = RenderTexture.active;
+                RenderTexture.active = target;
+                readback.ReadPixels(new Rect(0, 0, count, 1), 0, 0, false);
+                readback.Apply(false);
+                RenderTexture.active = previous;
+
+                var found = readback.GetPixels();
+                var cells = new Vector2Int[count];
+                for (int i = 0; i < count; i++)
+                    cells[i] = new Vector2Int(Mathf.RoundToInt(found[i].r), Mathf.RoundToInt(found[i].g));
+                return cells;
+            }
+            finally
+            {
+                cmd.Release();
+                target.Release();
+                UnityEngine.Object.DestroyImmediate(target);
+                UnityEngine.Object.DestroyImmediate(readback);
+                UnityEngine.Object.DestroyImmediate(index);
+                UnityEngine.Object.DestroyImmediate(material);
+            }
+        }
+
+        /// <summary>A grid painted from channel values, and what a fixture reads from it.</summary>
+        public sealed class PaintedGrid : IDisposable
+        {
+            /// <summary>The grid, grey, so the decode's luminance returns each value.</summary>
+            public RenderTexture Texture;
+            /// <summary>The texel each channel is read from, channel 1 first.</summary>
+            public Vector2Int[] Cells;
+            /// <summary>What each channel reads: its own value, or the value of whichever
+            /// channel sharing its texel was painted last.</summary>
+            public float[] Reads;
+            /// <summary>Channels whose texel another channel reads too. The layout cannot
+            /// carry them separately, whatever decodes it.</summary>
+            public List<int> Shared = new();
+
+            public void Dispose()
+            {
+                if (Texture == null) return;
+                Texture.Release();
+                UnityEngine.Object.DestroyImmediate(Texture);
+                Texture = null;
+            }
+        }
+
+        /// <summary>
+        /// A <paramref name="width"/> by <paramref name="height"/> grid in
+        /// <paramref name="layout"/> carrying <paramref name="values"/> (channel 1 first,
+        /// 0..1) in the texels the fixtures read them from (<see cref="CellsOf"/>).
+        /// </summary>
+        public static PaintedGrid PaintGrid(float[] values, VRSLGridLayout layout, int width, int height)
+        {
+            var cells  = CellsOf(values.Length, layout, width, height);
+            var pixels = new Color[width * height];
+            var owner  = new Dictionary<Vector2Int, int>();
+            var grid   = new PaintedGrid { Cells = cells, Reads = new float[values.Length] };
+            for (int i = 0; i < values.Length; i++)
+            {
+                var cell = cells[i];
+                Assert(cell.x >= 0 && cell.x < width && cell.y >= 0 && cell.y < height,
+                    $"channel {i + 1} reads from outside the grid, at {cell}");
+                if (owner.TryGetValue(cell, out int other))
+                {
+                    if (!grid.Shared.Contains(other + 1)) grid.Shared.Add(other + 1);
+                    grid.Shared.Add(i + 1);
+                }
+                owner[cell] = i;
+                pixels[cell.y * width + cell.x] = new Color(values[i], values[i], values[i], 1f);
+            }
+            for (int i = 0; i < values.Length; i++)
+                grid.Reads[i] = pixels[cells[i].y * width + cells[i].x].r;
+
+            var source = new Texture2D(width, height, TextureFormat.RGBAFloat, false, true);
+            try
+            {
+                source.SetPixels(pixels);
+                source.Apply(false);
+                grid.Texture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBFloat,
+                                                 RenderTextureReadWrite.Linear)
+                {
+                    name       = $"Painted {layout} grid",
+                    filterMode = FilterMode.Point,
+                    wrapMode   = TextureWrapMode.Clamp,
+                };
+                grid.Texture.Create();
+                Graphics.CopyTexture(source, grid.Texture);
+            }
+            finally { UnityEngine.Object.DestroyImmediate(source); }
+            grid.Shared.Sort();
+            return grid;
+        }
+
         /// <summary>Channels 1..<paramref name="count"/> read back through the
         /// shader's own accessor forced onto the CRT texture path, whatever the
         /// channel buffer is doing.
@@ -677,6 +821,7 @@ namespace VRSL.URP.Tests
             cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels",
                          Manager.ChannelBuffer ?? _dummyChannels);
             cs.SetInt("_VRSLU_DMXChannelCount", 0);
+            cs.SetInt("_VRSLU_DMXGridLayout", (int)Manager.GridLayout);
             cs.SetTexture(_validateKernel, "_DMXMainTex", grid);
             cs.SetVector("_VRSLDMXTexelSize", new Vector4(
                 1f / grid.width, 1f / grid.height, grid.width, grid.height));

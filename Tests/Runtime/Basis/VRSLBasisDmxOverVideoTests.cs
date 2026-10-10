@@ -176,19 +176,6 @@ namespace VRSL.URP.Tests
             return best;
         }
 
-        /// <summary>The 13th channel of a sector that VRSL's accessor pulls a row
-        /// down. <c>GetDMXValue</c> carries a hard-coded correction table over
-        /// five channel ranges, so on the picture path those channels read the
-        /// value 13 below their own. It belongs to VRSL's texture accessor; the
-        /// channel buffer has no equivalent.</summary>
-        static bool ShiftedThirteenth(int channel)
-            => channel % 13 == 0
-            && ((channel >= 90  && channel <= 101)
-             || (channel >= 160 && channel <= 205)
-             || (channel >= 326 && channel <= 404)
-             || (channel >= 676 && channel <= 819)
-             ||  channel >= 1339);
-
         /// <summary>Whether channel <paramref name="i"/> (0-based) can be judged
         /// at all. Padding cannot, since nobody writes it. Nor can a channel whose
         /// true value sits near the wrap: the ramp is modular, so a damped read
@@ -238,7 +225,7 @@ namespace VRSL.URP.Tests
         {
             var wrong = new List<int>();
             for (int i = 0; i < count; i++)
-                if (Judgeable(i, offset) && ShiftedThirteenth(i + 1)) wrong.Add(i + 1);
+                if (Judgeable(i, offset) && VRSLDMXRig.ShiftedThirteenth(i + 1)) wrong.Add(i + 1);
             return wrong;
         }
 
