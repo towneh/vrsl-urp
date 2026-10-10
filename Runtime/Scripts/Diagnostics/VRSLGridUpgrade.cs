@@ -92,7 +92,7 @@ namespace VRSL.URP
 
         /// <summary>An enabled channel source component in <paramref name="scene"/>, or
         /// null. A prefab asset has no scene, so it never has one.</summary>
-        static MonoBehaviour ChannelSourceIn(Scene scene)
+        internal static MonoBehaviour ChannelSourceIn(Scene scene)
         {
             if (!scene.IsValid() || !scene.isLoaded) return null;
             foreach (var root in scene.GetRootGameObjects())

@@ -206,25 +206,24 @@ namespace VRSL.URP.EditorScripts
         // ── Which source is live ──────────────────────────────────────────────
         enum Feed
         {
-            /// <summary>A source is publishing bytes and the fixtures read them.</summary>
+            /// <summary>Stream data, a source publishing bytes, and the fixtures read them.</summary>
             Buffer,
-            /// <summary>No source. The CRT decode chain drives the fixtures.</summary>
+            /// <summary>A grid input. The CRT decode chain drives the fixtures, and any
+            /// source attached is on standby.</summary>
             Grid,
-            /// <summary>A source is registered but publishing no universes, so the
-            /// manager has stopped publishing and the fixtures have fallen back to the
-            /// grid. Nothing on screen distinguishes this from having no source at
-            /// all, which is the reason it gets its own state.</summary>
-            Mute,
+            /// <summary>Stream data with nothing publishing, so the lights are dark. On
+            /// screen it looks like a show with everything at zero, which is the reason it
+            /// gets its own state.</summary>
+            Quiet,
         }
 
         static Feed Classify(VRSL_URPLightManager mgr)
         {
-            // Both, not just the count: a source cleared after the manager's last upload
-            // leaves the count standing until the next one, and the fixtures are on the
-            // grid from that point regardless.
-            if (mgr.ChannelSource == null) return Feed.Grid;
-            return mgr.ChannelCount > 0 ? Feed.Buffer : Feed.Mute;
+            if (mgr.GridLayout != null) return Feed.Grid;
+            return mgr.ChannelCount > 0 ? Feed.Buffer : Feed.Quiet;
         }
+
+        static string SourceName(VRSL_URPLightManager mgr) => mgr.ChannelSource?.GetType().Name;
 
         void DrawToolbar(VRSL_URPLightManager mgr)
         {
@@ -291,29 +290,36 @@ namespace VRSL.URP.EditorScripts
                 switch (feed)
                 {
                     case Feed.Buffer:
-                        EditorGUILayout.LabelField(
-                            "Reading", $"Channel buffer — {mgr.ChannelSource.GetType().Name}");
+                        EditorGUILayout.LabelField("Reading", $"Stream data — {SourceName(mgr)}");
                         EditorGUILayout.LabelField(
                             "Published", $"{mgr.UniverseCount} universe(s), {mgr.ChannelCount} slots");
+                        if (mgr.ChannelSource is VRSLTrussRecordSource records && records.RecordsDecoded == 0)
+                            EditorGUILayout.LabelField(" ",
+                                "No record has arrived yet, so every channel reads zero until one does.",
+                                EditorStyles.wordWrappedMiniLabel);
                         break;
 
                     case Feed.Grid:
-                        EditorGUILayout.LabelField("Reading", "Video grid — CRT decode chain");
+                        EditorGUILayout.LabelField("Reading",
+                            $"Video grid — {mgr.GridLayout}"
+                          + (mgr.ChannelSource != null ? $" ({SourceName(mgr)} on standby)" : ""));
                         EditorGUILayout.LabelField("Grid", GridDescription(mgr));
                         break;
 
-                    case Feed.Mute:
+                    case Feed.Quiet:
+                        EditorGUILayout.LabelField("Reading", "Stream data — nothing is sending it, lights dark");
                         EditorGUILayout.HelpBox(
-                            $"{mgr.ChannelSource.GetType().Name} is registered but publishing no "
-                            + "universes, so the manager has stopped publishing and the fixtures "
-                            + "have fallen back to the video grid. A source that has not heard "
-                            + "anything yet looks exactly like no source at all from the lights.",
+                            mgr.ChannelSource == null
+                                ? "Stream data is chosen but nothing in this scene is sending it, so the "
+                                + "lights are dark. Add a source (VRSL → URP → DMX Config) or choose a grid "
+                                + "under the manager's DMX Input."
+                                : $"{SourceName(mgr)} is attached but publishing no universes, so the "
+                                + "lights are dark.",
                             MessageType.Warning);
-                        EditorGUILayout.LabelField("Grid", GridDescription(mgr));
                         break;
                 }
 
-                if (feed != Feed.Buffer && mgr.LiveTextures.main != null)
+                if (feed == Feed.Grid && mgr.LiveTextures.main != null)
                     EditorGUILayout.LabelField(" ",
                         "Read the way the fixtures read it, in the manager's grid layout. A "
                         + "nine-universe grid will not read correctly here.",
@@ -386,6 +392,12 @@ namespace VRSL.URP.EditorScripts
                 }
                 if (_verify) RequestReadback(mgr, origin, slots, compare: true);
                 else _verifyReport = null;
+            }
+            else if (Classify(mgr) == Feed.Quiet)
+            {
+                System.Array.Copy(_values, _previous, slots);
+                System.Array.Clear(_values, 0, slots);
+                _verifyReport = null;
             }
             else
             {

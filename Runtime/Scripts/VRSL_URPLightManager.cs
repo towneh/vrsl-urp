@@ -1719,6 +1719,25 @@ namespace VRSL.URP
         }
 
 
+        /// <summary>What DMX Input is reading, for the diagnostics line: a source on
+        /// standby under a grid, and under Stream data whether anything is sending.</summary>
+        string DmxInputStatus()
+        {
+            string source = ChannelSource?.GetType().Name;
+            if (GridLayout is { } layout)
+                return $"DMX input: the {layout} grid"
+                     + (source != null ? $", {source} on standby" : "");
+            if (ChannelCount == 0)
+                return source == null
+                    ? "DMX input: Stream data, and NOTHING IS SENDING IT, so the lights are dark. "
+                    + "Add a source or choose a grid."
+                    : $"DMX input: Stream data from {source}, which is publishing no universes, so the "
+                    + "lights are dark";
+            return $"DMX input: Stream data from {source}, {UniverseCount} universe(s)"
+                 + (ChannelSource is VRSLTrussRecordSource records && records.RecordsDecoded == 0
+                    ? ", NO RECORD DECODED YET, so every channel reads zero" : "");
+        }
+
         /// <summary>
         /// Prints a health report to the Console. Right-click the component in
         /// play mode. Answers, in order, the questions that "nothing is lit"
@@ -1758,6 +1777,7 @@ namespace VRSL.URP
                             + "inactive ones. Fixtures added since then need RefreshFixtures().");
             else
                 sb.AppendLine($"  Fixtures: {FixtureCount} collected");
+            sb.AppendLine("  " + DmxInputStatus());
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Volumetric shader", volumetricShader));
             sb.AppendLine("  " + VRSLDiagnostics.SurfacePrepassStatus(surfacePropertiesShader));

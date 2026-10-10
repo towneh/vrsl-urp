@@ -61,6 +61,40 @@ namespace VRSL.URP.EditorScripts
         };
 
         /// <summary>
+        /// What DMX Input will read from: a channel source on standby under a grid, and
+        /// under Stream data the source, or that there is none and the lights are dark.
+        /// </summary>
+        void DrawInputSource(SerializedProperty input)
+        {
+            if (input.hasMultipleDifferentValues || serializedObject.isEditingMultipleObjects) return;
+            var manager = (VRSL_URPLightManager)target;
+            // In Play mode the source the manager actually holds; otherwise whichever the
+            // scene would bind, which is the one a source finds on enable.
+            var source = Application.isPlaying
+                ? manager.ChannelSource as MonoBehaviour
+                : VRSLGridUpgrade.ChannelSourceIn(manager.gameObject.scene);
+            bool stream = input.enumValueIndex == (int)VRSLDmxInput.StreamData;
+
+            if (!stream)
+            {
+                if (source != null)
+                    EditorGUILayout.LabelField(
+                        $"{source.name} is on standby. Choose Stream data to read it.",
+                        EditorStyles.wordWrappedMiniLabel);
+                return;
+            }
+            if (source != null)
+                EditorGUILayout.LabelField($"Reads {source.name}.", EditorStyles.wordWrappedMiniLabel);
+            else
+                EditorGUILayout.HelpBox(
+                    Application.isPlaying
+                        ? "Nothing in this scene is sending stream data, so the lights are dark."
+                        : "No source in this scene, so the lights will be dark. Add one from "
+                        + "VRSL → URP → DMX Config, or choose a grid.",
+                    MessageType.Warning);
+        }
+
+        /// <summary>
         /// What the package may spend, and the controls that level governs.
         /// </summary>
         /// <remarks>
@@ -81,9 +115,12 @@ namespace VRSL.URP.EditorScripts
             // Above quality because it decides whether anything lights at all. The DMX
             // manager only; the AudioLink one has no DMX input.
             var input = serializedObject.FindProperty(nameof(VRSL_URPLightManager.dmxInput));
-            // Named here: Unity would title the field "Dmx Input".
             if (input != null)
+            {
+                // Named here: Unity would title the field "Dmx Input".
                 EditorGUILayout.PropertyField(input, new GUIContent("DMX Input", input.tooltip));
+                DrawInputSource(input);
+            }
 
             EditorGUILayout.PropertyField(quality);
 

@@ -12,7 +12,7 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The DMX manager's DMX Input: three grids and Stream data, chosen while the world
     /// runs, a channel source on standby under a grid, and Stream data dark when nothing
-    /// is sending it. Rows E1 to E5 of TESTING.md (E6 is in VRSLGridLayoutTests).
+    /// is sending it. Rows E1 to E5 and E7 of TESTING.md (E6 is in VRSLGridLayoutTests).
     /// </summary>
     class VRSLDmxInputTests : VRSLDMXTest
     {
@@ -266,6 +266,54 @@ namespace VRSL.URP.Tests
                     "the source came back and nothing lit from it");
             }
             finally { rig.Dispose(); }
+        }
+
+        /// <summary>
+        /// E7. The manager's diagnostics name the input: Stream data and its
+        /// source, a grid with the source on standby, and Stream data with nothing
+        /// sending it.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator E7_the_diagnostics_say_what_the_input_is_reading()
+        {
+            var rig = VRSLDMXRig.Build();
+            var said = new List<string>();
+            void OnLog(string message, string stack, LogType type)
+            {
+                if (message.Contains("Diagnostics — DMX")) said.Add(message);
+            }
+            Application.logMessageReceived += OnLog;
+            try
+            {
+                yield return rig.Step(2);
+                string source = nameof(VRSL_SyntheticDMXChannelSource);
+
+                // The menu is how an author gets this report.
+                var menu = (ContextMenu)System.Attribute.GetCustomAttribute(
+                    typeof(VRSL_URPLightManager).GetMethod(nameof(VRSL_URPLightManager.LogDiagnostics)),
+                    typeof(ContextMenu));
+                Assert.AreEqual("VRSL Diagnostics", menu?.menuItem,
+                    "the VRSL Diagnostics menu entry is not on LogDiagnostics");
+
+                rig.Manager.LogDiagnostics();
+                StringAssert.Contains($"DMX input: Stream data from {source}", said.Last());
+
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.VerticalGrid);
+                yield return rig.Step(1);
+                rig.Manager.LogDiagnostics();
+                StringAssert.Contains($"DMX input: the Vertical grid, {source} on standby", said.Last());
+
+                rig.Manager.ChannelSource = null;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+                yield return rig.Step(1);
+                rig.Manager.LogDiagnostics();
+                StringAssert.Contains("DMX input: Stream data, and NOTHING IS SENDING IT", said.Last());
+            }
+            finally
+            {
+                Application.logMessageReceived -= OnLog;
+                rig.Dispose();
+            }
         }
 
         /// <summary>
