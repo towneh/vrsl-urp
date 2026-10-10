@@ -12,7 +12,13 @@ namespace VRSL.URP.BasisIntegration
         static readonly Color[] cornerColors = { Color.green, new Color(1f, 0.6f, 0.2f), Color.white, new Color(1f, 0.4f, 1f) };
         static readonly string[] cornerNames = { "BL", "BR", "TR", "TL" };
 
+        static readonly string[] layoutNames = { "Horizontal", "Vertical", "Legacy" };
+        static readonly string[] setFields   = { "horizontal", "vertical", "legacy" };
+
         private int dragIndex = -1;
+        // The layout whose corners the drag view edits while following.
+        private int editLayout;
+        private VRSL_URPLightManager sceneManager;
         private Material previewMat;
         private RenderTexture previewRT;
         private double  nextPreview;
@@ -47,7 +53,9 @@ namespace VRSL.URP.BasisIntegration
             // selected. Nothing moves in edit mode unless the framing does; in
             // play mode the frame does, so that case is capped rather than
             // skipped.
-            int key = (cfg.uvBL, cfg.uvBR, cfg.uvTR, cfg.uvTL).GetHashCode();
+            var corners = EditedCorners(cfg);
+            var outTarget = EditedTarget(cfg);
+            int key = (corners.bl, corners.br, corners.tr, corners.tl, outTarget).GetHashCode();
             bool framingMoved = key != previewKey || !ReferenceEquals(tex, previewTex);
             if (!live && !framingMoved) return;
             if (live && !framingMoved && EditorApplication.timeSinceStartup < nextPreview) return;
@@ -55,14 +63,14 @@ namespace VRSL.URP.BasisIntegration
             previewTex  = tex;
             nextPreview = EditorApplication.timeSinceStartup + 1.0 / 15.0;
 
-            float outAspect = (cfg.Target != null && cfg.Target.height > 0) ? (float)cfg.Target.width / cfg.Target.height
+            float outAspect = (outTarget != null && outTarget.height > 0) ? (float)outTarget.width / outTarget.height
                             : (tex.height > 0 ? (float)tex.width / tex.height : 16f / 9f);
             EnsurePreviewRT(outAspect);
             if (previewMat != null && previewRT != null)
             {
                 // Match the runtime per-client origin flip so this output preview stays WYSIWYG in
                 // play mode on top-left-origin GPUs (see BasisVideoRenderTextureOutput.Update).
-                Vector2 bl = cfg.uvBL, br = cfg.uvBR, tr = cfg.uvTR, tl = cfg.uvTL;
+                Vector2 bl = corners.bl, br = corners.br, tr = corners.tr, tl = corners.tl;
                 if (live && cfg.Player.OutputFrameIsTopLeftOrigin)
                 {
                     bl.y = 1f - bl.y; br.y = 1f - br.y; tr.y = 1f - tr.y; tl.y = 1f - tl.y;
@@ -70,6 +78,25 @@ namespace VRSL.URP.BasisIntegration
                 BasisVideoRenderTextureOutput.BlitUVs(previewMat, tex, previewRT, bl, br, tr, tl);
                 Repaint();
             }
+        }
+
+        /// <summary>The corners the drag view shows: the selected layout's while
+        /// following, the single set otherwise.</summary>
+        BasisVideoRenderTextureOutput.Corners EditedCorners(BasisVideoRenderTextureOutput cfg)
+            => cfg.followManagerLayout ? cfg.CornersFor((VRSLGridLayout)editLayout) : cfg.Single;
+
+        /// <summary>The grid the edited corners write: the selected layout's raw grid
+        /// while following, found through the scene's DMX manager, or the DMX Grid RT.</summary>
+        RenderTexture EditedTarget(BasisVideoRenderTextureOutput cfg)
+        {
+            if (!cfg.followManagerLayout) return cfg.Target;
+            // Found once rather than per editor tick; the preview asks every tick.
+            if (sceneManager == null) sceneManager = Object.FindAnyObjectByType<VRSL_URPLightManager>();
+            var manager = VRSL_URPLightManager.Instance != null ? VRSL_URPLightManager.Instance : sceneManager;
+            var raw = manager != null && manager.gridTextures != null
+                ? BasisVideoRenderTextureOutput.RawGridOf(manager.gridTextures.For((VRSLGridLayout)editLayout))
+                : null;
+            return raw != null ? raw : cfg.Target;
         }
 
         public override void OnInspectorGUI()
@@ -106,7 +133,31 @@ namespace VRSL.URP.BasisIntegration
             var pBR = serializedObject.FindProperty("uvBR");
             var pTR = serializedObject.FindProperty("uvTR");
             var pTL = serializedObject.FindProperty("uvTL");
-            var props = new[] { pBL, pBR, pTR, pTL };
+            var single = new[] { pBL, pBR, pTR, pTL };
+
+            var follow = serializedObject.FindProperty("followManagerLayout");
+            EditorGUILayout.PropertyField(follow, L("Follow Manager Layout", follow.tooltip));
+            var props = single;
+            if (follow.boolValue)
+            {
+                editLayout = GUILayout.Toolbar(editLayout, layoutNames);
+                string set = setFields[editLayout];
+                props = new[]
+                {
+                    serializedObject.FindProperty(set + ".bl"), serializedObject.FindProperty(set + ".br"),
+                    serializedObject.FindProperty(set + ".tr"), serializedObject.FindProperty(set + ".tl"),
+                };
+                var grid = EditedTarget(cfg);
+                EditorGUILayout.LabelField(
+                    grid != null && grid != cfg.Target
+                        ? $"The {layoutNames[editLayout]} corners, written into {grid.name} while the "
+                        + "DMX manager reads that grid."
+                        : $"The {layoutNames[editLayout]} corners. No {layoutNames[editLayout]} raw grid was "
+                        + "found through the scene's DMX manager, so they write the DMX Grid RT.",
+                    EditorStyles.wordWrappedMiniLabel);
+                if (GUILayout.Button($"Copy the single corners to {layoutNames[editLayout]}"))
+                    for (int i = 0; i < 4; i++) props[i].vector2Value = single[i].vector2Value;
+            }
 
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Drag the corners to frame the grid", EditorStyles.boldLabel);
@@ -118,10 +169,10 @@ namespace VRSL.URP.BasisIntegration
             {
                 if (GUILayout.Button("Reset to full frame"))
                 {
-                    pBL.vector2Value = new Vector2(0, 0);
-                    pBR.vector2Value = new Vector2(1, 0);
-                    pTR.vector2Value = new Vector2(1, 1);
-                    pTL.vector2Value = new Vector2(0, 1);
+                    props[0].vector2Value = new Vector2(0, 0);
+                    props[1].vector2Value = new Vector2(1, 0);
+                    props[2].vector2Value = new Vector2(1, 1);
+                    props[3].vector2Value = new Vector2(0, 1);
                 }
                 if (GUILayout.Button("Rotate 90°")) Rotate90(props);
             }
@@ -143,20 +194,20 @@ namespace VRSL.URP.BasisIntegration
                 {
                     var cam = serializedObject.FindProperty("SourceCamera").objectReferenceValue as Camera;
                     var screen = serializedObject.FindProperty("SourceScreen").objectReferenceValue as Renderer;
-                    var tgt = serializedObject.FindProperty("Target").objectReferenceValue as RenderTexture;
+                    var tgt = EditedTarget(cfg);
                     if (BasisVideoRenderTextureOutput.ComputeUVsFromCamera(cam, screen, tgt, out var bl, out var br, out var tr, out var tl))
                     {
-                        pBL.vector2Value = bl; pBR.vector2Value = br; pTR.vector2Value = tr; pTL.vector2Value = tl;
+                        props[0].vector2Value = bl; props[1].vector2Value = br; props[2].vector2Value = tr; props[3].vector2Value = tl;
                     }
                     else Debug.LogWarning("Bake failed: check the Camera and Screen Quad references.");
                 }
             }
 
             EditorGUILayout.Space();
-            EditorGUILayout.PropertyField(pBL, L("Bottom-Left", ""));
-            EditorGUILayout.PropertyField(pBR, L("Bottom-Right", ""));
-            EditorGUILayout.PropertyField(pTR, L("Top-Right", ""));
-            EditorGUILayout.PropertyField(pTL, L("Top-Left", ""));
+            EditorGUILayout.PropertyField(props[0], L("Bottom-Left", ""));
+            EditorGUILayout.PropertyField(props[1], L("Bottom-Right", ""));
+            EditorGUILayout.PropertyField(props[2], L("Top-Right", ""));
+            EditorGUILayout.PropertyField(props[3], L("Top-Left", ""));
             EditorGUILayout.PropertyField(serializedObject.FindProperty("ClearWhenNoFrame"));
 
             if (Application.isPlaying)
@@ -247,7 +298,8 @@ namespace VRSL.URP.BasisIntegration
 
         void DrawOutputPreview(BasisVideoRenderTextureOutput cfg)
         {
-            float outAspect = (cfg.Target != null && cfg.Target.height > 0) ? (float)cfg.Target.width / cfg.Target.height
+            var outTarget = EditedTarget(cfg);
+            float outAspect = (outTarget != null && outTarget.height > 0) ? (float)outTarget.width / outTarget.height
                             : (previewRT != null && previewRT.height > 0 ? (float)previewRT.width / previewRT.height : 16f / 9f);
 
             EditorGUILayout.LabelField("Output → DMX Grid RT:", EditorStyles.miniLabel);
