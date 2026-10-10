@@ -7,7 +7,7 @@
 
 float GetSurfaceStrobe(uint DMXChannel)
 {
-    half strobe = getValueAtCoords(DMXChannel + 4, TEXTURE2D_ARGS(_VRSLU_DMXGridStrobeOutput, sampler_VRSLU_DMXGridStrobeOutput));
+    half strobe = DMXStrobe(DMXChannel + 4);
     
     //check if we should even be strobing at all.
     strobe = IF(isDMX() == 1, strobe, 1);
@@ -18,9 +18,9 @@ float GetSurfaceStrobe(uint DMXChannel)
 
 float4 GetDMXRGB(uint DMXChannel, float intensity, uint channelOffset)
 {
-    float redchannel = getValueAtCoords(DMXChannel + 1 + channelOffset, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture));
-    float greenchannel = getValueAtCoords(DMXChannel + 2 + channelOffset, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture));
-    float bluechannel = getValueAtCoords(DMXChannel + 3 + channelOffset, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture));
+    float redchannel = DMXValue(DMXChannel + 1 + channelOffset);
+    float greenchannel = DMXValue(DMXChannel + 2 + channelOffset);
+    float bluechannel = DMXValue(DMXChannel + 3 + channelOffset);
 
     #if defined(PROJECTION_YES)
         redchannel = redchannel * _RedMultiplier;
@@ -33,20 +33,20 @@ float4 GetDMXRGB(uint DMXChannel, float intensity, uint channelOffset)
 
 float GetDMXAlpha(uint DMXChannel, float enableDMXControl)
 {
-    return IF(isDMX() == 1 && enableDMXControl == 1, getValueAtCoords(DMXChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture)), 0.0);
+    return IF(isDMX() == 1 && enableDMXControl == 1, DMXValue(DMXChannel), 0.0);
 }
 
 float GetDMX12CH(uint DMXChannel, int dimmerChannel)
 {
     int startChannel = (int)DMXChannel + 2 + dimmerChannel;
-    float dimmer = getValueAtCoords(startChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture));
+    float dimmer = DMXValue(startChannel);
     return dimmer;
 }
 
 float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
 {
     int startChannel = (int)DMXChannel + (dimmerChannel-1);
-    intensity = getValueAtCoords(startChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture));
+    intensity = DMXValue(startChannel);
     return GetDMXRGB((uint) startChannel, intensity, 0);
 }
 
@@ -54,7 +54,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
     float4 GetDMXEmission1CH(float2 EmissionUV)
     {
         uint dmx = getDMXChannel();
-        float dmxIntensity = IF(isDMX()==1, getValueAtCoords(dmx, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture)), 1.0);
+        float dmxIntensity = IF(isDMX()==1, DMXValue(dmx), 1.0);
         float4 DMXcol = getEmissionColor() * dmxIntensity;
         float4 col = IF(isDMX() == 1, DMXcol * (_CurveMod), getEmissionColor());
         float4 e = col;
@@ -73,7 +73,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
     float4 GetDMXEmission4CH(float2 EmissionUV)
     {
         uint dmx = getDMXChannel();
-        float dmxIntensity = IF(isDMX()==1, getValueAtCoords(dmx, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture)), 1.0);
+        float dmxIntensity = IF(isDMX()==1, DMXValue(dmx), 1.0);
         float4 DMXcol = GetDMXRGB(dmx, dmxIntensity,0) * getEmissionColor();
         float4 col = IF(isDMX() == 1, DMXcol * (_CurveMod), getEmissionColor());
         float4 e = col;
@@ -92,7 +92,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
     float4 GetDMXEmission5CH(float2 EmissionUV)
     {
         uint dmx = getDMXChannel();
-        float dmxIntensity = IF(isDMX()==1, getValueAtCoords(dmx, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture)), 1.0);
+        float dmxIntensity = IF(isDMX()==1, DMXValue(dmx), 1.0);
         float strobe = IF(isStrobe() == 1, GetSurfaceStrobe(dmx), 1);
         float4 DMXcol = GetDMXRGB(dmx, dmxIntensity,0) * getEmissionColor();
         float4 col = IF(isDMX() == 1, DMXcol * (_CurveMod), getEmissionColor());
@@ -112,7 +112,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
     float4 GetDMXEmission13CH(float2 EmissionUV)
     {
         uint dmx = getDMXChannel();
-        float dmxIntensity = IF(isDMX()==1, getValueAtCoords(dmx+5, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture)), 1.0);
+        float dmxIntensity = IF(isDMX()==1, DMXValue(dmx+5), 1.0);
         float strobe = IF(isStrobe() == 1, GetSurfaceStrobe(dmx+2), 1);
         float4 DMXcol = GetDMXRGB(dmx, dmxIntensity,6) * getEmissionColor();
         float4 col = IF(isDMX() == 1, DMXcol * (_CurveMod), getEmissionColor());
@@ -265,7 +265,7 @@ float4 GetDMXEmission12Ch(float2 EmissionUV)
 float GetDMXAlpha()
 {
     return UNITY_ACCESS_INSTANCED_PROP(Props, _EnableDMXAlpha) == 1 && isDMX() == 1 ? 
-        getValueAtCoords((getDMXChannel() + 5), TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture)) : 1.0;
+        DMXValue(getDMXChannel() + 5) : 1.0;
 }
 #endif
 

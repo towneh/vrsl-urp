@@ -178,7 +178,7 @@ namespace VRSL.URP.Tests
                   + "protect and would pass against anything");
 
                 int global = Shader.PropertyToID("_VRSLU_DMXChannelCount");
-                Assert.AreEqual(published, Shader.GetGlobalInt(global),
+                Assert.AreEqual(published, Shader.GetGlobalInteger(global),
                     "the owner did not put its channel count in the global, so the global is "
                   + "not the observable this row thinks it is");
 
@@ -195,7 +195,7 @@ namespace VRSL.URP.Tests
 
                 yield return rig.Step(3);
 
-                Assert.AreEqual(published, Shader.GetGlobalInt(global),
+                Assert.AreEqual(published, Shader.GetGlobalInteger(global),
                     "a manager that does not own the singleton rewrote the channel-count "
                   + "global. Nothing reads that global today, so this is the cheap "
                   + "observable rather than the harm: the same LateUpdate also drives the "

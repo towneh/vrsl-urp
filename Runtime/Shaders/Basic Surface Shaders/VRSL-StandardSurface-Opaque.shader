@@ -58,6 +58,8 @@
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            // The DMX channel buffer is a structured buffer, which needs shader model 5.
+            #pragma target 4.5
 
             #define VRSL_DMX
             #define VRSL_SURFACE

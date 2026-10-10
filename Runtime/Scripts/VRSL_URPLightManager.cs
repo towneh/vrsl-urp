@@ -606,14 +606,12 @@ namespace VRSL.URP
             // to read. A successor replaces both; with nobody to hand to, the count is
             // what gets put back.
             //
-            // The count is the guard, and the binding is deliberately left alone. There
+            // The count is the guard, and the bindings are deliberately left alone. There
             // is no way to unbind a global buffer that does not mean holding a live one
             // past teardown, and a buffer nothing releases is a warning at every domain
-            // reload — a worse trade than the thing it protects against, since nothing in
-            // the package reads either global today: the compute is bound per dispatch
-            // and the render pass sets the count on its own command buffer. A consumer
-            // that ever does read them must check the count first, which is the contract
-            // the compute already keeps.
+            // reload. The fixture shaders read the channel and timing buffers only while
+            // the count is above zero, the contract the compute keeps as well, so a count
+            // of zero is enough.
             // Before the hand-over, so a successor notes the assets as they really are
             // rather than as this manager left them.
             RestoreUpdateModes();
@@ -622,7 +620,7 @@ namespace VRSL.URP
 
             if (wasOwner && !HandOverOwnership())
             {
-                Shader.SetGlobalInt(s_DMXChannelCount, 0);
+                Shader.SetGlobalInteger(s_DMXChannelCount, 0);
                 Shader.SetGlobalInteger(s_DMXGridLayout, 0);
                 Shader.SetGlobalInteger(s_StrobeDisabled, 0);
             }
@@ -711,6 +709,7 @@ namespace VRSL.URP
             }
             UploadChannels();
             AdvanceState();
+            PublishStrobeClock();
             VolumetricStats.Tick();
         }
 
@@ -840,6 +839,7 @@ namespace VRSL.URP
             // from whatever the driver left there.
             SpinPhaseBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
             SpinPhaseBuffer.SetData(new float[count]);
+            Shader.SetGlobalBuffer(s_DMXSpinPhase, SpinPhaseBuffer);
         }
 
         // Always allocated, even in static mode where nothing writes it: the compute
@@ -852,6 +852,7 @@ namespace VRSL.URP
             MovementBuffer?.Release();
             MovementBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
             MovementBuffer.SetData(new float[count]);
+            Shader.SetGlobalBuffer(s_DMXMovement, MovementBuffer);
         }
 
         void EnsureStrobePhaseBuffer(int channelCount)
@@ -861,6 +862,7 @@ namespace VRSL.URP
             StrobePhaseBuffer?.Release();
             StrobePhaseBuffer = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
             StrobePhaseBuffer.SetData(new float[count]);
+            Shader.SetGlobalBuffer(s_DMXStrobePhase, StrobePhaseBuffer);
         }
 
         void EnsureUniverseStepBuffer(int universeCount)
@@ -910,6 +912,17 @@ namespace VRSL.URP
             computeShader.Dispatch(_strobeKernel, Mathf.CeilToInt(ChannelCount / 64f), 1, 1);
         }
 
+        // What DispatchDecode hands the compute for strobing from the channel buffer, for
+        // the shader-driven fixtures, which read the same globals. Sampled here rather
+        // than in DispatchDecode so a scene with no realtime fixtures still gets it; both
+        // read Time.timeSinceLevelLoad within one frame, so the two agree.
+        void PublishStrobeClock()
+        {
+            Shader.SetGlobalInteger(s_StrobeStatic, strobeRate == StrobeRate.Dynamic ? 0 : 1);
+            Shader.SetGlobalVector( s_StrobeFreqs,  StrobeFreqs);
+            Shader.SetGlobalFloat(  s_TimeY,        Time.timeSinceLevelLoad);
+        }
+
         void EnsureChannelBuffer(int channelCount)
         {
             int words = Mathf.Max(1, (channelCount + 3) / 4);
@@ -956,7 +969,7 @@ namespace VRSL.URP
 
             UniverseCount = universes;
             ChannelCount  = count;
-            Shader.SetGlobalInt(s_DMXChannelCount, count);
+            Shader.SetGlobalInteger(s_DMXChannelCount, count);
         }
 
         void StopPublishing()
@@ -968,7 +981,7 @@ namespace VRSL.URP
             EnsureUniverseStepBuffer(0);
             UniverseCount = 0;
             ChannelCount  = 0;
-            Shader.SetGlobalInt(s_DMXChannelCount, 0);
+            Shader.SetGlobalInteger(s_DMXChannelCount, 0);
         }
 
         // The flat space persists between frames. Values are absolute and a block is
