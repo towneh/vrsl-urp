@@ -111,7 +111,7 @@ float2 getDMXCellUV(uint DMXChannel)
         y = DMXChannel >= 1339 ? y - 1 : y;
     }
     
-    return _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    return _VRSLU_DMXGridLayout == 2 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
 }
 
 //function for getting the value on the DMX Grid in the bottom right corner configuration
@@ -125,7 +125,7 @@ half getValueAtCoords(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
     half4 c = SAMPLE_TEXTURE2D_LOD(tex, sampler_point_clamp, xyUV, 0);
     half value = 0.0;
     
-    if(getNineUniverseMode() && _EnableCompatibilityMode != 1)
+    if(getNineUniverseMode() && _VRSLU_DMXGridLayout != 2)
     {
         value = c.r;
         value = IF(targetColor > 0, c.g, value);
@@ -152,7 +152,7 @@ half getValueAtCoordsRaw(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
     half y = DMXChannel / 13.0; // starts at 1 // doubles as sector
     y = frac(y)== 0.00000 ? y - 1 : y;
     
-    float2 xyUV = _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    float2 xyUV = _VRSLU_DMXGridLayout == 2 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
 
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
     float4 c = SAMPLE_TEXTURE2D_LOD(tex, sampler_point_clamp, xyUV, 0);

@@ -170,6 +170,273 @@ namespace VRSL.URP.Tests
             }
             finally { rig.Dispose(); }
         }
+
+
+        // ── The fixtures follow the manager's layout ──────────────────────────
+
+        const string Prefabs = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/";
+
+        /// <summary>One of each Horizontal fixture whose body or beam reads the grid.</summary>
+        static readonly string[] HorizontalPrefabs =
+        {
+            "Horizontal Mode/VRSL-DMX-Static-Flasher-H-1CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-Laser-H-13CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-LightBar-H-13CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-MultiLightBar-H-15CH.prefab",
+            "Horizontal Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-H-5CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-DiscoBall-H-1CH.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-H-13CH-URP.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-13CH-URP.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-H-13CH-URP.prefab",
+        };
+
+        /// <summary>The Legacy fixture prefabs 0.2.0-rc.6 shipped.</summary>
+        static readonly string[] LegacyPrefabs =
+        {
+            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-L-13CH-URP.prefab",
+            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-L-13CH-URP.prefab",
+            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
+            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
+        };
+
+        /// <summary>The Vertical fixture prefabs 0.2.0-rc.6 shipped.</summary>
+        static readonly string[] VerticalPrefabs =
+        {
+            "Vertical Mode/VRSL-DMX-Static-Flasher-V-1CH.prefab",
+            "Vertical Mode/VRSL-DMX-Static-Laser-V-13CH.prefab",
+            "Vertical Mode/VRSL-DMX-Static-LightBar-V-13CH.prefab",
+            "Vertical Mode/VRSL-DMX-Static-MultiLightBar-V-15CH.prefab",
+            "Vertical Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-V-5CH.prefab",
+            "Vertical Mode/VRSL-DMX-Static-DiscoBall-V-1CH.prefab",
+            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-V-13CH-URP.prefab",
+            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-V-13CH-URP.prefab",
+            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
+            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
+        };
+
+        /// <summary>Each layout's decode textures are this size, so each is painted at it.</summary>
+        static Vector2Int SizeOf(VRSLGridLayout layout) => layout switch
+        {
+            VRSLGridLayout.Vertical => new Vector2Int(26, 135),
+            VRSLGridLayout.Legacy   => new Vector2Int(50, 50),
+            _                       => new Vector2Int(26, 240),
+        };
+
+        /// <summary>
+        /// Channel values for the image rows: bright and uneven, so a fixture reading
+        /// the wrong cell looks different. Channels that share a texel in any layout
+        /// get one value between them, so the frames compare the read rather than what
+        /// a layout can carry (see G6).
+        /// </summary>
+        static float[] ImageValues(int count)
+        {
+            var values = new float[count];
+            for (int i = 0; i < count; i++)
+                values[i] = 0.3f + 0.7f * Mathf.Repeat((i + 1) * 0.6180339f, 1f);
+
+            foreach (VRSLGridLayout layout in System.Enum.GetValues(typeof(VRSLGridLayout)))
+            {
+                var size  = SizeOf(layout);
+                var cells = VRSLDMXRig.CellsOf(count, layout, size.x, size.y);
+                var first = new Dictionary<Vector2Int, int>();
+                for (int i = 0; i < count; i++)
+                {
+                    if (first.TryGetValue(cells[i], out int owner)) values[i] = values[owner];
+                    else first[cells[i]] = i;
+                }
+            }
+            return values;
+        }
+
+        /// <summary>
+        /// The rig's realtime movers and <paramref name="prefabs"/> in a row, lit from
+        /// <paramref name="values"/> painted in <paramref name="layout"/> and handed to
+        /// the manager, which is set to that layout. Captured from a camera in front of
+        /// the prefabs.
+        /// </summary>
+        static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
+                                         System.Action<Texture2D> onCaptured)
+        {
+            using var rig = VRSLDMXRig.Build();
+            var painted = new List<VRSLDMXRig.PaintedGrid>();
+            var stilled = new List<Material>();
+            RenderTexture white = null;
+            VRSLGridTextures grid = null;
+            try
+            {
+                for (int i = 0; i < prefabs.Length; i++)
+                {
+                    var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + prefabs[i]);
+                    Assert.IsNotNull(prefab, $"{prefabs[i]} is not in the package");
+                    var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
+                    go.transform.localPosition = new Vector3(2f + i * 1.6f, 1.5f, -6f);
+                    go.transform.localRotation = Quaternion.identity;
+                    // The Built-in discoball turns its dots with the shader clock, which no
+                    // capture holds, so two captures of one scene differ wherever they land.
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                    {
+                        if (!r.sharedMaterials.Any(m => m != null && m.shader.name.Contains("Discoball"))) continue;
+                        foreach (var m in r.materials)
+                        {
+                            stilled.Add(m);
+                            if (m.HasProperty("_RotationSpeed")) m.SetFloat("_RotationSpeed", 0f);
+                        }
+                    }
+                    foreach (var s in go.GetComponentsInChildren<VRStageLighting_DMX_Static>(true))
+                    {
+                        s.useLegacySectorMode = true;
+                        // Applied by the component's own Start, next frame.
+                        s.sector = 2 + i;
+                    }
+                    foreach (var f in go.GetComponentsInChildren<VRStageLighting_DMX_RealtimeLight>(true))
+                    {
+                        f.useLegacySectorMode = true;
+                        f.sector = 2 + i;
+                        f.DriveFixtureShells();
+                    }
+                }
+
+                var size = SizeOf(layout);
+                var main = VRSLDMXRig.PaintGrid(values, layout, size.x, size.y);
+                painted.Add(main);
+                white = Solid(Color.white);
+                grid  = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                var set = new VRSLGridTextures.Set
+                {
+                    main = main.Texture, movement = main.Texture, strobe = white, spinTimer = main.Texture,
+                };
+                // The same set in every slot: the layout the manager is set to is the
+                // only thing that differs between captures.
+                grid.horizontal = grid.vertical = grid.legacy = set;
+
+                rig.Manager.ChannelSource = null;
+                rig.Manager.enabled      = false;
+                rig.Manager.gridTextures = grid;
+                rig.Manager.dmxInput     = (VRSLDmxInput)layout;
+                rig.Manager.enabled      = true;
+                rig.Manager.RefreshFixtures();
+                rig.FreezeForImageCapture();
+
+                // Far enough back for all ten prefabs, at a size where their bodies are
+                // more than a few pixels.
+                var view = rig.AddSecondaryCamera(targetSize: 512,
+                                                  eye: new Vector3(9.2f, 3f, -19f),
+                                                  lookAt: new Vector3(9.2f, 1.5f, -6f));
+                VRSLCameraFilter.RegisterMainView(view.Camera);
+
+                for (int i = 0; i < 12; i++)
+                {
+                    yield return null;
+                    rig.RenderFrame();
+                }
+                onCaptured(VRSLImageCompare.Read(view.Target));
+            }
+            finally
+            {
+                foreach (var p in painted) p.Dispose();
+                foreach (var m in stilled) if (m != null) Object.DestroyImmediate(m);
+                if (white != null) Object.DestroyImmediate(white);
+                if (grid  != null) Object.DestroyImmediate(grid);
+            }
+        }
+
+        static float LitShare(Texture2D frame)
+        {
+            var pixels = frame.GetPixels32();
+            int lit = 0;
+            foreach (var p in pixels) if (Mathf.Max(p.r, Mathf.Max(p.g, p.b)) > 12) lit++;
+            return (float)lit / pixels.Length;
+        }
+
+        /// <summary>
+        /// G8, without the switch. Every Horizontal fixture prefab renders the
+        /// same on a Legacy or a Vertical grid as on a Horizontal one carrying the same
+        /// channel values, once the manager is set to that layout: shader-driven bodies
+        /// and beams through both includes, realtime bodies, and the realtime light.
+        /// The Vertical case is there for the Built-in include, which takes its texel
+        /// size from Unity's automatic value for the grid texture rather than from the
+        /// manager.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G8_a_horizontal_prefab_lights_the_same_on_every_layout()
+        {
+            var values = ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
+            Texture2D horizontal = null, other = null;
+            try
+            {
+                yield return CaptureLayout(HorizontalPrefabs, VRSLGridLayout.Horizontal, values, t => horizontal = t);
+                Assert.Greater(LitShare(horizontal), 0.01f,
+                    "the Horizontal frame is nearly black, so the comparison would prove nothing");
+
+                foreach (var layout in new[] { VRSLGridLayout.Legacy, VRSLGridLayout.Vertical })
+                {
+                    yield return CaptureLayout(HorizontalPrefabs, layout, values, t => other = t);
+                    var result = VRSLImageCompare.Compare(horizontal, other);
+                    Debug.Log($"[G8] {layout} against Horizontal: {result}");
+                    if (result.DifferingPercent > EdgeBudget)
+                        VRSLImageCompare.WriteImages(EvidenceFolder, $"G8-{layout}", horizontal, other);
+                    Assert.LessOrEqual(result.DifferingPercent, EdgeBudget,
+                        $"the fixtures render differently on a {layout} grid carrying the same "
+                      + $"values ({result}). Images in {EvidenceFolder}");
+                    Object.DestroyImmediate(other);
+                    other = null;
+                }
+            }
+            finally
+            {
+                if (horizontal != null) Object.DestroyImmediate(horizontal);
+                if (other      != null) Object.DestroyImmediate(other);
+            }
+        }
+
+        /// <summary>
+        /// G10. The Legacy and Vertical fixture prefabs 0.2.0-rc.6 shipped, beside a manager
+        /// in their layout, render the same from run to run, taking the layout from the
+        /// manager's global. Strobe held. Against this machine's own previous capture, like
+        /// I1, so the first run seeds and the row after that guards against change.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G10_the_legacy_and_vertical_prefabs_render_as_before(
+            [Values(VRSLGridLayout.Legacy, VRSLGridLayout.Vertical)] VRSLGridLayout layout)
+        {
+            var values = ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
+            var prefabs = layout == VRSLGridLayout.Legacy ? LegacyPrefabs : VerticalPrefabs;
+            Texture2D frame = null, previous = null;
+            try
+            {
+                yield return CaptureLayout(prefabs, layout, values, t => frame = t);
+                Assert.Greater(LitShare(frame), 0.01f, "the frame is nearly black, so the comparison would prove nothing");
+
+                string path = VRSLImageCompare.LocalPath(VRSLDMXRig.CaptureName($"{layout}-prefabs"));
+                previous = VRSLImageCompare.Load(path);
+                if (previous == null)
+                {
+                    VRSLImageCompare.Save(path, frame);
+                    Assert.Inconclusive($"no previous capture on this machine, so this run seeded one at {path}.");
+                }
+
+                var result = VRSLImageCompare.Compare(previous, frame);
+                Debug.Log($"[G10] {layout} prefabs against the previous capture: {result}");
+                if (result.DifferingPercent > EdgeBudget)
+                    VRSLImageCompare.WriteImages(EvidenceFolder, $"G10-{layout}", previous, frame);
+                Assert.LessOrEqual(result.DifferingPercent, EdgeBudget,
+                    $"the {layout} prefabs render differently from the previous capture ({result}). "
+                  + $"If that was intended, delete {path} to re-seed. Images in {EvidenceFolder}");
+            }
+            finally
+            {
+                if (frame    != null) Object.DestroyImmediate(frame);
+                if (previous != null) Object.DestroyImmediate(previous);
+            }
+        }
+
+        /// <summary>I1's allowance for edge scatter, which is all a correct frame may move.</summary>
+        const float EdgeBudget = 0.25f;
+
+        static string EvidenceFolder =>
+            System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath)!.FullName,
+                                   "VRSL-Benchmarks", "image-failures");
     }
 }
 #endif

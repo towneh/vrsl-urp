@@ -94,13 +94,13 @@ half getValueAtCoords(uint DMXChannel, sampler2D _Tex)
 
     // y = (y > 6 && y < 31) && x == 13.0 ? y - 1 : y;
     
-    float2 xyUV = _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    float2 xyUV = _VRSLU_DMXGridLayout == 2 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
         
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
     half4 c = tex2Dlod(_Tex, uvcoords);
     half value = 0.0;
     
-   if(getNineUniverseMode() && _EnableCompatibilityMode != 1)
+   if(getNineUniverseMode() && _VRSLU_DMXGridLayout != 2)
    {
     value = c.r;
     value = IF(targetColor > 0, c.g, value);
@@ -130,7 +130,7 @@ half getValueAtCoordsRaw(uint DMXChannel, sampler2D _Tex)
     half y = DMXChannel / 13.0; // starts at 1 // doubles as sector
     y = frac(y)== 0.00000 ? y - 1 : y;
     
-    float2 xyUV = _EnableCompatibilityMode == 1 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    float2 xyUV = _VRSLU_DMXGridLayout == 2 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
 
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
     float4 c = tex2Dlod(_Tex, uvcoords);

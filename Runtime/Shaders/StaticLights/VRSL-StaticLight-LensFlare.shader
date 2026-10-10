@@ -26,8 +26,6 @@
 		 [Toggle] _EnableStrobe ("Enable Strobe", Int) = 0
 		 [HideInInspector]_StrobeFreq("Strobe Frequency", Range(0,25)) = 1
 
-         [Toggle] _EnableCompatibilityMode ("Enable Compatibility Mode", Int) = 0
-         [Toggle] _EnableVerticalMode ("Enable Vertical Mode", Int) = 0
         [Toggle] _EnableDMX ("Enable Stream DMX/DMX Control", Int) = 0
         _FixutreIntensityMultiplier ("Intensity Multipler (For Bloom Scaling)", Range(1,150)) = 1
 

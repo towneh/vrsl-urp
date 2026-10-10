@@ -4,8 +4,6 @@
     {
         [Toggle] _EnableDMX ("Enable Stream DMX/DMX Control", Int) = 0
         [Toggle] _EnableFineChannels ("Enable Fine Channels (For Pan/Tilt)", Int) = 0
-        [Toggle] _EnableCompatibilityMode ("Enable Compatibility Mode", Int) = 0
-        [Toggle] _EnableVerticalMode ("Enable Vertical Mode", Int) = 0
         _DMXChannel ("DMX Channel Number)", Int) = 0
         [HideInInspector][Toggle] _NineUniverseMode ("Extended Universe Mode", Int) = 0
         _UniversalIntensity ("Universal Intensity", Range (0,1)) = 1
@@ -95,7 +93,7 @@
             half _XConeFlatness, _ZRotation, _UniversalIntensity;
             half _EndFade, _FadeStrength, _InternalShine, _LaserSoftening, _InternalShineLength;
             float _ScrollOffset;
-            uint _EnableCompatibilityMode, _EnableVerticalMode;
+            int _VRSLU_DMXGridLayout;   // the manager's grid layout, see VRSL-Defines
             sampler2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridSpinTimer;
             uniform float4 _VRSLU_DMXGridRenderTexture_TexelSize;
             uniform const half compatSampleYAxis = 0.019231;
@@ -432,7 +430,7 @@
             half _XConeFlatness, _ZRotation, _UniversalIntensity;
             half _EndFade, _FadeStrength, _InternalShine, _LaserSoftening, _InternalShineLength;
             float _ScrollOffset;
-            uint _EnableCompatibilityMode, _EnableVerticalMode;
+            int _VRSLU_DMXGridLayout;   // the manager's grid layout, see VRSL-Defines
             sampler2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridSpinTimer;
             uniform float4 _VRSLU_DMXGridRenderTexture_TexelSize;
             uniform const half compatSampleYAxis = 0.019231;

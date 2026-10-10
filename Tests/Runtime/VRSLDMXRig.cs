@@ -696,7 +696,7 @@ namespace VRSL.URP.Tests
                 target.Create();
                 material.SetTexture("_VRSLTestIndex", index);
                 material.SetVector("_VRSLDMXTexelSize", new Vector4(1f / width, 1f / height, width, height));
-                material.SetInteger("_EnableCompatibilityMode", layout == VRSLGridLayout.Legacy ? 1 : 0);
+                material.SetInteger("_VRSLU_DMXGridLayout", (int)layout);
                 cmd.SetRenderTarget(target);
                 cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 3);
                 Graphics.ExecuteCommandBuffer(cmd);

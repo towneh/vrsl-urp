@@ -5,8 +5,6 @@
          [HideInInspector]_DMXChannel ("DMX Fixture Number/Sector (Per 13 Channels)", Int) = 0
          [HideInInspector][Toggle] _NineUniverseMode ("Extended Universe Mode", Int) = 0
 
-         [Toggle] _EnableCompatibilityMode ("Enable Compatibility Mode", Int) = 0
-         [Toggle] _EnableVerticalMode ("Enable Vertical Mode", Int) = 0
          [Toggle] _EnableDMX ("Enable Stream DMX/DMX Control", Int) = 0
         //  [NoScaleOffset] _VRSLU_DMXGridRenderTexture("DMX Grid Render Texture (RAW Unsmoothed)", 2D) = "white" {}
          _GlobalIntensity("Global Intensity", Range(0,1)) = 1
@@ -126,7 +124,7 @@
                  // pack correction factor into direction w component to save space
                  o.worldDirection.w = dot(o.vertex, CalculateFrustumCorrection());
                  uint dmx = getDMXChannel();
-                 o.dmxIntensity = IF(_EnableCompatibilityMode == 1, float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture)), float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture)));
+                 o.dmxIntensity = float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture));
                  if(o.dmxIntensity.y <= 0.05 && _EnableDMX == 1)
                  {
                      v.vertex = float4(0,0,0,0);
@@ -293,7 +291,7 @@
                 // pack correction factor into direction w component to save space
                 o.worldDirection.w = dot(o.vertex, CalculateFrustumCorrection());
                 uint dmx = getDMXChannel();
-                o.dmxIntensity = IF(_EnableCompatibilityMode == 1, float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture)), float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture)));
+                o.dmxIntensity = float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture));
                 if(o.dmxIntensity.y <= 0.05 && _EnableDMX == 1)
                 {
                     v.vertex = float4(0,0,0,0);

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
@@ -298,6 +299,59 @@ namespace VRSL.URP.Tests
                 Object.DestroyImmediate(ownerGo);
                 Restore(original);
             }
+        }
+
+
+        // ── The fixtures take the layout from the manager ─────────────────────
+
+        /// <summary>
+        /// G9. No fixture shader or include can choose a layout of its own: the
+        /// old material flag is gone from everything but the two CRT shaders (each layout
+        /// has its own CRT set, so for them the material is the layout), both read-function
+        /// includes choose by the manager's global, and every shader that includes the
+        /// Built-in one has the global declared. Materials still carrying the old flag's saved
+        /// value are not checked: nothing reads that name any more.
+        /// </summary>
+        [Test]
+        public void NoFixtureShaderChoosesALayoutOfItsOwn()
+        {
+            string root = System.IO.Path.GetFullPath("Packages/town.mr.vrsl-urp/Runtime/Shaders");
+            Assert.IsTrue(System.IO.Directory.Exists(root), $"no shader folder at {root}");
+
+            var crtShaders = new[] { "DMXRTShader-StrobeOutput.shader", "DMXRTShader-DMXInterpolation.shader" };
+            var files = System.IO.Directory.EnumerateFiles(root, "*.*", System.IO.SearchOption.AllDirectories)
+                .Where(f => f.EndsWith(".shader") || f.EndsWith(".hlsl") || f.EndsWith(".cginc") || f.EndsWith(".compute"))
+                .ToList();
+
+            var wrong = new List<string>();
+            foreach (var file in files)
+            {
+                string name = System.IO.Path.GetFileName(file);
+                string text = System.IO.File.ReadAllText(file);
+                if (text.Contains("_EnableCompatibilityMode") && !crtShaders.Contains(name))
+                    wrong.Add($"{name} still names _EnableCompatibilityMode");
+                if (text.Contains("_EnableVerticalMode"))
+                    wrong.Add($"{name} still names _EnableVerticalMode");
+
+                // The URP read include brings its Defines file in itself; the Built-in one
+                // leaves the declaration to whoever includes it.
+                bool readsGrid = text.Contains("VRSL-DMXFunctions.cginc");
+                bool declares  = text.Contains("VRSL-Defines.cginc") || text.Contains("int _VRSLU_DMXGridLayout");
+                if (readsGrid && !declares)
+                    wrong.Add($"{name} includes the Built-in read functions without the layout global declared");
+            }
+
+            foreach (var include in new[] { "VRSL-DMXFunctions-URP.hlsl", "VRSL-DMXFunctions.cginc" })
+            {
+                var file = files.FirstOrDefault(f => System.IO.Path.GetFileName(f) == include);
+                Assert.IsNotNull(file, $"{include} is not in the package");
+                Assert.That(System.IO.File.ReadAllText(file), Does.Contain("_VRSLU_DMXGridLayout == 2"),
+                    $"{include} does not choose its read from the manager's layout");
+            }
+
+            Assert.IsFalse(files.Any(f => System.IO.Path.GetFileName(f) == "VRSLDMX.cginc"),
+                "VRSLDMX.cginc, a third copy of the read functions that nothing includes, is back");
+            Assert.IsEmpty(wrong, string.Join("; ", wrong));
         }
     }
 }
