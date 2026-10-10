@@ -256,11 +256,21 @@ namespace VRSL.URP.Tests
         /// the prefabs. With <paramref name="switchAtRuntime"/> the manager comes up on
         /// Horizontal, renders a few frames reading the grid wrongly, and is switched by
         /// <c>SetDmxInput</c> instead. The prefabs are patched at sectors 2 onwards, or
-        /// <paramref name="sectorOffset"/> further on.
+        /// <paramref name="sectorOffset"/> further on. With <paramref name="source"/> the
+        /// synthetic source publishes that pattern, held still, over two universes beside
+        /// the grid, and <paramref name="onReady"/> sees the rig just before the capture.
+        /// Renderers <paramref name="hide"/> picks, on the prefabs and the rig's movers,
+        /// are switched off. <paramref name="facing"/> turns each prefab, upright when
+        /// it is not given. The camera sits at <paramref name="eye"/>, or far enough back
+        /// for ten prefabs.
         /// </summary>
         static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
                                          System.Action<Texture2D> onCaptured, bool switchAtRuntime = false,
-                                         int sectorOffset = 0)
+                                         int sectorOffset = 0,
+                                         VRSL_SyntheticDMXChannelSource.Pattern? source = null,
+                                         System.Action<VRSLDMXRig> onReady = null,
+                                         System.Func<Renderer, bool> hide = null,
+                                         Vector3[] facing = null, Vector3? eye = null)
         {
             using var rig = VRSLDMXRig.Build();
             var painted = new List<VRSLDMXRig.PaintedGrid>();
@@ -275,7 +285,7 @@ namespace VRSL.URP.Tests
                     Assert.IsNotNull(prefab, $"{prefabs[i]} is not in the package");
                     var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
                     go.transform.localPosition = new Vector3(2f + i * 1.6f, 1.5f, -6f);
-                    go.transform.localRotation = Quaternion.identity;
+                    go.transform.localRotation = facing == null ? Quaternion.identity : Quaternion.Euler(facing[i]);
                     // The Built-in discoball turns its dots with the shader clock, which no
                     // capture holds, so two captures of one scene differ wherever they land.
                     foreach (var r in go.GetComponentsInChildren<Renderer>(true))
@@ -300,6 +310,9 @@ namespace VRSL.URP.Tests
                         f.DriveFixtureShells();
                     }
                 }
+                if (hide != null)
+                    foreach (var r in rig.Floor.transform.parent.GetComponentsInChildren<Renderer>(true))
+                        if (hide(r)) r.enabled = false;
 
                 var size = SizeOf(layout);
                 var main = VRSLDMXRig.PaintGrid(values, layout, size.x, size.y);
@@ -319,6 +332,13 @@ namespace VRSL.URP.Tests
                 rig.Manager.gridTextures = grid;
                 rig.Manager.dmxInput     = (VRSLDmxInput)(switchAtRuntime ? VRSLGridLayout.Horizontal : layout);
                 rig.Manager.enabled      = true;
+                if (source.HasValue)
+                {
+                    rig.Source.pattern        = source.Value;
+                    rig.Source.speed          = 0f;
+                    rig.Source.universes      = 2;
+                    rig.Manager.ChannelSource = rig.Source;
+                }
                 rig.Manager.RefreshFixtures();
                 rig.FreezeForImageCapture();
                 if (switchAtRuntime)
@@ -333,9 +353,9 @@ namespace VRSL.URP.Tests
 
                 // Far enough back for all ten prefabs, at a size where their bodies are
                 // more than a few pixels.
-                var view = rig.AddSecondaryCamera(targetSize: 512,
-                                                  eye: new Vector3(9.2f, 3f, -19f),
-                                                  lookAt: new Vector3(9.2f, 1.5f, -6f));
+                var at   = eye ?? new Vector3(9.2f, 3f, -19f);
+                var view = rig.AddSecondaryCamera(targetSize: 512, eye: at,
+                                                  lookAt: new Vector3(at.x, 1.5f, -6f));
                 VRSLCameraFilter.RegisterMainView(view.Camera);
 
                 for (int i = 0; i < 12; i++)
@@ -343,6 +363,7 @@ namespace VRSL.URP.Tests
                     yield return null;
                     rig.RenderFrame();
                 }
+                onReady?.Invoke(rig);
                 onCaptured(VRSLImageCompare.Read(view.Target));
             }
             finally
@@ -501,6 +522,100 @@ namespace VRSL.URP.Tests
             {
                 if (nearFrame != null) Object.DestroyImmediate(nearFrame);
                 if (farFrame  != null) Object.DestroyImmediate(farFrame);
+            }
+        }
+
+        // ── The fixtures follow a channel source ──────────────────────────────
+
+        /// <summary>The Horizontal prefabs whose bodies read the grid through the URP include.</summary>
+        static readonly string[] UrpIncludePrefabs =
+        {
+            "Horizontal Mode/VRSL-DMX-Static-Flasher-H-1CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-LightBar-H-13CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-MultiLightBar-H-15CH.prefab",
+            "Horizontal Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-H-5CH.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-13CH-URP.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-H-13CH-URP.prefab",
+        };
+
+        /// <summary>
+        /// Each of <see cref="UrpIncludePrefabs"/> turned so the side it glows from faces
+        /// the capture. Upright, the flasher, the bar and the strobe glow at the floor and
+        /// the 15-channel bar away from the camera, so a frame of them upright shows their
+        /// bodies black whatever they read.
+        /// </summary>
+        static readonly Vector3[] UrpIncludeFacing =
+        {
+            new(90f, 0f, 0f), new(90f, 0f, 0f), new(0f, 180f, 0f), new(90f, 0f, 0f), Vector3.zero, Vector3.zero,
+        };
+
+        /// <summary>Close enough to <see cref="UrpIncludePrefabs"/> that their bodies fill
+        /// more than a sliver of the frame.</summary>
+        static readonly Vector3 UrpIncludeEye = new(6f, 2f, -15f);
+
+        /// <summary>
+        /// What N29 allows to differ. The frames are the same scene lit from the same
+        /// values, so the allowance is for a stray pixel; a fixture reading the wrong
+        /// thing moves whole bodies.
+        /// </summary>
+        const float SameValuesBudget = 0.01f;
+
+        /// <summary>The shaders that read the grid through the Built-in include.</summary>
+        static readonly string[] BuiltInIncludeShaders =
+        {
+            "VRSL-URP/Standard Mover/Fixture", "VRSL-URP/Wash Mover/Fixture", "VRSL-URP/Basic Laser/DMX",
+            "VRSL-URP/Standard Static/Lens Flare", "VRSL-URP/Other/Discoball",
+        };
+
+        static bool OnBuiltInInclude(Renderer r) =>
+            r.sharedMaterials.Any(m => m != null && BuiltInIncludeShaders.Contains(m.shader.name));
+
+        /// <summary>
+        /// N29 for the fixtures on the URP include. Their prefabs and the rig render
+        /// the same lit from the synthetic source's still Fixtures pattern, with a grid
+        /// carrying other values bound beside it, as from a grid carrying what the source
+        /// published and no source. Strobe held. Renderers on the Built-in include are
+        /// switched off in both frames.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N29_shader_driven_fixtures_follow_a_channel_source()
+        {
+            int count = VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25;
+            // Anything but what the source sends: a fixture still reading the grid lights
+            // from these.
+            var other     = ImageValues(count);
+            var published = new float[count];
+
+            Texture2D fromGrid = null, fromSource = null;
+            try
+            {
+                yield return CaptureLayout(UrpIncludePrefabs, VRSLGridLayout.Horizontal, other, t => fromSource = t,
+                                           source: VRSL_SyntheticDMXChannelSource.Pattern.Fixtures,
+                                           onReady: rig =>
+                                           {
+                                               var flat = rig.Manager.PublishedChannels.ToArray();
+                                               for (int i = 0; i < count; i++) published[i] = flat[i] / 255f;
+                                           },
+                                           hide: OnBuiltInInclude, facing: UrpIncludeFacing, eye: UrpIncludeEye);
+                Assert.IsTrue(published.Any(v => v > 0f), "the source published nothing");
+                yield return CaptureLayout(UrpIncludePrefabs, VRSLGridLayout.Horizontal, published,
+                                           t => fromGrid = t, hide: OnBuiltInInclude, facing: UrpIncludeFacing,
+                                           eye: UrpIncludeEye);
+                Assert.Greater(LitShare(fromGrid), 0.01f,
+                    "the frame lit from the grid is nearly black, so the comparison would prove nothing");
+
+                var result = VRSLImageCompare.Compare(fromGrid, fromSource);
+                Debug.Log($"[N29] lit from the source against lit from a grid carrying the same values: {result}");
+                if (result.DifferingPercent > SameValuesBudget)
+                    VRSLImageCompare.WriteImages(EvidenceFolder, "N29", fromGrid, fromSource);
+                Assert.LessOrEqual(result.DifferingPercent, SameValuesBudget,
+                    $"the fixtures render differently from a channel source than from a grid carrying the "
+                  + $"same values ({result}). Images in {EvidenceFolder}");
+            }
+            finally
+            {
+                if (fromGrid   != null) Object.DestroyImmediate(fromGrid);
+                if (fromSource != null) Object.DestroyImmediate(fromSource);
             }
         }
 
