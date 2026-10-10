@@ -259,9 +259,7 @@ namespace VRSL.URP.Tests
         /// <paramref name="sectorOffset"/> further on. With <paramref name="source"/> the
         /// synthetic source publishes that pattern, held still, over two universes beside
         /// the grid, and <paramref name="onReady"/> sees the rig just before the capture.
-        /// Renderers <paramref name="hide"/> picks, on the prefabs and the rig's movers,
-        /// are switched off. <paramref name="facing"/> turns each prefab, upright when
-        /// it is not given. The camera sits at <paramref name="eye"/>, or far enough back
+        /// <paramref name="facing"/> turns each prefab, upright when it is not given. The camera sits at <paramref name="eye"/>, or far enough back
         /// for ten prefabs.
         /// </summary>
         static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
@@ -269,7 +267,6 @@ namespace VRSL.URP.Tests
                                          int sectorOffset = 0,
                                          VRSL_SyntheticDMXChannelSource.Pattern? source = null,
                                          System.Action<VRSLDMXRig> onReady = null,
-                                         System.Func<Renderer, bool> hide = null,
                                          Vector3[] facing = null, Vector3? eye = null)
         {
             using var rig = VRSLDMXRig.Build();
@@ -310,9 +307,6 @@ namespace VRSL.URP.Tests
                         f.DriveFixtureShells();
                     }
                 }
-                if (hide != null)
-                    foreach (var r in rig.Floor.transform.parent.GetComponentsInChildren<Renderer>(true))
-                        if (hide(r)) r.enabled = false;
 
                 var size = SizeOf(layout);
                 var main = VRSLDMXRig.PaintGrid(values, layout, size.x, size.y);
@@ -549,36 +543,31 @@ namespace VRSL.URP.Tests
             new(90f, 0f, 0f), new(90f, 0f, 0f), new(0f, 180f, 0f), new(90f, 0f, 0f), Vector3.zero, Vector3.zero,
         };
 
-        /// <summary>Close enough to <see cref="UrpIncludePrefabs"/> that their bodies fill
-        /// more than a sliver of the frame.</summary>
-        static readonly Vector3 UrpIncludeEye = new(6f, 2f, -15f);
+        /// <summary>The Horizontal prefabs whose beams or bodies read the grid through the
+        /// Built-in include, besides the lens flares on the flasher and the blinder.</summary>
+        static readonly string[] BuiltInIncludePrefabs =
+        {
+            "Horizontal Mode/VRSL-DMX-Static-Laser-H-13CH.prefab",
+            "Horizontal Mode/VRSL-DMX-Static-DiscoBall-H-1CH.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab",
+            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-H-13CH-URP.prefab",
+        };
 
         /// <summary>
-        /// What N29 allows to differ. The frames are the same scene lit from the same
-        /// values, so the allowance is for a stray pixel; a fixture reading the wrong
+        /// What N29 and N30 allow to differ. The frames are the same scene lit from the
+        /// same values, so the allowance is for a stray pixel; a fixture reading the wrong
         /// thing moves whole bodies.
         /// </summary>
         const float SameValuesBudget = 0.01f;
 
-        /// <summary>The shaders that read the grid through the Built-in include.</summary>
-        static readonly string[] BuiltInIncludeShaders =
-        {
-            "VRSL-URP/Standard Mover/Fixture", "VRSL-URP/Wash Mover/Fixture", "VRSL-URP/Basic Laser/DMX",
-            "VRSL-URP/Standard Static/Lens Flare", "VRSL-URP/Other/Discoball",
-        };
-
-        static bool OnBuiltInInclude(Renderer r) =>
-            r.sharedMaterials.Any(m => m != null && BuiltInIncludeShaders.Contains(m.shader.name));
-
         /// <summary>
-        /// N29 for the fixtures on the URP include. Their prefabs and the rig render
-        /// the same lit from the synthetic source's still Fixtures pattern, with a grid
-        /// carrying other values bound beside it, as from a grid carrying what the source
-        /// published and no source. Strobe held. Renderers on the Built-in include are
-        /// switched off in both frames.
+        /// <paramref name="prefabs"/> and the rig lit from the synthetic source's still
+        /// Fixtures pattern, with a grid carrying other values bound beside it, against the
+        /// same scene lit from a grid carrying what the source published and no source.
+        /// Strobe held. The camera sits at <paramref name="eye"/>, close enough that the
+        /// bodies fill more than a sliver of the frame.
         /// </summary>
-        [UnityTest]
-        public IEnumerator N29_shader_driven_fixtures_follow_a_channel_source()
+        static IEnumerator CompareSourceWithGrid(string row, string[] prefabs, Vector3[] facing, Vector3 eye)
         {
             int count = VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25;
             // Anything but what the source sends: a fixture still reading the grid lights
@@ -589,25 +578,24 @@ namespace VRSL.URP.Tests
             Texture2D fromGrid = null, fromSource = null;
             try
             {
-                yield return CaptureLayout(UrpIncludePrefabs, VRSLGridLayout.Horizontal, other, t => fromSource = t,
+                yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, other, t => fromSource = t,
                                            source: VRSL_SyntheticDMXChannelSource.Pattern.Fixtures,
                                            onReady: rig =>
                                            {
                                                var flat = rig.Manager.PublishedChannels.ToArray();
                                                for (int i = 0; i < count; i++) published[i] = flat[i] / 255f;
                                            },
-                                           hide: OnBuiltInInclude, facing: UrpIncludeFacing, eye: UrpIncludeEye);
+                                           facing: facing, eye: eye);
                 Assert.IsTrue(published.Any(v => v > 0f), "the source published nothing");
-                yield return CaptureLayout(UrpIncludePrefabs, VRSLGridLayout.Horizontal, published,
-                                           t => fromGrid = t, hide: OnBuiltInInclude, facing: UrpIncludeFacing,
-                                           eye: UrpIncludeEye);
+                yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, published, t => fromGrid = t,
+                                           facing: facing, eye: eye);
                 Assert.Greater(LitShare(fromGrid), 0.01f,
                     "the frame lit from the grid is nearly black, so the comparison would prove nothing");
 
                 var result = VRSLImageCompare.Compare(fromGrid, fromSource);
-                Debug.Log($"[N29] lit from the source against lit from a grid carrying the same values: {result}");
+                Debug.Log($"[{row}] lit from the source against lit from a grid carrying the same values: {result}");
                 if (result.DifferingPercent > SameValuesBudget)
-                    VRSLImageCompare.WriteImages(EvidenceFolder, "N29", fromGrid, fromSource);
+                    VRSLImageCompare.WriteImages(EvidenceFolder, row, fromGrid, fromSource);
                 Assert.LessOrEqual(result.DifferingPercent, SameValuesBudget,
                     $"the fixtures render differently from a channel source than from a grid carrying the "
                   + $"same values ({result}). Images in {EvidenceFolder}");
@@ -616,6 +604,144 @@ namespace VRSL.URP.Tests
             {
                 if (fromGrid   != null) Object.DestroyImmediate(fromGrid);
                 if (fromSource != null) Object.DestroyImmediate(fromSource);
+            }
+        }
+
+        /// <summary>
+        /// N29. The flasher, light bar, 15-channel bar, 6x4 strobe and realtime
+        /// blinder and par, with the rig's movers behind them, light the same from a channel
+        /// source as from a grid carrying what it published: bodies on the URP include, lens
+        /// flares and mover heads on the Built-in one, and the realtime light.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N29_shader_driven_fixtures_follow_a_channel_source()
+            => CompareSourceWithGrid("N29", UrpIncludePrefabs, UrpIncludeFacing, new Vector3(6f, 2f, -15f));
+
+        /// <summary>
+        /// N30, N29 for the Built-in include. The laser, the discoball and both realtime
+        /// movers light the same from a channel source as from a grid carrying what it
+        /// published: the laser's beams, movement and spin, the discoball, and the mover
+        /// heads, which pan and tilt with their beams.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N30_lasers_discoballs_and_mover_heads_follow_a_channel_source()
+            => CompareSourceWithGrid("N30", BuiltInIncludePrefabs, new Vector3[BuiltInIncludePrefabs.Length],
+                                     new Vector3(4.4f, 2f, -12f));
+
+        /// <summary>
+        /// Channels 1..<paramref name="count"/> through one include's read functions, drawn
+        /// by <paramref name="probe"/>: the value in red, the movement value in green and
+        /// the spin phase in blue. The grid is <paramref name="grid"/> with
+        /// <paramref name="spin"/> as its spin timer; with <paramref name="fromBuffer"/> the
+        /// manager's buffers are live as well.
+        /// </summary>
+        static Color[] ReadThrough(string probe, int count, RenderTexture grid, RenderTexture spin,
+                                   VRSL_URPLightManager manager, bool fromBuffer)
+        {
+            var shader = Shader.Find(probe);
+            Assert.IsNotNull(shader, $"the {probe} test shader is not in this project");
+            var target   = new RenderTexture(count, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
+            var readback = new Texture2D(count, 1, TextureFormat.RGBAFloat, false, true);
+            var material = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            var cmd      = new UnityEngine.Rendering.CommandBuffer { name = "VRSL test reads" };
+            try
+            {
+                target.Create();
+                material.SetTexture("_VRSLU_DMXGridRenderTexture",         grid);
+                material.SetTexture("_VRSLU_DMXGridRenderTextureMovement", grid);
+                material.SetTexture("_VRSLU_DMXGridSpinTimer",             spin);
+                material.SetVector("_VRSLDMXTexelSize", new Vector4(1f / grid.width, 1f / grid.height, grid.width, grid.height));
+                material.SetInteger("_VRSLU_DMXGridLayout", 0);
+                material.SetBuffer("_VRSLU_DMXChannels",    manager.ChannelBuffer);
+                material.SetBuffer("_VRSLU_DMXMovement",    manager.MovementBuffer);
+                material.SetBuffer("_VRSLU_DMXSpinPhase",   manager.SpinPhaseBuffer);
+                material.SetBuffer("_VRSLU_DMXStrobePhase", manager.StrobePhaseBuffer);
+                material.SetInteger("_VRSLU_DMXChannelCount", fromBuffer ? manager.ChannelCount : 0);
+                cmd.SetRenderTarget(target);
+                cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 3);
+                Graphics.ExecuteCommandBuffer(cmd);
+
+                var previous = RenderTexture.active;
+                RenderTexture.active = target;
+                readback.ReadPixels(new Rect(0, 0, count, 1), 0, 0, false);
+                readback.Apply(false);
+                RenderTexture.active = previous;
+                return readback.GetPixels();
+            }
+            finally
+            {
+                cmd.Release();
+                target.Release();
+                Object.DestroyImmediate(target);
+                Object.DestroyImmediate(readback);
+                Object.DestroyImmediate(material);
+            }
+        }
+
+        /// <summary>
+        /// N31. Both includes' read functions return, for every channel the rig patches, the
+        /// value, the movement value and the spin phase the manager holds for it: from the
+        /// channel buffer while it is live, with a grid of other values bound beside it, and
+        /// from a grid carrying the same values when it is not. Except the spin phase of the
+        /// 13th channels the correction table moves, on the grid: the includes' raw read,
+        /// which the spin phase comes through, does not apply the table, so it reads those
+        /// from their own cell.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N31_both_includes_read_a_channel_alike_from_the_buffer_and_the_grid(
+            [Values("Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads")] string probe)
+        {
+            var rig = VRSLDMXRig.Build();
+            var painted = new List<VRSLDMXRig.PaintedGrid>();
+            try
+            {
+                // Smoothing off, so the movement buffer holds the channel values themselves.
+                rig.Manager.movementSmoothingMax = 0f;
+                rig.Manager.movementSmoothingMin = 0f;
+                rig.Source.pattern   = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
+                rig.Source.universes = 2;
+                yield return rig.Step(4);
+
+                int count  = PatchedChannels;
+                var flat   = rig.Manager.PublishedChannels.ToArray();
+                var phases = new float[rig.Manager.SpinPhaseBuffer.count];
+                rig.Manager.SpinPhaseBuffer.GetData(phases);
+                var values = new float[count];
+                var spin   = new float[count];
+                for (int i = 0; i < count; i++)
+                {
+                    values[i] = flat[i] / 255f;
+                    spin[i]   = phases[i];
+                }
+                Assert.IsTrue(spin.Any(p => p > 0f), "no channel has a spin phase, so the spin half proves nothing");
+
+                var size = SizeOf(VRSLGridLayout.Horizontal);
+                var grid      = VRSLDMXRig.PaintGrid(values, VRSLGridLayout.Horizontal, size.x, size.y);
+                var spinGrid  = VRSLDMXRig.PaintGrid(spin, VRSLGridLayout.Horizontal, size.x, size.y);
+                var otherGrid = VRSLDMXRig.PaintGrid(ImageValues(count), VRSLGridLayout.Horizontal, size.x, size.y);
+                painted.AddRange(new[] { grid, spinGrid, otherGrid });
+
+                var fromGrid   = ReadThrough(probe, count, grid.Texture, spinGrid.Texture, rig.Manager, fromBuffer: false);
+                var fromBuffer = ReadThrough(probe, count, otherGrid.Texture, otherGrid.Texture, rig.Manager, fromBuffer: true);
+                var wrong = new List<string>();
+                for (int i = 0; i < count; i++)
+                {
+                    foreach (var (how, read) in new[] { ("grid", fromGrid[i]), ("buffer", fromBuffer[i]) })
+                    {
+                        bool spinRead = how == "buffer" || !VRSLDMXRig.ShiftedThirteenth(i + 1);
+                        if (Mathf.Abs(read.r - values[i]) > Half || Mathf.Abs(read.g - values[i]) > Half
+                         || (spinRead && Mathf.Abs(read.b - spin[i]) > 1e-3f))
+                            wrong.Add($"ch {i + 1} from the {how}: value {read.r * 255f:F2}, movement {read.g * 255f:F2}, "
+                                    + $"spin {read.b:F4}; sent {values[i] * 255f:F0}, spin {spin[i]:F4}");
+                    }
+                }
+                Assert.IsEmpty(wrong, $"{wrong.Count} reads differ from what the manager holds: "
+                                    + string.Join("; ", wrong.Take(30)));
+            }
+            finally
+            {
+                rig.Dispose();
+                foreach (var p in painted) p.Dispose();
             }
         }
 
