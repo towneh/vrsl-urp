@@ -1242,6 +1242,7 @@ namespace VRSL.URP
         static readonly int s_DMXGridSpin        = Shader.PropertyToID("_VRSLU_DMXGridSpinTimer");
         static readonly int s_DMXGridTexelSize   = Shader.PropertyToID("_VRSLDMXTexelSize");
         static readonly int s_DMXGridLayout      = Shader.PropertyToID("_VRSLU_DMXGridLayout");
+        static readonly int s_DMXGridStrobeStatus = Shader.PropertyToID("_VRSLU_DMXGridStrobeStatus");
 
         void PublishDMXGlobals()
         {
@@ -1255,6 +1256,10 @@ namespace VRSL.URP
             PublishDMX("Strobe Output",   s_DMXGridStrobe,      live.strobe);
             PublishDMX("Strobe Timings",  s_DMXGridStrobeTimer, live.strobeTimer);
             PublishDMX("Spin Timer",      s_DMXGridSpin,        live.spinTimer);
+            // The strobe output decode reads the main grid between frames, outside Render
+            // Graph, which sets every global it published back to black once a frame has
+            // rendered. Under a name the graph never sets, so it survives.
+            if (live.main != null) Shader.SetGlobalTexture(s_DMXGridStrobeStatus, live.main);
 
             // The surface decode (IndustryRead in VRSL-DMXFunctions-URP.hlsl) maps a channel to a
             // grid texel from a texel size. Publish it as our own global _VRSLDMXTexelSize — the

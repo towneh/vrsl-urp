@@ -26,7 +26,9 @@
 
             #define VRSL_DMX
 
-            Texture2D _VRSLU_DMXGridRenderTexture;
+            // The live main grid, under a name of its own: Render Graph sets the globals
+            // it published back to black after every frame, and this decode runs outside it.
+            Texture2D _VRSLU_DMXGridStrobeStatus;
             Texture2D _VRSLU_DMXGridStrobeTimer;
             SamplerState VRSL_PointClampSampler;
             float _NineUniverseMode, _EnableCompatibilityMode;
@@ -62,7 +64,7 @@
                 // if (_Time.y > 1.0)
                 // {
                     float4 p = _VRSLU_DMXGridStrobeTimer.SampleLevel(VRSL_PointClampSampler, IN.localTexcoord.xy, 0);
-                    float4 s = _VRSLU_DMXGridRenderTexture.SampleLevel(VRSL_PointClampSampler, IN.localTexcoord.xy, 0);
+                    float4 s = _VRSLU_DMXGridStrobeStatus.SampleLevel(VRSL_PointClampSampler, IN.localTexcoord.xy, 0);
                     float phase = p.r;
                     float status = getValue(s).r;
                     half strobe = (sin(phase));//Get sin wave
