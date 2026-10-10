@@ -255,10 +255,12 @@ namespace VRSL.URP.Tests
         /// the manager, which is set to that layout. Captured from a camera in front of
         /// the prefabs. With <paramref name="switchAtRuntime"/> the manager comes up on
         /// Horizontal, renders a few frames reading the grid wrongly, and is switched by
-        /// <c>SetDmxInput</c> instead.
+        /// <c>SetDmxInput</c> instead. The prefabs are patched at sectors 2 onwards, or
+        /// <paramref name="sectorOffset"/> further on.
         /// </summary>
         static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
-                                         System.Action<Texture2D> onCaptured, bool switchAtRuntime = false)
+                                         System.Action<Texture2D> onCaptured, bool switchAtRuntime = false,
+                                         int sectorOffset = 0)
         {
             using var rig = VRSLDMXRig.Build();
             var painted = new List<VRSLDMXRig.PaintedGrid>();
@@ -289,12 +291,12 @@ namespace VRSL.URP.Tests
                     {
                         s.useLegacySectorMode = true;
                         // Applied by the component's own Start, next frame.
-                        s.sector = 2 + i;
+                        s.sector = 2 + i + sectorOffset;
                     }
                     foreach (var f in go.GetComponentsInChildren<VRStageLighting_DMX_RealtimeLight>(true))
                     {
                         f.useLegacySectorMode = true;
-                        f.sector = 2 + i;
+                        f.sector = 2 + i + sectorOffset;
                         f.DriveFixtureShells();
                     }
                 }
@@ -442,6 +444,63 @@ namespace VRSL.URP.Tests
             {
                 if (frame    != null) Object.DestroyImmediate(frame);
                 if (previous != null) Object.DestroyImmediate(previous);
+            }
+        }
+
+        /// <summary>
+        /// G16. Every Horizontal fixture prefab renders the same patched at sectors 106 to
+        /// 115, near the end of the grid's third universe, as at sectors 2 to 11, with the
+        /// same values painted at both. The lasers, lens flares, discoballs and mover bodies
+        /// read through the Built-in include, which sizes the grid from Unity's automatic
+        /// texel size for the grid texture rather than from the manager; a wrong size moves
+        /// the read further from its cell the further down the grid a fixture sits.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G16_a_prefab_lights_the_same_at_the_end_of_the_grid()
+        {
+            const int offset = 104;
+            var size  = SizeOf(VRSLGridLayout.Horizontal);
+            int count = size.y / 2 * 13;
+            var near  = ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
+            var far   = new float[count];
+            for (int i = 0; i < far.Length; i++) far[i] = i < near.Length ? near[i] : 0.3f;
+            // The prefabs read at most 15 channels from their own sector's first.
+            int first = VRSLDMXRig.ChannelOf(2) - 1, last = VRSLDMXRig.ChannelOf(2 + HorizontalPrefabs.Length) + 15;
+            for (int i = first; i < last; i++) far[i + offset * 13] = near[i];
+
+            using (var painted = VRSLDMXRig.PaintGrid(far, VRSLGridLayout.Horizontal, size.x, size.y))
+            {
+                Debug.Log($"[G16] {painted.Shared.Count} channels share a texel on the Horizontal grid: "
+                        + string.Join(", ", painted.Shared.Select(ch => $"{ch}@{painted.Cells[ch - 1]}")));
+                var unreadable = Enumerable.Range(first, last - first)
+                                           .Where(i => Mathf.Abs(painted.Reads[i + offset * 13] - near[i]) > Half)
+                                           .Select(i => i + offset * 13 + 1).ToList();
+                Assert.IsEmpty(unreadable, "the far sectors do not carry the near sectors' values on channels "
+                                         + string.Join(", ", unreadable));
+            }
+
+            Texture2D nearFrame = null, farFrame = null;
+            try
+            {
+                yield return CaptureLayout(HorizontalPrefabs, VRSLGridLayout.Horizontal, near, t => nearFrame = t);
+                Assert.Greater(LitShare(nearFrame), 0.01f,
+                    "the frame at the start of the grid is nearly black, so the comparison would prove nothing");
+                yield return CaptureLayout(HorizontalPrefabs, VRSLGridLayout.Horizontal, far, t => farFrame = t,
+                                           sectorOffset: offset);
+
+                var result = VRSLImageCompare.Compare(nearFrame, farFrame);
+                Debug.Log($"[G16] sectors {2 + offset}-{1 + offset + HorizontalPrefabs.Length} against "
+                        + $"2-{1 + HorizontalPrefabs.Length}: {result}");
+                if (result.DifferingPercent > EdgeBudget)
+                    VRSLImageCompare.WriteImages(EvidenceFolder, "G16", nearFrame, farFrame);
+                Assert.LessOrEqual(result.DifferingPercent, EdgeBudget,
+                    $"the fixtures render differently at the end of the grid carrying the same values "
+                  + $"({result}). Images in {EvidenceFolder}");
+            }
+            finally
+            {
+                if (nearFrame != null) Object.DestroyImmediate(nearFrame);
+                if (farFrame  != null) Object.DestroyImmediate(farFrame);
             }
         }
 
