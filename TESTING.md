@@ -724,6 +724,21 @@ delivered every frame.
 | N27 | D | `VRSLTrussOscDmxSourceTests.N27` in the suite. No Basis packages needed: records built byte for byte the way Truss builds them, sent to a `VRSLTrussOscDmxSource` on a free loopback port as the `/truss/dmx` message `truss-relay --osc` sends, one blob per message | After 30 records: nothing dropped, 30 datagrams received and none ignored, `UniverseCount` 4, and every one of the 2080 channels read back through the shader equals `RampValue` of its flat address; the newest header carries the lane's own sequence and frame index, equal, under carrier 6. A record naming universe 4 grows the count to 5 exactly once and all 2600 channels read the Ramp. A record with a value bit flipped after its CRC was written is counted dropped with `BadCrc` and the buffer still reads the Ramp. Then four datagrams that are not ours, a message under another address, one with an int argument, a bundle wrapping a real record, and three bytes that are not OSC, all count as ignored, none decodes and none counts as a drop |
 | N28 | D | `VRSLTrussOscDmxSourceTests.N28` in the suite: the port already held by another socket when the source enables, then a source whose `listenAddress` is not an address | `Listening` false, `LastError` says the port is held by another program, one error logged naming the address and port, nothing received, and no exception out of enable. The bad address is reported as not an IP address, not as a held port. **By hand, the row that matters for a VJ:** `truss-relay --artnet --osc 127.0.0.1:12100` with a desk sending it Art-Net and nothing else running, a scene with a `VRSL_URPLightManager`, fixtures patched, and a Truss OSC DMX Source added from `VRSL → URP → DMX Config`; press Play. The inspector's Live block shows datagrams and records climbing at the relay's `--osc-rate` and the fixtures follow the desk; the DMX Monitor header reads `Channel buffer — VRSLTrussOscDmxSource`. Stop the relay and the counts stop; a second source on the same port reports the port held rather than fighting for it |
 
+### Runtime re-addressing
+
+`VRSLReaddressTests` in the suite. A world script moves a fixture to another address by
+setting its address fields and calling `ApplyAddress()` on the fixture, on either
+`VRStageLighting_DMX_RealtimeLight` or `VRStageLighting_DMX_Static`. Without the call a
+realtime light's body keeps glowing to the old address, and its beam follows only once
+something else makes the manager re-upload its fixture data. The par and blinder bodies
+don't follow DMX at all today (no body renderers wired), so on those only the beam moves.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| R1 | D | The rig on Ramp over two universes; one fixture moved from sector 3 to sector 10, another from sector 5 to universe 2 channel 1, each through `ApplyAddress()` and no manager call | From the second frame each beam decodes the colour of the fixture already at its new address, and every body renderer's property block carries the new `_DMXChannel` (131 and 521). Passed 2026-10-10; fails on the colour with `ApplyAddress()` not telling the manager, and on the body with it not redriving the body |
+| R2 | — | A Horizontal flasher (a `DMX_Static` with two renderers) moved to universe 2 channel 27, then to sector 3 in single-channel mode on channel 4 | Both renderers read `_DMXChannel` 547, then 44. Passed 2026-10-10; fails with `ApplyAddress()` empty |
+| R3 | D | The rig on Ramp with strobe disabled, every fixture's `ApplyAddress()` called once to settle, then again with nothing changed | Colour and intensity bit-identical across the second call for all 50 fixtures; every body still on its own sector's channel. Passed 2026-10-10 |
+
 ### Basis video → DMX (optional integration)
 
 Needs `com.basis.mediaplayer` in the project; without it the assembly is skipped and none of
