@@ -196,7 +196,18 @@ namespace VRSL.URP.Tests
                                                VRSLGridLayout.Legacy, VRSLGridLayout.Horizontal })
                 {
                     rig.Manager.disableStrobe = true;
+                    // What a switch costs: the bind runs inside the call, and the refresh
+                    // that follows is a fixture search when the fixtures are unchanged, as here.
+                    bool switching = layout != rig.Manager.GridLayout;
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
                     rig.Manager.SetDmxInput((int)layout);
+                    double bindMs = watch.Elapsed.TotalMilliseconds;
+                    watch.Restart();
+                    Object.FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Exclude);
+                    double searchMs = watch.Elapsed.TotalMilliseconds;
+                    if (switching)
+                        Debug.Log($"[G11] switch to {layout}: bound in {bindMs:F3} ms, fixture search {searchMs:F3} ms "
+                                + $"({VRSLDMXRig.FixtureCount} fixtures)");
                     Assert.AreEqual(layout, rig.Manager.GridLayout);
                     Assert.AreEqual((int)layout, Shader.GetGlobalInteger(s_GridLayout),
                         $"the switch to {layout} did not publish the layout");
