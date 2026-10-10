@@ -37,6 +37,12 @@ namespace VRSL.URP.EditorScripts
                 Debug.LogError("[VRSL URP] No DMX light manager with a channel buffer in the scene.");
                 return;
             }
+            if (mgr.dmxInput != VRSLDmxInput.StreamData)
+            {
+                Debug.LogError("[VRSL URP] The manager reads a video grid, so the channel buffer is "
+                             + "empty. Set its DMX Input to Stream data and validate again.");
+                return;
+            }
             if (mgr.ChannelCount == 0)
             {
                 Debug.LogError("[VRSL URP] The manager has no channel source publishing. Add a "

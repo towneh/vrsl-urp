@@ -54,19 +54,16 @@ namespace VRSL.URP.BasisIntegration
             }
 
             Debug.Log($"[VRSL] {(added ? "Added" : "Bound")} the DMX record source on "
-                    + $"\"{go.name}\". Raise Minimum Universes to the show's size if you know "
-                    + "it: the count grows when a block names a higher universe, and each "
-                    + "growth reallocates the manager's buffers.", source);
+                    + $"\"{go.name}\". The lights read it when the DMX manager's DMX Input is "
+                    + "Stream data; on a grid input it waits on standby. Raise Minimum Universes "
+                    + "to the show's size if you know it: the count grows when a block names a "
+                    + "higher universe, and each growth reallocates the manager's buffers.", source);
 
             if (go.GetComponent<BasisVideoRenderTextureOutput>() != null)
-                Debug.LogWarning($"[VRSL] \"{go.name}\" also frames a DMX grid into the RT. The "
-                               + "records win from here: the manager reads the channel buffer "
-                               + "whenever a source is publishing, and this one publishes from "
-                               + "the moment it is enabled whether or not a record has arrived. "
-                               + "On a path that re-encodes the video the buffer stays zeroed and "
-                               + "the fixtures go dark rather than falling back to the picture, "
-                               + "so a scene wanting the grid as a backstop has to disable this "
-                               + "component itself when no records turn up.", source);
+                Debug.Log($"[VRSL] \"{go.name}\" also frames a DMX grid into the RT. Both can "
+                        + "stay: the DMX manager's DMX Input chooses which one the lights read, "
+                        + "and a world can switch between them while it runs with SetDmxInput.",
+                          source);
         }
     }
 }
