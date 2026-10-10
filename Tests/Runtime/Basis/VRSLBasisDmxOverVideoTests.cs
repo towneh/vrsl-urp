@@ -47,15 +47,15 @@ namespace VRSL.URP.Tests
         // is a transpose: the RT's bottom-right corner samples the strip's
         // top-left. Getting this the other way round still fills the RT and
         // still lights the rig, reading every channel off the wrong fixture.
-        static readonly Vector2 UvBL = new Vector2(0f, 8f / 1080f);
-        static readonly Vector2 UvBR = new Vector2(0f, 216f / 1080f);
-        static readonly Vector2 UvTR = new Vector2(1f, 216f / 1080f);
-        static readonly Vector2 UvTL = new Vector2(1f, 8f / 1080f);
+        internal static readonly Vector2 UvBL = new Vector2(0f, 8f / 1080f);
+        internal static readonly Vector2 UvBR = new Vector2(0f, 216f / 1080f);
+        internal static readonly Vector2 UvTR = new Vector2(1f, 216f / 1080f);
+        internal static readonly Vector2 UvTL = new Vector2(1f, 8f / 1080f);
 
         const string RawGridRT =
             "Packages/town.mr.vrsl-urp/Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
 
-        static string Fixture()
+        internal static string Fixture()
         {
             string where = System.Environment.GetEnvironmentVariable("VRSL_TRUSS_FIXTURES");
             if (string.IsNullOrEmpty(where)) where = HostedFixtures;
