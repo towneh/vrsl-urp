@@ -5,6 +5,7 @@
 ### Added
 
 - **One DMX manager for any grid.** **DMX Input** on the manager chooses which grid in the video the lights read: the **Horizontal**, **Vertical** or **Legacy grid**. Every fixture takes the layout from the manager, so one prefab works on any layout. A world can switch while it runs with `SetDmxInput` (0 to 2, ready for a UI Dropdown).
+- **Every fixture follows a channel source.** Flashers, light bars, strobes, lasers, lens flares, the discoball and the mover heads read the channel source with the realtime lights, with the same movement smoothing, strobe and gobo spin.
 - **Legacy grids and fixtures.** Realtime lights decode a Legacy grid, and the migration tool brings Legacy and Vertical fixtures, both of upstream's Legacy prefab sets included, onto the Horizontal prefabs.
 - **`ApplyAddress()` re-patches a DMX fixture while the world runs,** beam and body together.
 
@@ -12,6 +13,7 @@
 
 Upgrading from 0.2.0-rc.6:
 
+- **The fixture shaders that read DMX need shader model 4.5.**
 - **Open and save each scene with a DMX manager once.** Its five decode texture fields become DMX Input and a **Grid Textures** asset. Re-import the profiling sample.
 - **Fixtures take the grid layout from the manager.** A material's `_EnableCompatibilityMode` no longer does anything, and `Runtime/Shaders/VRSLDMX.cginc` is gone: a custom shader that included it should use the shared DMX includes in `Runtime/Shaders/Shared/` instead.
 - **Some fixtures look different.** Migrated Legacy and Vertical fixtures carry the Horizontal prefabs' v2.4 materials.
@@ -19,7 +21,7 @@ Upgrading from 0.2.0-rc.6:
 ### Fixed
 
 - **Decoding:** strobe from a video grid, and Vertical and Legacy managers' strobe timing.
-- **Fixtures:** the Vertical flasher glows only at its lens.
+- **Fixtures:** mover heads now turn with their beams under a channel source and draw their depth in the same pose as their colour, and the Vertical flasher glows only at its lens.
 - **Editor:** Play mode no longer saves changes into the package's decode textures, and the control panel's strobe toggle no longer edits the package's materials.
 
 ## [0.2.0-rc.6] — 2026-10-05
