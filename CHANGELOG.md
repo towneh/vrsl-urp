@@ -14,7 +14,7 @@
 
 Upgrading from 0.2.0-rc.6:
 
-- **The fixture shaders that read DMX need shader model 4.5.**
+- **Unity 6000.4 and URP 17.4 or newer.** The fixture shaders that read DMX need shader model 4.5.
 - **Open and save each scene with a DMX manager once.** Its five decode texture fields become DMX Input and a **Grid Textures** asset, and a manager beside an enabled channel source comes up on Stream data, since a source is now read only under Stream data. Re-import the profiling sample.
 - **Fixtures take the grid layout from the manager.** A material's `_EnableCompatibilityMode` no longer does anything, and `Runtime/Shaders/VRSLDMX.cginc` is gone: a custom shader that included it should use the shared DMX includes in `Runtime/Shaders/Shared/` instead.
 - **Some fixtures look different.** Migrated Legacy and Vertical fixtures carry the Horizontal prefabs' v2.4 materials.

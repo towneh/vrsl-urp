@@ -26,8 +26,8 @@ The package is a standalone fork of [VR Stage Lighting](https://github.com/AcCho
 
 ## What you need
 
-- Unity 6000.0 or newer
-- Universal Render Pipeline 17.0 or newer, in Forward or Forward+ mode
+- Unity 6000.4 or newer
+- Universal Render Pipeline 17.4 or newer, in Forward or Forward+ mode
 - AudioLink 3.1.2 or newer. The package depends on it, so install it even for a DMX-only rig.
 - A desktop-class GPU. The package uses compute shaders and a full-screen raymarch, so it is built for desktop VR and flatscreen rather than for Quest.
 
