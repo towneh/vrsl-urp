@@ -259,15 +259,18 @@ namespace VRSL.URP.Tests
         /// <paramref name="sectorOffset"/> further on. With <paramref name="source"/> the
         /// synthetic source publishes that pattern, held still, over two universes beside
         /// the grid, and <paramref name="onReady"/> sees the rig just before the capture.
-        /// <paramref name="facing"/> turns each prefab, upright when it is not given. The camera sits at <paramref name="eye"/>, or far enough back
-        /// for ten prefabs.
+        /// <paramref name="facing"/> turns each prefab, upright when it is not given. The
+        /// camera sits at <paramref name="eye"/>, or far enough back for ten prefabs.
+        /// <paramref name="lateChange"/> runs two frames before the capture, so the capture
+        /// is the first frame rendered after the manager's next update.
         /// </summary>
         static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
                                          System.Action<Texture2D> onCaptured, bool switchAtRuntime = false,
                                          int sectorOffset = 0,
                                          VRSL_SyntheticDMXChannelSource.Pattern? source = null,
                                          System.Action<VRSLDMXRig> onReady = null,
-                                         Vector3[] facing = null, Vector3? eye = null)
+                                         Vector3[] facing = null, Vector3? eye = null,
+                                         System.Action<VRSLDMXRig> lateChange = null)
         {
             using var rig = VRSLDMXRig.Build();
             var painted = new List<VRSLDMXRig.PaintedGrid>();
@@ -354,6 +357,7 @@ namespace VRSL.URP.Tests
 
                 for (int i = 0; i < 12; i++)
                 {
+                    if (i == 10) lateChange?.Invoke(rig);
                     yield return null;
                     rig.RenderFrame();
                 }
@@ -742,6 +746,112 @@ namespace VRSL.URP.Tests
             {
                 rig.Dispose();
                 foreach (var p in painted) p.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// N32, the strobe gate. A 13-channel light bar patched on the same sector as one
+        /// of the rig's realtime movers, strobing from the synthetic source's Ramp: frame by
+        /// frame, the bar glows exactly when the realtime light is open.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N32_a_shader_driven_fixture_strobes_with_the_realtime_light_on_its_channels()
+        {
+            // Sector 10's strobe channel reads 136 on the Ramp: above half, the fastest rate.
+            const int sector = 10;
+            var rig = VRSLDMXRig.Build();
+            GameObject bar = null;
+            try
+            {
+                rig.Source.pattern   = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
+                rig.Source.universes = 2;
+                rig.PointBeamsDown();
+
+                var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + UrpIncludePrefabs[1]);
+                bar = Object.Instantiate(prefab, rig.Floor.transform.parent);
+                // Clear of the rig, turned so the side it glows from faces the camera.
+                bar.transform.localPosition = new Vector3(-10f, 1.5f, -6f);
+                bar.transform.localRotation = Quaternion.Euler(UrpIncludeFacing[1]);
+                foreach (var s in bar.GetComponentsInChildren<VRStageLighting_DMX_Static>(true))
+                {
+                    s.useLegacySectorMode = true;
+                    s.sector              = sector;
+                    s.enableStrobe        = true;
+                }
+                var view = rig.AddSecondaryCamera(targetSize: 128, eye: new Vector3(-10f, 1.5f, -8f),
+                                                  lookAt: new Vector3(-10f, 1.5f, -6f));
+                VRSLCameraFilter.RegisterMainView(view.Camera);
+
+                yield return rig.Step(4);
+                rig.Calibrate();
+
+                var light = new List<bool>();
+                var glow  = new List<float>();
+                for (int frame = 0; frame < 60; frame++)
+                {
+                    yield return null;
+                    rig.RenderFrame();
+                    light.Add(rig.ReadLights()[sector].colorAndIntensity.w > 0f);
+                    var image = VRSLImageCompare.Read(view.Target);
+                    glow.Add(image.GetPixels32().Max(p => Mathf.Max(p.r, Mathf.Max(p.g, p.b))));
+                    Object.DestroyImmediate(image);
+                }
+
+                Assert.IsTrue(light.Contains(true) && light.Contains(false),
+                    "the realtime light never changed state, so the row compares nothing");
+                float lit = glow.Where((g, i) => light[i]).Min(), dark = glow.Where((g, i) => !light[i]).Max();
+                Debug.Log($"[N32] {light.Count(o => o)} of {light.Count} frames open; the bar's brightest pixel "
+                        + $"is at least {lit} with the light open and at most {dark} with it closed");
+                Assert.Greater(lit, dark + 32f,
+                    "the bar does not go dark exactly when the realtime light on its channels closes: "
+                  + string.Join(" ", light.Select((o, i) => $"{(o ? "open" : "shut")}:{glow[i]:F0}")));
+            }
+            finally
+            {
+                if (bar != null) Object.DestroyImmediate(bar);
+                rig.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// N33. With the synthetic source switched off mid-run, the first frame
+        /// rendered after the manager next updates matches the same scene that never had a
+        /// source: every fixture is back on the grid at once. Both of N29's and N30's sets,
+        /// strobe held.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N33_switching_the_source_off_puts_every_fixture_back_on_the_grid_the_next_frame()
+        {
+            var grid = ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
+            var sets = new[]
+            {
+                (UrpIncludePrefabs, UrpIncludeFacing, new Vector3(6f, 2f, -15f)),
+                (BuiltInIncludePrefabs, new Vector3[BuiltInIncludePrefabs.Length], new Vector3(4.4f, 2f, -12f)),
+            };
+            foreach (var (prefabs, facing, eye) in sets)
+            {
+                Texture2D switchedOff = null, never = null;
+                try
+                {
+                    yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, grid, t => switchedOff = t,
+                                               source: VRSL_SyntheticDMXChannelSource.Pattern.Fixtures,
+                                               facing: facing, eye: eye,
+                                               lateChange: rig => rig.Source.enabled = false);
+                    yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, grid, t => never = t,
+                                               facing: facing, eye: eye);
+                    var result = VRSLImageCompare.Compare(never, switchedOff);
+                    Debug.Log($"[N33] {prefabs[0]} and the rest, source switched off against no source: {result}");
+                    if (result.DifferingPercent > SameValuesBudget)
+                        VRSLImageCompare.WriteImages(EvidenceFolder, "N33", never, switchedOff);
+                    Assert.LessOrEqual(result.DifferingPercent, SameValuesBudget,
+                        $"a frame after the source switched off still differs from one that never had a source "
+                      + $"({result}). Images in {EvidenceFolder}");
+                }
+                finally
+                {
+                    if (switchedOff != null) Object.DestroyImmediate(switchedOff);
+                    if (never       != null) Object.DestroyImmediate(never);
+                }
             }
         }
 

@@ -787,8 +787,12 @@ namespace VRSL.URP
             cmd.SetComputeBufferParam(cs, k, s_DMXMovement,     MovementBuffer);
             cmd.SetComputeIntParam(   cs,    s_StrobeStatic,    strobeRate == StrobeRate.Dynamic ? 0 : 1);
             cmd.SetComputeVectorParam(cs,    s_StrobeFreqs,     StrobeFreqs);
-            // Sampled once per frame so both eyes and every mirror strobe together.
-            cmd.SetComputeFloatParam( cs,    s_TimeY,           Time.timeSinceLevelLoad);
+            // Sampled once per frame so both eyes and every mirror strobe together, and
+            // published with it so the shader-driven fixtures strobe with this sample
+            // whenever the frame renders.
+            float timeY = Time.timeSinceLevelLoad;
+            cmd.SetComputeFloatParam( cs,    s_TimeY,           timeY);
+            Shader.SetGlobalFloat(s_TimeY, timeY);
             cmd.SetComputeIntParam(   cs,    s_StrobeDisabled,  disableStrobe ? 1 : 0);
             cmd.SetComputeTextureParam(cs, k, s_DMXMainTex,     main);
             cmd.SetComputeTextureParam(cs, k, s_DMXMovementTex, movement);
@@ -913,9 +917,9 @@ namespace VRSL.URP
         }
 
         // What DispatchDecode hands the compute for strobing from the channel buffer, for
-        // the shader-driven fixtures, which read the same globals. Sampled here rather
-        // than in DispatchDecode so a scene with no realtime fixtures still gets it; both
-        // read Time.timeSinceLevelLoad within one frame, so the two agree.
+        // the shader-driven fixtures, which read the same globals. DispatchDecode
+        // publishes the time again with the sample the compute takes; this covers a scene
+        // with no realtime fixtures, where it does not run.
         void PublishStrobeClock()
         {
             Shader.SetGlobalInteger(s_StrobeStatic, strobeRate == StrobeRate.Dynamic ? 0 : 1);
@@ -1232,8 +1236,9 @@ namespace VRSL.URP
 
         /// <summary>
         /// Where DMX channel values come from, when they arrive as bytes rather
-        /// than as a video frame. Null leaves the CRT decode chain in charge, which
-        /// is the unmodified behaviour.
+        /// than as a video frame. While it publishes, the realtime lights and every
+        /// shader-driven fixture read the channel buffer and no grid; null, or a source
+        /// publishing nothing, leaves the CRT decode chain in charge of both.
         /// </summary>
         public IVRSLDMXChannelSource ChannelSource
         {
