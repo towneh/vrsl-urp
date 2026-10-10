@@ -8,12 +8,12 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: VRSL-ParLight-FixtureMat-Legacy-5CH
-  m_Shader: {fileID: 4800000, guid: 75766aa491bc3034791ba036cd616ea7, type: 3}
+  m_Shader: {fileID: 4800000, guid: 7f807ad06936e6011eefaa7033bcf698, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords: []
+  m_ValidKeywords:
+  - _5CH_MODE
   m_InvalidKeywords:
-  - _CHANNEL_MODE
   - _EMISSION
   - _ENABLECOMPATIBILITYMODE_ON
   - _FORWARD_Y
@@ -135,7 +135,7 @@ Material:
     - _BlockLengthY: 0
     - _BulbMaxIntensity: 1
     - _BumpScale: 1
-    - _ChannelMode: 1
+    - _ChannelMode: 2
     - _ClippingThreshold: 0.5
     - _ConeWidth: 0
     - _CurveMod: 0.06
