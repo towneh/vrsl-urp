@@ -1700,9 +1700,12 @@ namespace VRSL.URP
         {
             if (_injectionSubscribed) return;
 
+            // Before the prepasses, not only the opaques: a mover head, a laser or a lens
+            // flare draws its depth and normals from the grid too, and URP's depth
+            // prepasses and the surface prepass run ahead of the opaques.
             _gridTexturePass ??= new VRSLDMXLightPasses.GridTexturePass
             {
-                renderPassEvent = RenderPassEvent.BeforeRenderingOpaques,
+                renderPassEvent = RenderPassEvent.BeforeRenderingPrePasses,
             };
             _surfacePrepass ??= new VRSLSurfacePrepass(surfacePropertiesShader);
             _tileCullPass   ??= new VRSLTileCullPass(lightCullShader, this);
