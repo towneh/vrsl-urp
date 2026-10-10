@@ -51,13 +51,12 @@ namespace VRSL.URP.EditorScripts
                 return;
             }
 
-            // Finding a synthetic source in the scene does not make it the one that
-            // filled the buffer. A second source, a disabled one, or any other
-            // IVRSLDMXChannelSource the manager took instead would be compared against
-            // a ramp it never published, and the result would read as a real pass or a
-            // real failure. Only the manager knows who is publishing.
-            var source = Object.FindAnyObjectByType<VRSL_SyntheticDMXChannelSource>();
-            if (source == null || !ReferenceEquals(mgr.ChannelSource, source))
+            // The source the manager publishes from, never one found in the scene: a
+            // second source, a disabled one, or any other IVRSLDMXChannelSource the
+            // manager took instead would be compared against a ramp it never published,
+            // and the result would read as a real pass or a real failure.
+            var source = mgr.ChannelSource as VRSL_SyntheticDMXChannelSource;
+            if (source == null)
             {
                 Debug.LogWarning("[VRSL URP] Validation compares against the synthetic source's Ramp "
                                + "pattern, and the manager is not publishing from one. Add a Synthetic "

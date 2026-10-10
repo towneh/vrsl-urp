@@ -81,8 +81,9 @@ namespace VRSL.URP
             // it ran. It did not: the first sweep collected its fixtures, built its
             // tiles and culled them, and every tile came back empty because no channel
             // values ever reached a fixture. The PlayMode rig assigns it the same way,
-            // for the same reason.
-            var source = UnityEngine.Object.FindAnyObjectByType<VRSL_SyntheticDMXChannelSource>();
+            // for the same reason. Taken from under the sweep's root, where the scene
+            // builder puts it, so another source loaded beside the sweep is never bound.
+            var source = root.GetComponentInChildren<VRSL_SyntheticDMXChannelSource>();
             if (source == null)
             {
                 outcome.error = "The sweep scene has no synthetic DMX source, so the fixtures "
