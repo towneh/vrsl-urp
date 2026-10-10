@@ -2,7 +2,22 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **One DMX manager for any grid.** **DMX Input** on the manager chooses which grid in the video the lights read: the **Horizontal**, **Vertical** or **Legacy grid**. Every fixture takes the layout from the manager, so one prefab works on any layout. A world can switch while it runs with `SetDmxInput` (0 to 2, ready for a UI Dropdown).
+- **Legacy grids.** Realtime lights decode a Legacy grid.
+
+### Changed
+
+Upgrading from 0.2.0-rc.6:
+
+- **Open and save each scene with a DMX manager once.** Its five decode texture fields become DMX Input and a **Grid Textures** asset. Re-import the profiling sample.
+- **Fixtures take the grid layout from the manager.** A material's `_EnableCompatibilityMode` no longer does anything, and `Runtime/Shaders/VRSLDMX.cginc` is gone: a custom shader that included it should use the shared DMX includes in `Runtime/Shaders/Shared/` instead.
+
+### Fixed
+
+- **Decoding:** strobe from a video grid, and Vertical and Legacy managers' strobe timing.
+- **Editor:** Play mode no longer saves changes into the package's decode textures, and the control panel's strobe toggle no longer edits the package's materials.
 
 ## [0.2.0-rc.6] — 2026-10-05
 
