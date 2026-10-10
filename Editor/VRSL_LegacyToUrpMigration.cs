@@ -37,78 +37,8 @@ namespace VRSL.URP.EditorScripts
         const string MENU_PATH = "VRSL/URP/Migrate Scene Fixtures (Add URP Siblings)";
         const string MENU_PATH_INPLACE = "VRSL/URP/Convert Custom Fixtures In-Place (Component + Material)";
 
-        // Upstream prefab GUID -> URP prefab GUID. Keep the friendly name in-line so the
-        // table stays self-documenting. Kind drives which field-translation path runs.
-        static readonly PrefabPair[] PREFAB_PAIRS = new[]
-        {
-            new PrefabPair("2aa50be2d32099842af2903a918a56f7", "17c6ee43b8af20aead4a4ccc0c57c3cb", "AudioLink Mover Spotlight",  FixtureKind.AudioLink),
-            new PrefabPair("dd0fe316ce2ca824ead0901561087fd3", "9aa51ab9f0738edf41d2ab84a38c2784", "AudioLink Mover Washlight",  FixtureKind.AudioLink),
-            new PrefabPair("269647a339f4d1c47951638c83aa839b", "2156195184d840df408a82f7ec31ecd9", "AudioLink Static Blinder",   FixtureKind.AudioLink),
-            new PrefabPair("161d81f8a11b22d42ae4e81f522939d3", "3e6759ca4cb0a19bc3f20487b6c9f2e1", "AudioLink Static ParLight",  FixtureKind.AudioLink),
-
-            new PrefabPair("f5be3cfe3f15bfb4e9477904c5af9daf", "d3e39e2f24901667db5024c000b520cc", "DMX H 13CH Mover Spotlight", FixtureKind.Dmx),
-            new PrefabPair("b3e8ff051cc2d684aa255ceccce9b96f", "b3dde321f5bf01b7f34b56b4f022e9e3", "DMX H 13CH Mover Washlight", FixtureKind.Dmx),
-            new PrefabPair("e9dde3e86ccb8ca4bb4ecbe35a6fa7b1", "0c48d81deda9b2b42e666ee404a350e5", "DMX H 13CH Static Blinder",  FixtureKind.Dmx),
-            new PrefabPair("946b3c09cfa93244c90a4b0ac7764b44", "51451bcea7766727ec63db8b7aebe996", "DMX H 13CH Static ParLight", FixtureKind.Dmx),
-
-            new PrefabPair("d9cab657bd2dff14ea5425c2c4c4679e", "12eb166a9c94e2b764534fdf24bef23b", "DMX L 13CH Mover Spotlight", FixtureKind.Dmx),
-            new PrefabPair("41c8453c8957aec4292212174d351a36", "c9012c802489a64d6e6fcba1c829b084", "DMX L 13CH Mover Washlight", FixtureKind.Dmx),
-            new PrefabPair("9310469001d6cdf4db2145f9fddd7933", "4bd409afbd3dcc666a94dfe0de01c748", "DMX L 13CH Static Blinder",  FixtureKind.Dmx),
-            new PrefabPair("dd7cad5fc7f12624ea58efde5c3cd633", "89fe5f214c335d0bb96312a00515613b", "DMX L 13CH Static ParLight", FixtureKind.Dmx),
-
-            new PrefabPair("9a6d4144bda0d3c4ba95593af446b653", "b4eb189266f0fc064ad34abf97e760db", "DMX V 13CH Mover Spotlight", FixtureKind.Dmx),
-            new PrefabPair("88bee1a0ddf090d4bb0721b30240c949", "9433adb565b60265dd32d0b3d29495fe", "DMX V 13CH Mover Washlight", FixtureKind.Dmx),
-            new PrefabPair("d7a8bacd5310e8e499962549ef931c57", "e9c7d3d37ed1b74a9921c9a2d3b05d95", "DMX V 13CH Static Blinder",  FixtureKind.Dmx),
-            new PrefabPair("2ff8eb277ef9d7047b12d127b2eaeb36", "d762a8e3b9fd9395d8fc6d1a572d4429", "DMX V 13CH Static ParLight", FixtureKind.Dmx),
-
-            new PrefabPair("5ae312c8e69488842994fd62a7609adc", "4bd6fe160f434eaa8ae0ad2b7e28d203", "DMX H 5CH Static Blinder",   FixtureKind.Dmx),
-            new PrefabPair("6a94fea4f85300a44b9e29ba54430110", "e0009838b6fe1c3137b25f4e3658ae65", "DMX H 5CH Static ParLight",  FixtureKind.Dmx),
-            new PrefabPair("94d6ff221dc5748458941750e422114f", "4138d57a3de4cdd841630c4e41cfed3d", "DMX V 5CH Static Blinder",   FixtureKind.Dmx),
-            new PrefabPair("3b7bdfab2bd7abf4295be3356f6f3617", "6b5a89d8241bd316dc7ff37e0135e98c", "DMX V 5CH Static ParLight",  FixtureKind.Dmx),
-            new PrefabPair("fbb24c41d42d23c4296c31f5aca73942", "345a06b27d787f46fdcdf223175c83ef", "DMX H 5CH Static LightBar",  FixtureKind.Dmx),
-
-            // Shader-driven fixtures: the URP prefab keeps the same Static (or Laser) component
-            // as upstream, and the fields copy across by name.
-            new PrefabPair("75c269de381facb4cae616c67f83f519", "4a8f7532473a5e9bf1361da1fe4b77a4", "AudioLink Basic Laser",       FixtureKind.AudioLink),
-            // The discoballs become realtime lights; upstream's root is a 25 m projection
-            // volume, so its scale is not carried over.
-            new PrefabPair("a7acda2f5fe7dfd4aaa49ec10a2d5586", "5e2a7c4b9d1f4e8a8b3c2d1e0f9a8b7c", "AudioLink Discoball",         FixtureKind.AudioLink, matchScale: false),
-            new PrefabPair("092158b73b160384f904e33d35a09123", "9e7791cf3563706421af503421e7aa61", "AudioLink Static Flasher",    FixtureKind.AudioLink),
-            new PrefabPair("c33f8d4d996a9ba47b86d420e4cdb05b", "7d6e97747390e7734fb4ae838b5f9667", "AudioLink Static Lightbar",   FixtureKind.AudioLink),
-
-            new PrefabPair("3d6c0b40980bcd34aba9183a62ecbd21", "9c1eb5ab51addbc7b6095123da60df6a", "DMX H 13CH Static Laser",     FixtureKind.Dmx),
-            new PrefabPair("22192b7ad03f22a4db578b035fdca38d", "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c", "DMX H 1CH Discoball",         FixtureKind.Dmx, matchScale: false),
-            new PrefabPair("6d00d693f1608ab49ad08d18dbe1fa02", "5404970a7e74686098d7d8dfef0597f2", "DMX H 1CH Static Flasher",    FixtureKind.Dmx),
-            new PrefabPair("96ffbd2a722ae324e892d303e2ee9a2a", "2e796cb68041073f45927683e29e808f", "DMX H 13CH Static LightBar",  FixtureKind.Dmx),
-            new PrefabPair("c19e8fd46b4abdf49bb7b6cdc62acdde", "cc5c662de3ca6d24fc0081cbf207613c", "DMX H 15CH Static MultiLightBar", FixtureKind.Dmx),
-            new PrefabPair("46d1954298362974887b80dc3d70ee5f", "6ba550857dbb8b35cdd51d4d4a127435", "DMX H 5CH Static 6x4 Strobe", FixtureKind.Dmx),
-
-            new PrefabPair("55058c5ef8c22d04991b48a99a10acfe", "97c0bfb4d24415d89174bdeec0068d50", "DMX V 13CH Static Laser",     FixtureKind.Dmx),
-            new PrefabPair("8bb1407f1f0e2cc48b9bbf35ca1951a6", "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c", "DMX V 1CH Discoball",         FixtureKind.Dmx, matchScale: false),
-            new PrefabPair("65a96b17618e51548a669749173d48ff", "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c", "DMX L 1CH Discoball",         FixtureKind.Dmx, matchScale: false),
-            new PrefabPair("1c08f57da0cd0414c85f64b373431921", "1d6e08d6803e8af6b1c636ef1fdfa3c5", "DMX V 1CH Static Flasher",    FixtureKind.Dmx),
-            new PrefabPair("b2a0b640363bc10408fb7a3803939fa0", "c95416bf6eef62f2a394420e7f9eb36d", "DMX V 13CH Static LightBar",  FixtureKind.Dmx),
-            new PrefabPair("b8873da88b401dd4ab93b061c5ddf750", "a0940e84628bd52352bbe8a8c7825f32", "DMX V 15CH Static MultiLightBar", FixtureKind.Dmx),
-            new PrefabPair("51b428740444288448e19c88c64d5311", "49912180c2c2cec3d31d578111f9c053", "DMX V 5CH Static 6x4 Strobe", FixtureKind.Dmx),
-            new PrefabPair("6b906c7cc969ac346a656210549c02c7", "91cec4a5ecd89a3b271d226cf9bc78f4", "DMX V 5CH Example Surface",   FixtureKind.Dmx),
-        };
-
-        static readonly Dictionary<string, PrefabPair> PAIRS_BY_UPSTREAM_GUID =
-            PREFAB_PAIRS.ToDictionary(p => p.UpstreamGuid);
-
-        // Upstream fixture prefabs this package ships no twin for. Named in the summary so an
-        // author knows which instances were passed over, rather than finding out in the headset.
-        static readonly Dictionary<string, string> UNPORTED_UPSTREAM = new Dictionary<string, string>
-        {
-            { "55ac9bf95dc63bb4fb6ba2095d73cde2", "DMX L 13CH Static Laser" },
-            { "a38b2f56984259247bded9aa1b1ee149", "DMX L 1CH Static Flasher" },
-            { "b1b81594f59ca5d469ad06808051c682", "DMX L 13CH Static LightBar" },
-            { "dd68d30b9f0b34442aac2fb4540ae553", "DMX L 15CH Static MultiLightBar" },
-            { "6f5c5d0af7e69e242ad56ac13882e04e", "DMX L 5CH Static 6x4 Strobe" },
-            { "27dc7840f76fbc1469f1e64bdbc9991a", "DMX L 5CH Example Surface" },
-            { "8c5b2abb4f158154cad77f35b9ce2643", "DMX H 5CH Example Surface" },
-            { "78bf4380452cfbe4aa8154e17a189b28", "DMX V 5CH Static LightBar" },
-        };
+        static readonly Dictionary<string, VRSLMigrationPair> PAIRS_BY_UPSTREAM_GUID =
+            VRSLMigrationTable.Pairs.ToDictionary(p => p.UpstreamGuid);
 
         // Upstream component type names we look up by string (no compile-time reference to upstream).
         const string UPSTREAM_AL_STATIC    = "VRSL.VRStageLighting_AudioLink_Static";
@@ -150,7 +80,7 @@ namespace VRSL.URP.EditorScripts
 
             // Snapshot candidates before mutating — otherwise we'd walk into the URP siblings
             // we just inserted and try to migrate them too.
-            var candidates = new List<(GameObject go, PrefabPair pair)>();
+            var candidates = new List<(GameObject go, VRSLMigrationPair pair)>();
             var unported = new Dictionary<string, int>();
             foreach (var root in scene.GetRootGameObjects())
             {
@@ -159,7 +89,7 @@ namespace VRSL.URP.EditorScripts
                     if (!TryGetSourceGuid(t.gameObject, out string sourceGuid)) continue;
                     if (PAIRS_BY_UPSTREAM_GUID.TryGetValue(sourceGuid, out var pair))
                         candidates.Add((t.gameObject, pair));
-                    else if (UNPORTED_UPSTREAM.TryGetValue(sourceGuid, out var name))
+                    else if (VRSLMigrationTable.Unported.TryGetValue(sourceGuid, out var name))
                     {
                         unported.TryGetValue(name, out int n);
                         unported[name] = n + 1;
@@ -176,7 +106,8 @@ namespace VRSL.URP.EditorScripts
 
             foreach (var (go, pair) in candidates)
             {
-                if (HasUrpSiblingAlready(go.transform, pair.UrpGuid))
+                if (HasUrpSiblingAlready(go.transform, pair.UrpGuid)
+                    || (pair.Rc6UrpGuid != null && HasUrpSiblingAlready(go.transform, pair.Rc6UrpGuid)))
                 {
                     skipped++;
                     continue;
@@ -360,7 +291,7 @@ namespace VRSL.URP.EditorScripts
 
         // ── Insertion ─────────────────────────────────────────────────────────────
 
-        static GameObject AddUrpSibling(Transform source, PrefabPair pair)
+        static GameObject AddUrpSibling(Transform source, VRSLMigrationPair pair)
         {
             string urpPath = AssetDatabase.GUIDToAssetPath(pair.UrpGuid);
             if (string.IsNullOrEmpty(urpPath))
@@ -389,12 +320,12 @@ namespace VRSL.URP.EditorScripts
 
         // ── Field translation ─────────────────────────────────────────────────────
 
-        static void CopyParameters(GameObject source, GameObject target, FixtureKind kind)
+        static void CopyParameters(GameObject source, GameObject target, VRSLMigrationKind kind)
         {
             switch (kind)
             {
-                case FixtureKind.AudioLink: CopyAudioLinkParameters(source, target); break;
-                case FixtureKind.Dmx:       CopyDmxParameters(source, target);       break;
+                case VRSLMigrationKind.AudioLink: CopyAudioLinkParameters(source, target); break;
+                case VRSLMigrationKind.Dmx:       CopyDmxParameters(source, target);       break;
             }
         }
 
@@ -699,30 +630,6 @@ namespace VRSL.URP.EditorScripts
             if (f == null) return;
             f.SetValue(dst, value);
         }
-
-        // ── Data ──────────────────────────────────────────────────────────────────
-
-        readonly struct PrefabPair
-        {
-            public readonly string UpstreamGuid;
-            public readonly string UrpGuid;
-            public readonly string FriendlyName;
-            public readonly FixtureKind Kind;
-            /// <summary>Copy the source's local scale onto the sibling. Off for a source
-            /// whose root scale is a projection volume rather than the fixture.</summary>
-            public readonly bool MatchScale;
-
-            public PrefabPair(string upstream, string urp, string friendly, FixtureKind kind, bool matchScale = true)
-            {
-                UpstreamGuid = upstream;
-                UrpGuid = urp;
-                FriendlyName = friendly;
-                Kind = kind;
-                MatchScale = matchScale;
-            }
-        }
-
-        enum FixtureKind { AudioLink, Dmx }
     }
 }
 #endif
