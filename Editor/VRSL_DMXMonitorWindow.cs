@@ -325,8 +325,9 @@ namespace VRSL.URP.EditorScripts
         {
             var rt = mgr.LiveTextures.main;
             if (rt == null) return "none assigned — nothing to read";
-            int universes = GridUniverses(rt, mgr.GridLayout);
-            return $"{mgr.GridLayout}: {rt.name}  {rt.width}×{rt.height}  "
+            var layout    = mgr.GridLayout ?? VRSLGridLayout.Horizontal;
+            int universes = GridUniverses(rt, layout);
+            return $"{layout}: {rt.name}  {rt.width}×{rt.height}  "
                  + (universes == 1 ? "(1 universe)" : $"({universes} universes)");
         }
 
@@ -335,7 +336,7 @@ namespace VRSL.URP.EditorScripts
         {
             if (mgr == null) return 0;
             if (mgr.ChannelCount > 0) return mgr.UniverseCount;
-            return GridUniverses(mgr.LiveTextures.main, mgr.GridLayout);
+            return GridUniverses(mgr.LiveTextures.main, mgr.GridLayout ?? VRSLGridLayout.Horizontal);
         }
 
         /// <summary>Universes the decode grid holds. A Legacy grid holds one. The others
@@ -417,7 +418,7 @@ namespace VRSL.URP.EditorScripts
             // Buffers and textures bind per kernel, so the accessor's inputs have to be
             // supplied here even though the manager already publishes them as globals.
             cs.SetBuffer(kernel, "_VRSLU_DMXChannels", mgr.ChannelBuffer);
-            cs.SetInt("_VRSLU_DMXGridLayout", (int)mgr.GridLayout);
+            cs.SetInt("_VRSLU_DMXGridLayout", (int)(mgr.GridLayout ?? VRSLGridLayout.Horizontal));
             cs.SetInt("_VRSLU_DMXChannelCount", mgr.ChannelCount);
             var main = mgr.LiveTextures.main;
             if (main != null)

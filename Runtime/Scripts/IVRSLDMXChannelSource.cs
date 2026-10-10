@@ -68,8 +68,10 @@ namespace VRSL.URP
     /// costs precision and adds the only part of the read path that can be
     /// wrong. A source implementing this hands the manager the bytes directly.
     ///
-    /// The texture path is unaffected: a scene with no channel source keeps
-    /// reading the CRT chain exactly as before.
+    /// The manager reads a source only while its DMX Input is Stream data. Under
+    /// a grid input the source stays bound and is still asked for its blocks
+    /// every frame, so nothing piles up and Stream data reads current values the
+    /// moment it is chosen again.
     /// </summary>
     public interface IVRSLDMXChannelSource
     {
@@ -81,9 +83,9 @@ namespace VRSL.URP
         /// <summary>
         /// The blocks arriving this frame, or false when none are. False means
         /// "nothing new", not "stop publishing": the manager keeps the values it
-        /// already holds. Returning to the CRT chain is done by clearing the
-        /// manager's <c>ChannelSource</c>, which a component does in its own
-        /// <c>OnDisable</c>.
+        /// already holds. A source detaches by clearing the manager's
+        /// <c>ChannelSource</c>, which a component does in its own
+        /// <c>OnDisable</c>; under Stream data the lights then go dark.
         ///
         /// A block must name a universe below <see cref="UniverseCount"/>, and its
         /// run must stay inside both its universe's usable slots and the values

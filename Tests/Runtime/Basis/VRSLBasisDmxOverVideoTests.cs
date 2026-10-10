@@ -94,6 +94,7 @@ namespace VRSL.URP.Tests
                 // Assigned rather than left to the source's OnEnable, which only
                 // lands if the manager already claimed the singleton.
                 rig.Scene.Manager.ChannelSource = rig.Source;
+                rig.Scene.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
             }
 
             if (picture)
@@ -378,33 +379,40 @@ namespace VRSL.URP.Tests
             var rig = Open(records: true, picture: true);
             try
             {
+                // The picture first, on the Horizontal grid, with the records on standby.
+                rig.Scene.Manager.SetDmxInput((int)VRSLDmxInput.HorizontalGrid);
                 yield return Until(rig, 30, 0);
                 yield return rig.Scene.Step(30);
 
+                Assert.AreEqual(0, rig.Scene.Manager.ChannelCount,
+                    "the records are published on a grid input, so they are not on standby");
                 uint before = rig.Source.RecordsDecoded;
-                var buffer = rig.Scene.ReadChannels();
-                var grid   = rig.Scene.ReadGridChannels(Channels);
-                Assert.AreEqual(before, rig.Source.RecordsDecoded,
-                    "a record landed between the two reads, so they are from two frames");
+                var grid    = rig.Scene.ReadGridChannels(Channels);
+
+                // Then the records, the frame after choosing Stream data. Standby kept
+                // draining them, so they are current at once.
+                rig.Scene.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+                yield return rig.Scene.Step(1);
+                uint arrived = rig.Source.RecordsDecoded - before;
+                var buffer   = rig.Scene.ReadChannels();
 
                 int fromRecords = OffsetOf(buffer, Channels);
                 int fromPicture = OffsetOf(grid, Channels);
-                // Offsets are modular, so the distance between them is too.
-                int apart = ((fromPicture - fromRecords) % Modulus + Modulus) % Modulus;
+                // Offsets are modular, so the distance between them is too. The records
+                // that arrived between the two reads account for some of it.
+                int apart = ((fromRecords - fromPicture) % Modulus + Modulus) % Modulus;
                 if (apart > Modulus / 2) apart -= Modulus;
-                float frames = apart / (float)Step;
-                Debug.Log($"N25: records at offset {fromRecords}, picture at {fromPicture}, "
-                        + $"{frames:F1} frames apart");
+                float frames = apart / (float)Step - arrived;
+                Debug.Log($"N25: picture at offset {fromPicture}, records at {fromRecords} with "
+                        + $"{arrived} record(s) between the reads, {frames:F1} frames apart");
 
-                // ReadChannels binds the manager's own channel count, so it takes
-                // whichever branch MainChannel would take for a fixture. With both
-                // feeds live it comes back exact, including on the channels the
-                // texture accessor shifts, which is what says the records win.
+                // Under Stream data the fixtures read the records exactly, including on
+                // the channels the texture accessor shifts.
                 CollectionAssert.IsEmpty(
                     Disagreeing(buffer, fromRecords, Channels, Half * 255f, "records"),
-                    "with both feeds live the fixtures must read the records, and this "
-                  + "is the grid's shifted channels showing up in what they read");
-                AssertPictureReadsTheRamp(grid, fromPicture, "beside the records");
+                    "under Stream data the fixtures must read the records, and this is the "
+                  + "grid's shifted channels showing up in what they read");
+                AssertPictureReadsTheRamp(grid, fromPicture, "with the records on standby");
                 Assert.LessOrEqual(Mathf.Abs(frames), 2f,
                     "the two paths are further apart in time than the CRT's damping accounts for");
             }

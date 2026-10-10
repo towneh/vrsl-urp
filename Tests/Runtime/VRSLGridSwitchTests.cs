@@ -17,19 +17,19 @@ namespace VRSL.URP.Tests
     /// </summary>
     class VRSLGridSwitchTests : VRSLDMXTest
     {
-        static readonly VRSLGridLayout[] Layouts =
+        internal static readonly VRSLGridLayout[] Layouts =
             { VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy };
 
         static readonly int s_GridLayout = Shader.PropertyToID("_VRSLU_DMXGridLayout");
 
         /// <summary>The last channel the rig patches: its last fixture's thirteenth.</summary>
-        static int PatchedChannels => VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 12;
+        internal static int PatchedChannels => VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 12;
 
         /// <summary>Video values arrive through an 8-bit grid and the decode chain's own
         /// formats, so a few byte steps rather than half of one.</summary>
-        const float VideoTolerance = 3f / 255f;
+        internal const float VideoTolerance = 3f / 255f;
 
-        static VRSLGridTextures Shipped()
+        internal static VRSLGridTextures Shipped()
         {
             var asset = AssetDatabase.LoadAssetAtPath<VRSLGridTextures>(
                 AssetDatabase.GUIDToAssetPath(VRSLWiring.GridTexturesGuid));
@@ -44,10 +44,10 @@ namespace VRSL.URP.Tests
 
         // In the editor an update mode set on an asset is written to the asset, so every
         // row here puts the originals back however it ends.
-        static Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode> Snapshot(VRSLGridTextures asset)
+        internal static Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode> Snapshot(VRSLGridTextures asset)
             => Crts(asset).Distinct().ToDictionary(c => c, c => c.updateMode);
 
-        static void Restore(Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode> modes)
+        internal static void Restore(Dictionary<CustomRenderTexture, CustomRenderTextureUpdateMode> modes)
         {
             foreach (var pair in modes) if (pair.Key != null) pair.Key.updateMode = pair.Value;
         }
@@ -60,7 +60,7 @@ namespace VRSL.URP.Tests
         /// every fifth fixture's strobe channel is high and the rest are at zero, which
         /// holds them on.
         /// </summary>
-        static float[] Pattern(VRSLGridLayout layout)
+        internal static float[] Pattern(VRSLGridLayout layout)
         {
             var values = new float[PatchedChannels];
             int k = (int)layout;
@@ -84,7 +84,7 @@ namespace VRSL.URP.Tests
         static Vector3 Rgb(VRSL_URPLightManager.VRSLLightData d)
             => new Vector3(d.colorAndIntensity.x, d.colorAndIntensity.y, d.colorAndIntensity.z);
 
-        static List<string> Mismatches(VRSLDMXRig rig, float[] pattern)
+        internal static List<string> Mismatches(VRSLDMXRig rig, float[] pattern)
         {
             var lights = rig.ReadLights();
             var wrong = new List<string>();
@@ -102,7 +102,7 @@ namespace VRSL.URP.Tests
         /// <summary>Step until every fixture lights the pattern, or give up after four
         /// seconds: the incoming chain glides from what it last held to the live grid.
         /// The frames it took go in <paramref name="frames"/>[0].</summary>
-        static IEnumerator Settle(VRSLDMXRig rig, float[] pattern, List<string> wrong, int[] frames)
+        internal static IEnumerator Settle(VRSLDMXRig rig, float[] pattern, List<string> wrong, int[] frames)
         {
             wrong.Clear();
             for (int f = 1; f <= 240; f++)
@@ -140,7 +140,7 @@ namespace VRSL.URP.Tests
         /// <summary>The decode chain holds its first seconds back for data to arrive
         /// (the colour stage waits three, the strobe timer one), counted on the game
         /// clock since the scene loaded (`_Time.y`), which the runner restarts per test.</summary>
-        static IEnumerator PastTheChainsStartUp(VRSLDMXRig rig)
+        internal static IEnumerator PastTheChainsStartUp(VRSLDMXRig rig)
         {
             if (rig.Manager.GetComponent<ChainClock>() == null) rig.Manager.gameObject.AddComponent<ChainClock>();
             while (Time.timeSinceLevelLoad < 3.5f)

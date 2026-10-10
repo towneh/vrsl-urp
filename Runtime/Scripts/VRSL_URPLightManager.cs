@@ -34,9 +34,13 @@ namespace VRSL.URP
         public static VRSL_URPLightManager Instance { get; private set; }
 
         // ── Inspector ─────────────────────────────────────────────────────────
-        [Tooltip("Which DMX grid your video carries. Pick the one your desk or encoder "
-               + "sends; the wrong one lights the wrong fixtures, or none. Has no effect "
-               + "while a channel source such as Truss SEI is publishing.")]
+        [Tooltip("Where the lights take their DMX from. A grid reads that layout from the "
+               + "video: pick the one your desk or encoder sends, since the wrong one lights "
+               + "the wrong fixtures, or none. Stream data reads a channel source, such as Truss "
+               + "records from the media player or the OSC source (VRSL → URP → DMX Config adds "
+               + "one), and leaves the lights dark without one. Switching to a grid takes a few "
+               + "frames to settle. SetDmxInput takes the same choices as numbers, 0 to 3, for a "
+               + "UI Dropdown.")]
         public VRSLDmxInput dmxInput = VRSLDmxInput.HorizontalGrid;
 
         [Tooltip("The textures that decode the video's grid, a set for each layout. Fills "
@@ -185,13 +189,15 @@ namespace VRSL.URP
                + "you are on. With both managers in a scene, set it on both.")]
         public bool forceOwnNormals = false;
 
-        /// <summary>The grid layout <see cref="dmxInput"/> reads.</summary>
-        public VRSLGridLayout GridLayout => (VRSLGridLayout)dmxInput;
+        /// <summary>The grid layout <see cref="dmxInput"/> reads, or null under Stream
+        /// data.</summary>
+        public VRSLGridLayout? GridLayout =>
+            dmxInput == VRSLDmxInput.StreamData ? null : (VRSLGridLayout)dmxInput;
 
         /// <summary>The decode textures for the layout this manager reads, or an empty
-        /// set when it has no Grid Textures.</summary>
+        /// set under Stream data or when it has no Grid Textures.</summary>
         public VRSLGridTextures.Set LiveTextures =>
-            gridTextures != null ? gridTextures.For(GridLayout) : default;
+            gridTextures != null && GridLayout is { } layout ? gridTextures.For(layout) : default;
 
         /// <summary>The level this manager is running at.</summary>
         public VRSLQualityLevel Quality => VRSLQualityLevel.For(quality);
@@ -708,9 +714,38 @@ namespace VRSL.URP
                 _configDirty = false;
             }
             UploadChannels();
+            SayIfStreamDataIsQuiet();
             AdvanceState();
             PublishStrobeClock();
             VolumetricStats.Tick();
+        }
+
+        /// <summary>Seconds of play Stream data may go with nothing to read before the
+        /// manager says so: long enough that a world whose source comes up a little after
+        /// the manager, or that chooses Stream data on join, never hears about it.</summary>
+        internal const float StreamQuietGrace = 5f;
+
+        float _streamQuietSince = -1f;
+        bool  _streamQuietSaid;
+
+        /// <summary>
+        /// Stream data is the event's choice, so it is never refused or switched away
+        /// from, and with nothing sending it the lights are dark. This says why, once.
+        /// </summary>
+        void SayIfStreamDataIsQuiet()
+        {
+            if (_boundInput != VRSLDmxInput.StreamData || ChannelCount > 0)
+            {
+                _streamQuietSince = -1f;
+                _streamQuietSaid  = false;
+                return;
+            }
+            if (_streamQuietSince < 0f) _streamQuietSince = Time.time;
+            if (_streamQuietSaid || Time.time - _streamQuietSince < StreamQuietGrace) return;
+            _streamQuietSaid = true;
+            Debug.LogWarning("[VRSL URP] Stream data is chosen but nothing in this scene is sending it, "
+                           + "so the lights are dark. Add a channel source (VRSL → URP → DMX Config) or "
+                           + "choose a grid input.", this);
         }
 
         // ── The decode ────────────────────────────────────────────────────────
@@ -754,8 +789,10 @@ namespace VRSL.URP
                 || StrobePhaseBuffer   == null
                 || MovementBuffer      == null) return;
             // With a channel source publishing the kernel reads no grid at all, so a
-            // scene with none still lights; without one there is nothing to decode.
-            if (live.main == null && ChannelCount == 0) return;
+            // scene with none still lights; without one there is nothing to decode. Under
+            // Stream data with nothing sending it the dispatch still runs, on the black
+            // stand-ins, so the lights go dark rather than holding their last values.
+            if (live.main == null && ChannelCount == 0 && _boundInput != VRSLDmxInput.StreamData) return;
 
             // Every texture the kernel declares has to be bound, whichever branch it
             // takes: an unbound compute texture is an error at dispatch.
@@ -771,7 +808,7 @@ namespace VRSL.URP
             cmd.BeginSample(DecodeMarker);
             cmd.SetComputeVectorParam(cs, s_DMXGridTexelSize, new Vector4(
                 1f / main.width, 1f / main.height, main.width, main.height));
-            cmd.SetComputeIntParam(   cs,    s_DMXGridLayout,   (int)GridLayout);
+            cmd.SetComputeIntParam(   cs,    s_DMXGridLayout,   (int)(GridLayout ?? VRSLGridLayout.Horizontal));
             cmd.SetComputeIntParam(   cs,    s_FixtureCount,    FixtureCount);
             cmd.SetComputeIntParam(   cs,    s_GoboCount,       GoboCount);
             cmd.SetComputeBufferParam(cs, k, s_FixtureConfigs,  FixtureConfigBuffer);
@@ -939,6 +976,19 @@ namespace VRSL.URP
         void UploadChannels()
         {
             int universes = ChannelSource != null ? ChannelSource.UniverseCount : 0;
+            if (_boundInput != VRSLDmxInput.StreamData)
+            {
+                // On standby: still bound, and still drained, since a source keeps what
+                // it decodes until it is asked and a partial snapshot dropped there would
+                // leave Stream data reading stale channels once it is chosen again.
+                if (universes > 0)
+                {
+                    EnsureFlatSpace(universes);
+                    ScatterBlocks(universes);
+                }
+                StopPublishing();
+                return;
+            }
             if (universes <= 0) { StopPublishing(); return; }
 
             int count = universes * VRSLDMX.SlotsPerUniverse;
@@ -1132,10 +1182,10 @@ namespace VRSL.URP
         public void MarkConfigDirty() => _configDirty = true;
 
         /// <summary>
-        /// Choose the grid the lights read, while the world runs: 0 the Horizontal grid,
-        /// 1 the Vertical grid, 2 the Legacy grid. A number rather than
-        /// <see cref="VRSLDmxInput"/>, so a UI Dropdown's <c>On Value Changed (Int32)</c>
-        /// and an interpreted world script can call it.
+        /// Choose where the lights take their DMX from, while the world runs: 0 the
+        /// Horizontal grid, 1 the Vertical grid, 2 the Legacy grid, 3 Stream data. A
+        /// number rather than <see cref="VRSLDmxInput"/>, so a UI Dropdown's
+        /// <c>On Value Changed (Int32)</c> and an interpreted world script can call it.
         /// </summary>
         /// <remarks>
         /// On the manager that owns the singleton, a grid's textures are bound and
@@ -1151,18 +1201,18 @@ namespace VRSL.URP
         /// puts the video into a grid has to switch to the new layout's grid as well,
         /// or the lights read a grid nothing is writing.
         ///
-        /// A number outside 0 to 2, or a grid the Grid Textures asset has no textures
+        /// A number outside 0 to 3, or a grid the Grid Textures asset has no textures
         /// for, is refused with a warning, and nothing changes. Choosing what is already
         /// chosen changes nothing. On a manager that does not own the singleton this only
         /// changes the setting, which it reads once it takes over.
         /// </remarks>
         public void SetDmxInput(int input)
         {
-            if (input < (int)VRSLDmxInput.HorizontalGrid || input > (int)VRSLDmxInput.LegacyGrid)
+            if (input < (int)VRSLDmxInput.HorizontalGrid || input > (int)VRSLDmxInput.StreamData)
             {
                 Debug.LogWarning($"[VRSL URP] There's no DMX input {input}. Use 0 for the Horizontal "
-                               + "grid, 1 for the Vertical grid or 2 for the Legacy grid. "
-                               + $"The lights stay on {Describe(_boundInput ?? dmxInput)}.", this);
+                               + "grid, 1 for the Vertical grid, 2 for the Legacy grid or 3 for Stream "
+                               + $"data. The lights stay on {Describe(_boundInput ?? dmxInput)}.", this);
                 return;
             }
             var value = (VRSLDmxInput)input;
@@ -1181,12 +1231,18 @@ namespace VRSL.URP
         }
 
         /// <summary>An input as the lights' messages name it.</summary>
-        static string Describe(VRSLDmxInput input) => $"the {(VRSLGridLayout)input} grid";
+        static string Describe(VRSLDmxInput input) => input switch
+        {
+            VRSLDmxInput.StreamData => "Stream data",
+            _                       => $"the {(VRSLGridLayout)input} grid",
+        };
 
         /// <summary>Whether this manager can read <paramref name="input"/>, warning when
-        /// it cannot.</summary>
+        /// it cannot. Stream data always can: with nothing sending it the lights are dark,
+        /// which is the event's choice to make.</summary>
         bool CanRead(VRSLDmxInput input)
         {
+            if (input == VRSLDmxInput.StreamData) return true;
             var layout = (VRSLGridLayout)input;
             if (gridTextures != null && gridTextures.For(layout).main != null) return true;
             Debug.LogWarning(gridTextures == null
@@ -1236,9 +1292,10 @@ namespace VRSL.URP
 
         /// <summary>
         /// Where DMX channel values come from, when they arrive as bytes rather
-        /// than as a video frame. While it publishes, the realtime lights and every
-        /// shader-driven fixture read the channel buffer and no grid; null, or a source
-        /// publishing nothing, leaves the CRT decode chain in charge of both.
+        /// than as a video frame. Read only under Stream data, where the realtime lights
+        /// and every shader-driven fixture read the channel buffer and no grid, and are
+        /// dark when this is null or publishes nothing. Under a grid input a source stays
+        /// bound, on standby, and is read again as soon as Stream data is chosen.
         /// </summary>
         public IVRSLDMXChannelSource ChannelSource
         {
@@ -1359,8 +1416,8 @@ namespace VRSL.URP
             };
         }
 
-        /// <summary>Make <see cref="dmxInput"/> what this manager reads: the other
-        /// layouts' textures stopped, this one's bound and published.</summary>
+        /// <summary>Make <see cref="dmxInput"/> what this manager reads: every layout's
+        /// textures stopped but a grid input's own, which are bound and published.</summary>
         void BindInput()
         {
             StopInactiveLayouts();
@@ -1394,13 +1451,25 @@ namespace VRSL.URP
         static readonly int s_DMXGridTexelSize   = Shader.PropertyToID("_VRSLDMXTexelSize");
         static readonly int s_DMXGridLayout      = Shader.PropertyToID("_VRSLU_DMXGridLayout");
         static readonly int s_DMXGridStrobeStatus = Shader.PropertyToID("_VRSLU_DMXGridStrobeStatus");
+        static readonly int[] s_DMXGridGlobals =
+            { s_DMXGrid, s_DMXGridMovement, s_DMXGridStrobe, s_DMXGridStrobeTimer, s_DMXGridSpin, s_DMXGridStrobeStatus };
 
         void PublishDMXGlobals()
         {
             // Unset, a global int reads 0, which is Horizontal: the default path and a scene
             // with no DMX manager read the grid the way they always have.
-            Shader.SetGlobalInteger(s_DMXGridLayout, (int)GridLayout);
+            if (GridLayout is { } layout) Shader.SetGlobalInteger(s_DMXGridLayout, (int)layout);
             PublishStrobeDisabled();
+
+            if (GridLayout == null)
+            {
+                // The fixture shaders read the grid whenever no channels are published, so
+                // under Stream data with nothing sending it they have to find black there,
+                // not a grid left from before the switch or a texture that was never set.
+                foreach (int id in s_DMXGridGlobals)
+                    Shader.SetGlobalTexture(id, Texture2D.blackTexture);
+                return;
+            }
 
             var live = LiveTextures;
             PublishDMX("Color/Intensity", s_DMXGrid,            live.main);
@@ -1482,10 +1551,11 @@ namespace VRSL.URP
         }
 
         /// <summary>
-        /// Stop the CRTs of the layouts not in use. The package ships every one OnDemand,
-        /// so in a clean project there is nothing to do; this is for assets an earlier
-        /// session or another tool left running, which would otherwise decode a grid
-        /// nothing reads, every frame.
+        /// Stop the CRTs of the layouts not in use, which under Stream data is all of
+        /// them. The package ships every one OnDemand, so in a clean project this only
+        /// stops the ones this manager started; it is also for assets an earlier session
+        /// or another tool left running, which would otherwise decode a grid nothing
+        /// reads, every frame.
         /// </summary>
         void StopInactiveLayouts()
         {
@@ -1493,7 +1563,7 @@ namespace VRSL.URP
             var live = LiveTextures;
             for (int l = 0; l <= (int)VRSLGridLayout.Legacy; l++)
             {
-                if (l == (int)GridLayout) continue;
+                if (GridLayout is { } layout && l == (int)layout) continue;
                 var set = gridTextures.For((VRSLGridLayout)l);
                 StopUnlessLive(set.main,        live);
                 StopUnlessLive(set.movement,    live);

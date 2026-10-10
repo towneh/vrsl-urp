@@ -339,6 +339,7 @@ namespace VRSL.URP.Tests
                 // Assigned rather than left to the source's own OnEnable, which
                 // only lands if the manager already claimed the singleton.
                 rig.Manager.ChannelSource = rig.Source;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
             }
             return rig;
             }
@@ -863,7 +864,7 @@ namespace VRSL.URP.Tests
             cs.SetBuffer(_validateKernel, "_VRSLU_DMXChannels",
                          Manager.ChannelBuffer ?? _dummyChannels);
             cs.SetInt("_VRSLU_DMXChannelCount", 0);
-            cs.SetInt("_VRSLU_DMXGridLayout", (int)Manager.GridLayout);
+            cs.SetInt("_VRSLU_DMXGridLayout", (int)(Manager.GridLayout ?? VRSLGridLayout.Horizontal));
             cs.SetTexture(_validateKernel, "_DMXMainTex", grid);
             cs.SetVector("_VRSLDMXTexelSize", new Vector4(
                 1f / grid.width, 1f / grid.height, grid.width, grid.height));

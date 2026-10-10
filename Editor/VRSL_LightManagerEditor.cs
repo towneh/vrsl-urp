@@ -241,8 +241,10 @@ namespace VRSL.URP.EditorScripts
                 var input = serializedObject.FindProperty(nameof(VRSL_URPLightManager.dmxInput));
                 if (input != null && !input.hasMultipleDifferentValues)
                     EditorGUILayout.LabelField(
-                        $"Grid Textures is read for the {input.enumDisplayNames[input.enumValueIndex]}, "
-                      + "which DMX Input sets.",
+                        input.enumValueIndex == (int)VRSLDmxInput.StreamData
+                            ? "Grid Textures is not read under Stream data."
+                            : $"Grid Textures is read for the {input.enumDisplayNames[input.enumValueIndex]}, "
+                            + "which DMX Input sets.",
                         EditorStyles.wordWrappedMiniLabel);
             }
         }

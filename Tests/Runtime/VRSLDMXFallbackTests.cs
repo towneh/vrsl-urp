@@ -7,9 +7,9 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// What a scene does when a channel source is present, and what it goes back
-    /// to when there is not one. N4 is the regression that matters most: every
-    /// existing scene is a scene with no channel source.
+    /// What a scene does with a channel source under each kind of DMX input: read
+    /// alone under Stream data, dark when it goes, and on standby under a grid. N4 is
+    /// the regression that matters most: every existing scene reads a grid.
     ///
     /// Rows N2, N3 and N4 of TESTING.md.
     /// </summary>
@@ -70,7 +70,7 @@ namespace VRSL.URP.Tests
         }
 
         [UnityTest]
-        public IEnumerator N3_clearing_the_source_returns_to_the_texture_path_within_a_frame()
+        public IEnumerator N3_clearing_the_source_under_stream_data_darkens_the_lights_within_a_frame()
         {
             var rig = VRSLDMXRig.Build();
             try
@@ -82,7 +82,8 @@ namespace VRSL.URP.Tests
                 yield return rig.Step(VRSLDMXRig.Frames(1f));
 
                 Assert.Greater(rig.Manager.ChannelCount, 0, "the source never started publishing");
-                var published = Colours(rig.ReadLights());
+                Assert.IsTrue(rig.ReadLights().Any(l => l.colorAndIntensity.w > 0f),
+                    "nothing lit from the source, so going dark would prove nothing");
 
                 rig.Source.enabled = false;         // the component clears the manager in OnDisable
                 yield return rig.Step(2);
@@ -91,37 +92,47 @@ namespace VRSL.URP.Tests
                     "the manager is still publishing after its source was disabled");
                 Assert.AreEqual(0, rig.Manager.UniverseCount);
 
-                var after = Colours(rig.ReadLights());
-                bool changed = Enumerable.Range(0, VRSLDMXRig.FixtureCount)
-                                         .Any(i => Vector3.Distance(published[i], after[i]) > SameDecode);
-                Assert.IsTrue(changed,
-                    "the decode did not move when the source went away, so the fixtures latched "
-                  + "at the buffer's last values instead of falling back");
+                var after = rig.ReadLights();
+                for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)
+                    Assert.AreEqual(Vector4.zero, after[i].colorAndIntensity,
+                        $"fixture {i} still lights with Stream data chosen and nothing sending it: "
+                      + "it latched at the buffer's last values or fell back to a grid");
             }
             finally { rig.Dispose(); }
         }
 
         [UnityTest]
-        public IEnumerator N4_a_scene_with_no_source_decodes_as_it_did_before_one_was_attached()
+        public IEnumerator N4_a_grid_input_decodes_the_same_with_a_source_on_standby_as_with_none()
         {
             var rig = VRSLDMXRig.Build();
             try
             {
-                // Calibration needs a source to identify fixtures by, so the
-                // no-source baseline is taken by putting it down again afterwards.
+                // Calibration needs a source to identify fixtures by, so the grid
+                // baseline is taken afterwards, with the source still attached.
                 yield return rig.Step(4);
                 rig.Calibrate();
-                rig.Manager.ChannelSource = null;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.HorizontalGrid);
                 yield return rig.Step(VRSLDMXRig.Frames(1f));
 
-                Assert.AreEqual(0, rig.Manager.ChannelCount, "nothing should be publishing now");
+                Assert.AreEqual(0, rig.Manager.ChannelCount, "the source is published on a grid input");
+                Assert.IsTrue(ReferenceEquals(rig.Manager.ChannelSource, rig.Source),
+                    "choosing a grid detached the source rather than leaving it on standby");
                 var baseline = Colours(rig.ReadLights());
 
-                // Hand over, let it drive the whole patch, then take it away again.
-                // Comparing before against after inside one session is the check a
-                // cross-branch capture was reaching for, without needing the other
-                // branch to have a working scene to capture from.
+                // Every existing scene is a scene with no source, so the standby source
+                // going away must change nothing either.
+                rig.Manager.ChannelSource = null;
+                yield return rig.Step(VRSLDMXRig.Frames(1f));
+                var none = Colours(rig.ReadLights());
+                for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)
+                    Assert.Less(Vector3.Distance(baseline[i], none[i]), SameDecode,
+                        $"fixture {i} decodes differently with the source detached than on standby");
+
+                // Stream data, then the grid again. Comparing before against after inside
+                // one session is the check a cross-branch capture was reaching for,
+                // without needing the other branch to have a working scene to capture from.
                 rig.Manager.ChannelSource = rig.Source;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
                 yield return rig.Step(VRSLDMXRig.Frames(1f));
 
                 Assert.Greater(rig.Manager.ChannelCount, 0, "the source never took over");
@@ -129,16 +140,16 @@ namespace VRSL.URP.Tests
                 Assert.IsTrue(
                     Enumerable.Range(0, VRSLDMXRig.FixtureCount)
                               .Any(i => Vector3.Distance(baseline[i], driven[i]) > SameDecode),
-                    "attaching a source changed nothing, so this row is not testing the handover");
+                    "Stream data changed nothing, so this row is not testing the switch");
 
-                rig.Manager.ChannelSource = null;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.HorizontalGrid);
                 yield return rig.Step(VRSLDMXRig.Frames(1f));
 
                 var restored = Colours(rig.ReadLights());
                 for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)
                     Assert.Less(Vector3.Distance(baseline[i], restored[i]), SameDecode,
-                        $"fixture {i} did not return to its no-source decode. Every existing scene "
-                      + "is a no-source scene, so this is the regression that matters most");
+                        $"fixture {i} did not return to its grid decode. Every existing scene "
+                      + "reads a grid, so this is the regression that matters most");
             }
             finally { rig.Dispose(); }
         }

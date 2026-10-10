@@ -229,7 +229,7 @@ namespace VRSL.URP.Tests
         /// get one value between them, so the frames compare the read rather than what
         /// a layout can carry (see G6).
         /// </summary>
-        static float[] ImageValues(int count)
+        internal static float[] ImageValues(int count)
         {
             var values = new float[count];
             for (int i = 0; i < count; i++)
@@ -254,24 +254,29 @@ namespace VRSL.URP.Tests
         /// <paramref name="values"/> painted in <paramref name="layout"/> and handed to
         /// the manager, which is set to that layout. Captured from a camera in front of
         /// the prefabs. With <paramref name="switchAtRuntime"/> the manager comes up on
-        /// Horizontal, renders a few frames reading the grid wrongly, and is switched by
+        /// <paramref name="startOn"/>, renders a few frames reading the wrong thing, and is switched by
         /// <c>SetDmxInput</c> instead. The prefabs are patched at sectors 2 onwards, or
         /// <paramref name="sectorOffset"/> further on. With <paramref name="source"/> the
         /// synthetic source publishes that pattern, held still, over two universes beside
         /// the grid, and <paramref name="onReady"/> sees the rig just before the capture.
+        /// The manager reads <paramref name="input"/>, or Stream data with a source and the
+        /// layout without one.
         /// <paramref name="facing"/> turns each prefab, upright when it is not given. The
         /// camera sits at <paramref name="eye"/>, or far enough back for ten prefabs.
         /// <paramref name="lateChange"/> runs two frames before the capture, so the capture
         /// is the first frame rendered after the manager's next update.
         /// </summary>
-        static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
+        internal static IEnumerator CaptureLayout(string[] prefabs, VRSLGridLayout layout, float[] values,
                                          System.Action<Texture2D> onCaptured, bool switchAtRuntime = false,
                                          int sectorOffset = 0,
                                          VRSL_SyntheticDMXChannelSource.Pattern? source = null,
                                          System.Action<VRSLDMXRig> onReady = null,
                                          Vector3[] facing = null, Vector3? eye = null,
-                                         System.Action<VRSLDMXRig> lateChange = null)
+                                         System.Action<VRSLDMXRig> lateChange = null,
+                                         VRSLDmxInput? input = null,
+                                         VRSLDmxInput startOn = VRSLDmxInput.HorizontalGrid)
         {
+            var chosen = input ?? (source.HasValue ? VRSLDmxInput.StreamData : (VRSLDmxInput)layout);
             using var rig = VRSLDMXRig.Build();
             var painted = new List<VRSLDMXRig.PaintedGrid>();
             var stilled = new List<Material>();
@@ -327,7 +332,7 @@ namespace VRSL.URP.Tests
                 rig.Manager.ChannelSource = null;
                 rig.Manager.enabled      = false;
                 rig.Manager.gridTextures = grid;
-                rig.Manager.dmxInput     = (VRSLDmxInput)(switchAtRuntime ? VRSLGridLayout.Horizontal : layout);
+                rig.Manager.dmxInput     = switchAtRuntime ? startOn : chosen;
                 rig.Manager.enabled      = true;
                 if (source.HasValue)
                 {
@@ -345,7 +350,7 @@ namespace VRSL.URP.Tests
                         yield return null;
                         rig.RenderFrame();
                     }
-                    rig.Manager.SetDmxInput((int)layout);
+                    rig.Manager.SetDmxInput((int)chosen);
                 }
 
                 // Far enough back for all ten prefabs, at a size where their bodies are
@@ -373,7 +378,7 @@ namespace VRSL.URP.Tests
             }
         }
 
-        static float LitShare(Texture2D frame)
+        internal static float LitShare(Texture2D frame)
         {
             var pixels = frame.GetPixels32();
             int lit = 0;
@@ -526,7 +531,7 @@ namespace VRSL.URP.Tests
         // ── The fixtures follow a channel source ──────────────────────────────
 
         /// <summary>The Horizontal prefabs whose bodies read the grid through the URP include.</summary>
-        static readonly string[] UrpIncludePrefabs =
+        internal static readonly string[] UrpIncludePrefabs =
         {
             "Horizontal Mode/VRSL-DMX-Static-Flasher-H-1CH.prefab",
             "Horizontal Mode/VRSL-DMX-Static-LightBar-H-13CH.prefab",
@@ -542,14 +547,14 @@ namespace VRSL.URP.Tests
         /// the 15-channel bar away from the camera, so a frame of them upright shows their
         /// bodies black whatever they read.
         /// </summary>
-        static readonly Vector3[] UrpIncludeFacing =
+        internal static readonly Vector3[] UrpIncludeFacing =
         {
             new(90f, 0f, 0f), new(90f, 0f, 0f), new(0f, 180f, 0f), new(90f, 0f, 0f), Vector3.zero, Vector3.zero,
         };
 
         /// <summary>The Horizontal prefabs whose beams or bodies read the grid through the
         /// Built-in include, besides the lens flares on the flasher and the blinder.</summary>
-        static readonly string[] BuiltInIncludePrefabs =
+        internal static readonly string[] BuiltInIncludePrefabs =
         {
             "Horizontal Mode/VRSL-DMX-Static-Laser-H-13CH.prefab",
             "Horizontal Mode/VRSL-DMX-Static-DiscoBall-H-1CH.prefab",
@@ -562,7 +567,7 @@ namespace VRSL.URP.Tests
         /// same values, so the allowance is for a stray pixel; a fixture reading the wrong
         /// thing moves whole bodies.
         /// </summary>
-        const float SameValuesBudget = 0.01f;
+        internal const float SameValuesBudget = 0.01f;
 
         /// <summary>
         /// <paramref name="prefabs"/> and the rig lit from the synthetic source's still
@@ -814,13 +819,16 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// N33. With the synthetic source switched off mid-run, the first frame
-        /// rendered after the manager next updates matches the same scene that never had a
-        /// source: every fixture is back on the grid at once. Both of N29's and N30's sets,
-        /// strobe held.
+        /// N33. Under Stream data, with the synthetic
+        /// source switched off mid-run, the first frame rendered after the manager next
+        /// updates matches the same scene on Stream data with no source at all: every
+        /// fixture, shader-driven and realtime, is dark at once, with a grid of other
+        /// values bound that nothing may fall back to. Under a grid input the source is on
+        /// standby, and switching it off changes nothing: the frame matches the same scene
+        /// that never had a source. Both of N29's and N30's sets, strobe held.
         /// </summary>
         [UnityTest]
-        public IEnumerator N33_switching_the_source_off_puts_every_fixture_back_on_the_grid_the_next_frame()
+        public IEnumerator N33_switching_the_source_off_darkens_stream_data_and_leaves_a_grid_alone()
         {
             var grid = ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
             var sets = new[]
@@ -830,26 +838,46 @@ namespace VRSL.URP.Tests
             };
             foreach (var (prefabs, facing, eye) in sets)
             {
-                Texture2D switchedOff = null, never = null;
+                Texture2D switchedOff = null, dark = null, onStandby = null, never = null;
                 try
                 {
                     yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, grid, t => switchedOff = t,
                                                source: VRSL_SyntheticDMXChannelSource.Pattern.Fixtures,
                                                facing: facing, eye: eye,
                                                lateChange: rig => rig.Source.enabled = false);
+                    yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, grid, t => dark = t,
+                                               facing: facing, eye: eye, input: VRSLDmxInput.StreamData);
+                    yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, grid, t => onStandby = t,
+                                               source: VRSL_SyntheticDMXChannelSource.Pattern.Fixtures,
+                                               facing: facing, eye: eye, input: VRSLDmxInput.HorizontalGrid,
+                                               lateChange: rig => rig.Source.enabled = false);
                     yield return CaptureLayout(prefabs, VRSLGridLayout.Horizontal, grid, t => never = t,
                                                facing: facing, eye: eye);
-                    var result = VRSLImageCompare.Compare(never, switchedOff);
-                    Debug.Log($"[N33] {prefabs[0]} and the rest, source switched off against no source: {result}");
+                    Assert.Greater(LitShare(never), 0.01f,
+                        "the frame lit from the grid is nearly black, so nothing could fall back to it");
+
+                    var result = VRSLImageCompare.Compare(dark, switchedOff);
+                    Debug.Log($"[N33] {prefabs[0]} and the rest, Stream data with the source switched off "
+                            + $"against Stream data with none: {result}");
                     if (result.DifferingPercent > SameValuesBudget)
-                        VRSLImageCompare.WriteImages(EvidenceFolder, "N33", never, switchedOff);
+                        VRSLImageCompare.WriteImages(EvidenceFolder, "N33-dark", dark, switchedOff);
                     Assert.LessOrEqual(result.DifferingPercent, SameValuesBudget,
-                        $"a frame after the source switched off still differs from one that never had a source "
-                      + $"({result}). Images in {EvidenceFolder}");
+                        $"a frame after the source switched off under Stream data is not dark ({result}). "
+                      + $"Images in {EvidenceFolder}");
+
+                    result = VRSLImageCompare.Compare(never, onStandby);
+                    Debug.Log($"[N33] {prefabs[0]} and the rest, the Horizontal grid with a source switched "
+                            + $"off on standby against no source: {result}");
+                    if (result.DifferingPercent > SameValuesBudget)
+                        VRSLImageCompare.WriteImages(EvidenceFolder, "N33-standby", never, onStandby);
+                    Assert.LessOrEqual(result.DifferingPercent, SameValuesBudget,
+                        $"a source on standby changed the grid's frame ({result}). Images in {EvidenceFolder}");
                 }
                 finally
                 {
                     if (switchedOff != null) Object.DestroyImmediate(switchedOff);
+                    if (dark        != null) Object.DestroyImmediate(dark);
+                    if (onStandby   != null) Object.DestroyImmediate(onStandby);
                     if (never       != null) Object.DestroyImmediate(never);
                 }
             }
@@ -858,7 +886,7 @@ namespace VRSL.URP.Tests
         /// <summary>I1's allowance for edge scatter, which is all a correct frame may move.</summary>
         const float EdgeBudget = 0.25f;
 
-        static string EvidenceFolder =>
+        internal static string EvidenceFolder =>
             System.IO.Path.Combine(System.IO.Directory.GetParent(Application.dataPath)!.FullName,
                                    "VRSL-Benchmarks", "image-failures");
     }

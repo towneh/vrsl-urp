@@ -306,6 +306,11 @@ namespace VRSL.URP
 
             var manager = (GameObject)PrefabUtility.InstantiatePrefab(source, root.transform);
             manager.name = "VRSL URP Light Manager";
+            // The source below is what lights the fixtures, and a manager reads one only
+            // under Stream data.
+            var component = manager.GetComponent<VRSL_URPLightManager>();
+            component.dmxInput = VRSLDmxInput.StreamData;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(component);
 
             // A deterministic channel source, so the fixtures are lit and moving the
             // same way on the same frame index of every run. Ramp gives every channel

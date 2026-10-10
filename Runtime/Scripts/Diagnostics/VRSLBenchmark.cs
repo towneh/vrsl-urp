@@ -773,8 +773,11 @@ namespace VRSL.URP
                           : dmx.ChannelCount > 0
                           ? "A channel source is publishing, so the values are reaching the "
                           + "buffer but not the fixtures — check the patch."
-                          : "No channel source is publishing and the CRT decode chain has "
-                          + "nothing feeding it, so every channel reads zero."));
+                          : dmx.dmxInput == VRSLDmxInput.StreamData
+                          ? "DMX Input is Stream data and nothing is sending it, so the lights "
+                          + "are dark."
+                          : "The CRT decode chain has nothing feeding it, so every channel "
+                          + "reads zero."));
 
             var tiles = VRSLDiagnostics.SummariseTiles(useDmx ? dmx.TileCullPass
                                                               : audioLink.TileCullPass);

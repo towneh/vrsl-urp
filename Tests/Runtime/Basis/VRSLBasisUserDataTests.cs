@@ -64,6 +64,7 @@ namespace VRSL.URP.Tests
             // Assigned rather than left to the source's OnEnable, which only
             // lands if the manager already claimed the singleton.
             rig.Scene.Manager.ChannelSource = rig.Source;
+            rig.Scene.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
             BasisPlayerApproval.Approve(rig.Player, fixture);
             rig.Player.Open(fixture);
             rig.Player.Play();

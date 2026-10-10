@@ -45,14 +45,20 @@ namespace VRSL.URP
         /// one fixture count and camera variant, with none, one and three extra cameras
         /// rendering into textures at each secondary-camera policy and at Standard and
         /// High. What a world with mirrors pays, and what each policy gives back.</param>
+        /// <param name="dmxInput">What the manager reads. Stream data reads the scene's
+        /// synthetic source; a grid input leaves the source on standby and decodes that
+        /// layout's grid, which nothing paints, so it measures the decode chain with the
+        /// fixtures dark.</param>
         public static IEnumerator Run(VRSLSweepOutcome outcome, Action<VRSLBenchmarkRun> stampEnvironment,
-                                      bool forceOwnNormals = false, bool mirrors = false)
+                                      bool forceOwnNormals = false, bool mirrors = false,
+                                      VRSLDmxInput dmxInput = VRSLDmxInput.StreamData)
         {
             var settings = new VRSLBenchmarkSettings();
             var run      = new VRSLBenchmarkRun
             {
-                label = mirrors ? "mirror-sweep"
-                      : forceOwnNormals ? "standard-sweep-own-normals" : "standard-sweep",
+                label = (mirrors ? "mirror-sweep"
+                       : forceOwnNormals ? "standard-sweep-own-normals" : "standard-sweep")
+                      + (dmxInput == VRSLDmxInput.StreamData ? "" : $"-{dmxInput}"),
             };
             var root     = GameObject.Find(VRSLBenchmarkScene.RootName);
             var camera   = VRSLBenchmarkScene.FindCamera(root);
@@ -83,7 +89,21 @@ namespace VRSL.URP
                               + "would have nothing to light from.";
                 yield break;
             }
+            // Chosen before anything else changes, since a refusal leaves the manager as it
+            // was and the run stops here.
+            var dmxInputWas = manager.dmxInput;
+            manager.SetDmxInput((int)dmxInput);
+            if (manager.dmxInput != dmxInput)
+            {
+                outcome.error = $"The sweep's manager can't read {dmxInput}; its Grid Textures has "
+                              + "nothing for that layout.";
+                yield break;
+            }
             manager.ChannelSource = source;
+            if (dmxInput != VRSLDmxInput.StreamData)
+                run.Note($"DMX Input was {dmxInput}: the synthetic source sat on standby and nothing "
+                       + "painted the grid, so the fixtures were dark and this measures the decode "
+                       + "chain rather than lit fixtures.");
             bool forceOwnNormalsWas = manager.forceOwnNormals;
             manager.forceOwnNormals = forceOwnNormals;
             // The sweep's camera renders into a texture, which would make it a
@@ -265,6 +285,7 @@ namespace VRSL.URP
                 {
                     manager.forceOwnNormals     = forceOwnNormalsWas;
                     manager.secondaryCameraMode = policyWas;
+                    manager.SetDmxInput((int)dmxInputWas);
                 }
                 VRSLCameraFilter.UnregisterMainView(camera);
                 VRSLBenchmarkScene.RemoveSecondaryCameras(mirrorCameras);
