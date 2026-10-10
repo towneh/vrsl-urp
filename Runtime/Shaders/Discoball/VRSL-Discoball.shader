@@ -79,6 +79,7 @@
              };
             #include "../Shared/VRSL-Defines.cginc"
             half _Multiplier;
+			#pragma target 4.5
 			#include "../Shared/VRSL-DMXFunctions.cginc"
 
              float4 Rotation(float4 vertPos)
@@ -124,7 +125,7 @@
                  // pack correction factor into direction w component to save space
                  o.worldDirection.w = dot(o.vertex, CalculateFrustumCorrection());
                  uint dmx = getDMXChannel();
-                 o.dmxIntensity = float2(dmx, getValueAtCoords(dmx, _VRSLU_DMXGridRenderTexture));
+                 o.dmxIntensity = float2(dmx, DMXValue(dmx));
                  if(o.dmxIntensity.y <= 0.05 && _EnableDMX == 1)
                  {
                      v.vertex = float4(0,0,0,0);

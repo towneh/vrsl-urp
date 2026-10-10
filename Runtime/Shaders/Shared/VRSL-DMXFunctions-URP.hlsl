@@ -271,7 +271,7 @@ half DMXStrobe(uint DMXChannel)
     if (_VRSLU_StrobeDisabled > 0) return 1.0;
 
     float status = loadDMXChannel(DMXChannel);
-    float phase;
+    float phase = 0.0;
     if (_VRSLU_StrobeStatic > 0u)
     {
         float speed = status > 0.2 ? _VRSLU_StrobeFreqs.y : _VRSLU_StrobeFreqs.x;

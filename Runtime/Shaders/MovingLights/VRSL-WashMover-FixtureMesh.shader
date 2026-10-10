@@ -73,7 +73,7 @@
             #pragma multi_compile_instancing
             #pragma shader_feature_local _LIGHTING_MODEL
             //REMOVE THIS WHEN FINISHED DEBUGGING
-            //#pragma target 4.5
+            #pragma target 4.5
 
             #define GEOMETRY
 
@@ -173,6 +173,7 @@
             };
 
             #include "../Shared/VRSL-Defines.cginc"
+            #pragma target 4.5
             #include "../Shared/VRSL-DMXFunctions.cginc"
             #include "VRSL-StandardMover-Vertex.cginc"
             ENDCG
@@ -194,7 +195,7 @@
             #pragma multi_compile_instancing
             #pragma shader_feature_local _LIGHTING_MODEL
             //REMOVE THIS WHEN FINISHED DEBUGGING
-            //#pragma target 4.5
+            #pragma target 4.5
 
             #define GEOMETRY
 
@@ -268,7 +269,7 @@
             #pragma multi_compile_instancing
             #pragma shader_feature_local _LIGHTING_MODEL
             //REMOVE THIS WHEN FINISHED DEBUGGING
-            //#pragma target 4.5
+            #pragma target 4.5
 
             #define GEOMETRY
 

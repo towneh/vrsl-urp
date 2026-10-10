@@ -148,6 +148,7 @@
             float _ShouldDoFlicker;
             half _RemoveTextureArtifact, _CurveMod;
             uint _UseDepthLight;
+            #pragma target 4.5
             #include "../Shared/VRSL-DMXFunctions.cginc"
 
             float4x4 GetWorldToViewMatrix()
@@ -208,19 +209,19 @@
                 uint dmx = getDMXChannel();
                 float intensity = 0.0f;
                 #if _1CH_MODE
-                half4 e = IF(isDMX() == 1, getValueAtCoords(dmx+1, _VRSLU_DMXGridRenderTexture) * getEmissionColor(),
+                half4 e = IF(isDMX() == 1, DMXValue(dmx+1) * getEmissionColor(),
                     getEmissionColor());
                 intensity = GetDMXChannel(dmx);
                 #elif _4CH_MODE
                     float4 DMXcol = getEmissionColor();
-                    DMXcol *= float4(getValueAtCoords(dmx+1, _VRSLU_DMXGridRenderTexture), getValueAtCoords(dmx+2, _VRSLU_DMXGridRenderTexture), getValueAtCoords(dmx+3, _VRSLU_DMXGridRenderTexture), 1);
+                    DMXcol *= float4(DMXValue(dmx+1), DMXValue(dmx+2), DMXValue(dmx+3), 1);
                     float4 coll = IF(isDMX() == 1, DMXcol, getEmissionColor());
                     half4 e = coll;
                     intensity = GetDMXChannel(dmx);
                 #elif _5CH_MODE
                     float strobe = IF(isStrobe() == 1, GetStrobeOutputFiveCH(dmx), 1);
                     float4 DMXcol = getEmissionColor();
-                    DMXcol *= float4(getValueAtCoords(dmx+1, _VRSLU_DMXGridRenderTexture), getValueAtCoords(dmx+2, _VRSLU_DMXGridRenderTexture), getValueAtCoords(dmx+3, _VRSLU_DMXGridRenderTexture), 1);
+                    DMXcol *= float4(DMXValue(dmx+1), DMXValue(dmx+2), DMXValue(dmx+3), 1);
                     float4 coll = IF(isDMX() == 1, DMXcol, getEmissionColor());
                     half4 e = coll * strobe;
                     intensity = GetDMXChannel(dmx);

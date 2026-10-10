@@ -121,6 +121,7 @@
                 UNITY_DEFINE_INSTANCED_PROP(half, _TextureColorSampleY)
             UNITY_INSTANCING_BUFFER_END(Props)
 
+            #pragma target 4.5
             #include "../Shared/VRSL-DMXFunctions.cginc"
 
             //#define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
@@ -214,8 +215,8 @@
 
             half GetSpin(uint DMXChannel)
             {
-                half status = getValueAtCoords(DMXChannel, _VRSLU_DMXGridRenderTexture);
-                half phase = getValueAtCoordsRaw(DMXChannel, _VRSLU_DMXGridSpinTimer);
+                half status = DMXValue(DMXChannel);
+                half phase = DMXSpinPhase(DMXChannel);
                 //phase = checkPanInvertY() == 1 ? -phase : phase;
                 return status > 0.5 ? -phase : phase;
             }
@@ -229,17 +230,17 @@
                 UNITY_TRANSFER_INSTANCE_ID(v, o);
 
                 uint dmx = getDMXChannel();
-                o.rgbIntensity.w = getValueAtCoords(dmx + (uint) 10, _VRSLU_DMXGridRenderTexture);
+                o.rgbIntensity.w = DMXValue(dmx + (uint) 10);
                 o.rgbIntensity.w = IF(isDMX() > 0, o.rgbIntensity.w, 1);
                 if(getGlobalIntensity() <= 0.01 || getFinalIntensity() <= 0.05 || _UniversalIntensity <= 0.05 || o.rgbIntensity.w <= 0.05)
                 {
                     o.vertex = UnityObjectToClipPos(half4(0,0,0,0));
                     return o;
                 }
-                o.panTiltLengthWidth.x = lerp(-90,90,clamp(getValueAtCoords(dmx, _VRSLU_DMXGridRenderTextureMovement), 0.0,0.9999)); // ch 1
-                o.panTiltLengthWidth.y = lerp(-90,90,clamp(getValueAtCoords(dmx + (uint) 1, _VRSLU_DMXGridRenderTextureMovement), 0.0,0.9999)); // ch 2
-                o.panTiltLengthWidth.z = lerp(-0.5,5,clamp(getValueAtCoords(dmx + (uint) 2, _VRSLU_DMXGridRenderTexture), 0.0,0.9999)); // ch 3
-                o.panTiltLengthWidth.w = lerp(-3.75,20,clamp(getValueAtCoords(dmx + (uint) 3, _VRSLU_DMXGridRenderTexture), 0.0,0.9999)); // ch 4
+                o.panTiltLengthWidth.x = lerp(-90,90,clamp(DMXMovement(dmx), 0.0,0.9999)); // ch 1
+                o.panTiltLengthWidth.y = lerp(-90,90,clamp(DMXMovement(dmx + (uint) 1), 0.0,0.9999)); // ch 2
+                o.panTiltLengthWidth.z = lerp(-0.5,5,clamp(DMXValue(dmx + (uint) 2), 0.0,0.9999)); // ch 3
+                o.panTiltLengthWidth.w = lerp(-3.75,20,clamp(DMXValue(dmx + (uint) 3), 0.0,0.9999)); // ch 4
 
                 //replacement for _WorldSpaceCameraPos
                 float3 wpos;
@@ -260,7 +261,7 @@
                 vert.y = v.vertex.y; //Prevent the cone from elongating when changing width.
 
                 // Cone Flatness for X and Z
-                half flatness = lerp(0,1.999,getValueAtCoords(dmx+ (uint) 4, _VRSLU_DMXGridRenderTexture));
+                half flatness = lerp(0,1.999,DMXValue(dmx+ (uint) 4));
                 flatness = IF(isDMX() > 0, flatness, getConeFlatness());
                 vert.z = lerp(vert.z, vert.z/2, flatness);
               //  vert.x = lerp(vert.x, vert.x/2, _XConeFlatness);
@@ -274,14 +275,14 @@
                 o.worldPos = mul(unity_ObjectToWorld, vert);
                 o.vertex = UnityObjectToClipPos(vert);
 
-                o.flatnessBeamCountSpinThickness.x = lerp(0,1.999,getValueAtCoords(dmx+ (uint) 4, _VRSLU_DMXGridRenderTexture)); //5
-                o.flatnessBeamCountSpinThickness.y = lerp(4,68,getValueAtCoords(dmx+ (uint) 5, _VRSLU_DMXGridRenderTexture));//6
+                o.flatnessBeamCountSpinThickness.x = lerp(0,1.999,DMXValue(dmx+ (uint) 4)); //5
+                o.flatnessBeamCountSpinThickness.y = lerp(4,68,DMXValue(dmx+ (uint) 5));//6
                 o.flatnessBeamCountSpinThickness.z = GetSpin(dmx+ (uint) 6) * _ScrollOffset; //7
-                o.flatnessBeamCountSpinThickness.w = lerp(0.0005, 0.05,getValueAtCoords(dmx+ (uint) 11, _VRSLU_DMXGridRenderTexture)); //12
-                o.rgbIntensity.x = getValueAtCoords(dmx+ (uint) 7, _VRSLU_DMXGridRenderTexture); //8 
-                o.rgbIntensity.y = getValueAtCoords(dmx+ (uint) 8, _VRSLU_DMXGridRenderTexture); //9
-                o.rgbIntensity.z = getValueAtCoords(dmx+ (uint) 9, _VRSLU_DMXGridRenderTexture); //10
-                o.rgbIntensity.w = getValueAtCoords(dmx+ (uint) 10, _VRSLU_DMXGridRenderTexture); //11
+                o.flatnessBeamCountSpinThickness.w = lerp(0.0005, 0.05,DMXValue(dmx+ (uint) 11)); //12
+                o.rgbIntensity.x = DMXValue(dmx+ (uint) 7); //8 
+                o.rgbIntensity.y = DMXValue(dmx+ (uint) 8); //9
+                o.rgbIntensity.z = DMXValue(dmx+ (uint) 9); //10
+                o.rgbIntensity.w = DMXValue(dmx+ (uint) 10); //11
 
                 return o;
             }
