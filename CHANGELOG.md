@@ -2,13 +2,16 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.2] — 2026-10-11
+
 ### Changed
 
 - **One set of prefabs.** Every DMX fixture and the DMX manager sit together in `Runtime/Prefabs/DMX/`, the AudioLink ones in `Runtime/Prefabs/AudioLink/`, and the names lose `-H-` and `-URP` (`VRSL-DMX-Mover-Spotlight-13CH`, `VRSL-AudioLink-Discoball`). Each fixture prefab serves every grid layout and the one DMX manager takes the layout from its DMX Input. The prefabs keep their GUIDs, so scenes that use them are unaffected.
 - **The per-layout prefabs are superseded.** The Legacy and Vertical fixtures and managers moved to `Runtime/Prefabs/DMX/Superseded/`. **VRSL → URP → Replace Superseded Prefabs in Scene** moves a scene onto the single prefabs, keeping what was set on each instance and each manager's DMX Input. They'll be removed in a later release.
 - **The profiling sample builds the realtime-light scene only.** Its mesh-shader option needed fixture prefabs and a depth-light prefab the package no longer ships. Re-import the sample to pick it up.
 - **The migration tool brings the Horizontal and Legacy example surfaces across** onto the example surface prefab, which serves every layout like the rest.
-
 - **Migrated fixtures glow like fresh ones.** The migration tool scales a mover's, par's, blinder's or discoball's tint by the two prefabs' defaults instead of copying it as it is. The original package's fixtures mostly default to a tint of 2 and this package's movers and discoballs to 1, so a fixture migrated with 0.3.0-rc.1 or earlier can glow twice as bright as one placed fresh.
 
 ### Removed
