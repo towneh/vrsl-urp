@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.3] — 2026-10-11
+
 ### Changed
 
 - **AudioLink is optional.** The package no longer depends on `com.llealloo.audiolink`, so a DMX-only project, or a Basis project with AudioLink removed, installs it without AudioLink and the DMX side works as before. Install AudioLink 3.1.2 or newer to use the AudioLink fixtures, their light manager, the AudioLink menus and the AudioLink example scene; scenes and prefabs that use them reconnect when it's installed.
