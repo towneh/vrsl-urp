@@ -103,20 +103,6 @@ namespace VRSL.URP.Tests
         /// movement damping reads its smoothness from.</summary>
         public static int SmoothnessChannel(int abs) => ((abs - 1) / 13 + 1) * 13;
 
-        /// <summary>The 13th channel of a sector that the compute's texture accessor
-        /// pulls a row down. <c>GetDMXValue</c> carries a hard-coded correction table
-        /// over five channel ranges, so on the grid path those channels read the value
-        /// 13 below their own, in every layout. It belongs to the compute's accessor:
-        /// the channel buffer has no equivalent, and the shader-driven fixtures' include,
-        /// as compiled, reads these channels from their own cells.</summary>
-        public static bool ShiftedThirteenth(int channel)
-            => channel % 13 == 0
-            && ((channel >= 90  && channel <= 101)
-             || (channel >= 160 && channel <= 205)
-             || (channel >= 326 && channel <= 404)
-             || (channel >= 676 && channel <= 819)
-             ||  channel >= 1339);
-
         /// <summary>The value the Ramp pattern puts on a 1-based channel.
         /// <c>RampValue</c> is indexed from 0, and mixing the two up shifts every
         /// prediction by one channel.</summary>
@@ -796,8 +782,33 @@ namespace VRSL.URP.Tests
         /// 0..1) in the texels the fixtures read them from (<see cref="CellsOf"/>).
         /// </summary>
         public static PaintedGrid PaintGrid(float[] values, VRSLGridLayout layout, int width, int height)
+            => PaintGrid(values, CellsOf(values.Length, layout, width, height), layout, width, height);
+
+        /// <summary>
+        /// For channels 1..<paramref name="count"/>, the texel each one occupies: the column of
+        /// its slot and the row of its sector, taken from channels no reader can place wrongly
+        /// (slot 1 of every sector, and every slot of a reference sector of the same parity),
+        /// so it doesn't depend on how a reader turns the rest into a cell.
+        /// </summary>
+        public static Vector2Int[] OwnCellsOf(int count, VRSLGridLayout layout, int width, int height)
         {
-            var cells  = CellsOf(values.Length, layout, width, height);
+            var found = CellsOf(count, layout, width, height);
+            var own   = new Vector2Int[count];
+            for (int i = 0; i < count; i++)
+            {
+                int sector = i / 13, slot = i % 13;
+                // A Legacy row holds two sectors side by side, and from sector 40 on the
+                // columns shift; a reference sector matches both.
+                int reference = (layout == VRSLGridLayout.Legacy && sector >= 40 ? 40 : 0) + (sector & 1);
+                own[i] = new Vector2Int(found[reference * 13 + slot].x, found[sector * 13].y);
+            }
+            return own;
+        }
+
+        /// <summary>A grid carrying <paramref name="values"/> in the given texels.</summary>
+        public static PaintedGrid PaintGrid(float[] values, Vector2Int[] cells, VRSLGridLayout layout,
+                                            int width, int height)
+        {
             var pixels = new Color[width * height];
             var owner  = new Dictionary<Vector2Int, int>();
             var grid   = new PaintedGrid { Cells = cells, Reads = new float[values.Length] };

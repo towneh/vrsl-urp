@@ -219,27 +219,11 @@ namespace VRSL.URP.Tests
             return wrong;
         }
 
-        /// <summary>Which judged channels the picture path is expected to get
-        /// wrong, so a row can assert the set rather than wave a tolerance at
-        /// it.</summary>
-        static List<int> ExpectedWrong(int offset, int count)
-        {
-            var wrong = new List<int>();
-            for (int i = 0; i < count; i++)
-                if (Judgeable(i, offset) && VRSLDMXRig.ShiftedThirteenth(i + 1)) wrong.Add(i + 1);
-            return wrong;
-        }
-
         static void AssertPictureReadsTheRamp(float[] grid, int offset, string when)
         {
-            var wrong = Disagreeing(grid, offset, Channels, 4f, "picture " + when);
-            CollectionAssert.AreEqual(ExpectedWrong(offset, Channels), wrong,
-                "the channels the picture path gets wrong are not the ones VRSL's own "
-              + "correction table accounts for, so the framing or the addressing is at fault");
-            foreach (int channel in wrong)
-                Assert.AreEqual((channel - 1 - 13 + offset) % Modulus,
-                                grid[channel - 1] * 255f, 2f,
-                    $"channel {channel} is shifted, but not onto the row below it");
+            CollectionAssert.IsEmpty(Disagreeing(grid, offset, Channels, 4f, "picture " + when),
+                "channels the picture path reads wrong, so the framing, the addressing or the "
+              + "accessor's channel-to-cell arithmetic is at fault");
         }
 
         /// <summary>The cell each channel occupies in the RAW grid RT, read back
@@ -281,8 +265,7 @@ namespace VRSL.URP.Tests
         /// This is the row that tells a framing fault from a decode-chain one.
         /// Both show up at the accessor as "the numbers are wrong", and N24 cannot
         /// separate them; here the values have been through the blit and nothing
-        /// else. Note there are no exceptions to make room for: VRSL's correction
-        /// table lives in the accessor, so every cell must hold its own channel.
+        /// else. Every cell must hold its own channel, with no exceptions.
         ///
         /// The RT leads the interpolation CRT by a frame, which is the CRT's own
         /// latency, so the offset is recovered here rather than shared with the
@@ -406,12 +389,11 @@ namespace VRSL.URP.Tests
                 Debug.Log($"N25: picture at offset {fromPicture}, records at {fromRecords} with "
                         + $"{arrived} record(s) between the reads, {frames:F1} frames apart");
 
-                // Under Stream data the fixtures read the records exactly, including on
-                // the channels the texture accessor shifts.
+                // Under Stream data the fixtures read the records exactly.
                 CollectionAssert.IsEmpty(
                     Disagreeing(buffer, fromRecords, Channels, Half * 255f, "records"),
                     "under Stream data the fixtures must read the records, and this is the "
-                  + "grid's shifted channels showing up in what they read");
+                  + "grid showing up in what they read");
                 AssertPictureReadsTheRamp(grid, fromPicture, "with the records on standby");
                 Assert.LessOrEqual(Mathf.Abs(frames), 2f,
                     "the two paths are further apart in time than the CRT's damping accounts for");

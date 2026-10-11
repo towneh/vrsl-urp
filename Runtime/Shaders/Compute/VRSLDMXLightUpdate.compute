@@ -110,36 +110,21 @@ float2 LegacyCellUV(uint channel, uint sector)
     return float2(x, y);
 }
 
-// The grid cell a channel decodes from, in UV.
+// The grid cell a channel occupies, in UV: slot ((ch - 1) mod 13) + 1 of sector
+// (ch - 1) div 13, the cell the includes' getDMXCellUV gives. Integers throughout, so
+// no rounding of a division can put a channel in a neighbouring row. Channel 0,
+// unpatched, sits below the grid and samples its clamped edge.
 float2 DMXCellUV(uint ch)
 {
-    uint x = ch % 13u;
-    if (x == 0u) x = 13u;
+    uint slot   = ch == 0u ? 13u : (ch - 1u) % 13u + 1u;
+    int  sector = ch == 0u ? -1  : (int)((ch - 1u) / 13u);
 
-    float y = (ch % 13u == 0u) ? (ch / 13.0) - 1.0 : (ch / 13.0);
+    if (_VRSLU_DMXGridLayout == 2u) return LegacyCellUV(slot - 1u, (uint)max(sector, 0));
 
-    // Correction table for channel 13 in specific ranges (matches CGINC exactly).
-    // Before the layout choice, as in the includes: both reads take the corrected row.
-    if (x == 13u)
-    {
-        if (ch >= 90u   && ch <= 101u)  y -= 1.0;
-        if (ch >= 160u  && ch <= 205u)  y -= 1.0;
-        if (ch >= 326u  && ch <= 404u)  y -= 1.0;
-        if (ch >= 676u  && ch <= 819u)  y -= 1.0;
-        if (ch >= 1339u)                y -= 1.0;
-    }
-
-    if (_VRSLU_DMXGridLayout == 2u) return LegacyCellUV(x - 1u, (uint)y);
-
+    // The includes' IndustryRead, offsets and all.
     float resMultX = _VRSLDMXTexelSize.z / 13.0;
-    float u = (x  * resMultX * _VRSLDMXTexelSize.x) - 0.015;
-    // floor: the Built-in path calls IndustryRead(int x, int y), so the row is
-    // truncated to an integer before it is scaled into UV. Porting the call to
-    // float dropped that truncation, and the row coordinate then drifted by
-    // frac(channel / 13) of a row — enough that every channel past the second in
-    // a row sampled the row below it, silently decoding a neighbouring fixture's
-    // value. The offsets below are inherited from that path and left alone.
-    float v = (floor(y + 1.0) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
+    float u = (slot * resMultX * _VRSLDMXTexelSize.x) - 0.015;
+    float v = ((sector + 1) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
     return float2(u, v);
 }
 
@@ -152,9 +137,9 @@ float GetDMXValue(uint ch, Texture2D<float4> tex)
 }
 
 // Channel value straight out of the byte buffer. No coordinate maths, no
-// correction table for the 13th channel of a sector, no luminance conversion and
-// no layout modes: the channel number is the index. An unpatched or out-of-range
-// channel reads 0, which is what an unlit fixture expects.
+// luminance conversion and no layout modes: the channel number is the index.
+// An unpatched or out-of-range channel reads 0, which is what an unlit fixture
+// expects.
 float LoadDMXChannel(uint ch)
 {
     uint index = ch - 1u;
@@ -185,9 +170,7 @@ float MovementChannel(uint ch)
     return _VRSLU_DMXMovement[index];
 }
 
-// Raw-channel variant — matches getValueAtCoordsRaw() in VRSL-DMXFunctions.cginc,
-// except that it applies the 13th-channel correction where the includes do not.
-// That only matters for a spin channel on a sector's 13th slot.
+// Raw-channel variant — matches getValueAtCoordsRaw() in VRSL-DMXFunctions.cginc.
 // Needed for the SpinnerTimer, whose red channel stores accumulated phase (not a color).
 float GetDMXValueRaw(uint ch, Texture2D<float4> tex)
 {

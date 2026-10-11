@@ -167,31 +167,20 @@ int getTargetRGBValue(uint universe)
     //returns 0 for red, 1 for green, 2, for blue
 }
 
-// The grid cell getValueAtCoords reads a channel from, in UV.
+// The grid cell a channel occupies, in UV: slot ((c - 1) mod 13) + 1 of sector (c - 1) div 13.
+// Integers throughout, so no rounding of a division can put a channel in a neighbouring row.
+// Channel 0, unpatched, sits below the grid and samples its clamped edge.
 float2 getDMXCellUV(uint DMXChannel)
 {
     uint universe = ceil(((int) DMXChannel)/512.0);
     int targetColor = getTargetRGBValue(universe);
-    
+
     universe-=1;
     DMXChannel = targetColor > 0 ? DMXChannel - (((universe - (universe % 3)) * 512)) - (targetColor * 24) : DMXChannel;
 
-    uint x = DMXChannel % 13; // starts at 1 ends at 13
-    x = x == 0.0 ? 13.0 : x;
-    half y = DMXChannel / 13.0; // starts at 1 // doubles as sector
-    y = frac(y)== 0.00000 ? y - 1 : y;
-    if(x == 13.0) //for the 13th channel of each sector... Go down a sector for these DMX Channel Ranges...
-    {
-        //I don't know why, but we need this for some reason otherwise the 13th channel gets shifted around improperly.
-        //I"m not sure how to express these exception ranges mathematically. Doing so would be much more cleaner though.
-        y = DMXChannel >= 90 && DMXChannel <= 101 ? y - 1 : y;
-        y = DMXChannel >= 160 && DMXChannel <= 205 ? y - 1 : y;
-        y = DMXChannel >= 326 && DMXChannel <= 404 ? y - 1 : y;
-        y = DMXChannel >= 676 && DMXChannel <= 819 ? y - 1 : y;
-        y = DMXChannel >= 1339 ? y - 1 : y;
-    }
-    
-    return _VRSLU_DMXGridLayout == 2 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    uint slot   = DMXChannel == 0 ? 13 : (DMXChannel - 1) % 13 + 1;
+    int  sector = DMXChannel == 0 ? -1 : (int)((DMXChannel - 1) / 13);
+    return _VRSLU_DMXGridLayout == 2 ? LegacyRead(slot - 1, sector) : IndustryRead(slot, sector + 1);
 }
 
 //function for getting the value on the DMX Grid in the bottom right corner configuration
@@ -223,16 +212,7 @@ half getValueAtCoordsRaw(uint DMXChannel, TEXTURE2D_PARAM(tex, samplerTex))
 {
     uint universe = ceil(((int) DMXChannel)/512.0);
     int targetColor = getTargetRGBValue(universe);
-
-    universe-=1;
-    DMXChannel = targetColor > 0 ? DMXChannel - (((universe - (universe % 3)) * 512)) - (targetColor * 24) : DMXChannel;
-
-    uint x = DMXChannel % 13; // starts at 1 ends at 13
-    x = x == 0.0 ? 13.0 : x;
-    half y = DMXChannel / 13.0; // starts at 1 // doubles as sector
-    y = frac(y)== 0.00000 ? y - 1 : y;
-    
-    float2 xyUV = _VRSLU_DMXGridLayout == 2 ? LegacyRead(x-1.0,y) : IndustryRead(x,(y + 1.0));
+    float2 xyUV = getDMXCellUV(DMXChannel);
 
     float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
     float4 c = SAMPLE_TEXTURE2D_LOD(tex, sampler_point_clamp, xyUV, 0);

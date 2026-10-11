@@ -46,10 +46,7 @@ namespace VRSL.URP.Tests
         /// settles onto the same texel. That is the layout and the hardware, not the
         /// decode, and another GPU may settle it differently, so the row names no shared
         /// set: for a shared channel the claim is only that the compute reads what the
-        /// fixtures read. The compute's 13th-channel correction table is the one known
-        /// difference from the fixtures, in every layout (N24 finds it on real video):
-        /// for those channels the compute reads the cell 13 below, and the row asserts
-        /// exactly that, since it is also where a port goes almost right.
+        /// fixtures read.
         /// </summary>
         [UnityTest]
         public IEnumerator G6_a_legacy_grid_decodes_what_the_channel_buffer_does()
@@ -99,13 +96,10 @@ namespace VRSL.URP.Tests
                 var notAsSent = new List<string>();
                 for (int i = 0; i < read.Length; i++)
                 {
-                    // The compute's correction table reads these from the cell 13 below,
-                    // as N24 finds on real video; the fixtures read their own.
-                    int from = VRSLDMXRig.ShiftedThirteenth(i + 1) ? i - 13 : i;
-                    if (Mathf.Abs(read[i] - painted.Reads[from]) > Half)
+                    if (Mathf.Abs(read[i] - painted.Reads[i]) > Half)
                         notAsRead.Add($"ch {i + 1} decoded {read[i] * 255f:F0}, the fixtures read "
-                                    + $"{painted.Reads[from] * 255f:F0} for ch {from + 1} from texel {painted.Cells[from]}");
-                    if (from == i && !painted.Shared.Contains(i + 1) && Mathf.Abs(read[i] - values[i]) > Half)
+                                    + $"{painted.Reads[i] * 255f:F0} from texel {painted.Cells[i]}");
+                    if (!painted.Shared.Contains(i + 1) && Mathf.Abs(read[i] - values[i]) > Half)
                         notAsSent.Add($"ch {i + 1} decoded {read[i] * 255f:F0}, sent {values[i] * 255f:F0}");
                 }
                 Assert.IsEmpty(notAsRead, $"{notAsRead.Count} channels decode from a different texel "
@@ -645,7 +639,8 @@ namespace VRSL.URP.Tests
         /// manager's buffers are live as well.
         /// </summary>
         static Color[] ReadThrough(string probe, int count, RenderTexture grid, RenderTexture spin,
-                                   VRSL_URPLightManager manager, bool fromBuffer)
+                                   VRSL_URPLightManager manager, bool fromBuffer,
+                                   VRSLGridLayout layout = VRSLGridLayout.Horizontal)
         {
             var shader = Shader.Find(probe);
             Assert.IsNotNull(shader, $"the {probe} test shader is not in this project");
@@ -660,7 +655,7 @@ namespace VRSL.URP.Tests
                 material.SetTexture("_VRSLU_DMXGridRenderTextureMovement", grid);
                 material.SetTexture("_VRSLU_DMXGridSpinTimer",             spin);
                 material.SetVector("_VRSLDMXTexelSize", new Vector4(1f / grid.width, 1f / grid.height, grid.width, grid.height));
-                material.SetInteger("_VRSLU_DMXGridLayout", 0);
+                material.SetInteger("_VRSLU_DMXGridLayout", (int)layout);
                 material.SetBuffer("_VRSLU_DMXChannels",    manager.ChannelBuffer);
                 material.SetBuffer("_VRSLU_DMXMovement",    manager.MovementBuffer);
                 material.SetBuffer("_VRSLU_DMXSpinPhase",   manager.SpinPhaseBuffer);
@@ -691,10 +686,7 @@ namespace VRSL.URP.Tests
         /// N31. Both includes' read functions return, for every channel the rig patches, the
         /// value, the movement value and the spin phase the manager holds for it: from the
         /// channel buffer while it is live, with a grid of other values bound beside it, and
-        /// from a grid carrying the same values when it is not. Except the spin phase of the
-        /// 13th channels the correction table moves, on the grid: the includes' raw read,
-        /// which the spin phase comes through, does not apply the table, so it reads those
-        /// from their own cell.
+        /// from a grid carrying the same values when it is not.
         /// </summary>
         [UnityTest]
         public IEnumerator N31_both_includes_read_a_channel_alike_from_the_buffer_and_the_grid(
@@ -737,9 +729,8 @@ namespace VRSL.URP.Tests
                 {
                     foreach (var (how, read) in new[] { ("grid", fromGrid[i]), ("buffer", fromBuffer[i]) })
                     {
-                        bool spinRead = how == "buffer" || !VRSLDMXRig.ShiftedThirteenth(i + 1);
                         if (Mathf.Abs(read.r - values[i]) > Half || Mathf.Abs(read.g - values[i]) > Half
-                         || (spinRead && Mathf.Abs(read.b - spin[i]) > 1e-3f))
+                         || Mathf.Abs(read.b - spin[i]) > 1e-3f)
                             wrong.Add($"ch {i + 1} from the {how}: value {read.r * 255f:F2}, movement {read.g * 255f:F2}, "
                                     + $"spin {read.b:F4}; sent {values[i] * 255f:F0}, spin {spin[i]:F4}");
                     }
@@ -751,6 +742,92 @@ namespace VRSL.URP.Tests
             {
                 rig.Dispose();
                 foreach (var p in painted) p.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// G17. Every channel the layout carries, painted in its own cell
+        /// with a value no neighbour shares, reads back as its own value through the compute
+        /// and through both includes' value, movement and raw (spin) reads. The cells come from
+        /// <see cref="VRSLDMXRig.OwnCellsOf"/>, not from a reader, so the row says nothing about
+        /// a reader by construction. Channels sharing a Legacy texel are left out.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G17_every_reader_takes_a_channel_from_its_own_cell(
+            [Values(VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy)] VRSLGridLayout layout)
+        {
+            var size  = SizeOf(layout);
+            // As many channels as the layout carries (2-pixel cells, 13 to a row), up to 1536:
+            // past three universes of 512 the includes split the grid by colour, which is
+            // another question.
+            int count = layout == VRSLGridLayout.Legacy ? PatchedChannels : Mathf.Min(size.y / 2 * 13, 1536);
+            var rig = VRSLDMXRig.Build();
+            VRSLDMXRig.PaintedGrid painted = null;
+            RenderTexture white = null;
+            VRSLGridTextures grid = null;
+            try
+            {
+                yield return rig.Step(2);
+                var values = new float[count];
+                for (int i = 0; i < count; i++) values[i] = (i % 251 + 2) / 255f;
+                painted = VRSLDMXRig.PaintGrid(values, VRSLDMXRig.OwnCellsOf(count, layout, size.x, size.y),
+                                               layout, size.x, size.y);
+                white = Solid(Color.white);
+                grid  = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                var set = new VRSLGridTextures.Set
+                {
+                    main = painted.Texture, movement = painted.Texture, strobe = white, spinTimer = painted.Texture,
+                };
+                grid.horizontal = grid.vertical = grid.legacy = set;
+                rig.Manager.ChannelSource = null;
+                rig.Manager.enabled       = false;
+                rig.Manager.gridTextures  = grid;
+                rig.Manager.dmxInput      = (VRSLDmxInput)layout;
+                rig.Manager.enabled       = true;
+                yield return rig.Step(3);
+                Assert.AreEqual(0, rig.Manager.ChannelCount, "the manager is still reading the channel buffer");
+                // The compute readback decodes in whatever layout the manager reads.
+                Assert.AreEqual((VRSLGridLayout?)layout, rig.Manager.GridLayout,
+                    $"the manager reads {rig.Manager.GridLayout?.ToString() ?? "no grid"}, so the compute half "
+                  + $"would judge a {layout} grid through another layout's cells");
+
+                var wrong = new Dictionary<string, List<int>>();
+                void Check(string reader, int channel, float read)
+                {
+                    if (painted.Shared.Contains(channel) || Mathf.Abs(read - values[channel - 1]) <= Half) return;
+                    if (!wrong.TryGetValue(reader, out var list)) wrong[reader] = list = new List<int>();
+                    list.Add(channel);
+                }
+
+                var compute = rig.ReadGridChannels(count);
+                for (int i = 0; i < count; i++) Check("compute", i + 1, compute[i]);
+                foreach (var probe in new[] { "Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads" })
+                {
+                    var reads = ReadThrough(probe, count, painted.Texture, painted.Texture, rig.Manager,
+                                            fromBuffer: false, layout);
+                    string name = probe.Contains("Urp") ? "URP include" : "Built-in include";
+                    for (int i = 0; i < count; i++)
+                    {
+                        Check(name + " value",    i + 1, reads[i].r);
+                        Check(name + " movement", i + 1, reads[i].g);
+                        Check(name + " raw",      i + 1, reads[i].b);
+                    }
+                }
+
+                Debug.Log($"[G17] {layout}: {count} channels, {painted.Shared.Count} sharing a texel; "
+                        + (wrong.Count == 0 ? "every reader read every channel from its own cell"
+                           : string.Join("; ", wrong.Select(w => $"{w.Key} misread {w.Value.Count}: "
+                                                                + string.Join(", ", w.Value.Take(20))))));
+                Assert.IsEmpty(wrong, $"{layout}: readers that take a channel from a cell not its own: "
+                                    + string.Join("; ", wrong.Select(w => $"{w.Key} on {w.Value.Count} channels, "
+                                                                         + $"first {string.Join(", ", w.Value.Take(12))}")));
+            }
+            finally
+            {
+                rig.Dispose();
+                painted?.Dispose();
+                if (white != null) { white.Release(); Object.DestroyImmediate(white); }
+                if (grid != null) Object.DestroyImmediate(grid);
             }
         }
 
