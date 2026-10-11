@@ -41,8 +41,9 @@ namespace VRSL.URP
     /// </summary>
     /// <remarks>
     /// A fixture prefab here serves every grid layout, because the layout is the manager's.
-    /// So Legacy and Vertical upstream fixtures pair with the Horizontal URP prefab, and the
-    /// per-layout URP prefabs earlier releases shipped are produced by no row.
+    /// So Horizontal, Legacy and Vertical upstream fixtures pair with the same URP prefab, and
+    /// the per-layout URP prefabs earlier releases shipped (now under
+    /// <c>Prefabs/DMX/Superseded/</c>) are produced by no row.
     /// Upstream shipped its Legacy fixtures twice: under <c>Prefabs/DMX/Legacy Mode/</c>,
     /// and from v2.1 to v2.3.0 also under <c>Shaders/Basic Surface Shaders/Legacy Mode/</c>
     /// with other GUIDs. Worlds built on those releases can carry either set.
@@ -65,9 +66,7 @@ namespace VRSL.URP
         const string Strobe6x4   = "6ba550857dbb8b35cdd51d4d4a127435";
         const string Discoball   = "3c1f6d2a8e5b4f7a9d0c1b2e3f4a5b6c";
 
-        /// <summary>The one URP prefab a pair may keep in a per-layout folder: it has
-        /// no Horizontal URP twin.</summary>
-        public const string VerticalExampleSurface = "91cec4a5ecd89a3b271d226cf9bc78f4";
+        const string ExampleSurface5 = "91cec4a5ecd89a3b271d226cf9bc78f4";
 
         public static readonly VRSLMigrationPair[] Pairs =
         {
@@ -136,7 +135,10 @@ namespace VRSL.URP
             new VRSLMigrationPair("b2a0b640363bc10408fb7a3803939fa0", LightBar13, "DMX V 13CH Static LightBar",      Dmx, rc6Urp: "c95416bf6eef62f2a394420e7f9eb36d"),
             new VRSLMigrationPair("b8873da88b401dd4ab93b061c5ddf750", MultiBar15, "DMX V 15CH Static MultiLightBar", Dmx, rc6Urp: "a0940e84628bd52352bbe8a8c7825f32"),
             new VRSLMigrationPair("51b428740444288448e19c88c64d5311", Strobe6x4,  "DMX V 5CH Static 6x4 Strobe",     Dmx, rc6Urp: "49912180c2c2cec3d31d578111f9c053"),
-            new VRSLMigrationPair("6b906c7cc969ac346a656210549c02c7", VerticalExampleSurface, "DMX V 5CH Example Surface", Dmx),
+            new VRSLMigrationPair("6b906c7cc969ac346a656210549c02c7", ExampleSurface5, "DMX V 5CH Example Surface", Dmx),
+            new VRSLMigrationPair("8c5b2abb4f158154cad77f35b9ce2643", ExampleSurface5, "DMX H 5CH Example Surface", Dmx),
+            new VRSLMigrationPair("27dc7840f76fbc1469f1e64bdbc9991a", ExampleSurface5, "DMX L 5CH Example Surface", Dmx),
+            new VRSLMigrationPair("f5ed30f5e443da045ad632a1ccf18ff9", ExampleSurface5, "DMX L 5CH Example Surface", Dmx),
         };
 
         /// <summary>Upstream fixture prefabs this package ships no twin for. Named in the
@@ -144,11 +146,27 @@ namespace VRSL.URP
         /// out in the headset.</summary>
         public static readonly Dictionary<string, string> Unported = new Dictionary<string, string>
         {
-            { "27dc7840f76fbc1469f1e64bdbc9991a", "DMX L 5CH Example Surface" },
-            { "f5ed30f5e443da045ad632a1ccf18ff9", "DMX L 5CH Example Surface" },
-            { "8c5b2abb4f158154cad77f35b9ce2643", "DMX H 5CH Example Surface" },
             { "78bf4380452cfbe4aa8154e17a189b28", "DMX V 5CH Static LightBar" },
         };
+
+        const string DmxManager = "a153c72afb11a7d95718c2cfda31fd8a";
+
+        /// <summary>This package's own superseded prefabs, under <c>Prefabs/DMX/Superseded/</c>,
+        /// and the prefab that replaces each: the per-layout fixtures earlier releases shipped
+        /// (the 0.2.0-rc.6 twins the pairs remember) and the Legacy and Vertical managers.</summary>
+        public static readonly Dictionary<string, string> Superseded = BuildSuperseded();
+
+        static Dictionary<string, string> BuildSuperseded()
+        {
+            var map = new Dictionary<string, string>
+            {
+                { "ad7144dda51ade86af22a2dee3d4e8b5", DmxManager },   // Legacy manager
+                { "86bdb731b077c2575c0f809d45511918", DmxManager },   // Vertical manager
+            };
+            foreach (var pair in Pairs)
+                if (pair.Rc6UrpGuid != null) map[pair.Rc6UrpGuid] = pair.UrpGuid;
+            return map;
+        }
     }
 }
 #endif

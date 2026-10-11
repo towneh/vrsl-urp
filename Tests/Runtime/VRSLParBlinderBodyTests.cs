@@ -21,19 +21,21 @@ namespace VRSL.URP.Tests
 
         static readonly string[] ParsAndBlinders =
         {
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-H-13CH-URP.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-13CH-URP.prefab",
-            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
-            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
-            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
-            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
-            "Horizontal Mode/5-Channel Statics/DMX-5CH-URP-Fixtures/VRSL-DMX-Static-ParLight-H-5CH-URP.prefab",
-            "Horizontal Mode/5-Channel Statics/DMX-5CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-5CH-URP.prefab",
-            "Vertical Mode/5-Channel Statics/DMX-5CH-URP-Fixtures/VRSL-DMX-Static-ParLight-V-5CH-URP.prefab",
-            "Vertical Mode/5-Channel Statics/DMX-5CH-URP-Fixtures/VRSL-DMX-Static-Blinder-V-5CH-URP.prefab",
+            "VRSL-DMX-Static-ParLight-13CH.prefab",
+            "VRSL-DMX-Static-Blinder-13CH.prefab",
+            "Superseded/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
+            "VRSL-DMX-Static-ParLight-5CH.prefab",
+            "VRSL-DMX-Static-Blinder-5CH.prefab",
+            "Superseded/VRSL-DMX-Static-ParLight-V-5CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-Blinder-V-5CH-URP.prefab",
         };
 
-        static IEnumerable<string> FiveChannel => ParsAndBlinders.Where(p => p.Contains("-5CH-"));
+        static bool IsFiveChannel(string path) => path.Contains("-5CH");
+
+        static IEnumerable<string> FiveChannel => ParsAndBlinders.Where(p => IsFiveChannel(p));
 
         /// <summary>The brightest linear value J2 and J4 allow on a body or flare at black:
         /// the housing keeps a faint sheen of the rig's reflections, while a lit lens, and a
@@ -68,7 +70,7 @@ namespace VRSL.URP.Tests
                     light.fixtureShellRenderers ?? new MeshRenderer[0],
                     $"{path}: a renderer left off the list glows at full whatever the desk sends");
                 Assert.AreEqual(BodyTint, light.shellEmissionTint, $"{path}: the body tint");
-                Assert.AreEqual(path.Contains("-5CH-"), light.use5ChannelMode,
+                Assert.AreEqual(IsFiveChannel(path), light.use5ChannelMode,
                     $"{path}: the cast light must read the patch the fixture is named for");
 
                 var go = Object.Instantiate(prefab);

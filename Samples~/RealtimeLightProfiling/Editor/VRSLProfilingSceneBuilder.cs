@@ -34,26 +34,21 @@ namespace VRSL.URP.Profiling.Editor
         }
 
         const string PkgRoot         = "Packages/town.mr.vrsl-urp/";
-        const string URPManager      = PkgRoot + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-URP-LightManager-Horizontal.prefab";
+        const string URPManager      = PkgRoot + "Runtime/Prefabs/DMX/VRSL-DMX-LightManager.prefab";
         const string DepthLightPath  = PkgRoot + "Runtime/Prefabs/Directional Light (For Depth).prefab";
 
-        // Per-(path, kind) prefab paths. The Horizontal-mode 13-channel variants
-        // are used for both URP and legacy paths since the profiling scene only
-        // exercises rendering cost; the DMX channel mapping is irrelevant once
-        // the synthetic source is feeding pre-decoded values.
+        // The package ships its fixtures as realtime lights only, so the mesh-shader path
+        // has no prefabs of its own to place.
         static string PrefabPath(LightingPath p, FixtureType t)
         {
-            const string urpDir    = PkgRoot + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/";
-            const string legacyDir = PkgRoot + "Runtime/Prefabs/DMX/Horizontal Mode/";
-            bool urp = p == LightingPath.URPRealtime;
-            string dir    = urp ? urpDir : legacyDir;
-            string suffix = urp ? "-URP.prefab" : ".prefab";
+            if (p != LightingPath.URPRealtime) return null;
+            const string dir = PkgRoot + "Runtime/Prefabs/DMX/";
             switch (t)
             {
-                case FixtureType.MoverWashlight: return dir + "VRSL-DMX-Mover-WashLight-H-13CH" + suffix;
-                case FixtureType.MoverSpotlight: return dir + "VRSL-DMX-Mover-Spotlight-H-13CH" + suffix;
-                case FixtureType.StaticParLight: return dir + "VRSL-DMX-Static-ParLight-H-13CH" + suffix;
-                case FixtureType.StaticBlinder:  return dir + "VRSL-DMX-Static-Blinder-H-13CH"  + suffix;
+                case FixtureType.MoverWashlight: return dir + "VRSL-DMX-Mover-WashLight-13CH.prefab";
+                case FixtureType.MoverSpotlight: return dir + "VRSL-DMX-Mover-Spotlight-13CH.prefab";
+                case FixtureType.StaticParLight: return dir + "VRSL-DMX-Static-ParLight-13CH.prefab";
+                case FixtureType.StaticBlinder:  return dir + "VRSL-DMX-Static-Blinder-13CH.prefab";
                 default:                         return null;
             }
         }
@@ -324,6 +319,11 @@ namespace VRSL.URP.Profiling.Editor
             truss.transform.localScale    = Vector3.one;
 
             string asset = PrefabPath(path, fixtureType);
+            if (asset == null)
+            {
+                Debug.LogError($"[VRSL Profiling] This package has no {fixtureType} prefab for the {path} path; build with URP Realtime.");
+                return;
+            }
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(asset);
             if (prefab == null)
             {

@@ -79,7 +79,7 @@ namespace VRSL.URP.Tests
         [UnityTest]
         public IEnumerator R2_a_shader_driven_fixture_takes_its_new_address()
         {
-            const string Flasher = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/Horizontal Mode/VRSL-DMX-Static-Flasher-H-1CH.prefab";
+            const string Flasher = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/VRSL-DMX-Static-Flasher-1CH.prefab";
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Flasher);
             Assert.IsNotNull(prefab, $"Asset not found: {Flasher}");
             var go = Object.Instantiate(prefab);

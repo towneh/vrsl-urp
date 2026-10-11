@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: VRSL-Vertical-ExampleSurfaceShader-Cube
+  m_Name: VRSL-ExampleSurfaceShader-Cube
   m_Shader: {fileID: 4800000, guid: 7f807ad06936e6011eefaa7033bcf698, type: 3}
   m_ShaderKeywords: _5CH_MODE _ENABLEOSC_ON _ENABLESTROBE_ON _ENABLEVERTICALMODE_ON
   m_LightmapFlags: 4

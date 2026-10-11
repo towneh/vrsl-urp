@@ -15,9 +15,9 @@ namespace VRSL.URP.Tests
     /// </summary>
     public class VRSLMigrationTableTests
     {
-        static readonly string[] PerLayoutFolders = { "/Legacy Mode/", "/Vertical Mode/" };
+        const string SupersededFolder = VRSLWiring.PackageRoot + "Runtime/Prefabs/DMX/Superseded/";
 
-        static bool InPerLayoutFolder(string path) => PerLayoutFolders.Any(path.Contains);
+        static bool Superseded(string path) => path.StartsWith(SupersededFolder);
 
         [Test]
         public void EveryUpstreamGuidAppearsOnce()
@@ -50,22 +50,44 @@ namespace VRSL.URP.Tests
         }
 
         [Test]
-        public void NoPairProducesAPerLayoutPrefab()
+        public void NoPairProducesASupersededPrefab()
         {
-            var perLayout = new List<string>();
+            var superseded = new List<string>();
             foreach (var pair in VRSLMigrationTable.Pairs)
             {
-                if (pair.UrpGuid == VRSLMigrationTable.VerticalExampleSurface) continue;
                 string path = AssetDatabase.GUIDToAssetPath(pair.UrpGuid);
-                if (InPerLayoutFolder(path)) perLayout.Add($"{pair.FriendlyName} -> {path}");
+                if (Superseded(path)) superseded.Add($"{pair.FriendlyName} -> {path}");
             }
-            Assert.IsEmpty(perLayout,
-                "fixture prefabs serve every grid layout, so a Legacy or Vertical fixture "
-              + "migrates onto the Horizontal prefab: " + string.Join(", ", perLayout));
+            Assert.IsEmpty(superseded,
+                "fixture prefabs serve every grid layout, so every upstream fixture migrates "
+              + "onto the one prefab: " + string.Join(", ", superseded));
+        }
 
-            // The exception is a real per-layout prefab, or it excuses nothing.
-            Assert.That(AssetDatabase.GUIDToAssetPath(VRSLMigrationTable.VerticalExampleSurface),
-                Does.Contain("/Vertical Mode/"));
+        [Test]
+        public void EverySupersededPrefabHasAReplacementOutsideTheFolder()
+        {
+            var inFolder = AssetDatabase.FindAssets("t:Prefab", new[] { SupersededFolder.TrimEnd('/') })
+                .Select(AssetDatabase.GUIDToAssetPath).ToList();
+            Assert.IsNotEmpty(inFolder, "the superseded prefabs weren't found");
+
+            var bad = new List<string>();
+            foreach (var path in inFolder)
+            {
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                if (!VRSLMigrationTable.Superseded.TryGetValue(guid, out string replacement))
+                    bad.Add($"{path} has no replacement");
+                else
+                {
+                    string to = AssetDatabase.GUIDToAssetPath(replacement);
+                    if (!to.StartsWith(VRSLWiring.PackageRoot) || !to.EndsWith(".prefab") || Superseded(to))
+                        bad.Add($"{path} -> '{to}'");
+                }
+            }
+            foreach (var guid in VRSLMigrationTable.Superseded.Keys)
+                if (!Superseded(AssetDatabase.GUIDToAssetPath(guid)))
+                    bad.Add($"{guid} is listed as superseded but isn't in the folder");
+            Assert.IsEmpty(bad,
+                "superseded prefabs the replace menu can't move a scene off: " + string.Join(", ", bad));
         }
 
         [Test]
@@ -76,8 +98,8 @@ namespace VRSL.URP.Tests
             foreach (var pair in pairs)
             {
                 Assert.AreNotEqual(pair.UrpGuid, pair.Rc6UrpGuid, pair.FriendlyName);
-                Assert.That(InPerLayoutFolder(AssetDatabase.GUIDToAssetPath(pair.Rc6UrpGuid)),
-                    $"{pair.FriendlyName}: its rc.6 target should be a Legacy or Vertical prefab");
+                Assert.That(Superseded(AssetDatabase.GUIDToAssetPath(pair.Rc6UrpGuid)),
+                    $"{pair.FriendlyName}: its rc.6 target should be a superseded prefab");
             }
         }
     }

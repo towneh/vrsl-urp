@@ -33,8 +33,8 @@ namespace VRSL.URP.Tests
 
         const string RootName      = "VRSL DMX Test Rig";
         const string Pkg           = "Packages/town.mr.vrsl-urp/";
-        const string ManagerPrefab = Pkg + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-URP-LightManager-Horizontal.prefab";
-        const string FixturePrefab = Pkg + "Runtime/Prefabs/DMX/Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab";
+        const string ManagerPrefab = Pkg + "Runtime/Prefabs/DMX/VRSL-DMX-LightManager.prefab";
+        const string FixturePrefab = Pkg + "Runtime/Prefabs/DMX/VRSL-DMX-Mover-Spotlight-13CH.prefab";
 
         /// <summary>The camera's render target, for rows that read the frame back.</summary>
         public RenderTexture Target => _target;

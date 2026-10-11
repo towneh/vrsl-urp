@@ -13,7 +13,7 @@ namespace VRSL.URP.Tests
     /// </summary>
     class VRSLDiscoballTests : VRSLDMXTest
     {
-        const string Prefab  = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/VRSL-DMX-URP-Discoball-1CH.prefab";
+        const string Prefab  = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/VRSL-DMX-Discoball-1CH.prefab";
         const string Cubemap = "Packages/town.mr.vrsl-urp/Runtime/Textures/VRSL-DiscoBallCubeMap.png";
         const int ImageSize  = 512;
         const int WarmUpFrames = 4;

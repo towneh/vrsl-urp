@@ -173,39 +173,39 @@ namespace VRSL.URP.Tests
         /// <summary>One of each Horizontal fixture whose body or beam reads the grid.</summary>
         static readonly string[] HorizontalPrefabs =
         {
-            "Horizontal Mode/VRSL-DMX-Static-Flasher-H-1CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-Laser-H-13CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-LightBar-H-13CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-MultiLightBar-H-15CH.prefab",
-            "Horizontal Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-H-5CH.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-H-13CH-URP.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-13CH-URP.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-H-13CH-URP.prefab",
+            "VRSL-DMX-Static-Flasher-1CH.prefab",
+            "VRSL-DMX-Static-Laser-13CH.prefab",
+            "VRSL-DMX-Static-LightBar-13CH.prefab",
+            "VRSL-DMX-Static-MultiLightBar-15CH.prefab",
+            "VRSL-DMX-Static-6x4StrobeLight-5CH.prefab",
+            "VRSL-DMX-Mover-Spotlight-13CH.prefab",
+            "VRSL-DMX-Mover-WashLight-13CH.prefab",
+            "VRSL-DMX-Static-Blinder-13CH.prefab",
+            "VRSL-DMX-Static-ParLight-13CH.prefab",
         };
 
         /// <summary>The Legacy fixture prefabs 0.2.0-rc.6 shipped.</summary>
         static readonly string[] LegacyPrefabs =
         {
-            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-L-13CH-URP.prefab",
-            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-L-13CH-URP.prefab",
-            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
-            "Legacy Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Mover-Spotlight-L-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Mover-WashLight-L-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
         };
 
         /// <summary>The Vertical fixture prefabs 0.2.0-rc.6 shipped.</summary>
         static readonly string[] VerticalPrefabs =
         {
-            "Vertical Mode/VRSL-DMX-Static-Flasher-V-1CH.prefab",
-            "Vertical Mode/VRSL-DMX-Static-Laser-V-13CH.prefab",
-            "Vertical Mode/VRSL-DMX-Static-LightBar-V-13CH.prefab",
-            "Vertical Mode/VRSL-DMX-Static-MultiLightBar-V-15CH.prefab",
-            "Vertical Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-V-5CH.prefab",
+            "Superseded/VRSL-DMX-Static-Flasher-V-1CH.prefab",
+            "Superseded/VRSL-DMX-Static-Laser-V-13CH.prefab",
+            "Superseded/VRSL-DMX-Static-LightBar-V-13CH.prefab",
+            "Superseded/VRSL-DMX-Static-MultiLightBar-V-15CH.prefab",
+            "Superseded/VRSL-DMX-Static-6x4StrobeLight-V-5CH.prefab",
             null,   // the shader-driven discoball's place, kept so the stored capture's layout holds
-            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-V-13CH-URP.prefab",
-            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-V-13CH-URP.prefab",
-            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
-            "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Mover-Spotlight-V-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Mover-WashLight-V-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
+            "Superseded/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
         };
 
         /// <summary>Each layout's decode textures are this size, so each is painted at it.</summary>
@@ -514,12 +514,12 @@ namespace VRSL.URP.Tests
         /// <summary>The Horizontal prefabs whose bodies read the grid through the URP include.</summary>
         internal static readonly string[] UrpIncludePrefabs =
         {
-            "Horizontal Mode/VRSL-DMX-Static-Flasher-H-1CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-LightBar-H-13CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-MultiLightBar-H-15CH.prefab",
-            "Horizontal Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-H-5CH.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-13CH-URP.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-ParLight-H-13CH-URP.prefab",
+            "VRSL-DMX-Static-Flasher-1CH.prefab",
+            "VRSL-DMX-Static-LightBar-13CH.prefab",
+            "VRSL-DMX-Static-MultiLightBar-15CH.prefab",
+            "VRSL-DMX-Static-6x4StrobeLight-5CH.prefab",
+            "VRSL-DMX-Static-Blinder-13CH.prefab",
+            "VRSL-DMX-Static-ParLight-13CH.prefab",
         };
 
         /// <summary>
@@ -537,9 +537,9 @@ namespace VRSL.URP.Tests
         /// Built-in include, besides the lens flares on the flasher and the blinder.</summary>
         internal static readonly string[] BuiltInIncludePrefabs =
         {
-            "Horizontal Mode/VRSL-DMX-Static-Laser-H-13CH.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab",
-            "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-H-13CH-URP.prefab",
+            "VRSL-DMX-Static-Laser-13CH.prefab",
+            "VRSL-DMX-Mover-Spotlight-13CH.prefab",
+            "VRSL-DMX-Mover-WashLight-13CH.prefab",
         };
 
         /// <summary>
