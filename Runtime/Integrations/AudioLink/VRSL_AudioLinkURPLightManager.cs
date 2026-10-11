@@ -608,8 +608,10 @@ namespace VRSL.URP
             // The kernel needs something in the sampling slot every dispatch. The
             // fallback, when the manager holds no sampling texture, is the AudioLink
             // atlas itself: mode-0 fixtures never read the slot, and the texture modes
-            // then sample the atlas, which is the degraded path they always had.
-            Texture sampling = _cachedSamplingTex != null ? _cachedSamplingTex : _cachedAudioTex;
+            // then sample the atlas, which is the degraded path they always had. Read
+            // from the field, not the handle cache: the cache holds the black texture
+            // that keeps the handle valid, which is never what a fixture should sample.
+            Texture sampling = samplingTexture != null ? samplingTexture : _cachedAudioTex;
 
             var cs  = computeShader;
             int k   = ComputeKernel;
@@ -634,11 +636,25 @@ namespace VRSL.URP
         {
             if (FixtureConfigBuffer == null || FixtureCount == 0) return;
 
-            var configs = new VRSLALFixtureConfig[FixtureCount];
+            // Every frame, so the array is kept rather than allocated each time.
+            if (_configs == null || _configs.Length != FixtureCount)
+                _configs = new VRSLALFixtureConfig[FixtureCount];
+            // A fixture destroyed since the last RefreshFixtures() goes dark rather than
+            // throwing, which would stop every AudioLink pass on every camera.
             for (int i = 0; i < FixtureCount; i++)
-                configs[i] = BuildConfig(_fixtures[i]);
-            FixtureConfigBuffer.SetData(configs);
+                _configs[i] = _fixtures[i] != null ? BuildConfig(_fixtures[i]) : s_DarkConfig;
+            FixtureConfigBuffer.SetData(_configs);
         }
+
+        VRSLALFixtureConfig[] _configs;
+
+        // Zero intensity with a real direction and range: the compute normalises the
+        // forward vector, and a zero one would put NaNs in the light data.
+        static readonly VRSLALFixtureConfig s_DarkConfig = new()
+        {
+            positionAndRange = new Vector4(0f, 0f, 0f, 1f),
+            forwardAndType   = new Vector4(0f, -1f, 0f, 0f),
+        };
 
         void BuildGoboArray()
         {

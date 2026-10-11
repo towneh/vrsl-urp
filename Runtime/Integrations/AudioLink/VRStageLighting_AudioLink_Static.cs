@@ -720,11 +720,12 @@ namespace VRSL.URP
         }
         void Init(bool withAL)
         {
-            if(objRenderers[0] == null)
+            bool hasRenderers = objRenderers != null && objRenderers.Length > 0;
+            if(hasRenderers && objRenderers[0] == null)
             {
                 return;
             }
-            if(objRenderers.Length > 0)
+            if(hasRenderers)
             {
                 _SetProps();
                 previousColorTint = lightColorTint;

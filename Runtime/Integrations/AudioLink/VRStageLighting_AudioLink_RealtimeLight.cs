@@ -207,7 +207,8 @@ namespace VRSL.URP
                 && colorMode <= ALRealtimeColorMode.ThemeColor3)
             {
                 enableThemeColor = 1;
-                themeColorTarget = (int)colorMode - (int)ALRealtimeColorMode.ThemeColor0;
+                // The body shader numbers the theme colours from 1, as the Static's field does.
+                themeColorTarget = (int)colorMode - (int)ALRealtimeColorMode.ThemeColor0 + 1;
             }
             else if (colorMode == ALRealtimeColorMode.ColorChord)
             {

@@ -27,12 +27,16 @@ public class VRSL_AudioLink_SmoothingPanel : MonoBehaviour
 
     void UpdateText()
     {
-        bassSmoothingText.text = (( (Mathf.Abs(bassSmoothingSlider.value - 1.0f))*100.0f).ToString());
-        lowerMidSmoothingText.text = (((Mathf.Abs(lowerMidSmoothingSlider.value - 1.0f))*100.0f).ToString());
-        upperMidSmoothingText.text = (((Mathf.Abs(upperMidSmoothingSlider.value - 1.0f))*100.0f).ToString());
-        trebleSmoothingText.text = (((Mathf.Abs(trebleSmoothingSlider.value - 1.0f))*100.0f).ToString());
-        colorChordSmoothingText.text = (((Mathf.Abs(colorChordSmoothingSlider.value - 1.0f))*100.0f).ToString());
+        bassSmoothingText.text = Percent(bassSmoothingSlider);
+        lowerMidSmoothingText.text = Percent(lowerMidSmoothingSlider);
+        upperMidSmoothingText.text = Percent(upperMidSmoothingSlider);
+        trebleSmoothingText.text = Percent(trebleSmoothingSlider);
+        colorChordSmoothingText.text = Percent(colorChordSmoothingSlider);
     }
+
+    // Whole percent, so the label shows neither float noise nor a culture's decimal comma.
+    static string Percent(Slider slider) =>
+        Mathf.RoundToInt(Mathf.Abs(slider.value - 1.0f) * 100.0f).ToString();
 
     public void UpdateSettings()
     {
