@@ -318,9 +318,7 @@ namespace VRSL.URP.Profiling
 
         // Manager allocates RTHandles in OnEnable, so swap its Grid Textures and bounce the
         // component to force a re-allocation against our synthetic textures.
-        // No-op when URP isn't installed — the legacy mesh-shader path reads the
-        // global textures published in PublishGlobals directly, no manager rebind
-        // needed.
+        // Does nothing when the scene has no DMX manager.
         void BindToManager()
         {
             var mgr = FindAnyObjectByType<VRSL_URPLightManager>();

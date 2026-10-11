@@ -30,11 +30,9 @@ namespace VRSL.URP.EditorScripts
             int undoGroup = Undo.GetCurrentGroup();
             var result = VRSLSupersededPrefabs.ReplaceIn(scene);
             Undo.CollapseUndoOperations(undoGroup);
-            if (result.Replaced > 0)
-            {
-                if (stage != null) PrefabUtility.SaveAsPrefabAsset(stage.prefabContentsRoot, stage.assetPath);
-                else EditorSceneManager.MarkSceneDirty(scene);
-            }
+            // In Prefab Mode this marks the prefab for saving, which leaves the save to
+            // Prefab Mode or the author and keeps the replacement undoable.
+            if (result.Replaced > 0) EditorSceneManager.MarkSceneDirty(scene);
 
             string summary = result.Replaced == 0
                 ? "Nothing to replace: no fixture or manager here comes from a superseded prefab."
