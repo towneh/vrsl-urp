@@ -56,5 +56,6 @@ The following were authored by towneh on the `urp-volumetric-lights` development
 
 The package depends on, but does not bundle, the following — these install via the Unity Package Manager and ship under their own respective licenses:
 
-- [AudioLink](https://github.com/llealloo/audiolink) by llealloo. The URP AudioLink path consumes AudioLink's `_AudioTexture` global at runtime.
 - Universal Render Pipeline (Unity).
+
+It also works with, but does not require, [AudioLink](https://github.com/llealloo/audiolink) by llealloo. Where AudioLink is installed, the URP AudioLink path consumes AudioLink's `_AudioTexture` global at runtime.

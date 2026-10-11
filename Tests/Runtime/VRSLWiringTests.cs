@@ -52,7 +52,6 @@ namespace VRSL.URP.Tests
         public void EveryWiringFieldNameExistsOnItsManager()
         {
             AssertFieldsExist(typeof(VRSL_URPLightManager), VRSLWiring.Dmx, "DMX");
-            AssertFieldsExist(typeof(VRSL_AudioLinkURPLightManager), VRSL_AudioLinkURPLightManager.WiringFields, "AudioLink");
         }
 
         /// <summary>

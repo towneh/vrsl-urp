@@ -28,7 +28,7 @@ The package is a standalone fork of [VR Stage Lighting](https://github.com/AcCho
 
 - Unity 6000.4 or newer
 - Universal Render Pipeline 17.4 or newer, in Forward or Forward+ mode
-- AudioLink 3.1.2 or newer. The package depends on it, so install it even for a DMX-only rig.
+- AudioLink 3.1.2 or newer, only to drive fixtures from music. Without it the DMX side works as normal, and the AudioLink fixtures, menus and example scene aren't usable until it's installed.
 - A desktop-class GPU. The package uses compute shaders and a full-screen raymarch, so it is built for desktop VR and flatscreen rather than for Quest.
 
 ## Install
@@ -56,7 +56,7 @@ There is no renderer feature to add and no URP setting to find. After you instal
    | `VRSL-ExampleScene-AudioLink-URPRealtimeLights` | `Runtime/Example Scenes/AudioLink-Scenes/` |
    | `VRSL-ExampleScene-EditorViaOSC-Horizontal-URPRealtimeLights` | `Runtime/Example Scenes/DMX-EditorViaOSCScenes/` |
 
-   The AudioLink scene lights up as soon as audio plays. The DMX scene needs a desk or a DMX sender to feed it, and until one does it stays dark, which is the expected state rather than a fault.
+   The AudioLink scene needs AudioLink installed, and lights up as soon as audio plays. The DMX scene needs a desk or a DMX sender to feed it, and until one does it stays dark, which is the expected state rather than a fault.
 
 2. **Add a light manager to your scene.** Run **VRSL → URP → Add Light Manager to Active Scene**. Use one manager per scene for each data path. The manager arrives with every shader and texture reference filled in. Its inspector shows one status line that says whether it is wired. If a reference goes missing, run **VRSL → URP → Repair Manager Wiring**.
 

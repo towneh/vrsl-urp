@@ -1,0 +1,27 @@
+{
+    "name": "Towneh.VRSL.URP.AudioLink.Editor",
+    "references": [
+        "Towneh.VRSL.URP",
+        "Towneh.VRSL.URP.AudioLink",
+        "Towneh.VRSL.URP.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "VRSL_AUDIOLINK_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.llealloo.audiolink",
+            "expression": "3.1.2",
+            "define": "VRSL_AUDIOLINK_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}

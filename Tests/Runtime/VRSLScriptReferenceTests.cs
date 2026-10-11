@@ -43,7 +43,14 @@ namespace VRSL.URP.Tests
                 }
             }
 
-            bool Inside(string path) => roots.Any(path.StartsWith);
+            // AudioLink is optional rather than a dependency: only the AudioLink assets may
+            // carry its scripts, and those still have to load where AudioLink is installed.
+            // Without it the set's own scripts don't compile either, so the set is left out.
+            bool audioLinkInstalled = VRSLAudioLinkSet.Installed;
+            bool audioLinkAllowed = false;
+            bool Inside(string path) =>
+                roots.Any(path.StartsWith)
+                || (audioLinkAllowed && path.StartsWith(VRSLAudioLinkSet.PackageRoot));
 
             var folder = new[] { VRSLWiring.PackageRoot.TrimEnd('/') };
             var assets = AssetDatabase.FindAssets("t:Prefab", folder)
@@ -51,14 +58,16 @@ namespace VRSL.URP.Tests
                 .Select(AssetDatabase.GUIDToAssetPath).Distinct().ToList();
             Assert.That(assets.Count, Is.GreaterThan(10), "the shipped prefabs and scenes weren't found");
 
-            var resolved = new Dictionary<(string, long), bool>();
+            var resolved = new Dictionary<(string, long, bool), bool>();
             var bad = new Dictionary<string, int>();
             foreach (var path in assets)
             {
+                audioLinkAllowed = VRSLAudioLinkSet.Contains(path);
+                if (audioLinkAllowed && !audioLinkInstalled) continue;
                 string text = File.ReadAllText(Path.GetFullPath(path));
                 foreach (Match m in ScriptRef.Matches(text))
                 {
-                    var key = (m.Groups[2].Value, long.Parse(m.Groups[1].Value));
+                    var key = (m.Groups[2].Value, long.Parse(m.Groups[1].Value), audioLinkAllowed);
                     if (!resolved.TryGetValue(key, out bool ok))
                         resolved[key] = ok = Loads(key.Item1, key.Item2, Inside);
                     if (ok) continue;
@@ -69,8 +78,9 @@ namespace VRSL.URP.Tests
             }
 
             Assert.IsEmpty(bad,
-                "shipped prefabs and scenes carrying a script that doesn't load from this package or one it "
-              + "depends on, so every instance arrives with a missing script: "
+                "shipped prefabs and scenes carrying a script that doesn't load from this package, one it "
+              + "depends on, or (for the AudioLink assets only) AudioLink, so every instance arrives with "
+              + "a missing script: "
               + string.Join(", ", bad.Select(b => $"{b.Key} x{b.Value}")));
         }
 

@@ -12,3 +12,11 @@ using System.Runtime.CompilerServices;
 // that M1 replaces with real public API, and a second public way to set quality is
 // exactly what should not outlive it.
 [assembly: InternalsVisibleTo("Towneh.VRSL.URP.Editor")]
+
+// The AudioLink integration compiles only where AudioLink is installed. Its manager
+// shares the wiring resolver, the light-path list and the interfaces the package's
+// tools reach it through, all internal: they are how the package finds its own
+// managers, not API an author should build on.
+[assembly: InternalsVisibleTo("Towneh.VRSL.URP.AudioLink")]
+[assembly: InternalsVisibleTo("Towneh.VRSL.URP.AudioLink.Editor")]
+[assembly: InternalsVisibleTo("Towneh.VRSL.URP.AudioLink.Tests")]

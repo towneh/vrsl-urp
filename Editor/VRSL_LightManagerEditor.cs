@@ -359,10 +359,6 @@ namespace VRSL.URP.EditorScripts
     [CanEditMultipleObjects]
     class VRSL_URPLightManagerEditor : VRSLLightManagerEditor { }
 
-    [CustomEditor(typeof(VRSL_AudioLinkURPLightManager))]
-    [CanEditMultipleObjects]
-    class VRSL_AudioLinkURPLightManagerEditor : VRSLLightManagerEditor { }
-
     /// <summary>The repair, reachable without hunting for the component.</summary>
     static class VRSLWiringMenu
     {

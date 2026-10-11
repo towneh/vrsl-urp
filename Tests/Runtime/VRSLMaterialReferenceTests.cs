@@ -10,6 +10,24 @@ using UnityEngine;
 namespace VRSL.URP.Tests
 {
     /// <summary>
+    /// AudioLink isn't a dependency, so the package's assets allowed to reach into it are
+    /// named by where they live: a folder called AudioLink or AudioLink-Scenes. Where
+    /// AudioLink is installed their references into it must resolve; where it isn't,
+    /// nothing in the set can, so rows L2 and L6 leave the set out.
+    /// </summary>
+    static class VRSLAudioLinkSet
+    {
+        public const string PackageRoot = "Packages/com.llealloo.audiolink/";
+
+        public static bool Installed =>
+            UnityEditor.PackageManager.PackageInfo.FindForPackageName("com.llealloo.audiolink") != null;
+
+        public static bool Contains(string assetPath) =>
+            assetPath.StartsWith(VRSLWiring.PackageRoot)
+            && (assetPath.Contains("/AudioLink/") || assetPath.Contains("/AudioLink-Scenes/"));
+    }
+
+    /// <summary>
     /// What the fixture materials point at, read from the asset files themselves.
     ///
     /// A texture reference to an asset the project doesn't hold loads as nothing, and the
@@ -39,7 +57,14 @@ namespace VRSL.URP.Tests
             Assert.IsNotNull(info, "this package isn't installed as a package here");
             roots.AddRange(info.dependencies.Select(d => $"Packages/{d.name}/"));
 
-            bool Inside(string path) => roots.Any(path.StartsWith);
+            // AudioLink is optional rather than a dependency: only the AudioLink fixtures'
+            // own materials may point into it, and those references still have to resolve
+            // there where AudioLink is installed.
+            bool audioLinkInstalled = VRSLAudioLinkSet.Installed;
+            bool audioLinkAllowed = false;
+            bool Inside(string path) =>
+                roots.Any(path.StartsWith)
+                || (audioLinkAllowed && path.StartsWith(VRSLAudioLinkSet.PackageRoot));
 
             var materials = AssetDatabase.FindAssets("t:Material", new[] { VRSLWiring.PackageRoot + Folder })
                 .Select(AssetDatabase.GUIDToAssetPath).ToList();
@@ -48,6 +73,8 @@ namespace VRSL.URP.Tests
             var bad = new List<string>();
             foreach (var path in materials)
             {
+                audioLinkAllowed = VRSLAudioLinkSet.Contains(path);
+                if (audioLinkAllowed && !audioLinkInstalled) continue;
                 string text = File.ReadAllText(Path.GetFullPath(path));
                 string name = Path.GetFileNameWithoutExtension(path);
 
@@ -74,8 +101,9 @@ namespace VRSL.URP.Tests
             }
 
             Assert.IsEmpty(bad,
-                "fixture materials pointing at a shader or texture that isn't in this package or one it "
-              + "depends on, so the fixture doesn't render as authored: "
+                "fixture materials pointing at a shader or texture that isn't in this package, one it "
+              + "depends on, or (for the AudioLink fixtures only) AudioLink, so the fixture doesn't "
+              + "render as authored: "
               + string.Join(", ", bad));
         }
     }
