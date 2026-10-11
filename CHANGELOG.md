@@ -5,7 +5,7 @@
 ### Added
 
 - **One DMX manager for any grid, or for stream data.** **DMX Input** on the manager chooses where the lights read DMX: the **Horizontal**, **Vertical** or **Legacy grid** in the video, or **Stream data** from a channel source (Truss records from a Basis stream, or the Truss OSC source). Every fixture takes the layout from the manager, so one prefab works on any layout. A world can switch while it runs with `SetDmxInput` (0 to 3, ready for a UI Dropdown), and keeps the choice the same on every client with a networked script of its own; the wiki has an example.
-- **Every fixture follows stream data.** Flashers, light bars, strobes, lasers, lens flares, the discoball and the mover heads read the channel source with the realtime lights, with the same movement smoothing, strobe and gobo spin. Under a grid input a source waits on standby.
+- **Every fixture follows stream data.** Flashers, light bars, strobes, lasers, lens flares, the discoball, the mover heads and the par and blinder bodies read the channel source with the realtime lights, with the same movement smoothing, strobe and gobo spin. Under a grid input a source waits on standby.
 - **Legacy grids and fixtures.** Realtime lights decode a Legacy grid, and the migration tool brings Legacy and Vertical fixtures, both of upstream's Legacy prefab sets included, onto the Horizontal prefabs.
 - **`ApplyAddress()` re-patches a DMX fixture while the world runs,** beam and body together.
 - **The Basis video output can follow the manager's grid** (**Follow Manager Layout**), with a corner set per layout.
@@ -17,11 +17,11 @@ Upgrading from 0.2.0-rc.6:
 - **Unity 6000.4 and URP 17.4 or newer.** The fixture shaders that read DMX need shader model 4.5.
 - **Open and save each scene with a DMX manager once.** Its five decode texture fields become DMX Input and a **Grid Textures** asset, and a manager beside an enabled channel source comes up on Stream data, since a source is now read only under Stream data. Re-import the profiling sample.
 - **Fixtures take the grid layout from the manager.** A material's `_EnableCompatibilityMode` no longer does anything, and `Runtime/Shaders/VRSLDMX.cginc` is gone: a custom shader that included it should use the shared DMX includes in `Runtime/Shaders/Shared/` instead.
-- **Some fixtures look different.** Migrated Legacy and Vertical fixtures carry the Horizontal prefabs' v2.4 materials.
+- **Some fixtures look different.** Par and blinder bodies and blinder flares now follow DMX instead of glowing at full (**Shell Emission Tint** sets their brightness), and migrated Legacy and Vertical fixtures carry the Horizontal prefabs' v2.4 materials.
 
 ### Fixed
 
-- **Decoding:** strobe from a video grid, and Vertical and Legacy managers' strobe timing.
+- **Decoding:** strobe from a video grid, Vertical and Legacy managers' strobe timing, and 5-channel pars and blinders casting light from the wrong channels.
 - **Fixtures:** mover heads now turn with their beams under a channel source and draw their depth in the same pose as their colour, and the Vertical flasher glows only at its lens.
 - **Editor:** Play mode no longer saves changes into the package's decode textures, and the control panel's strobe toggle no longer edits the package's materials.
 
