@@ -20,7 +20,7 @@ namespace VRSL.URP.Tests
         /// <summary>The last channel the rig patches: its last fixture's thirteenth.</summary>
         static int PatchedChannels => VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 12;
 
-        static RenderTexture Solid(Color colour)
+        internal static RenderTexture Solid(Color colour)
         {
             var rt = new RenderTexture(1, 1, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear)
                      { name = "Solid test grid" };
@@ -216,7 +216,7 @@ namespace VRSL.URP.Tests
         };
 
         /// <summary>Each layout's decode textures are this size, so each is painted at it.</summary>
-        static Vector2Int SizeOf(VRSLGridLayout layout) => layout switch
+        internal static Vector2Int SizeOf(VRSLGridLayout layout) => layout switch
         {
             VRSLGridLayout.Vertical => new Vector2Int(26, 135),
             VRSLGridLayout.Legacy   => new Vector2Int(50, 50),
