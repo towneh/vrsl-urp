@@ -11,12 +11,6 @@
     "precompiledReferences": [],
     "autoReferenced": true,
     "defineConstraints": [],
-    "versionDefines": [
-        {
-            "name": "com.unity.render-pipelines.universal",
-            "expression": "",
-            "define": "VRSL_URP"
-        }
-    ],
+    "versionDefines": [],
     "noEngineReferences": false
 }

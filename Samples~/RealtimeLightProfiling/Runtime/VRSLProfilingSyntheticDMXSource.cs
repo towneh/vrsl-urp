@@ -1,7 +1,5 @@
 using UnityEngine;
-#if VRSL_URP
 using VRSL.URP;
-#endif
 
 namespace VRSL.URP.Profiling
 {
@@ -9,9 +7,9 @@ namespace VRSL.URP.Profiling
     /// CRT-bypass DMX source for profiling runs.
     ///
     /// Authors a small CPU-side pixel buffer that matches the format the URP
-    /// compute shader and legacy fragment shaders consume after the existing
+    /// compute shader and the fixture shaders consume after the existing
     /// CRT decode chain, then publishes that buffer as the four DMX globals
-    /// (read by legacy fixtures) and hands it to the URP manager as its Grid
+    /// (read by the shader-driven fixtures) and hands it to the URP manager as its Grid
     /// Textures (read by the URP compute). With this active, the GridReader
     /// camera and CustomRenderTexture chain do not need to run, so frame-to-
     /// frame variance from video decode and CRT scheduling is eliminated and
@@ -71,11 +69,9 @@ namespace VRSL.URP.Profiling
         Color32[] _mainPixels, _movementPixels, _strobePixels, _spinPixels;
         Texture2D _mainSrc,    _movementSrc,    _strobeSrc,    _spinSrc;
         RenderTexture _mainRT, _movementRT,     _strobeRT,     _spinRT;
-#if VRSL_URP
         VRSLGridTextures     _gridTextures;
         // The manager handed _gridTextures, so it can be taken back before it is destroyed.
         VRSL_URPLightManager _boundManager;
-#endif
 
         // Match VRSL_LocalUIControlPanel's property names so the volumetric
         // mesh fixtures (which read these _VRSLU_-prefixed globals) bind correctly.
@@ -98,9 +94,7 @@ namespace VRSL.URP.Profiling
 
         void OnDisable()
         {
-#if VRSL_URP
             var mgr = UnbindFromManager();
-#endif
             ReleaseRT(ref _mainRT);
             ReleaseRT(ref _movementRT);
             ReleaseRT(ref _strobeRT);
@@ -109,7 +103,6 @@ namespace VRSL.URP.Profiling
             ReleaseTex(ref _movementSrc);
             ReleaseTex(ref _strobeSrc);
             ReleaseTex(ref _spinSrc);
-#if VRSL_URP
             if (_gridTextures != null)
             {
                 if (Application.isPlaying) Destroy(_gridTextures); else DestroyImmediate(_gridTextures);
@@ -120,10 +113,8 @@ namespace VRSL.URP.Profiling
             // way BindToManager makes it take them. Releasing a handle that only wraps a
             // texture leaves the texture alone, so the order is safe.
             BounceManager(mgr);
-#endif
         }
 
-#if VRSL_URP
         /// <summary>Take this source's Grid Textures back off the manager it was given
         /// to. Returns that manager when it was still using them.</summary>
         VRSL_URPLightManager UnbindFromManager()
@@ -143,7 +134,6 @@ namespace VRSL.URP.Profiling
             mgr.enabled = false;
             mgr.enabled = true;
         }
-#endif
 
         void OnValidate()
         {
@@ -333,7 +323,6 @@ namespace VRSL.URP.Profiling
         // needed.
         void BindToManager()
         {
-#if VRSL_URP
             var mgr = FindAnyObjectByType<VRSL_URPLightManager>();
             if (mgr == null) return;
 
@@ -360,7 +349,6 @@ namespace VRSL.URP.Profiling
             mgr.gridTextures = _gridTextures;
             _boundManager    = mgr;
             if (wasEnabled) mgr.enabled = true;
-#endif
         }
 
         /// <summary>Re-publish globals and rebind to the URP manager. Call after

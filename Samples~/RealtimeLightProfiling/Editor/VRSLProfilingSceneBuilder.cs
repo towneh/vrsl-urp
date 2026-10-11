@@ -7,18 +7,11 @@ namespace VRSL.URP.Profiling.Editor
     /// <summary>
     /// Builds (or rebuilds) a deterministic VRSL profiling scene with N matched
     /// fixtures arranged on a horizontal truss aimed at a flat floor, a fixed-pose
-    /// camera, and a CRT-bypass synthetic DMX source. Drives the fixture-count
-    /// and camera sweeps documented in the 2.9.0 frametime test plan without
-    /// needing to re-author scenes by hand for every cell of the table.
+    /// camera, and a CRT-bypass synthetic DMX source, so a fixture-count or camera
+    /// sweep doesn't need a scene authored by hand for every cell.
     /// </summary>
     public class VRSLProfilingSceneBuilder : EditorWindow
     {
-        public enum LightingPath
-        {
-            URPRealtime,
-            LegacyMeshShader,
-        }
-
         public enum CameraVariant
         {
             InsideCones,
@@ -35,13 +28,9 @@ namespace VRSL.URP.Profiling.Editor
 
         const string PkgRoot         = "Packages/town.mr.vrsl-urp/";
         const string URPManager      = PkgRoot + "Runtime/Prefabs/DMX/VRSL-DMX-LightManager.prefab";
-        const string DepthLightPath  = PkgRoot + "Runtime/Prefabs/Directional Light (For Depth).prefab";
 
-        // The package ships its fixtures as realtime lights only, so the mesh-shader path
-        // has no prefabs of its own to place.
-        static string PrefabPath(LightingPath p, FixtureType t)
+        static string PrefabPath(FixtureType t)
         {
-            if (p != LightingPath.URPRealtime) return null;
             const string dir = PkgRoot + "Runtime/Prefabs/DMX/";
             switch (t)
             {
@@ -59,9 +48,7 @@ namespace VRSL.URP.Profiling.Editor
         const string FloorName      = "Floor";
         const string ManagerName    = "VRSL URP Light Manager";
         const string SourceName     = "Synthetic DMX Source";
-        const string DepthLightName = "Directional Light (For Depth)";
 
-        LightingPath  path           = LightingPath.URPRealtime;
         FixtureType   fixtureType    = FixtureType.MoverSpotlight;
         int           fixtureCount   = 50;
         CameraVariant cameraVariant  = CameraVariant.InsideCones;
@@ -77,29 +64,12 @@ namespace VRSL.URP.Profiling.Editor
         {
             EditorGUILayout.LabelField("Profiling Scene Builder", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Builds a deterministic profiling scene matching the 2.9.0 frametime test " +
-                "plan. Re-running with a new fixture count rebuilds the truss in place — the " +
+                "Builds a deterministic profiling scene. Re-running with a new fixture count " +
+                "rebuilds the truss in place — the " +
                 "camera, floor, manager, and synthetic DMX source are preserved.",
                 MessageType.Info);
 
             EditorGUILayout.Space();
-#if !VRSL_URP
-            // URP is not installed in this project; URPRealtime can't run, so
-            // pin the path to LegacyMeshShader and gray the dropdown entry out
-            // so the user sees the option exists but is unavailable.
-            if (path == LightingPath.URPRealtime) path = LightingPath.LegacyMeshShader;
-#endif
-            path = (LightingPath) EditorGUILayout.EnumPopup(
-                new GUIContent("Lighting path"),
-                path,
-                e =>
-                {
-#if !VRSL_URP
-                    if ((LightingPath)e == LightingPath.URPRealtime) return false;
-#endif
-                    return true;
-                },
-                includeObsolete: false);
             fixtureType    = (FixtureType)  EditorGUILayout.EnumPopup("Fixture type",    fixtureType);
             fixtureCount   = EditorGUILayout.IntSlider("Fixture count",   fixtureCount,  1, 256);
             cameraVariant  = (CameraVariant)EditorGUILayout.EnumPopup("Camera variant", cameraVariant);
@@ -131,7 +101,6 @@ namespace VRSL.URP.Profiling.Editor
             }
 
             StripDirectionalLights();
-            EnsureDepthLight(root);
             EnsureFloor(root);
             EnsureSource(root);
             EnsureManager(root);
@@ -148,15 +117,13 @@ namespace VRSL.URP.Profiling.Editor
 
             EditorSceneManager.MarkSceneDirty(scene);
 
-            Debug.Log($"[VRSL Profiling] Built {path} scene with {fixtureCount} {fixtureType} fixtures, camera={cameraVariant}.");
+            Debug.Log($"[VRSL Profiling] Built a scene with {fixtureCount} {fixtureType} fixtures, camera={cameraVariant}.");
         }
 
         // Removes scene directional lights so profile numbers reflect VRSL-only
         // cost. Unity adds a default Directional Light to every new scene; left
         // in place it adds an unrelated shadow/lighting term that pollutes the
-        // absolute numbers (it cancels in the legacy-vs-URP delta, but not in
-        // the per-N-fixture headline). EnsureDepthLight then re-adds VRSL's own
-        // depth-only directional for the legacy path.
+        // absolute numbers.
         static void StripDirectionalLights()
         {
             foreach (var light in Object.FindObjectsByType<Light>(FindObjectsInactive.Exclude))
@@ -164,38 +131,6 @@ namespace VRSL.URP.Profiling.Editor
                 if (light != null && light.type == LightType.Directional)
                     Undo.DestroyObjectImmediate(light.gameObject);
             }
-        }
-
-        // The legacy mesh-shader fixture path samples _CameraDepthTexture in its
-        // volumetric/projection passes. In Built-in RP that texture is only
-        // populated when a directional light is shadow-casting in the scene, so
-        // VRSL ships a "Directional Light (For Depth)" prefab that exists purely
-        // to trigger depth-texture generation. The URPRealtime path doesn't
-        // need it (URP populates depth via its renderer regardless), so we add
-        // it only for the legacy path and tear it down again if the user
-        // switches back to URPRealtime.
-        void EnsureDepthLight(GameObject root)
-        {
-            var existing = root.transform.Find(DepthLightName)?.gameObject;
-
-            if (path != LightingPath.LegacyMeshShader)
-            {
-                if (existing != null)
-                    Undo.DestroyObjectImmediate(existing);
-                return;
-            }
-
-            if (existing != null) return;
-
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(DepthLightPath);
-            if (prefab == null)
-            {
-                Debug.LogError($"[VRSL Profiling] Depth-light prefab not found: {DepthLightPath}");
-                return;
-            }
-            var inst = (GameObject)PrefabUtility.InstantiatePrefab(prefab, root.transform);
-            inst.name = DepthLightName;
-            Undo.RegisterCreatedObjectUndo(inst, "Spawn directional depth light");
         }
 
         void EnsureFloor(GameObject root)
@@ -226,14 +161,6 @@ namespace VRSL.URP.Profiling.Editor
         void EnsureManager(GameObject root)
         {
             var existing = root.transform.Find(ManagerName)?.gameObject;
-            if (path == LightingPath.LegacyMeshShader)
-            {
-                if (existing != null)
-                    Undo.DestroyObjectImmediate(existing);
-                return;
-            }
-
-#if VRSL_URP
             if (existing != null) return;
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(URPManager);
@@ -247,10 +174,8 @@ namespace VRSL.URP.Profiling.Editor
             Undo.RegisterCreatedObjectUndo(inst, "Spawn URP light manager");
 
             EnsureManagerShaders(inst.GetComponent<VRSL.URP.VRSL_URPLightManager>());
-#endif
         }
 
-#if VRSL_URP
         // Defensive: assign the volumetric and lighting shaders on the spawned
         // manager if the prefab didn't carry refs. Profiling without the
         // volumetric shader silently produces only floor lighting (no cones),
@@ -296,7 +221,6 @@ namespace VRSL.URP.Profiling.Editor
             }
             return null;
         }
-#endif
 
         void RebuildTruss(GameObject root)
         {
@@ -318,12 +242,7 @@ namespace VRSL.URP.Profiling.Editor
             truss.transform.localRotation = Quaternion.identity;
             truss.transform.localScale    = Vector3.one;
 
-            string asset = PrefabPath(path, fixtureType);
-            if (asset == null)
-            {
-                Debug.LogError($"[VRSL Profiling] This package has no {fixtureType} prefab for the {path} path; build with URP Realtime.");
-                return;
-            }
+            string asset = PrefabPath(fixtureType);
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(asset);
             if (prefab == null)
             {
@@ -350,8 +269,8 @@ namespace VRSL.URP.Profiling.Editor
             }
         }
 
-        // Both VRStageLighting_DMX_Static (legacy authoring component) and
-        // VRStageLighting_DMX_RealtimeLight (URP authoring component) expose
+        // Both VRStageLighting_DMX_Static (shader-driven fixtures) and
+        // VRStageLighting_DMX_RealtimeLight (realtime lights) expose
         // identically-named SerializedProperty paths for sector addressing,
         // so a single sweep across MonoBehaviours on the prefab handles both
         // fixture families without taking a hard reference to either type.
