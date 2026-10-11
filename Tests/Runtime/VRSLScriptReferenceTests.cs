@@ -82,7 +82,10 @@ namespace VRSL.URP.Tests
             foreach (var script in AssetDatabase.LoadAllAssetsAtPath(path).OfType<MonoScript>())
             {
                 if (!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(script, out _, out long local)) continue;
-                if (local == fileId) return script.GetClass() != null;
+                if (local != fileId) continue;
+                // Every m_Script in a prefab or scene is a component's, so only a MonoBehaviour loads.
+                var type = script.GetClass();
+                return type != null && typeof(MonoBehaviour).IsAssignableFrom(type);
             }
             return false;
         }
