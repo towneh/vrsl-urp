@@ -110,7 +110,7 @@
             half _EndFade, _FadeStrength, _InternalShine, _LaserSoftening, _InternalShineLength, _Multiplier;
             uniform const float compatSampleYAxis = 0.019231;
             uniform const float standardSampleYAxis = 0.00762;
-            #include "Packages/com.llealloo.audiolink/Runtime/Shaders/AudioLink.cginc"
+            #include "../Shared/VRSL-AudioLink-Data.hlsl"
 
 
             UNITY_INSTANCING_BUFFER_START(Props)
@@ -565,7 +565,7 @@
             half _EndFade, _FadeStrength, _InternalShine, _LaserSoftening, _InternalShineLength, _Multiplier;
             uniform const float compatSampleYAxis = 0.019231;
             uniform const float standardSampleYAxis = 0.00762;
-            #include "Packages/com.llealloo.audiolink/Runtime/Shaders/AudioLink.cginc"
+            #include "../Shared/VRSL-AudioLink-Data.hlsl"
 
 
             UNITY_INSTANCING_BUFFER_START(Props)

@@ -8,7 +8,7 @@
 #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0))
 
 #ifndef RAW
-#include "Packages/com.llealloo.audiolink/Runtime/Shaders/AudioLink.cginc"
+#include "VRSL-AudioLink-Data.hlsl"
 #endif
 
 float4 RGBtoHSV(in float3 RGB)

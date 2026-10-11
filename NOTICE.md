@@ -38,6 +38,10 @@ The following were authored by towneh on the `urp-volumetric-lights` development
 - The URP fixture prefab variants and their custom inspectors.
 - The example scenes' URP variants.
 
+## AudioLink (llealloo)
+
+`Runtime/Shaders/AudioLink/Shared/VRSL-AudioLink-Data.hlsl` copies the texture layout positions and the `AudioLinkData` / `AudioLinkLerp` read helpers from `AudioLink.cginc` in [AudioLink](https://github.com/llealloo/audiolink) 3.1.2, copyright (c) 2021 llealloo, licensed under the MIT License, so the AudioLink fixture shaders compile without the AudioLink package installed.
+
 ## Bundled third-party plugins
 
 ### SharpOSC
