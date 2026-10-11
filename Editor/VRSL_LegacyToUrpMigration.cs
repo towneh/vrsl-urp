@@ -78,6 +78,8 @@ namespace VRSL.URP.EditorScripts
                 return;
             }
 
+            s_WarnedFields.Clear();
+
             // Snapshot candidates before mutating — otherwise we'd walk into the URP siblings
             // we just inserted and try to migrate them too.
             var candidates = new List<(GameObject go, VRSLMigrationPair pair)>();
@@ -172,6 +174,8 @@ namespace VRSL.URP.EditorScripts
                 EditorUtility.DisplayDialog("VRSL In-Place Conversion", "No active loaded scene.", "OK");
                 return;
             }
+
+            s_WarnedFields.Clear();
 
             // Snapshot first: we add and remove components as we go, so walking live would be unsafe.
             var candidates = new List<(GameObject go, Component upstream, Type urpType)>();
@@ -487,11 +491,14 @@ namespace VRSL.URP.EditorScripts
                 return;
             }
 
-            if (srcType.IsEnum && dstType.IsEnum)
+            // Older upstream releases store some enums as plain ints (v2.3.0's `band`).
+            if (dstType.IsEnum && (srcType.IsEnum || IsIntegral(srcType)))
             {
                 int intVal = Convert.ToInt32(value);
                 if (Enum.IsDefined(dstType, intVal))
                     dstField.SetValue(dst, Enum.ToObject(dstType, intVal));
+                else
+                    WarnNotCarried(dst, dstName, $"the old value {intVal} has no match");
                 return;
             }
 
@@ -501,8 +508,23 @@ namespace VRSL.URP.EditorScripts
             }
             catch
             {
-                // Mismatched types — leave the URP default in place.
+                WarnNotCarried(dst, dstName, $"the old fixture stores it as {srcType.Name} and the new one as {dstType.Name}");
             }
+        }
+
+        static bool IsIntegral(Type t) =>
+            t == typeof(int) || t == typeof(short) || t == typeof(byte) || t == typeof(long)
+            || t == typeof(uint) || t == typeof(ushort) || t == typeof(sbyte) || t == typeof(ulong);
+
+        // One warning per field per run, so a value that silently stays at the new fixture's
+        // default shows up in the Console instead of in the headset.
+        static readonly HashSet<string> s_WarnedFields = new HashSet<string>();
+
+        static void WarnNotCarried(object dst, string field, string reason)
+        {
+            if (s_WarnedFields.Add(dst.GetType().Name + "." + field))
+                Debug.LogWarning($"[VRSL Migration] '{field}' on {dst.GetType().Name} was not carried over ({reason}), " +
+                                 "so migrated fixtures keep the new prefab's value. Check it by hand.");
         }
 
         // For modern-RT-light → URP-RT-light migrations: copy every same-named field except
