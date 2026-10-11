@@ -171,7 +171,7 @@ namespace VRSL.URP.Tests
             // stands by unwired. Disabling the owner hands ownership over by calling the
             // standby's TakeOwnership directly, which never goes through OnEnable — so a
             // resolver hooked there would leave this manager building its materials and
-            // passes from empty fields, which is the whole failure the milestone is about.
+            // passes from empty fields, which is the whole failure self-wiring exists to prevent.
             var ownerGo   = new GameObject("wiring owner");
             var standbyGo = new GameObject("wiring standby");
             try
@@ -251,7 +251,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M7-3. An override survives the paths that resolution now runs on.
+        /// W7. An override survives the paths that resolution now runs on.
         ///
         /// Entering play mode enables the manager, and leaving it enables the edit-mode
         /// one again — so "survives a play-mode round trip" is, mechanically, "survives
@@ -323,7 +323,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M7-2. Resolution is by identity, so an identically-named asset elsewhere in
+        /// W8. Resolution is by identity, so an identically-named asset elsewhere in
         /// the project cannot be picked instead.
         ///
         /// The requirement is about coexisting with <c>com.acchosen.vr-stage-lighting</c>,
@@ -468,8 +468,8 @@ namespace VRSL.URP.Tests
             {
                 Assert.IsNotEmpty(field.Consequence, $"{field.Field} has no consequence");
 
-                // R-M7-5: the message names what the author sees. A consequence that just
-                // repeats the field name is the diagnostic this milestone replaces, and
+                // The message names what the author sees. A consequence that just repeats
+                // the field name is the kind of diagnostic the table exists to replace, and
                 // it is easy to write one by accident when adding a field to the table.
                 Assert.That(field.Consequence, Does.Not.Contain(field.Field),
                     $"{field.Field}'s consequence restates the field name rather than "

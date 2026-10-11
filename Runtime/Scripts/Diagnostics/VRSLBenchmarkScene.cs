@@ -69,8 +69,8 @@ namespace VRSL.URP
         /// The size the sweep renders at, regardless of the Game view.
         ///
         /// Two reasons, and the second is the one that forced it. A matrix measured at
-        /// whatever size a window happens to be is not the fixed capture setup R-M0-1
-        /// asks for, and two machines could not be compared even in principle. And at
+        /// whatever size a window happens to be is not a fixed capture setup, and two
+        /// machines could not be compared even in principle. And at
         /// the Game view's size there was not enough per-pixel work to measure at all:
         /// measured 2026-08-24, lights per tile rising from 9 to 47 moved the GPU frame
         /// from 0.88 ms to 0.85 ms, which is to say not at all, while the package's cost

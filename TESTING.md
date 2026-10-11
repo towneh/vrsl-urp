@@ -34,15 +34,19 @@ includes anything structural.
 
 ### 2. The DMX suite
 
-The rows in **DMX channel buffer** below are implemented as PlayMode tests and should be
-run rather than performed by hand:
+Most rows below are PlayMode tests, and each section names its test classes. Run them
+rather than performing them by hand:
 
 ```
-.compilecheck/tests.sh          # headless; needs the editor closed and a real GPU
+Unity.exe -batchmode -projectPath <project> -runTests -testPlatform PlayMode \
+  -assemblyNames "Towneh.VRSL.URP.Tests;Towneh.VRSL.URP.Basis.Tests" \
+  -testResults results.xml -logFile -
 ```
 
-or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. The suite builds its own
-rig in code, so it needs neither the profiling sample nor a hand-authored scene.
+or from the Test Runner window, assembly `Towneh.VRSL.URP.Tests`. Headless needs the editor
+closed and a real GPU, and the project's `Packages/manifest.json` has to list
+`town.mr.vrsl-urp` under `testables`, or the run exits 0 having run nothing. The suite builds
+its own rig in code, so it needs neither the profiling sample nor a hand-authored scene.
 
 The **Measurement harness** rows (H1-H9) are in the same assembly and run the same way. Most
 measure rather than decode, so they are the slow part of a full run; H7 is a plain unit row
@@ -52,23 +56,15 @@ The **Wiring** rows (W1-W9), the **Image regression** ones and the **Cameras** r
 M7 to M9 (`VRSLCameraPolicyTests`) are in it too. The wiring
 rows are editor-only and cost nothing. W10 to W12 are hand rows and are marked as such:
 three are judged by looking at an inspector (W10, W11 and W11b), and W12 is a player
-comparison through `bench.sh`.
+comparison (see **The headless gate**).
 
 A second assembly, `Towneh.VRSL.URP.Basis.Tests`, exists only when `com.basis.mediaplayer` is
-in the project and holds the Basis integration rows (B7-B9 and B11 below). Those
-play a real stream: the fixtures are hosted at `https://www.mr.town/vod/`, and
-`VRSL_TRUSS_FIXTURES` (a directory or a URL base) points the rows somewhere else.
-`tests.sh` runs both assemblies.
-
-**The five Truss fixtures are not on that host yet** (checked 2026-08-31: the `/vod/`
-lane serves, `drip.mp4` returns 200, and all five of `truss-dmx-ramp.ts`,
-`truss-dmx-ramp-damaged.ts`, `truss-dmx-ramp-stripped.ts`,
-`truss-dmx-ramp-transcoded.ts` and `vrsl-dmx-marching.ts` return 404). They were
-generated after that host was set up and only ever landed on the other one, so **these
-rows fail on a 404 until somebody copies them across** — the sources are in
-`BasisApps/basis-truss-dmx-fixture/`, about 910 KB each. Nothing else needs changing
-when they arrive. Point `VRSL_TRUSS_FIXTURES` at a local directory holding them to run
-the rows meanwhile.
+in the project and holds the Basis integration rows (B7 to B11, N23 to N26, E8 and E9). Those
+play real streams: the Truss fixtures (`truss-dmx-ramp.ts` and its damaged, stripped and
+transcoded variants, and `vrsl-dmx-marching.ts`). `VRSL_TRUSS_FIXTURES`, a directory or a URL
+base, says where they are; without it the rows look under `https://www.mr.town/vod/`. A
+fixture the rows can't fetch fails the row on the download, so check the source serves them
+before reading a failure as a regression.
 
 The rows are still written out in full below, because they are the specification the tests
 implement and because a failure message is only useful next to the claim it belongs to. Do
@@ -204,7 +200,7 @@ their colour. `VRSL Diagnostics` and `Validate Renderer Setup` say when the draw
 | P3 | — | Profiling sample sweep, 10 → 25 → 50 → 100 → 200 | Frametime scales sub-linearly with fixture count |
 | P4 | — | `InsideCones` vs `OutsideCones` camera variants | Inside is the worst case; the gap shows culling working |
 | P11 | — | A scene dense enough that a tile wants more fixtures than the per-tile cap allows. Read the tile figures from `VRSL Diagnostics` or a sweep row | Lights per tile reports what the tile **asked for**, above the cap, not the cap itself. The dropped figure is non-zero and says how much light the scene is not drawing. A tile exactly at the cap reports zero dropped, so the two cases are distinguishable |
-| P12 | — | The same scene through `VRSL → URP → Performance → Analyse This Scene`. **Judged by reading it as a world author would**, not by grepping for a string | The summary says parts of the scene are missing light they should be getting, how many fixtures reach the same part of the screen against how many are lit, and what to change — spread them out, aim them elsewhere, or use fewer. It names no tiles and no cap: those describe the cull, and an author cannot act on either. It must not claim whole fixtures are dark — a fixture dropped from a busy tile still lights the tiles it wins, so what is lost is contributions rather than fixtures |
+| P12 | — | The same scene through `VRSL → URP → Performance → Analyse This Scene`. **Judged by reading it as a world author would**, not by grepping for a string | The summary says parts of the scene are missing light they should be getting, how many fixtures reach the same part of the screen against how many are lit, and what to change: spread them out, aim them elsewhere, or use fewer. It names no tiles and no cap: those describe the cull, and an author cannot act on either. It must not claim whole fixtures are dark — a fixture dropped from a busy tile still lights the tiles it wins, so what is lost is contributions rather than fixtures |
 
 **Read the tile figures with the camera beside them.** One cull pass serves every
 camera in the frame and each record overwrites the last, so a readback taken after the
@@ -252,19 +248,18 @@ menu item fill everything, because that is somebody asking.
 | W2 | — | Every field name in the table, against the manager it names | Present on the manager. The table addresses fields by name, so a rename compiles cleanly everywhere else and stops resolution dead without saying so |
 | W3 | — | Resolve a manager with one field deliberately pointed at the wrong asset and the rest empty | The override is untouched and is not reported as filled; every mandatory field is filled exactly once; nothing is unresolvable. Then `includeOptional` fills the remaining three, which is what the repair button does, and a second pass changes nothing — a repair pressed twice must not report changes it did not make |
 | W4 | — | Two nested holds on auto-resolution, the inner one released first | The outer hold survives. Held as a set, not a count: the inner scope releasing the outer one's hold would let the next bounce refill a field the outer holder emptied on purpose, which is how quality `Off` comes back on while its counters still say it is gone. Disposing the same hold twice must not drop somebody else's |
-| W5 | — | Two managers, the owner switched off so ownership passes to an unwired standby | The standby's mandatory fields are filled by the time it sets itself up. **The handover path never goes through `OnEnable`** — an owner standing down calls the successor's `TakeOwnership` directly — so a resolver hooked only there leaves this manager building its materials and passes from empty fields |
+| W5 | — | Two managers, the owner switched off so ownership passes to an unwired standby | The standby's mandatory fields are filled by the time it sets itself up. **The handover path never goes through `OnEnable`**: an owner standing down calls the successor's `TakeOwnership` directly, so a resolver hooked only there leaves this manager building its materials and passes from empty fields |
 | W6 | — | Empty every field through `SerializedObject`, then run the validate pass | Still empty immediately afterwards, filled on the next editor tick. Resolution is deferred on purpose, because `OnValidate` is also where import and mid-edit serialisation live. The tick is driven rather than waited for: `EditorApplication.delayCall` does not fire inside a batch-mode play-mode test, so waiting on it would test Unity's scheduler and nothing of ours |
-| W7 | — | **A-M7-3.** An override on one field, the rest empty, through the enable path and then the deferred validate path | The override survives both, and each path fills what was empty. **Asserted after each path rather than once at the end** — a single assertion cannot tell which path did the work, so removing the enable hook would leave the validate pass filling everything and the row still passing while the path it names went untested |
-| W8 | — | **A-M7-2.** A decoy asset with the same name as a wiring target, elsewhere in the project | Resolution picks this package's copy, by asset identity rather than by name. The row checks the decoy genuinely collides before it judges anything: if a name search is not ambiguous, resolution had nothing to get wrong and passing means nothing. It stages the collision rather than gating on `com.acchosen.vr-stage-lighting` being installed, because a gated row in a project without that package compiles out and proves nothing |
-| W9 | — | Every consequence string in the table, once per distinct asset | Names what the author will see, not what is null. A consequence that repeats its own field name, or that talks about being null, is the diagnostic this milestone replaces — and is easy to write by accident when adding a field |
+| W7 | — | An override on one field, the rest empty, through the enable path and then the deferred validate path | The override survives both, and each path fills what was empty. **Asserted after each path rather than once at the end**: a single assertion cannot tell which path did the work, so removing the enable hook would leave the validate pass filling everything and the row still passing while the path it names went untested |
+| W8 | — | A decoy asset with the same name as a wiring target, elsewhere in the project | Resolution picks this package's copy, by asset identity rather than by name. The row checks the decoy genuinely collides before it judges anything: if a name search is not ambiguous, resolution had nothing to get wrong and passing means nothing. It stages the collision rather than gating on `com.acchosen.vr-stage-lighting` being installed, because a gated row in a project without that package compiles out and proves nothing |
+| W9 | — | Every consequence string in the table, once per distinct asset | Names what the author will see, not what is null. A consequence that repeats its own field name, or that talks about being null, is the kind of message the table exists to replace, and is easy to write by accident when adding a field |
 
-**W10 to W12 are hand rows.** W10, W11 and W11b are judged by looking at an inspector,
-and A-M7-5 says so outright: it is judged by reading the message rather than by the
-message existing. That is not a formality. Running them on 2026-08-31 found three faults
-no amount of reading the source would have shown — a warning icon that belongs to Unity's
-dialog rather than to us, a `(s)` pluralisation that reads fine in a source file and wrong
-beside a real number, and a paragraph naming a feature half its readers do not have.
-W12 is a player comparison through `bench.sh`, and the suite runs in the editor.
+**W10 to W12 are hand rows.** W10, W11 and W11b are judged by reading the inspector, not by
+the message existing: running them on 2026-08-31 found three faults no reading of the
+source would have shown, a warning icon that belongs to Unity's dialog rather than to us, a
+`(s)` pluralisation that reads fine in a source file and wrong beside a real number, and a
+paragraph naming a feature half its readers do not have. W12 is a player comparison, and
+the suite runs in the editor.
 
 **Select the shipped prefab, and clear fields on the prefab asset rather than on a scene
 instance.** Auto-resolution skips persistent objects, so a field cleared on an instance is
@@ -373,42 +368,41 @@ of it and they render at 1024 square: at the rig's default 256 there is not enou
 per-pixel work for a real regression to clear the noise, and a row that cannot fail under
 the fault it is looking for is worse than no row.
 
-**H10 to H17 are hand rows**, run through `bench.sh` rather than the suite. They are about
-a built player, and the suite runs in the editor — which is the difference they exist to
-measure, so there is nowhere for them to live inside it.
+**H10 to H17 are hand rows**, run with the sweep player and the command-line comparison
+(**The headless gate**) rather than the suite. They are about a built player, and the suite
+runs in the editor, which is the difference they exist to measure, so there is nowhere for
+them to live inside it.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
-| H1 | — | **A-M0-1, the null run.** Capture, change nothing, capture again, compare | Every row **unchanged**, and the stated noise floor at or above the spread the two runs actually showed. Judge the guards as much as the verdict: each capture must report the package costing something. A run of zeroes compares as unchanged against anything, so a row of all-zeroes passing is the failure this row exists to catch, not a pass. Measured 2026-08-24 headless: package cost 0.257 and 0.293 ms CPU, delta 0.037 ms against a floor of 0.059 ms |
-| H2 | — | **A-M0-2, the verdict.** Two synthetic runs alike but for one row's package cost | A move past the floor reads as regressed, an equal move the other way as improved, and anything inside the floor as unchanged — including a delta exactly equal to it, because a `<=` is a decision somebody made. Judged on the comparison rather than on a seeded build, and it runs on any clock. **The seeded form was retired**: both levers its specification named were measured and could not clear the floor in that scene — clearing the cull cost 0.0015 ms while the counters showed it rejecting nine tenths of the per-light work, and quality `High` cost 0.089 ms against a 0.097 ms floor — so it ran on an absurd step count, and no such field exists now. A-M0-7 is the row that still takes a real workload change end to end |
-| H3 | — | **A-M0-3.** Three captures of an unchanged scene; measure the spread across all three | The spread must be within a tolerance **declared in code** — 40% of the measured cost, with a 0.05 ms floor for costs too small for a fraction to mean anything. Judged against a declared figure rather than one derived from the same three runs, because a floor taken from the data it adjudicates cannot fail. It is a smoke test for a harness that has stopped working, not a precision certificate: batch mode reproduces poorly and inconsistently, measured at 5.9% of the cost on one run and 33.9% on the next at 48 frames a side. Raising to 160 frames a side brought it to around 10%. Measured 2026-08-24: 0.208, 0.190 and 0.188 ms CPU — a spread of 0.021 ms, which is 10.4% against the 40% allowed. It does get close: another run the same day spread 36.7%, so the tolerance is doing real work rather than sitting far above anything observed |
-| H4 | — | Any capture, first one in the process | Must be **discarded**. A session's opening capture runs pinned at exactly the capture delta — both halves at 16.669 ms with an IQR of 0.02, against a 16.667 ms capture delta — so the difference cancels to zero while the counters look perfectly healthy. Idle frames do not clear it and neither does a longer warm-up inside the capture; disposing and rebuilding the rig does, which is why the warm-up is a whole capture taken and thrown away |
-| H5 | — | Quality `Standard` against quality `Off` | Two halves again. The **counter** half must pass anywhere: steps per light reads 24 at `Standard` and **0** at `Off`, which is the observable that says the volumetric pass is not being enqueued rather than merely being configured down. Clearing `volumetricShader` alone does not do it — the manager builds its material once and keeps it — so a preset that only cleared the field would report volumetrics off while running them at full cost. The **timing** half needs a GPU clock, direction included. It was briefly asserted on either clock, on the strength of one favourable reading of 0.069 ms against a stated 0.021 — then measured `Off` at 0.207 ms against `Standard` at 0.171, dearer by 0.036, with the counters still saying `Off` enqueued no pass at all. H3 explains it: the run-to-run spread on the CPU clock is around 0.055 ms, wider than the gap, so the sign flips as often as not. **A slim gap plus one confirming observation is not a row** |
+| H1 | — | **The null run.** Capture, change nothing, capture again, compare | Every row **unchanged**, and the stated noise floor at or above the spread the two runs actually showed. Judge the guards as much as the verdict: each capture must report the package costing something. A run of zeroes compares as unchanged against anything, so a row of all-zeroes passing is the failure this row exists to catch, not a pass. Measured 2026-08-24 headless: package cost 0.257 and 0.293 ms CPU, delta 0.037 ms against a floor of 0.059 ms |
+| H2 | — | **The verdict.** Two synthetic runs alike but for one row's package cost | A move past the floor reads as regressed, an equal move the other way as improved, and anything inside the floor as unchanged, including a delta exactly equal to it, because a `<=` is a decision somebody made. Judged on the comparison rather than on a seeded build, so it runs on any clock. **The seeded form was retired**: neither lever it named could clear the floor in that scene (clearing the cull cost 0.0015 ms while the counters showed it rejecting nine tenths of the per-light work, and quality `High` cost 0.089 ms against a 0.097 ms floor), so it ran on an absurd step count, and no such field exists now. H14 is the row that still takes a real workload change end to end |
+| H3 | — | Three captures of an unchanged scene; measure the spread across all three | The spread must be within a tolerance **declared in code**: 40% of the measured cost, with a 0.05 ms floor for costs too small for a fraction to mean anything. Judged against a declared figure rather than one derived from the same three runs, because a floor taken from the data it adjudicates cannot fail. It is a smoke test for a harness that has stopped working, not a precision certificate: batch mode reproduces poorly and inconsistently, measured at 5.9% of the cost on one run and 33.9% on the next at 48 frames a side. Raising to 160 frames a side brought it to around 10%. Measured 2026-08-24: 0.208, 0.190 and 0.188 ms CPU — a spread of 0.021 ms, which is 10.4% against the 40% allowed. It does get close: another run the same day spread 36.7%, so the tolerance is doing real work rather than sitting far above anything observed |
+| H4 | — | Any capture, first one in the process | Must be **discarded**. A session's opening capture runs pinned at exactly the capture delta (both halves at 16.669 ms with an IQR of 0.02, against a 16.667 ms capture delta), so the difference cancels to zero while the counters look perfectly healthy. Idle frames do not clear it and neither does a longer warm-up inside the capture; disposing and rebuilding the rig does, which is why the warm-up is a whole capture taken and thrown away |
+| H5 | — | Quality `Standard` against quality `Off` | Two halves again. The **counter** half must pass anywhere: steps per light reads 24 at `Standard` and **0** at `Off`, which is the observable that says the volumetric pass is not being enqueued rather than merely being configured down. Clearing `volumetricShader` alone does not do it (the manager builds its material once and keeps it), so a preset that only cleared the field would report volumetrics off while running them at full cost. The **timing** half needs a GPU clock, direction included. It was briefly asserted on either clock, on the strength of one favourable reading of 0.069 ms against a stated 0.021, then measured `Off` at 0.207 ms against `Standard` at 0.171, dearer by 0.036, with the counters still saying `Off` enqueued no pass at all. H3 explains it: the run-to-run spread on the CPU clock is around 0.055 ms, wider than the gap, so the sign flips as often as not. **A slim gap plus one confirming observation is not a row** |
 | H6 | — | `VRSLBenchmarkScene.SetActiveFixtures` at each count in the matrix | The manager must collect exactly the count the row claims. The sweep varies fixture count by activating a subset of one truss rather than rebuilding, and the subset is evenly spaced so the spread is identical at every count — taking the first N would cluster them at one end and change lights per tile, which is a counter the sweep reports. Rounding collisions at small counts are how this goes wrong, and it goes wrong silently. Measured 2026-08-24: exact at 10, 25, 50, 100 and 200 |
 | H7 | — | `VRSLBaseline.ReferencePath` with `VRSL_PERF_HOME` unset, set to a folder holding no `baseline.json`, and set to one that does | Null, null, then the path. The middle case is the one worth having: a consuming project may set the variable for the reference frames alone, and returning the path regardless turns that into "no such run" further down, which sends the reader looking for a file rather than for a baseline they never had. The rows restore the variable in teardown, not at the end of the row — it is process-wide and the image rows read it too, so a row that failed part way through would otherwise leave I2 pointed at a temporary folder for the rest of the session |
 | H15 | — | `VRSLBaseline.ReferenceFor` with a machine that has its own file under `baselines/`, and with one that does not | The machine's own `<gpu>-<context>.json` where there is one, `baseline.json` where there is not. **Keyed by GPU and context both**, for the same reason the noise floor is: an editor run and a player run measure two different things and neither describes the other. Falsified 2026-08-31 by moving the per-machine file aside — the same comparison then falls back and is refused on the GPU, and matches again when it is put back |
-| H15b | — | `VRSLBaseline.ReferenceFileName` with a context naming a traversal — `../outside`, `..\outside`, `/etc/passwd`, `..`, `a/../../outside` | One path segment, no separator and no `..`, and the lookup never reaches a file outside `baselines/`. **The context is input, not a constant**: it is read from the candidate `run.json` the caller was handed, so a hostile one walked out of the folder and the answer was a comparison against a file nobody chose rather than an error. Both halves of the name are reduced to letters and digits now — the GPU half always was, and applying it to only one of two inputs is what left the hole. **Reduced rather than allow-listed on purpose**, so a third context works the day somebody adds one instead of quietly reading the editor's numbers. Falsified 2026-08-31 by passing the context through as before: this row goes red and the other six stay green |
-| H16 | — | A run compared against a reference captured before `captureWidth` / `captureHeight` existed | **Compared, not refused.** Zero means the size was never recorded, which is not the same as a size that disagrees — the guard `scriptingBackend` already had, and for the same stated reason. Measured 2026-08-31 with the guard removed: `REFUSED — render size: 1920x1080 vs 0x0`, which is every run on every machine, including the committed reference against the box that produced it. With it, 30 rows compare |
+| H15b | — | `VRSLBaseline.ReferenceFileName` with a context naming a traversal — `../outside`, `..\outside`, `/etc/passwd`, `..`, `a/../../outside` | One path segment, no separator and no `..`, and the lookup never reaches a file outside `baselines/`. **The context is input, not a constant**: it is read from the candidate `run.json` the caller was handed, so a hostile one walked out of the folder and the answer was a comparison against a file nobody chose rather than an error. Both halves of the name are reduced to letters and digits now — the GPU half always was, and applying it to only one of two inputs is what left the hole. **Reduced rather than allow-listed on purpose**, so a third context works the day somebody adds one instead of reading the editor's numbers without saying so. Falsified 2026-08-31 by passing the context through as before: this row goes red and the other six stay green |
+| H16 | — | A run compared against a reference captured before `captureWidth` / `captureHeight` existed | **Compared, not refused.** Zero means the size was never recorded, which is not the same as a size that disagrees — the guard `scriptingBackend` already had, and for the same stated reason. Measured 2026-08-31 with the guard removed: `REFUSED — render size: 1920x1080 vs 0x0`, which is every run on every machine, including the reference against the machine that produced it. With it, 30 rows compare |
 | H17 | — | A **player** run compared with no `-baseline`, from inside the editor | The reference is chosen from the **candidate's** environment, not from the process doing the comparing. Otherwise a player run judged from the editor resolves the editor lineage, falls back, and is refused for a difference nobody introduced — which is what it did until 2026-08-31 |
 | H8 | — | `VRSLQualityPreset.Session` against an AudioLink-only scene, a scene with both managers, and no manager at all | Levels apply to whichever managers are present, and Restore puts the author's own values back. **The both-managers case is the one with teeth**: quality held on the DMX manager alone leaves the AudioLink volumetrics running at every level, so the `Off` capture is not off and the split between beams and surface lighting gets measured against a baseline that still has beams in it. Strobe is held on only where the manager has that switch — the AudioLink path strobes off the audio and has none, so it is a no-op there rather than something faked. The rows build their managers on an **inactive** GameObject, so `Awake` and `OnEnable` never fire and asking what a preset writes cannot start a light manager as a side effect |
-| H8b | — | `VRSLBenchmark.MeasureDmxPath` across one path, both paths, and both with the DMX one empty | The measured path is never a manager holding no fixtures while another holds some. A single empty manager still wins, because there is no other path to name. The case worth the row is both present with DMX empty: selecting it writes a measured-path count of **zero**, and zero is what a run too old to carry the field deserialises to — so the scene reads as single-path, the AudioLink coverage gets divided by the AudioLink count, and nothing says the figures came off a path with nothing on it. Unrecoverable downstream, which is why the guard is at the selection: once the zero is written, the two states are the same data. Falsified 2026-08-27 by restoring the pre-fix rule — this row goes red and the other five keep passing |
-| H9 | — | `VRSLCounters.MeasuredFixtures` and `MixedPaths` on a single-path scene, a dual-path one, and a run recorded before the field existed | The coverage figure divides by the path it was measured on, not by the scene. They agree wherever a scene has one light path, which is nearly all of them. **In a dual-path scene they must not**: the average comes off one cull pass, so read against the scene total it reports less coverage than was measured and the worst-case branch keyed on that comparison can never fire — on precisely the scenes with most to skip. The summary says which path it is describing, because run notes reach that summary only on an unusable run and would otherwise be invisible on every run worth reading. The third case is the one that bites quietly: an older run deserialises the field to 0, and reading it raw gives every such run a denominator of nothing |
-| H10 | — | **R-M0-6, the player run.** `bench.sh sweep` — build a standalone player and capture the matrix in it | 30 rows, **every one of them on a GPU clock**, with the environment block reading `Context: Player` and naming the scripting backend. Fixture counts exact at 10, 25, 50, 100 and 200, and **Emitting** non-zero on all 30. Measured 2026-08-27, RTX 3080, IL2CPP, 1920x1080: package cost from 0.354 ms (50 fixtures, outside the cones, volumetrics off) to 3.340 ms (100 fixtures, outside, High), settled after 303 frames, whole matrix in 26 s. Emitting reads 97 of 100 and 195 of 200 — that is the Ramp pattern putting a handful of fixtures on colour channels under the compute's `6/255` emission gate, not fixtures being dropped, and the tell is that it is the same handful every run |
-| H11 | — | A player run compared against the committed reference, which is an editor one | **`REFUSED`, a zero-row verdict line and exit 2.** Measured 2026-08-27: refused naming `depth priming: Auto vs Forced`, because `Matches` reports the first difference it finds and priming is checked before context — both differences are real and only one is named. This is the guard that keeps an editor figure and a player figure out of one table, and it is the reason the two are separate lineages with separate noise floors rather than a limitation to work around |
-| H12 | — | `git status` on the host project before and after `bench.sh sweep`, **including a build killed part-way through** | No new differences, and no `Assets/VRSL-BenchBuild`. The fault this exists for: the first version of the build step set three Player Settings and restored them in a `finally`, a kill at ten minutes never reached it, and the project was left carrying a changed Android scripting backend and a reset architecture list. It writes nothing now, and discards its scratch scene on the way in as well as out. **One thing it cannot help**: `GraphicsSettings.asset` gains an always-included shader entry, which Unity does on any batch standalone build of that project rather than the step doing it, and which has to be put back by hand |
-| H13 | — | `bench.sh floor <a> <b>` on a **player** null pair, then check the editor's stored floor | Filed under `VRSL.Perf.Floor.Player.<gpu>`, leaving the editor's bare-GPU key untouched. Measured 2026-08-27: **0.426 ms** for the player context on an RTX 3080. The row earns its place from what happened without it — that same null pair, two captures with nothing changed between them, reported **six regressions and seven improvements**. Refuses a forced comparison and refuses runs captured on another GPU, for the same reason the button in the window does: a floor is raised and never lowered, so a wrong one survives until somebody resets it |
-| H14 | — | **A-M0-7, the stopwatch.** A full before-and-after: capture, change the package, capture, compare | Under fifteen minutes of wall clock and under two minutes of attention. Measured 2026-08-27 through `bench.sh`, with the lever a doubling of the Standard preset's volumetric step count from 24 to 48: capture 30 s, rebuild 228 s, capture 30 s, compare 23 s — about five minutes and three commands. Seven rows regressed, none improved, and **six of the seven were Standard rows**, which is the specificity check nobody asked for: a floor set too low would have fired on the High rows as well. **Time the steady state, not the first run** — the first build of a player on a machine is a cold IL2CPP build of the whole host project, and the first launch pays for shader and driver caches that every later one reuses. Neither recurs within a milestone |
+| H8b | — | `VRSLBenchmark.MeasureDmxPath` across one path, both paths, and both with the DMX one empty | The measured path is never a manager holding no fixtures while another holds some. A single empty manager still wins, because there is no other path to name. The case worth the row is both present with DMX empty: selecting it writes a measured-path count of **zero**, and zero is what a run too old to carry the field deserialises to — so the scene reads as single-path, the AudioLink coverage gets divided by the AudioLink count, and nothing says the figures came off a path with nothing on it. Unrecoverable downstream, which is why the guard is at the selection: once the zero is written, the two states are the same data. Falsified 2026-08-27 by restoring the pre-fix rule: this row goes red and the other five keep passing |
+| H9 | — | `VRSLCounters.MeasuredFixtures` and `MixedPaths` on a single-path scene, a dual-path one, and a run recorded before the field existed | The coverage figure divides by the path it was measured on, not by the scene. They agree wherever a scene has one light path, which is nearly all of them. **In a dual-path scene they must not**: the average comes off one cull pass, so read against the scene total it reports less coverage than was measured and the worst-case branch keyed on that comparison can never fire — on precisely the scenes with most to skip. The summary says which path it is describing, because run notes reach that summary only on an unusable run and would otherwise be invisible on every run worth reading. The third case is the one that goes unnoticed: an older run deserialises the field to 0, and reading it raw gives every such run a denominator of nothing |
+| H10 | — | **The player run.** Build the sweep player and run it, which captures the matrix in a standalone player | 30 rows, **every one of them on a GPU clock**, with the environment block reading `Context: Player` and naming the scripting backend. Fixture counts exact at 10, 25, 50, 100 and 200, and **Emitting** non-zero on all 30. Measured 2026-08-27, RTX 3080, IL2CPP, 1920x1080: package cost from 0.354 ms (50 fixtures, outside the cones, volumetrics off) to 3.340 ms (100 fixtures, outside, High), settled after 303 frames, whole matrix in 26 s. Emitting reads 97 of 100 and 195 of 200 — that is the Ramp pattern putting a handful of fixtures on colour channels under the compute's `6/255` emission gate, not fixtures being dropped, and the tell is that it is the same handful every run |
+| H11 | — | A player run compared against the reference run, which is an editor one | **`REFUSED`, a zero-row verdict line and exit 2.** Measured 2026-08-27: refused naming `depth priming: Auto vs Forced`, because `Matches` reports the first difference it finds and priming is checked before context — both differences are real and only one is named. This is the guard that keeps an editor figure and a player figure out of one table, and it is the reason the two are separate lineages with separate noise floors rather than a limitation to work around |
+| H12 | — | `git status` on the host project before and after building the sweep player, **including a build killed part-way through** | No new differences, and no `Assets/VRSL-BenchBuild`. A build step that changes Player Settings and puts them back in a `finally` leaves them changed when the build is killed, since the `finally` never runs; this one writes none, and discards its scratch scene on the way in as well as out. **One thing it cannot help**: `GraphicsSettings.asset` gains an always-included shader entry, which Unity does on any batch standalone build of that project rather than the step doing it, and which has to be put back by hand |
+| H13 | — | `VRSLBenchCommandLine.AdoptFloorFromCommandLine` with `-baseline` and `-candidate` naming a **player** null pair, then check the editor's stored floor | Filed under `VRSL.Perf.Floor.Player.<gpu>`, leaving the editor's bare-GPU key untouched. Measured 2026-08-27: **0.426 ms** for the player context on an RTX 3080. The row earns its place from what happened without it — that same null pair, two captures with nothing changed between them, reported **six regressions and seven improvements**. Refuses a forced comparison and refuses runs captured on another GPU, for the same reason the button in the window does: a floor is raised and never lowered, so a wrong one survives until somebody resets it |
+| H14 | — | **The stopwatch.** A full before-and-after: capture, change the package, capture, compare | Under fifteen minutes of wall clock and under two minutes of attention. Measured 2026-08-27 with a wrapper script around the player build, the player and the comparison, with the lever a doubling of the Standard preset's volumetric step count from 24 to 48: capture 30 s, rebuild 228 s, capture 30 s, compare 23 s — about five minutes and three commands. Seven rows regressed, none improved, and **six of the seven were Standard rows**, which is the specificity check nobody asked for: a floor set too low would have fired on the High rows as well. **Time the steady state, not the first run** — the first build of a player on a machine is a cold IL2CPP build of the whole host project, and the first launch pays for shader and driver caches that every later one reuses. Neither recurs after the first run |
 
 ### Image regression
 
 Rendered frames compared rather than eyeballed. `VRSLImageRegressionTests` in the suite.
 
-The default comparison is against **this machine's own previous capture**, not a
-committed image: two GPUs do not render identically, so a committed reference is a
-false-failure machine everywhere except where it was made. Committed references are the
-second mode, found through `VRSL_PERF_HOME`, and rows needing one skip with a message
-when it is unset — a row that goes red because an environment variable is missing
-teaches people to ignore red rows.
+The default comparison is against **this machine's own previous capture**, not a stored
+image: two GPUs don't render identically, so a shared reference fails everywhere except
+where it was made. A reference frame from elsewhere is the second mode, read from a folder
+named by `VRSL_PERF_HOME`; rows needing one skip with a message when it is unset.
 
 Captures freeze everything that integrates over time. Strobe alternates, gobo spin never
 settles, and movement damping converges only after a warm-up. Without that freeze a row
@@ -417,48 +411,24 @@ is entirely the clock.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
-| P1 | — | Capture with `lightCullShader` assigned and again with it cleared | **Not one pixel different.** The cull decides which lights a tile iterates, never what they contribute, so any visual change means it is dropping a light that reaches the tile and the frametime saving is being paid for in wrong pixels. Measured 2026-08-24: bit-identical, 0 pixels differing. This is the row that makes the cull trustworthy enough for M3 to build on. This is the image half of P1 in **Cost and culling**, not a second row that happens to share the name |
-| I3 | — | **A-M0-4, sensitivity.** Capture a frame, shift it by one pixel, compare | Detected. Measured: max 0.165, 449 pixels differing. Seeded by shifting a real captured frame rather than by a debug keyword in the volumetric shader — the claim is about what the comparator resolves, and this exercises exactly that without adding surface to shipped code |
-| I4 | — | **A-M0-4, specificity.** Capture the same unchanged scene twice | **Identical.** Without this row the sensitivity row above is satisfied by a comparator that calls everything different, which is exactly as useless as one that calls everything the same. Measured: bit-identical, which also says the capture freeze works |
-| I1 | — | Compare against this machine's last capture. **Seed it from the same shape of run you will verify with — a full suite run, normally** | At most **0.25%** of the frame differing, which is the budget the row allows for the edge scatter depth priming leaves behind and nothing larger — the 0.51% run-shape difference below therefore still fails. A size mismatch is refused separately, since it means nothing was compared rather than that nothing moved. Past the budget the row says what moved and writes the images. The first run on a machine seeds the stored frame and reports inconclusive; delete the stored image to re-seed after an intended change |
-| I2 | — | Compare against the committed reference, `VRSL_PERF_HOME` set | Identical **on the reference machine**. Expect a difference anywhere else and treat it as hardware, not regression. Skips cleanly when the variable is unset, which is how a routine run should be made. **The committed frame is an RTX 3080 capture and the machine that took it is an RTX 3090 now**, so it fails here — measured 2026-09-01 at 63% of pixels differing, max 0.31. That is the row working, not a regression: I1, which compares against this machine's own last capture, passes in the same run. Re-taking the frame here would move the reference to this box, which is a decision rather than a fix |
-| I5 | — | **A-M7-1.** A manager with every wiring field cleared, bounced so the clear takes effect, repaired, and bounced again | **The same image as one wired by the prefab.** This is the row the milestone lives or dies on, and it is the only one that can make the claim: comparing GUIDs proves resolution picked the assets the table names, never that the table names the right ones. Rendering proves it, because a wrong asset in any of the ten shows — the wrong compute lights nothing, the wrong lighting shader puts nothing on surfaces, the wrong prepass makes every surface flat grey. **Bounced twice on purpose**: the cull resolves its shader in its constructor and the manager builds its volumetric material once and keeps it, so without the first bounce the row compares two correctly wired managers and passes whatever resolution did. Any row that changes a shader field has to drop the cached materials for the same reason |
+| P1 | — | Capture with `lightCullShader` assigned and again with it cleared | **Not one pixel different.** The cull decides which lights a tile iterates, never what they contribute, so any visual change means it is dropping a light that reaches the tile and the frametime saving is being paid for in wrong pixels. Measured 2026-08-24: bit-identical, 0 pixels differing. This is the image half of P1 in **Cost and culling**, not a second row that shares the name |
+| I3 | — | **Sensitivity.** Capture a frame, shift it by one pixel, compare | Detected. Measured: max 0.165, 449 pixels differing. Seeded by shifting a real captured frame rather than by a debug keyword in the volumetric shader — the claim is about what the comparator resolves, and this exercises exactly that without adding surface to shipped code |
+| I4 | — | **Specificity.** Capture the same unchanged scene twice | **Identical.** Without this row the sensitivity row above is satisfied by a comparator that calls everything different, which is exactly as useless as one that calls everything the same. Measured: bit-identical, which also says the capture freeze works |
+| I1 | — | Compare against this machine's last capture. **Seed it from the same shape of run you will verify with — a full suite run, normally** | At most **0.25%** of the frame differing, which is the budget the row allows for the edge scatter depth priming leaves behind and nothing larger. A size mismatch is refused separately, since it means nothing was compared rather than that nothing moved. Past the budget the row says what moved and writes the images. The first run on a machine seeds the stored frame and reports inconclusive; delete the stored image to re-seed after an intended change |
+| I2 | — | Compare against a reference frame in `VRSL_PERF_HOME` | Identical **on the machine that took the reference**. Expect a difference anywhere else and treat it as hardware, not regression: a frame taken on another GPU fails here while I1 passes in the same run. Skips cleanly when the variable is unset, which is how a routine run should be made |
+| I5 | — | A manager with every wiring field cleared, bounced so the clear takes effect, repaired, and bounced again | **The same image as one wired by the prefab.** This is the only row that can make the claim: comparing GUIDs proves resolution picked the assets the table names, never that the table names the right ones. Rendering proves it, because a wrong asset in any of them shows: the wrong compute lights nothing, the wrong lighting shader puts nothing on surfaces, the wrong prepass makes every surface flat grey. **Bounced twice on purpose**: the cull resolves its shader in its constructor and the manager builds its volumetric material once and keeps it, so without the first bounce the row compares two correctly wired managers and passes whatever resolution did. Any row that changes a shader field has to drop the cached materials for the same reason |
 
-**A reference frame is only valid for the run shape that seeded it.** Seeding from a
-filtered run and verifying in a full one reports a fixed set of pixels differing,
-identically every time — deterministic, but a property of what ran first rather than
-of the renderer. What is known about it, from a day spent on it:
+**Seed and verify in the same shape of run.** The host can change rendering state partway
+through a run (it brings the GPU Resident Drawer up with its quality tier), so the rig
+holds the drawer off, and depth priming and MSAA, for every render. A filtered run and a
+full one then capture the same frame.
 
-- **It is not the package's.** The frozen rig captured with the manager switched off
-  differs from the same rig with it on by 228 pixels at most 3 of 255. The run-shape
-  difference is 2782 pixels at up to 0.64: a thin ellipse on the floor at the left of
-  the frame, present in a filtered run and absent in a full one.
-- **Every fixture decodes identically in both shapes**, all four light-data vectors
-  of all fifty, logged and diffed. Pointing and intensity are not it.
-- **It survives everything of the host's the rig can name.** The rig now switches
-  every scene light off, sets a flat black ambient, clears the skybox, sun and fog,
-  forces every mip resident and clears the CRT chain's textures for its lifetime. The
-  fixture-body highlights that used to differ went with the CRT clear; the ring did
-  not move.
-- The raymarch's clock, gobo-wheel mip residency and beam direction were each pinned
-  and ruled out in turn.
-
-The next step is to log the active render pipeline asset and quality level at capture
-in both shapes: the host applies a quality tier at an unpredictable moment after
-start-up, and a filtered run captures at about sixteen seconds where a full one is
-minutes in. Seed and verify the same way and the rows are exact, which is what the
-suite does.
-
-**What the frame guards changed on 2026-09-02.** Until then the rig's movers pointed
-wherever their channels sent them, at the zoom channel's cone width, at the prefab's
-intensity, under the host's own lighting — and the package moved 228 pixels of it.
-`FreezeForImageCapture` now aims the beams at the floor at their authored cone, at an
-intensity of 60, in a frame with nothing else lighting it, and the capture helpers
-drive the source with the `Fixtures` pattern held still, every dimmer at full, where
-`Ramp` gave the fixtures in view channels of a few percent. What an image row compares
-is the package's light. Stored captures and reference frames are filed under a name
-that carries the rig's `CaptureVersion`, `rig-default-v2` now, so a change of shape
-seeds afresh rather than comparing against a frame of the old one. Bump the constant
+**What a frozen capture holds.** `FreezeForImageCapture` aims the beams at the floor at
+their authored cone at an intensity of 60, in a frame nothing else lights, and the capture
+helpers drive the source with the `Fixtures` pattern held still, every dimmer at full, so
+what an image row compares is the package's light. Stored captures and reference frames
+are filed under a name carrying the rig's `CaptureVersion` (`rig-default-v2` now), so a
+change of shape seeds afresh instead of comparing against an old frame. Bump the constant
 with any change to what a frozen capture contains.
 
 A failing row writes `-expected`, `-actual` and an amplified `-diff` PNG under
@@ -469,58 +439,75 @@ black rectangle whatever went wrong.
 
 ### The headless gate
 
-`.compilecheck/bench.sh` (local, like the other scripts).
+The sweep player and the comparison ship in the package. The gate itself is the suite's
+harness and image rows: the suite command above with
+`-testFilter "VRSL.URP.Tests.VRSLBenchmarkTests;VRSL.URP.Tests.VRSLImageRegressionTests"`.
 
 ```
-bench.sh check                              # the gate: harness + image rows
-bench.sh sweep [<dir>]                      # build a player, capture the matrix in it
-bench.sh compare <candidate>                # judge against the committed reference
-bench.sh compare <baseline> <candidate>     # adjudicate two named runs
+# Build the sweep player (or VRSL → URP → Performance → Build Sweep Player)
+Unity.exe -batchmode -projectPath <project> \
+  -executeMethod VRSL.URP.EditorScripts.VRSLBenchBuild.BuildFromCommandLine -out <dir>
+
+# Run it: captures the standard matrix and quits
+<dir>/VRSLSweep.exe -vrsl-out <runs> [-vrsl-dmx-input 0-3] [-vrsl-mirrors] [-vrsl-force-own-normals]
+
+# Judge a run; with no -baseline, against the reference run
+Unity.exe -batchmode -projectPath <project> \
+  -executeMethod VRSL.URP.EditorScripts.VRSLBenchCommandLine.CompareFromCommandLine \
+  -candidate <run.json> [-baseline <run.json>] [-out report.md] [-force]
+
+# Adopt a noise floor from a null pair
+Unity.exe -batchmode -projectPath <project> \
+  -executeMethod VRSL.URP.EditorScripts.VRSLBenchCommandLine.AdoptFloorFromCommandLine \
+  -baseline <run.json> -candidate <run.json>
 ```
 
-**With no baseline named, the committed reference is used**, resolved from
+The player writes each run to a folder of its own under `-vrsl-out` (the build folder
+without it), holding `run.json` and `report.md`, and names the folder in its log on a line
+starting `[VRSL sweep] report: `. `-vrsl-dmx-input` picks what the manager reads (Stream data
+from the scene's synthetic source when it is left out), `-vrsl-mirrors` measures the mirror
+matrix instead of the standard one, and `-vrsl-force-own-normals` draws VRSL's own normals
+everywhere, for the half of a pair that measures what reading URP's is worth.
+
+**With no baseline named, the reference run is used**, resolved from
 `$VRSL_PERF_HOME/baseline.json` the same way the reference frames are, so a gate needs no
 path anybody has to remember. That default is safe on a machine that did not produce the
 reference: `Compare` refuses on an environment mismatch, so the answer there is a refusal
 naming the difference and exit 2, not a fabricated delta. With the variable unset, or set
-to a folder holding no `baseline.json`, `compare` fails and names the folder it looked in
-rather than comparing against nothing.
+to a folder holding no `baseline.json`, the comparison fails and names the folder it looked
+in rather than comparing against nothing.
 
 **The editor's batch mode never captures a sweep, on purpose.** It has no GPU clock, so a
-capture taken there produces CPU-basis numbers nobody should quote in a results table.
-`sweep` gets one by building a standalone player and running the matrix inside it, which
-is what R-M0-6 asks for and the only way to a GPU-basis matrix nobody has to sit through.
-The capture loop is shared with the editor window, and the verdict comes from the same
-`VRSLBaseline.Compare` the window calls, so none of the three can disagree.
+capture taken there produces CPU-basis numbers nobody should quote in a results table. The
+sweep player gets one by running the matrix in a standalone player, the only way to a
+GPU-basis matrix nobody has to sit through. The capture loop is shared with the editor
+window, and the verdict comes from the same `VRSLBaseline.Compare` the window calls, so
+none of the three can disagree.
 
 The build is the slow half and is incremental afterwards, so a before-and-after costs one
-full build and one quick one. `VRSL_BENCH_PLAYER=<exe>` skips the build entirely, which is
-what a second capture of an unchanged package wants. Only the build needs the editor
-closed; the player holds no project lock, so a capture can run beside an open editor.
+full build and one quick one; a second capture of an unchanged package reuses the player.
+Only the build needs the editor closed. The player holds no project lock, so a capture can
+run beside an open editor.
 
 **A player run and an editor run are never compared.** `Matches` refuses on `context`, so
-the two form separate lineages with separate noise floors, and `baseline.json` — an editor
-run — is refused by a player candidate rather than reported against it. That is the
-intended behaviour, not a gap: the difference between them is exactly what R-M0-6 exists
-to keep visible.
+the two form separate lineages with separate noise floors, and `baseline.json`, an editor
+run, is refused by a player candidate rather than reported against it. That is the
+intended behaviour: the difference between them is worth keeping visible.
 
-`compare` exits 0 when nothing regressed, 1 when something did or the inputs are
-unusable, and 2 when it refuses because the two runs are from different machines —
-refusing rather than failing, since exiting 1 there would train whoever reads the gate
-to pass `-force` by reflex. It fails when the log carries no verdict line, because a
-runner that exits successfully having compared nothing is worse than no runner.
+The comparison exits 0 when nothing regressed, 1 when something did or the inputs are
+unusable, and 2 when it refuses because the two runs are from different machines.
+Refusing rather than failing matters there, since exiting 1 would train whoever reads the
+gate to pass `-force` by reflex.
 
-**A refusal emits a verdict line too**, reading zero rows, with the `REFUSED` line above it
-saying why. It has to: the script tests for the verdict line *before* it tests for
-`REFUSED`, so a refusal that stayed silent would be reported as exit 1 with "nothing was
-compared" and read as a regression. Worth a hand check whenever that path changes, because
-no automated row covers it — the entry point ends in `EditorApplication.Exit`. Compare the
-committed reference against a copy of itself with `environment.graphicsDevice` altered:
-expect `REFUSED`, a zero-row verdict line, and **exit 2**. This is the ordinary outcome of
-the defaulted form on any machine that is not the reference machine, not an edge case.
+**A refusal writes a verdict line too**, reading zero rows, with the `REFUSED` line above
+it saying why, so a wrapper that checks for the verdict line before `REFUSED` doesn't read
+a refusal as a regression. Check it by hand whenever that path changes, because no
+automated row covers it (the entry point ends in `EditorApplication.Exit`). Compare the
+reference run against a copy of itself with `environment.graphicsDevice` altered: expect
+`REFUSED`, a zero-row verdict line, and **exit 2**. This is the ordinary outcome of the
+defaulted form on any machine that is not the reference machine, not an edge case.
 
-**A sweep measures nothing unless four things are true**, and each was found the hard
-way rather than reasoned out. It must render at a fixed size large enough to have work
+**A sweep measures nothing unless four things are true.** It must render at a fixed size large enough to have work
 in it — at a Game view's 964x672 the GPU frame did not move at all as lights per tile
 went from 9 to 47. Its DMX source must be assigned to the manager explicitly, because
 the source's own `OnEnable` registration only lands if the manager already claimed the
@@ -532,8 +519,7 @@ scene, whatever else its numbers say.
 
 **A manager bounce rebuilds what `OnEnable` builds.** Configuring a manager and then
 cycling it off and on silently undoes anything that works by dropping something the
-manager rebuilds — quality `Off` most of all, which measured identical to `Standard`
-until the order was swapped. Configure *after* the bounce, and let a change that needs
+manager rebuilds, quality `Off` most of all. Configure *after* the bounce, and let a change that needs
 one, like clearing the cull shader, do its own.
 
 **Batch mode has no GPU clock.** `FrameTimingManager` returns a CPU frame time and a GPU
@@ -571,45 +557,19 @@ mismatch.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
-| D1 | Both | Priming `Forced`, Forward+, moving heads under a cue | Every fixture body renders at every pan and tilt, no flicker and no partial geometry. A body that blinks out as it rotates is a depth pass not following the forward one. **Passed 2026-08-31** by eye, AudioLink example scene on `DesktopRenderer`: ForwardPlus, priming Forced, **MSAA 2x with priming genuinely running** — see D4 for why that combination is live here rather than inert. That is the first run of this row in a configuration anybody ships |
-| D2 | Both | Priming `Disabled`, same scene | Identical result. **Passed 2026-08-31**, and this is the first run in which it actually varied anything: 1761 px of 262144 differing (0.672%) against a 1.0% budget, lit fraction 62.89% against 62.99% against a 0.5 tolerance. **That run was at MSAA 1, not the 2x it was recorded as** (found 2026-09-03 by S13): the suite's rig renders into a texture, a camera with a target takes its sample count from the target rather than the asset, and the rig's target had none. So the 0.672% against the ~0.23% of an earlier run is not MSAA; `p99 0.0039` says 99% of those pixels are off by one value of 255 with only a thin tail reaching the 0.6275 max, and the scatter is what an `Equal` test leaves at edges either way. The rig takes a sample count now, and a run of this row at 2x is still to be made. **The automated half reports `Inconclusive` rather than passing when the two captures come back bit-identical**, because that means priming never varied and the row compared one configuration with itself. It deliberately does not predict from MSAA or rendering mode whether priming will run: those conditions live in the URP a project ships, and a row that predicts wrong goes quiet instead of red — which is how this row spent its first weeks skipping on the one project that matters |
-| D3 | Both | Priming `Forced`, a fixture faded to black | A body that vanishes from colour while still writing depth punches a hole in the scene. **No fixture in the supported set can do this, and one unported fixture can.** The collapse to degenerate geometry lives only in the `PROJECTION_YES` and `VOLUMETRIC_YES` branches of `VRSL-StandardMover-Vertex.cginc` (lines 478 and 534), and those meshes draw at 3001 and 3002 and write no depth; the fixture-body branch has no collapse and always draws, which is correct for a housing. **The exception is `VRSL-Discoball`**, whose Low quality mode is opaque, alpha-tested and `_ZWrite` 1 at queue 2451 with no `DepthOnly` or `DepthNormals` pass — so under priming it is culled outright. That is an unported fixture and is switched off in all three example scenes; `Validate Renderer Setup` reports it, correctly, whether or not it is enabled. **Open limitation, not a pass** |
-| D4 | Both | Priming `Forced`, MSAA 4x | **Check which of two rows this is before reading it.** Stock URP refuses to prime on a multisampled target, so `Forced` plus MSAA renders as though priming were `Disabled` and the row only shows that raising MSAA breaks nothing. A project may ship a URP without that guard, and then priming really is running at MSAA and the row is a genuine priming test. **Basis is the second case**: it vendors URP 17.5.0 as an embedded package under `Packages/`, which wins over the registry one, with the MSAA condition patched out of `UniversalRendererRenderGraph.IsDepthPrimingEnabledRenderGraph` and marked `BASISVR MODIFIED`. **Covered at MSAA 2x on 2026-08-31** by D1's run, which is priming and MSAA together at the setting Basis actually ships. **4x is not tested**, deliberately: reaching it means editing the host project's pipeline asset, and this package does not change a project's renderer settings — an asset that batch player builds already rewrite is a poor place to add another source of drift |
+| D1 | Both | Priming `Forced`, Forward+, moving heads under a cue | Every fixture body renders at every pan and tilt, no flicker and no partial geometry. A body that blinks out as it rotates is a depth pass not following the forward one. **Passed 2026-08-31** by eye, AudioLink example scene on `DesktopRenderer`: ForwardPlus, priming Forced, MSAA 2x on a URP modified to prime multisampled cameras (see D4), so priming was genuinely running |
+| D2 | Both | Priming `Disabled`, same scene | Identical result, within 1.0% of pixels and 0.5 points of lit fraction. **Passed 2026-08-31** at MSAA 1: 1761 px of 262144 differing (0.672%), lit fraction 62.89% against 62.99%; 99% of the differing pixels are off by one value of 255, the scatter an `Equal` test leaves at edges. A run at 2x is still to be made (the rig takes a sample count since 2026-09-03). **The automated half reports `Inconclusive` when the two captures come back bit-identical**, because priming then never varied. It doesn't predict from MSAA or rendering mode whether priming will run, since those conditions live in the URP a project ships |
+| D3 | Both | Priming `Forced`, a fixture faded to black | A body that vanishes from colour while still writing depth punches a hole in the scene. **Only one fixture can do this.** The collapse to degenerate geometry lives only in the `PROJECTION_YES` and `VOLUMETRIC_YES` branches of `VRSL-StandardMover-Vertex.cginc`, and those meshes draw at 3001 and 3002 and write no depth; the fixture-body branch has no collapse and always draws, which is correct for a housing. **The exception is the shader-driven discoball** (`VRSL-DMX-Static-DiscoBall-H-1CH` and `-V-1CH`, shader `VRSL-Discoball`), whose material is opaque, alpha-tested and `_ZWrite` 1 at queue 2451 with no `DepthOnly` or `DepthNormals` pass, so under priming it is culled outright. The example scenes use the realtime discoball instead; `Validate Renderer Setup` reports the shader-driven one in any scene that places it. **Open limitation, not a pass** |
+| D4 | Both | Priming `Forced`, MSAA 4x | **Check which of two rows this is before reading it.** Stock URP declines to prime a multisampled camera, so `Forced` plus MSAA renders as though priming were `Disabled` and the row only shows that raising MSAA breaks nothing. A URP modified to prime anyway (Basis shipped one until September 2026, marked `BASISVR MODIFIED` in `IsDepthPrimingEnabledRenderGraph`) makes it a genuine priming test; S13 says which a run hit. **Covered at MSAA 2x on 2026-08-31** by D1's run on such a URP. **4x is not tested**: reaching it means editing the host project's pipeline asset, and this package doesn't change a project's renderer settings |
 | D5 | Both | A scene with no lights at all, of any type | Surfaces still light and beams still render. Depth comes from the pipeline; VRSL needs no light to obtain it, and the old depth-light requirement is gone |
-| D6 | — | **Suite, passed 2026-08-31 on its first run.** `VRSLDepthPolicyReport.LayerMaskVerdict` across five masks: a fixture layer excluded under priming `Forced`, the same mask with priming off, the layer included, no fixtures at all, and an unreadable mask | The first fails and **names the layer** — "a layer is excluded" leaves an author to find which of thirty-two. The other four are what make it mean anything: priming off is reported without counting against the verdict, an including mask reports nothing so a check that flagged everything cannot pass, no fixtures reads `NOT CHECKED` rather than as a clean bill, and an unreadable mask reports instead of throwing or quietly passing. **Automated rather than done by hand**: reaching the same verdict through the menu item needs a real `UniversalRendererData` carrying a real mask, which means editing the consuming project's pipeline asset, and this package does not change a project's renderer settings even briefly |
+| D6 | — | **Suite, passed 2026-08-31 on its first run.** `VRSLDepthPolicyReport.LayerMaskVerdict` across five masks: a fixture layer excluded under priming `Forced`, the same mask with priming off, the layer included, no fixtures at all, and an unreadable mask | The first fails and **names the layer** — "a layer is excluded" leaves an author to find which of thirty-two. The other four are what make it mean anything: priming off is reported without counting against the verdict, an including mask reports nothing so a check that flagged everything cannot pass, no fixtures reads `NOT CHECKED` rather than as a clean bill, and an unreadable mask reports instead of throwing or passing in silence. **Automated rather than done by hand**: reaching the same verdict through the menu item needs a real `UniversalRendererData` carrying a real mask, which means editing the consuming project's pipeline asset, and this package does not change a project's renderer settings even briefly |
 
-**A-M2-4, no measurable frame-time change.** `bench.sh sweep` on `main` (`04e8774`) and
-again on the branch, RTX 3090, IL2CPP player, 1920x1080, priming Forced, 30 configurations:
-**29 unchanged, 1 improved, 0 regressed**, exit 0.
+**Frame time is unchanged by the depth policy.** A 30-row player sweep before and after,
+RTX 3090, IL2CPP, 1920x1080, priming Forced, 2026-08-31: 29 unchanged, 1 improved, 0 regressed.
 
-**Read the pass as a confirmation and the structure as the evidence**, because two figures
-in that run are artefacts rather than findings, and they are artefacts for different reasons.
-
-10 / InsideCones / Off reports **+545.9%**, which is 0.372 ms measured against a 0.068 ms
-base — a percentage of almost nothing, and a movement comfortably **inside** the 1.086 ms
-floor. It is reported `Unchanged`, and the percentage is the only alarming thing about it.
-
-The row marked improved is 10 / OutsideCones / High at **-1.747 ms**, and that one is
-**outside the floor** — which is exactly why the harness flagged it rather than calling it
-unchanged. It is not dismissed for being small. It is dismissed because nothing in this
-milestone can make a DMX scene 52% faster, and its neighbours in the same column sit at 2
-to 3 ms, so the 3.339 ms it started from is the outlier. Run-to-run spread at ten fixtures
-is wide enough to clear the floor on its own, which is worth knowing before reading any
-single improved row here as a result.
-
-What decides it is that **the sweep builds a DMX-only scene**
-(`VRSL-DMX-Mover-Spotlight-H-13CH-URP`, no AudioLink anywhere in `VRSLBenchmarkScene`),
-and every runtime line this milestone adds is either AudioLink or not in a player at all:
-the two fixture-mesh shaders that gained depth passes are AudioLink and never loaded here,
-`VRSLDepthPolicyReport` is wholly inside `#if UNITY_EDITOR`, the control-panel change
-removes code rather than adding it, and the scene edits are to the example scenes, which
-the sweep does not use. There is nothing in a DMX player frame for this milestone to have
-slowed down.
-
-**The AudioLink moving heads are the ones to watch.** Their fixture-mesh shaders took
-their depth passes from URP's Lit shader until this milestone, which was safe only
-because the AudioLink branch of the shared vertex include has its rotation commented
-out. They declare their own now, so re-enabling AudioLink pan and tilt no longer breaks
+**The AudioLink moving heads declare their own depth passes.** Taken from URP's Lit shader,
+they were safe only because the AudioLink branch of the shared vertex include has its
+rotation commented out; with their own, re-enabling AudioLink pan and tilt doesn't break
 them under priming.
 
 ### Discoball
@@ -630,13 +590,11 @@ frame capture, and V11 reads its number off `VRSL Diagnostics`.
 | # | Path | Scenario | Expected |
 |---|---|---|---|
 | V1 | — | `Half` (default) | Cones visible, silhouetted correctly against geometry |
-| V2 | — | *Retired.* The full-resolution mode it compared against is gone |
 | V3 | — | `Off` against `Standard` | Beams present at `Standard` and absent at `Off`, with surfaces still lit at both. Noise follows the level and is on wherever beams are |
 | V4 | — | Beam a few metres from the camera, `Half`, with the geometry behind it first near and then far | Cone grain unchanged as the backing surface moves away. **Guards the per-light march span — a shared march loses sample density to whatever sits behind the beam.** It now guards the adaptive step count as well: the count is taken from the light's own span, so a count that grew or shrank with the surface behind the beam would be exactly the fault this row was written for |
 | V5 | — | Several cones overlapping, `Half` | Brightness in the overlap is the sum of the individual cones; no seam or banding where one cone's span ends |
 | V6 | — | Camera inside a cone, then walking out through its edge | No pop or brightness step as the near end of the span crosses the camera. **Exercises the midpoint selection in `VRSL_NarrowSpanToCone`** |
 | V7 | — | Narrow cone (small `spotAngle`), viewed side-on close to the fixture head | Smooth gradient, no dot-screen or weave pattern. **Worst case for span tightness — the cone is narrowest relative to its bounding sphere here** |
-| V8 | — | *Retired.* It told a march artefact from an upsample one by comparing the two resolution modes, and there is one mode now. A suspected upsample artefact is read off the half-res target in a frame capture instead |
 | V9 | — | `Standard` against `High` on a wide cone at long throw | `High` is smoother where stepping is visible at all. This is the case the level exists for: what governs stepping is metres of cone per step, so wide cones, long throws and dense haze show it first |
 | V10 | — | Cone edges at a grazing angle | Soft feather to the outer angle, no hard rim. **A hard rim means the span is clipping before the attenuation has faded**, or that the visibility bound is skipping lights it should march. The bound is `VRSL_VOL_MIN_CONTRIB` in the volumetric shader; set it to 0 and re-run to tell the two apart |
 | V11 | — | One fixture, walked away from the camera so its cone fills less and less of the view ray. `VRSL Diagnostics` on the manager at each distance | The cone keeps the same grain at every distance while the diagnostics' steps per light fall, never below 4 and never above the level's ceiling. Judged from that number, not by eye alone: the count is the span over the level's spacing, and a cone that fills less of the ray is a shorter span |
@@ -647,6 +605,9 @@ frame capture, and V11 reads its number off `VRSL Diagnostics`.
 | V16 | — | `VRSLVolumetricLoopTests`: collect the raymarch counters on the rig with its movers pointed straight down, at `Standard`, then at `High` | Steps per light marched never below 4 and never above the level's ceiling, and higher at `High` than at `Standard` on the same spans. The second half is what says the count follows the level's spacing rather than sitting at the ceiling |
 | V17 | — | `VRSLVolumetricLoopTests`: the same rig, frozen and on the Ramp, with `volumetricIntensity` at `1e-12` | Every light that reaches the loop is skipped by the bound and no step is taken; the count of lights reaching the loop is unchanged from the lit frame, so the bound moved only the verdict. Restoring the intensity restores the march |
 
+V2 and V8 are retired. A suspected upsample artefact is read off the half-res target in a
+frame capture.
+
 **A frozen capture pins the raymarch's clock as well.** The dither phase and the haze
 scroll follow time by design, and at the step floor of four the dither reaches the
 quantised output on a few grazing pixels: two captures of a frozen scene at different
@@ -654,13 +615,11 @@ frames differed by one 8-bit step on two or three of them. `FreezeForImageCaptur
 the clock at zero through the manager's override, beside the strobe, the spin and the
 damping. A capture that skips the freeze is comparing dither phases.
 
-**The rig's movers point wherever their channels say, and under the synthetic pattern
-that is off sideways at shallow angles.** Measured while writing V16: of some ten
-thousand marched pixels, 326 rays crossed any cone, all of them grazing an edge. The
-rig's frame therefore carries almost no beam, which is why I1 passed unchanged across a
-change to the noise field and the step count, and why V16 and V17 switch pan and tilt
-off first. Any row about what is in the air has to do the same, and I1 as it stands
-guards the surfaces, not the beams.
+**Rows about what is in the air point the movers down.** Free-running, the rig's movers
+follow their channels, which under the synthetic pattern points them off sideways at
+shallow angles and puts almost no beam in frame (of some ten thousand marched pixels, 326
+rays crossed any cone, all grazing an edge). V16 and V17 switch pan and tilt off for that
+reason, and image captures aim the beams down through `FreezeForImageCapture`.
 
 **The counters are how V11, V12, V16 and V17 are judged.** `VRSL Diagnostics` prints
 steps per light, lights marched per pixel and the share of lights skipped, and a sweep
@@ -672,7 +631,7 @@ reads a zero here should first ask whether a frame was collected at all.
 ### Cameras
 
 `VRSLCameraPolicyTests` in the suite covers M5, M7, M8 and M9. M2 to M4 and the main-view
-half of M5 want a mirror and eyes; M6 is a `bench.sh` pair.
+half of M5 want a mirror and eyes; M6 is a pair of player sweeps.
 
 `secondaryCameraMode` is a policy with four values: `Match`, `Reduced` (the default),
 `SurfaceOnly` and `Skip`. `Match` is what `Full` was. A camera that renders into a texture
@@ -687,7 +646,7 @@ level it is labelled with, and a row about the policy adds mirror cameras of its
 | M3 | — | `SurfaceOnly` | Surface lighting in the mirror, no volumetric cones |
 | M4 | — | `Skip` | No VRSL lighting in the mirror |
 | M5 | — | `Reduced` in a scene at `Standard` with a mirror pointed at the rig. By hand for the look, and `VRSLCameraPolicyTests.M5` in the suite on a mirror camera the rig adds | Beams appear in the mirror at `Low`, visibly cheaper than `Match`, with no missing fixtures and no difference in the main view. Measured 2026-09-03: the main view is pixel-identical across `Match` and `Reduced` (0 px); the mirror renders at `Low` where the scene is `Standard`; its frame differs from `SurfaceOnly` on 15.6% of pixels (the beams are there) and from `Match` by at most 3 of 255 on 0.26% of them; the raymarch counters from the mirror alone march the same lights (22037 of 22037) at fewer steps each, 4.67 against 7.78. The rig's own camera renders into a texture, so it is registered as the player's view (`VRSLCameraFilter.RegisterMainView`) the way a stream camera would be; without that every row would measure `Low` |
-| M6 | — | `VRSL_BENCH_ARGS=-vrsl-mirrors bash .compilecheck/bench.sh sweep` on the build before the decode moved once per frame and on the build after, compared with `bench.sh compare` | 18 rows: 50 fixtures inside the cones at `Standard` and `High`, with none, one and three mirrors under each policy. Each row names the camera count, the policy and the level the mirrors rendered at. Against the before build, the rows with mirrors cost no more and the saving grows with the camera count; within a build, `Reduced` sits between `Match` and `SurfaceOnly` at both scene levels. **Read the deltas and the ratios rather than the verdict**: the stored floor over-covers |
+| M6 | — | The sweep player run with `-vrsl-mirrors`, on the build before the decode moved once per frame and on the build after, compared with `CompareFromCommandLine` | 18 rows: 50 fixtures inside the cones at `Standard` and `High`, with none, one and three mirrors under each policy. Each row names the camera count, the policy and the level the mirrors rendered at. Against the before build, the rows with mirrors cost no more and the saving grows with the camera count; within a build, `Reduced` sits between `Match` and `SurfaceOnly` at both scene levels. **Read the deltas and the ratios rather than the verdict**: the stored floor over-covers |
 | M7 | D | `VRSLCameraPolicyTests.M7`: four cameras rendering every frame (the rig's and three secondary) for ten seconds of captured time, against the same rig with one | Every spinning fixture's phase advances at the rate its channel asks for, as N8 judges it, and the frame of light data (direction, spin, colour) matches the one-camera rig's to 1e-3. **An integrator that has drifted into a per-camera pass advances four times as far** |
 | M8 | D | `VRSLCameraPolicyTests.M8`: a mirror toggled through main-only, mirror-only and both across 45 frames, under `Sweep` at a speed that moves every channel far each frame | On every frame the decoded colour equals the bytes the manager uploaded last, whichever cameras rendered, and the mirror's frame is not black on any frame it rendered. A one-frame-old colour is a decode that did not run for that frame's cameras; a black mirror is the grid textures unbound or the light path skipping it |
 | M9 | — | `VRSLCameraPolicyTests.M9`: the camera filter as a function | `Match` renders everything at the scene's level; `SurfaceOnly` the same without beams; `Skip` nothing; `Reduced` everything one level below (`High` to `Standard`, `Standard` to `Low`, `Off` and `Low` unchanged). A camera with no target keeps the scene's level under every value. `Low` draws beams at fewer steps and wider spacing than `Standard` with no contact shadows, and is not in the sweep's level list. Reflection probes, registered data readers and cameras rendering into a texture the manager consumes stay skipped |
@@ -697,12 +656,11 @@ row asks otherwise, put back on dispose), the way S10 and S13 always did for the
 host rewrites the renderer's mode at a moment of its own after start-up, so a row that set
 it once measured whatever the host left; D1_D2 passes its mode through.
 
-**The decode runs once per frame, from the first camera VRSL renders.** It used to be a
-graph pass per camera. Nothing in it depends on the camera, so every camera in a frame reads
-one buffer; the DMX grid textures are still published from inside the graph, by an
-attachment-less pass, because a global texture set outside it binds as black. M7 and M8 are
-the rows that catch it drifting back, and N1 to N15 are unchanged by it: the dispatch reads
-the same buffers and the same clock the per-camera pass did.
+**The decode runs once per frame, from the first camera VRSL renders.** Nothing in it
+depends on the camera, so every camera in a frame reads one buffer; the DMX grid textures
+are still published from inside the graph, by an attachment-less pass, because a global
+texture set outside it binds as black. M7 and M8 are the rows that catch it drifting into a
+per-camera pass.
 
 ### DMX channel buffer
 
@@ -815,7 +773,7 @@ scene-owned player.
 | B8 | D | Same row, past frame 90, where the stream starts naming universe 4 | `UniverseCount` grows to 5 exactly once and all 2600 channels read the Ramp, the new universe included; it does not shrink again |
 | B9 | D | `VRSLBasisUserDataTests.B9` in the suite: `truss-dmx-ramp-damaged.ts`, every tenth record with a value bit flipped after its CRC was written | 30 of 300 dropped, `BadCrc` observed as the reason while playing, and the buffer still byte-exact from the 270 that arrived intact |
 | B10 | D | `VRSLBasisUserDataTests.B10_*` in the suite: `truss-dmx-ramp-transcoded.ts` (the intact fixture re-encoded with x264) and `truss-dmx-ramp-stripped.ts` (remuxed through `filter_units=remove_types=6`) | Both: the picture plays, `RecordsDecoded` and `RecordsDropped` stay at 0, `LastResult` stays `Ok`, `UniverseCount` stays at `minimumUniverses`. The lane is absent, not damaged, and nothing says otherwise. A rewritten-SEI path reads as B9 does (`BadCrc`/`BadMagic`, dropped count climbing). **By hand, and the part that matters for a show:** the same check against the real CDN you mean to use, with `logDrops` on; a provider that transcodes gives you the B10 reading and is not usable for this. **VRCDN, 2026-08-21: remuxes.** Published through `ingest.vrcdn.live` with `truss-relay --artnet` and read back from `https://stream.vrcdn.live/live/<name>.live.ts`: `truss-detect` 449 of 449 records intact, none corrupt or rewritten, 99 ms median latency; B11 green against that URL with the same assertions as the fixture rows |
-| B11 | D | `VRSLBasisUserDataTests.B11` in the suite, run only with `VRSL_TRUSS_LIVE_URL` set: a live lane (Art-Net sender → `truss-relay --artnet` → `mediamtx` → RTSP; `BasisApps/basis-truss-live` brings one up on this machine) carrying the same Ramp over five universes | Over five seconds the record rate sits at the video's frame rate (20-45/s accepted), nothing is dropped on a remuxing path, `UniverseCount` is 5 and all 2600 channels read the Ramp. Same assertions as the fixture rows, so the two agree or the difference is the path. Green 2026-08-21 against a loopback lane (`BasisApps/basis-truss-live`) and against VRCDN's TS egress |
+| B11 | D | `VRSLBasisUserDataTests.B11` in the suite, run only with `VRSL_TRUSS_LIVE_URL` set: a live lane (Art-Net sender → `truss-relay --artnet` → `mediamtx` → RTSP) carrying the same Ramp over five universes | Over five seconds the record rate sits at the video's frame rate (20-45/s accepted), nothing is dropped on a remuxing path, `UniverseCount` is 5 and all 2600 channels read the Ramp. Same assertions as the fixture rows, so the two agree or the difference is the path. Green 2026-08-21 against a loopback lane and against VRCDN's TS egress |
 
 ### VR (single-pass instanced)
 
@@ -825,7 +783,7 @@ scene-owned player.
 | X2 | — | Volumetric cones in headset | Cones in the same world position in both eyes |
 | X3 | — | Diagnostics, tile culling active | No vertical mirroring of lighting between eyes. Mirroring points at the `renderIntoTexture` inference in `VRSLTileCullPass`; clearing `lightCullShader` isolates it |
 | X4 | — | Fixture body meshes in headset | Visible in both eyes |
-| X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye. **Written 2026-09-04, not yet run in a headset:** the stereo-instanced variant is compiled for all six shaders, and the lens flare and the discoball render on desktop (Matt, 2026-09-04); whether both eyes draw them is the row and needs a headset |
+| X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye. **Written 2026-09-04, not yet run in a headset:** the stereo-instanced variant is compiled for all six shaders, and the lens flare and the discoball render on desktop (by eye, 2026-09-04); whether both eyes draw them is the row and needs a headset |
 
 ---
 
@@ -834,14 +792,15 @@ scene-owned player.
 Don't raise these; they're documented limitations with reasons in
 the [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) page of the wiki.
 
-- Light doesn't stop at walls — only contact shadows exist, no light-perspective shadow maps.
+- Light doesn't stop at walls: there are contact shadows only, no light-perspective shadow maps.
 - Occluders off screen cast no shadow, and shadows fade as an occluder leaves frame.
-- Smoothness and metallic **maps** aren't sampled; only the scalar material properties are.
-  A material with a metallic map reads at its smoothness *ceiling*, so it will look glossier
-  than it renders.
+- Metallic-smoothness maps are read under Unity's own property names (`_MetallicGlossMap`,
+  as URP's Lit uses). A shader that names its maps otherwise is read from its scalar
+  smoothness and metallic only, so a glossy map region can light flatter or glossier than
+  it renders.
 - No ambient occlusion term. AO models indirect occlusion and would be wrong applied to
   direct light.
-- Transparent geometry receives no VRSL light — the passes run after opaques.
+- Transparent geometry receives no VRSL light: the passes run after opaques.
 - Running the DMX and AudioLink managers on the same camera is unsupported; both write
   `_VRSLLights` and the last one scheduled wins.
 

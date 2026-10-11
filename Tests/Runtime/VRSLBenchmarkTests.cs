@@ -8,7 +8,7 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The two rows that make every other number in the performance programme mean
+    /// The two rows that make every other benchmark number in this package mean
     /// something: a null run that must report nothing moved, and a deliberately
     /// broken build that must report that it did.
     ///
@@ -175,7 +175,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M0-1. Capture, change nothing, capture again. Every row must read as
+        /// H1. Capture, change nothing, capture again. Every row must read as
         /// unchanged, and the noise floor the report states must be at or above the
         /// spread the two runs actually showed.
         ///
@@ -197,8 +197,8 @@ namespace VRSL.URP.Tests
             runs[1].noiseFloorMs = floor;
 
             var comparison = VRSLBaseline.Compare(runs[0], runs[1]);
-            Debug.Log($"[A-M0-1] {comparison.VerdictLine}, noise floor {floor:F3} ms");
-            foreach (var row in comparison.rows) Debug.Log($"[A-M0-1] {row.Describe()}");
+            Debug.Log($"[H1] {comparison.VerdictLine}, noise floor {floor:F3} ms");
+            foreach (var row in comparison.rows) Debug.Log($"[H1] {row.Describe()}");
 
             Assert.IsNull(comparison.environmentMismatch,
                 $"the two halves of a null run were captured on the same machine moments "
@@ -224,7 +224,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M0-2. The harness has to be able to say "regressed" at all.
+        /// H2. The harness has to be able to say "regressed" at all.
         ///
         /// <b>Judged on the comparison rather than on a seeded workload</b>, and the
         /// history is why. This row used to make the build genuinely worse and look for
@@ -235,17 +235,17 @@ namespace VRSL.URP.Tests
         /// cost 0.089 ms against a 0.097 ms floor. With volumetrics off the package
         /// still costs 2.55 ms, so any lever that only scales volumetrics is scaling a
         /// twentieth of the total. The row therefore ran on an absurd step count, which
-        /// M1 removed along with every other numeric cost field.
+        /// went with every other numeric cost field when quality became one setting.
         ///
         /// Keeping it would have meant a way to set a step count that exists solely for
-        /// this row — a second path to cost, in the milestone whose whole point is that
+        /// this row: a second path to cost, in a design whose whole point is that
         /// there is one. What the row is actually for is the verdict logic, and that is
         /// pure arithmetic over two documents: testable exactly, on any clock, without a
         /// GPU or a workload. It runs on every headless suite now rather than only when
         /// somebody opens the editor, which is a stronger guarantee than it had.
         ///
         /// What is not covered here is a real workload change flowing end to end into a
-        /// verdict. A-M0-7 is that row: it rebuilds with a changed constant and reads
+        /// verdict. H14 is that row: it rebuilds with a changed constant and reads
         /// the sweep, and editing the quality table is still its lever.
         /// </summary>
         [Test]
@@ -353,7 +353,7 @@ namespace VRSL.URP.Tests
         ///
         /// Judged on cost rather than on a field, and closable on a CPU clock because
         /// removing a fullscreen pass removes its CPU-side setup too, unlike the
-        /// cull-shader regression in A-M0-2.
+        /// cull-shader regression in H2.
         /// </summary>
         [UnityTest]
         public IEnumerator H5_QualityOffCostsLessThanStandard()
@@ -398,7 +398,7 @@ namespace VRSL.URP.Tests
             // Direction looked safe on one favourable reading — a 0.069 ms gap against a
             // stated 0.021 — and was asserted on that basis. It then measured Off at
             // 0.207 ms against Standard at 0.171, dearer by 0.036, while the counters
-            // still said Off was not enqueueing the pass at all. A-M0-3 explains it:
+            // still said Off was not enqueueing the pass at all. H3 explains it:
             // run-to-run spread on the CPU clock here is around 0.055 ms, which is wider
             // than the gap, so the sign flips as often as not. On a CPU clock, removing
             // a fullscreen pass gives back only its issue cost and that is simply too
@@ -420,10 +420,10 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// M3's opening question: what is the existing tile cull actually worth?
         ///
-        /// Not an acceptance row — it asserts almost nothing, on purpose. M3 is premised
+        /// Not an acceptance row: it asserts almost nothing, on purpose. A tighter cull is premised
         /// on <c>lightsInTile x steps x work</c> dominating, and proposes attacking the
         /// first term by culling cones instead of bounding spheres. Before building that,
-        /// this measures what the cull already saves, so the milestone starts from a
+        /// this measures what the cull already saves, so that work starts from a
         /// number rather than from the premise.
         ///
         /// It was measured once before at 0.0015 ms and the figure was withdrawn: the rig
@@ -467,9 +467,9 @@ namespace VRSL.URP.Tests
             Debug.Log($"[M3] saving {saving:F4} ms ({on.timings.CostBasis}) against a floor "
                     + $"of {floor:F4} ms. "
                     + (saving > floor
-                       ? "A real saving, so M3 has something to improve on."
-                       : "Inside the noise, so the cull is worth little here and M3's "
-                       + "premise wants checking before the milestone is built."));
+                       ? "A real saving, so a tighter cull has something to improve on."
+                       : "Inside the noise, so the cull is worth little here and a tighter "
+                       + "cull's premise wants checking before it is built."));
 
             // The comparison has to have been valid, whatever the answer turns out to be.
             Assert.IsTrue(on.counters.tileCullEngaged,
@@ -544,7 +544,7 @@ namespace VRSL.URP.Tests
         ///
         /// <b>This is an engineering declaration, not a derived number</b>, and it is
         /// stated here rather than computed from the runs being judged because a floor
-        /// derived from the same data it adjudicates cannot fail. A-M0-3 measures the
+        /// derived from the same data it adjudicates cannot fail. H3 measures the
         /// real spread and checks it against this.
         ///
         /// <b>It is a smoke test for a broken harness, not a precision certificate.</b>
@@ -558,8 +558,8 @@ namespace VRSL.URP.Tests
         ///
         /// The practical consequence is worth stating plainly: <b>a headless run cannot
         /// see a small regression at all.</b> An editor or player run on the GPU clock
-        /// does far better — the sweep's rows carry signals ten to thirty times their
-        /// stated precision — which is why the numbers a milestone quotes come from
+        /// does far better (the sweep's rows carry signals ten to thirty times their
+        /// stated precision), which is why the package's performance figures come from
         /// there and this is only a gate.
         /// </summary>
         const double DeclaredReproducibility = 0.40;
@@ -569,13 +569,13 @@ namespace VRSL.URP.Tests
         const double DeclaredFloorMs = 0.05;
 
         /// <summary>
-        /// A-M0-3. Three captures of an unchanged scene, and the spread between them
+        /// H3. Three captures of an unchanged scene, and the spread between them
         /// is what the harness can actually resolve.
         ///
         /// The spread is measured across all three and judged against a tolerance
         /// declared in code. Deriving the floor from the same three runs would produce
-        /// a row that passes whatever the harness does, which is the failure mode this
-        /// whole milestone exists to avoid.
+        /// a row that passes whatever the harness does, which is the failure mode the
+        /// harness exists to avoid.
         /// </summary>
         [UnityTest]
         public IEnumerator A_M0_3_ThreeRunsAgreeWithinTheDeclaredTolerance()
@@ -599,7 +599,7 @@ namespace VRSL.URP.Tests
             double middle    = (highest + lowest) * 0.5;
             double tolerance = Math.Max(DeclaredFloorMs, middle * DeclaredReproducibility);
 
-            Debug.Log($"[A-M0-3] three runs: {runs[0].rows[0].timings.CostMs:F4}, "
+            Debug.Log($"[H3] three runs: {runs[0].rows[0].timings.CostMs:F4}, "
                     + $"{runs[1].rows[0].timings.CostMs:F4}, {runs[2].rows[0].timings.CostMs:F4} ms "
                     + $"({runs[0].rows[0].timings.CostBasis}). Spread {spread:F4} ms "
                     + $"({100.0 * spread / Math.Max(0.0001, middle):F1}%), tolerance {tolerance:F4} ms.");
@@ -607,7 +607,7 @@ namespace VRSL.URP.Tests
             // What the stated +- would have claimed, logged beside what actually
             // happened. The gap between the two is the whole reason this row states its
             // own tolerance rather than trusting that column.
-            Debug.Log($"[A-M0-3] the rows' own stated precision was "
+            Debug.Log($"[H3] the rows' own stated precision was "
                     + $"{runs[0].rows[0].timings.Noise:F4} ms, against an observed spread of "
                     + $"{spread:F4} ms. The stated figure is a lower bound.");
 

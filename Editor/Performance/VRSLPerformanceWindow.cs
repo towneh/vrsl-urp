@@ -432,7 +432,7 @@ namespace VRSL.URP.EditorScripts
 
         void CompareWithBaseline()
         {
-            // Opened where the committed reference lives when there is one, so the
+            // Opened where the stored reference lives when there is one, so the
             // comparison people actually want is a click rather than a walk up the tree.
             // Still a picker rather than a substitution: this is where somebody chooses
             // two runs deliberately, and quietly supplying one would make the button mean

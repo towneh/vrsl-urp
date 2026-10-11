@@ -88,7 +88,7 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// D1 and D2 together. The image must not depend on depth priming.
         ///
-        /// This is the milestone's central claim, and the reason it is one row rather
+        /// This is the depth policy's central claim, and the reason it is one row rather
         /// than two: what matters is not that each configuration renders something, but
         /// that they render the <i>same</i> thing. A shader whose depth passes disagree
         /// with its forward pass draws under `Disabled` and vanishes under `Forced`, and

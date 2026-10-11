@@ -5,7 +5,7 @@ using NUnit.Framework;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// Rows for how the committed reference run is located.
+    /// Rows for how the stored reference run is located.
     ///
     /// The variable is process-wide and <c>VRSLImageCompare.GoldenFolder</c> reads it
     /// too, so every row here restores it in teardown rather than at the end of the

@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// The rows a person is otherwise asked to judge by looking at two frames.
     ///
     /// The default comparison is against this machine's own previous capture rather
-    /// than a committed reference image: two GPUs do not produce identical frames,
+    /// than a stored reference image: two GPUs do not produce identical frames,
     /// so a committed image is a false-failure machine everywhere except where it
     /// was made. Committed references are the second mode, reached through
     /// <c>VRSL_PERF_HOME</c>, and rows needing one skip with a message when it is
@@ -113,7 +113,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M7-1. A manager with every wiring field cleared repairs itself and renders
+        /// I5. A manager with every wiring field cleared repairs itself and renders
         /// the same image as one wired by the prefab.
         ///
         /// This is the row M7 lives or dies on, and it is the only one that can make the
@@ -188,17 +188,17 @@ namespace VRSL.URP.Tests
             try
             {
                 var result = VRSLImageCompare.Compare(wired, repaired);
-                Debug.Log($"[A-M7-1] prefab wiring vs repaired: {result}");
+                Debug.Log($"[I5] prefab wiring vs repaired: {result}");
 
                 Assert.IsFalse(result.SizeMismatch, "the two captures came back different sizes");
 
                 if (result.Max > VRSLImageCompare.Threshold)
                 {
-                    VRSLImageCompare.WriteImages(EvidenceFolder, "A-M7-1-wiring", wired, repaired);
+                    VRSLImageCompare.WriteImages(EvidenceFolder, "I5-wiring", wired, repaired);
                     Assert.Fail(
                         $"a repaired manager renders differently from a wired one ({result}). "
                       + "Resolution picked assets, but not the same ones the prefab uses — "
-                      + "which is the fault this milestone would otherwise introduce, since "
+                      + "which is the fault self-wiring could introduce, since "
                       + "a manager wired to the wrong assets fails exactly as silently as one "
                       + $"nobody wired. Images written to {EvidenceFolder}");
                 }
@@ -224,7 +224,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M0-4, the sensitivity half. The comparison has to catch a one-pixel
+        /// I3, the sensitivity half. The comparison has to catch a one-pixel
         /// offset in real rendered content, which is the fault the criterion names.
         ///
         /// Seeded by shifting a captured frame rather than by putting a debug keyword
@@ -243,11 +243,11 @@ namespace VRSL.URP.Tests
             {
                 shifted = VRSLImageCompare.ShiftedByOnePixel(frame);
                 var result = VRSLImageCompare.Compare(frame, shifted);
-                Debug.Log($"[A-M0-4] one-pixel shift: {result}");
+                Debug.Log($"[I3] one-pixel shift: {result}");
 
                 Assert.Greater(result.Max, VRSLImageCompare.Threshold,
                     $"a one-pixel offset of a real frame was not detected ({result}). "
-                  + "The comparison cannot resolve the fault A-M0-4 names, so it cannot "
+                  + "The comparison cannot resolve a one-pixel offset, so it cannot "
                   + "be trusted to catch an upsample or a tile-index error either");
 
                 // A shift is not a global shift: most of a frame is smooth and moves
@@ -264,7 +264,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A-M0-4, the specificity half. The comparison must call two captures of an
+        /// I4, the specificity half. The comparison must call two captures of an
         /// unchanged scene identical.
         ///
         /// Without this the sensitivity row above is satisfied by a comparator that
@@ -283,11 +283,11 @@ namespace VRSL.URP.Tests
             try
             {
                 var result = VRSLImageCompare.Compare(first, second);
-                Debug.Log($"[A-M0-4] unchanged scene, twice: {result}");
+                Debug.Log($"[I4] unchanged scene, twice: {result}");
 
                 if (result.Max > VRSLImageCompare.Threshold)
                 {
-                    VRSLImageCompare.WriteImages(EvidenceFolder, "A-M0-4-unchanged", first, second);
+                    VRSLImageCompare.WriteImages(EvidenceFolder, "I4-unchanged", first, second);
                     Assert.Fail(
                         $"two captures of an unchanged scene differ ({result}). Either the "
                       + "capture is not deterministic — something is still integrating over "
@@ -370,8 +370,8 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// The second mode: a committed reference frame from the programme repo,
-        /// reached through <c>VRSL_PERF_HOME</c>. Only the reference machine and any
+        /// The second mode: a reference frame from the folder
+        /// <c>VRSL_PERF_HOME</c> names. Only the reference machine and any
         /// future CI take this path; everywhere else it skips.
         /// </summary>
         [UnityTest]
@@ -394,17 +394,17 @@ namespace VRSL.URP.Tests
                 {
                     VRSLImageCompare.Save(path, frame);
                     Assert.Inconclusive($"no reference frame yet; seeded one at {path}. "
-                                      + "Commit it to the programme repo if it looks right.");
+                                      + "Keep it as the reference if it looks right.");
                 }
 
                 var result = VRSLImageCompare.Compare(reference, frame);
-                Debug.Log($"[I2] against committed reference: {result}");
+                Debug.Log($"[I2] against the stored reference: {result}");
 
                 if (result.Max > VRSLImageCompare.Threshold)
                 {
                     VRSLImageCompare.WriteImages(EvidenceFolder, "I2-reference", reference, frame);
                     Assert.Fail(
-                        $"the frame differs from the committed reference ({result}). On any "
+                        $"the frame differs from the stored reference ({result}). On any "
                       + "machine but the one that made it, expect this — two GPUs do not "
                       + $"render identically. Images written to {EvidenceFolder}");
                 }

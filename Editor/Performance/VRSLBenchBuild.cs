@@ -11,7 +11,7 @@ namespace VRSL.URP.EditorScripts
     /// Bakes the sweep scene into a standalone player that measures the matrix and
     /// quits.
     ///
-    /// R-M0-6 asks for the numbers a results table quotes to come from a player. The
+    /// The numbers a results table quotes should come from a player. The
     /// editor can produce a GPU-basis matrix and batch mode cannot — FrameTimingManager
     /// returns a GPU time of exactly zero there — so without this the only quotable run
     /// is one somebody sat through in the editor window.

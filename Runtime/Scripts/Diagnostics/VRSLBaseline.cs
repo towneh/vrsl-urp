@@ -82,7 +82,7 @@ namespace VRSL.URP
 
         /// <summary>The line a headless run is judged on. A runner that exits
         /// successfully having measured nothing is worse than no runner, so this is
-        /// what <c>bench.sh</c> requires to be present in the log.</summary>
+        /// what a script driving the run looks for in the log.</summary>
         public string VerdictLine =>
             $"VRSL BENCH VERDICT: {rows.Count} row(s), "
           + $"{Count(VRSLVerdict.Unchanged)} unchanged, "
@@ -111,7 +111,7 @@ namespace VRSL.URP
         /// travel between machines, because <see cref="Compare"/> refuses on an
         /// environment mismatch. Anywhere but the machine that produced it the answer is
         /// a refusal naming the difference, not a wrong number — which is why this can be
-        /// a default where a committed reference image cannot.</para>
+        /// a default where a stored reference image cannot.</para>
         /// </summary>
         public static string ReferencePath => ReferenceFor(
             SystemInfo.graphicsDeviceName, VRSLBenchmarkEnvironment.LocalContext);

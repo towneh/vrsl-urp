@@ -15,8 +15,8 @@ namespace VRSL.URP
     /// <summary>
     /// The standard sweep's capture loop.
     ///
-    /// In the runtime assembly because R-M0-6 asks for runs in a built player as well
-    /// as in the editor, and the player is the context whose numbers get quoted — batch
+    /// In the runtime assembly because the sweep runs in a built player as well as in
+    /// the editor, and the player is the context whose numbers get quoted — batch
     /// mode has no GPU clock, so the editor window and a built player are the only two
     /// things that can produce a GPU-basis matrix at all. Two copies of this loop would
     /// be two things to keep agreeing with each other, so there is one and each host

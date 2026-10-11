@@ -191,7 +191,7 @@ namespace VRSL.URP
         // ── Where reference images live ───────────────────────────────────────
 
         /// <summary>
-        /// The programme repo's reference frames, or null.
+        /// The reference frames in the folder <c>VRSL_PERF_HOME</c> names, or null.
         ///
         /// Located through <c>VRSL_PERF_HOME</c> so only the reference machine and any
         /// future CI take that path. A consuming project has no reason to hold one
@@ -213,7 +213,7 @@ namespace VRSL.URP
         /// <summary>
         /// Where the previous local capture of a row is kept.
         ///
-        /// This is the default comparison, not the committed reference: two GPUs will
+        /// This is the default comparison, not a stored reference: two GPUs will
         /// not produce identical frames, so a committed image is a false-failure
         /// machine everywhere except where it was made. Comparing against this
         /// machine's own last capture is also what the tool is actually for — land a
@@ -257,7 +257,7 @@ namespace VRSL.URP
         /// <summary>
         /// Shift an image by one pixel.
         ///
-        /// A-M0-4 asks whether the comparison catches a one-pixel offset in the
+        /// I3 asks whether the comparison catches a one-pixel offset in the
         /// volumetric upsample. Seeding that fault in the shader would mean a debug
         /// keyword in shipped code and a variant to compile, for a test's benefit; the
         /// claim being made is about the comparator's sensitivity, and this exercises

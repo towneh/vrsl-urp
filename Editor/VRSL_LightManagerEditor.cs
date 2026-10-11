@@ -290,9 +290,9 @@ namespace VRSL.URP.EditorScripts
         /// Fill what is empty and say what happened, on however many managers are
         /// selected.
         ///
-        /// It reports rather than acting in silence: a component that quietly fixes
+        /// It reports rather than acting in silence: a component that silently fixes
         /// itself is one whose author never learns their scene was wrong, which is the
-        /// first risk this milestone carries.
+        /// main risk in letting a manager wire itself.
         ///
         /// <para>A dialog only when something could not be filled, because
         /// <c>EditorUtility.DisplayDialog</c> draws a warning icon whatever the message

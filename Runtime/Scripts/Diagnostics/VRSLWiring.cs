@@ -1,5 +1,5 @@
 // Editor-only in substance: resolution reads the AssetDatabase, which a player has no
-// equivalent of, and R-M7-1 wants the resolved reference serialised so a built player
+// equivalent of, and the resolved reference is serialised so a built player
 // never looks anything up. It lives in the runtime assembly regardless, because the suite
 // reaches it and the test assembly does not reference the editor one — the same
 // arrangement VRSLBenchmarkScene uses for the same reason.
@@ -28,7 +28,7 @@ namespace VRSL.URP
         /// What the author will see when the field is empty.
         ///
         /// The consequence, not the cause. "Every surface lights as flat grey" is the
-        /// register R-M7-5 asks for; "surfacePropertiesShader is null" is the thing it
+        /// register to write in; "surfacePropertiesShader is null" is the thing it
         /// exists to replace, and the field name belongs after the consequence rather
         /// than instead of it.
         /// </summary>
@@ -55,7 +55,7 @@ namespace VRSL.URP
     /// is a supported configuration, so a name search would not merely be fragile here —
     /// it would resolve to the other package's assets, and a manager reading the legacy
     /// decode chain reports green on every diagnostic while every channel decodes zero.
-    /// That is the exact fault this milestone exists to remove.
+    /// That is the fault this table exists to prevent.
     /// </summary>
     static class VRSLWiring
     {
@@ -163,7 +163,7 @@ namespace VRSL.URP
         /// <summary>
         /// Fill every empty wiring field on a manager.
         ///
-        /// <b>Empty ones only.</b> R-M7-3: a value an author set is theirs, however
+        /// <b>Empty ones only.</b> A value an author set is theirs, however
         /// unusual it looks, and a resolver that enforced opinions would be a worse
         /// problem than the one it fixes. This fills gaps and nothing else.
         /// </summary>
@@ -232,7 +232,7 @@ namespace VRSL.URP
         /// never released it — the benchmark rows open a session on a manager they are
         /// about to destroy, so restoring fields on it is pointless — left automatic
         /// resolution dead for every later row in the process. It failed silently, which
-        /// is the exact class of fault this milestone exists to remove. Scoped to one
+        /// is the kind of fault self-wiring exists to prevent. Scoped to one
         /// manager, a leak dies with that manager.
         /// </summary>
         public static System.IDisposable SuppressAutoResolve(Object manager) =>
@@ -266,7 +266,7 @@ namespace VRSL.URP
         /// Resolution as a manager's enable calls it.
         ///
         /// Says what it filled, rather than fixing the scene in silence. The risk this
-        /// milestone carries is that a manager which quietly repairs itself is one whose
+        /// design carries is that a manager which silently repairs itself is one whose
         /// author never learns their scene was wrong, and one line in the Console when
         /// something was actually empty is the cheapest answer to it. Nothing is logged
         /// on the ordinary case where there was nothing to do.
@@ -385,7 +385,7 @@ namespace VRSL.URP
         public bool ChangedAnything => Filled.Count > 0;
 
         /// <summary>
-        /// What to tell the author, in the register R-M7-5 asks for: what they would
+        /// What to tell the author: what they would
         /// have seen, then which field it was.
         ///
         /// Reported rather than done in silence, because a manager that quietly fixes

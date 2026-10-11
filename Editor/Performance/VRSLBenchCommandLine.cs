@@ -12,10 +12,9 @@ namespace VRSL.URP.EditorScripts
     /// It compares rather than captures, and that is deliberate. Batch mode has no
     /// GPU clock — <c>FrameTimingManager</c> returns a real CPU frame time there and
     /// a GPU time of exactly zero — so a headless capture produces CPU-basis figures
-    /// that are not the ones a milestone quotes. What headless can do perfectly well
+    /// that are not the ones a results table quotes. What headless can do perfectly well
     /// is adjudicate: the verdict comes from <see cref="VRSLBaseline.Compare"/>,
     /// which is the same code the editor window calls, so the two cannot disagree.
-    /// That is A-M0-6 satisfied by construction rather than by testing.
     /// </summary>
     static class VRSLBenchCommandLine
     {
@@ -70,7 +69,7 @@ namespace VRSL.URP.EditorScripts
                                  + (string.IsNullOrEmpty(home)
                                         ? "VRSL_PERF_HOME is not set."
                                         : $"VRSL_PERF_HOME is {home}, which holds no baseline.json.")
-                                 + " Set it to the programme folder, or pass -baseline <run.json>.");
+                                 + " Set it to the folder holding baseline.json, or pass -baseline <run.json>.");
                     return;
                 }
 
@@ -116,7 +115,7 @@ namespace VRSL.URP.EditorScripts
                         Debug.Log("[VRSL bench]     counters: " + string.Join(", ", row.counterChanges));
                 }
 
-                // The line the shell script requires to be present. A runner that exits
+                // The line a script driving the run looks for. A runner that exits
                 // successfully having compared nothing is worse than no runner, so the
                 // script fails when this is absent rather than trusting the exit code.
                 Debug.Log("[VRSL bench] " + comparison.VerdictLine);

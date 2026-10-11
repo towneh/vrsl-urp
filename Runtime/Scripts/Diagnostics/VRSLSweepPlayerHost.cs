@@ -7,8 +7,8 @@ namespace VRSL.URP
     /// <summary>
     /// Runs the standard sweep in a built player and quits.
     ///
-    /// R-M0-6 wants the numbers a results table quotes to come from a player rather
-    /// than the editor, and batch mode cannot stand in: FrameTimingManager returns a
+    /// The numbers a results table quotes should come from a player rather than the
+    /// editor, and batch mode cannot stand in: FrameTimingManager returns a
     /// GPU time of exactly zero there, so a headless capture is CPU-basis whatever
     /// else is true of it. A player with a window has a real GPU clock.
     ///

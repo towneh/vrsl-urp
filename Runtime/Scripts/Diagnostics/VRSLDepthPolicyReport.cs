@@ -17,8 +17,8 @@ namespace VRSL.URP
     /// beside the menu item in Editor/, for one reason: the package's test assembly does
     /// not reference the editor assembly, and the suite runs PlayMode only. A row written
     /// against an editor-only assembly would need a second test assembly and a second
-    /// runner invocation, and the runner script is not committed — so that row would
-    /// quietly never run, which is the failure mode this milestone has already been bitten
+    /// runner invocation, and so that row would
+    /// go unrun without anyone noticing, which this package has been caught out
     /// by once. Same shape and same reason as VRSLWiring.
     ///
     /// Reading the mask stays in the editor code, because it needs SerializedObject. What

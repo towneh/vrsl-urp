@@ -417,7 +417,7 @@ namespace VRSL.URP.EditorScripts
         /// Shaders in the scene that render opaque and are missing a depth pass.
         ///
         /// The opaque range is where the prepass runs, so a shader below 2500 without
-        /// both passes is the failure this milestone is about. Above it, the prepass
+        /// both passes is the failure this check is for. Above it, the prepass
         /// never invokes them and their absence means nothing.
         ///
         /// A shader qualifies by being one this package ships, or by being on a renderer
