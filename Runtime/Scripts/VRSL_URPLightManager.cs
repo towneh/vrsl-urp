@@ -29,7 +29,7 @@ namespace VRSL.URP
     /// textures, compute and shaders fill themselves in.
     /// </summary>
     [AddComponentMenu("VRSL/URP Light Manager")]
-    public class VRSL_URPLightManager : MonoBehaviour, IVRSLLightSource
+    public class VRSL_URPLightManager : MonoBehaviour, IVRSLLightManager
     {
         public static VRSL_URPLightManager Instance { get; private set; }
 
@@ -482,6 +482,21 @@ namespace VRSL.URP
         /// <summary>Per-tile light culling for the current camera. Null until the
         /// passes are allocated, and inert when <c>lightCullShader</c> is unassigned.</summary>
         public VRSLTileCullPass TileCullPass => _tileCullPass;
+
+        bool IVRSLLightManager.OwnsSingleton => Instance == this;
+        VRSLQuality IVRSLLightManager.QualitySetting { get => quality; set => quality = value; }
+        float IVRSLLightManager.LightIntensity { get => lightIntensity; set => lightIntensity = value; }
+        float IVRSLLightManager.VolumetricIntensity { get => volumetricIntensity; set => volumetricIntensity = value; }
+        SecondaryCameraMode IVRSLLightManager.SecondaryCameraMode => secondaryCameraMode;
+        bool IVRSLLightManager.ForceOwnNormals => forceOwnNormals;
+        LayerMask IVRSLLightManager.PrepassLayers => prepassLayers;
+        string IVRSLLightManager.DarkFixturesReason =>
+            ChannelCount > 0
+                ? "A channel source is publishing, so the values are reaching the buffer but "
+                + "not the fixtures — check the patch."
+            : dmxInput == VRSLDmxInput.StreamData
+                ? "DMX Input is Stream data and nothing is sending it, so the lights are dark."
+                : "The CRT decode chain has nothing feeding it, so every channel reads zero.";
 
 #if UNITY_EDITOR
         // Called by Unity when the component is first added or the context-menu Reset is chosen.

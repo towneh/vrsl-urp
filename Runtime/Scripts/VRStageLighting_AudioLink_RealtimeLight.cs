@@ -16,7 +16,7 @@ namespace VRSL.URP
     /// so animations driving the pan/tilt hierarchy automatically drive the light direction.
     /// </summary>
     [AddComponentMenu("VRSL/AudioLink Realtime Light")]
-    public class VRStageLighting_AudioLink_RealtimeLight : MonoBehaviour
+    public class VRStageLighting_AudioLink_RealtimeLight : MonoBehaviour, IVRSLRealtimeLight
     {
         // ── Fixture type ──────────────────────────────────────────────────────
         [Tooltip("Selects the fixture archetype this component represents. Drives "
@@ -120,6 +120,9 @@ namespace VRSL.URP
         [Tooltip("Global intensity scalar applied on top of Final Intensity. Useful for "
                + "scene-wide dimming without adjusting every fixture individually.")]
         public float globalIntensity = 1f;
+
+        bool IVRSLRealtimeLight.IsDiscoball => fixtureType == AudioLinkFixtureType.Discoball;
+        float IVRSLRealtimeLight.GlobalIntensity { get => globalIntensity; set => globalIntensity = value; }
 
         // ── Pan / Tilt ────────────────────────────────────────────────────────
         [Tooltip("Enable per-frame world transform read for moving-head direction. "

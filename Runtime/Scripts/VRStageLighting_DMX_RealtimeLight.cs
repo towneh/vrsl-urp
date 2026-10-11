@@ -19,7 +19,7 @@ namespace VRSL.URP
     ///   +8  Green            +9  Blue             +10 Gobo spin       +11 Gobo select
     /// </summary>
     [AddComponentMenu("VRSL/DMX Realtime Light")]
-    public class VRStageLighting_DMX_RealtimeLight : MonoBehaviour
+    public class VRStageLighting_DMX_RealtimeLight : MonoBehaviour, IVRSLRealtimeLight
     {
         // ──────────────────────────────────────────────────────────────────────────
         // Fixture type — drives inspector field visibility
@@ -79,6 +79,9 @@ namespace VRSL.URP
         [Tooltip("Global intensity scalar applied on top of Final Intensity. Useful for "
                + "scene-wide dimming without adjusting every fixture individually.")]
         public float globalIntensity = 1f;
+
+        bool IVRSLRealtimeLight.IsDiscoball => fixtureType == DMXFixtureType.Discoball;
+        float IVRSLRealtimeLight.GlobalIntensity { get => globalIntensity; set => globalIntensity = value; }
 
         [Tooltip("Dimmer-response curve, matched to the body-glow surface's _CurveMod. The "
                + "surface emission scales as dimmer² × (1 + (curveMod-1)·dimmer); "

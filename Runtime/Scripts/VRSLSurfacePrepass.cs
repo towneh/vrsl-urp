@@ -44,7 +44,7 @@ namespace VRSL.URP
     /// the neutral fallback too (<see cref="GpuResidentDrawerConfigured"/>).
     ///
     /// Both <see cref="VRSL_URPLightManager"/> (DMX) and
-    /// <see cref="VRSL_AudioLinkURPLightManager"/> (AudioLink) instantiate this
+    /// <c>VRSL_AudioLinkURPLightManager</c> (AudioLink) instantiate this
     /// pass, but only one enqueues it per camera: the output is identical either
     /// way, so the DMX manager owns it and the AudioLink manager defers while a
     /// DMX manager is present, enabled and drawing fixtures through that camera.

@@ -37,11 +37,8 @@ namespace VRSL.URP
     {
         [Header("Light managers")]
         [Tooltip("The DMX light manager this panel adjusts. Leave empty to use the one in "
-               + "the scene.")]
+               + "the scene. Any other VRSL light manager in the scene is adjusted as well.")]
         public VRSL_URPLightManager dmxManager;
-        [Tooltip("The AudioLink light manager this panel adjusts. Leave empty to use the one "
-               + "in the scene.")]
-        public VRSL_AudioLinkURPLightManager audioLinkManager;
 
         [Header("Quality")]
         [Tooltip("How much the beams cost. High marches them more finely, Standard suits "
@@ -56,10 +53,10 @@ namespace VRSL.URP
         public DefaultQualityModes lensFlareQuality;
         public bool lockLensFlareQualityMode;
 
-        [Header("AudioLink colour sampling")]
-        [Tooltip("A texture for AudioLink fixtures set to sample their colour from a texture, "
-               + "a video feed for instance. Goes to the AudioLink light manager and to any "
-               + "laser material that samples one. Leave empty to change nothing.")]
+        [Header("Colour sampling")]
+        [Tooltip("A texture for fixtures set to take their colour from one, a video feed for "
+               + "instance. Goes to every light manager that samples colour and to any laser "
+               + "material that samples one. Leave empty to change nothing.")]
         public Texture videoSampleTargetTexture;
 
         [Header("Post Processing Animators")]
@@ -112,13 +109,14 @@ namespace VRSL.URP
 
         // Realtime discoballs and what each was authored to, so the discoball slider
         // scales them the way the beam and light sliders scale the managers.
-        readonly List<(VRStageLighting_DMX_RealtimeLight light, float authored)>       _dmxDiscoballs = new();
-        readonly List<(VRStageLighting_AudioLink_RealtimeLight light, float authored)> _alDiscoballs  = new();
+        readonly List<(IVRSLRealtimeLight light, float authored)> _discoballs = new();
+        bool _dmxDiscoballs;
 
         // What the managers were authored to, so the sliders scale the scene's own values
-        // rather than replacing them.
+        // rather than replacing them. The DMX manager is held by type for its DMX-only
+        // switches; every other path's manager through the interface.
         float _dmxAuthoredLight = 1f, _dmxAuthoredBeams = 1f;
-        float _alAuthoredLight  = 1f, _alAuthoredBeams  = 1f;
+        readonly List<(IVRSLLightManager manager, float light, float beams)> _otherManagers = new();
 
         static readonly int s_UniversalIntensity = Shader.PropertyToID("_UniversalIntensity");
         static readonly int s_SamplingTexture    = Shader.PropertyToID("_SamplingTexture");
@@ -163,7 +161,7 @@ namespace VRSL.URP
         void AdoptManagerQuality()
         {
             var source = dmxManager != null ? dmxManager.quality
-                       : audioLinkManager != null ? audioLinkManager.quality
+                       : _otherManagers.Count > 0 ? _otherManagers[0].manager.QualitySetting
                        : (VRSLQuality?)null;
             if (source == null) return;
             switch (source.Value)
@@ -175,17 +173,21 @@ namespace VRSL.URP
         }
 
         /// <summary>Find the managers when none is assigned. Safe to call again; it only
-        /// fills empty references.</summary>
+        /// fills empty references, and adds a manager for a path it doesn't hold yet
+        /// without touching the authored values of the ones it has.</summary>
         public void ResolveManagers()
         {
             if (dmxManager == null)
                 dmxManager = VRSL_URPLightManager.Instance != null
                     ? VRSL_URPLightManager.Instance
                     : FindAnyObjectByType<VRSL_URPLightManager>();
-            if (audioLinkManager == null)
-                audioLinkManager = VRSL_AudioLinkURPLightManager.Instance != null
-                    ? VRSL_AudioLinkURPLightManager.Instance
-                    : FindAnyObjectByType<VRSL_AudioLinkURPLightManager>();
+            _otherManagers.RemoveAll(m => !VRSLLightPaths.IsAlive(m.manager));
+            foreach (var m in VRSLLightPaths.OtherManagers(ownerOnly: false))
+            {
+                var path = VRSLLightPaths.Of(m);
+                if (!_otherManagers.Exists(held => VRSLLightPaths.Of(held.manager) == path))
+                    _otherManagers.Add((m, m.LightIntensity, m.VolumetricIntensity));
+            }
         }
 
         /// <summary>Remember what the managers were authored to, once, before any slider
@@ -197,10 +199,10 @@ namespace VRSL.URP
                 _dmxAuthoredLight = dmxManager.lightIntensity;
                 _dmxAuthoredBeams = dmxManager.volumetricIntensity;
             }
-            if (audioLinkManager != null)
+            for (int i = 0; i < _otherManagers.Count; i++)
             {
-                _alAuthoredLight = audioLinkManager.lightIntensity;
-                _alAuthoredBeams = audioLinkManager.volumetricIntensity;
+                var m = _otherManagers[i].manager;
+                _otherManagers[i] = (m, m.LightIntensity, m.VolumetricIntensity);
             }
         }
 
@@ -212,13 +214,15 @@ namespace VRSL.URP
             _fixtureMaterials.Clear();
             _lensFlareMaterials.Clear();
             _laserMaterials.Clear();
-            _dmxDiscoballs.Clear();
-            _alDiscoballs.Clear();
+            _discoballs.Clear();
+            _dmxDiscoballs = false;
 
-            foreach (var f in FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Include))
-                if (f.fixtureType == DMXFixtureType.Discoball) _dmxDiscoballs.Add((f, f.globalIntensity));
-            foreach (var f in FindObjectsByType<VRStageLighting_AudioLink_RealtimeLight>(FindObjectsInactive.Include))
-                if (f.fixtureType == AudioLinkFixtureType.Discoball) _alDiscoballs.Add((f, f.globalIntensity));
+            foreach (var light in VRSLLightPaths.RealtimeLights(FindObjectsInactive.Include))
+            {
+                if (!light.IsDiscoball) continue;
+                _discoballs.Add((light, light.GlobalIntensity));
+                _dmxDiscoballs |= light is VRStageLighting_DMX_RealtimeLight;
+            }
 
             var seen = new HashSet<Material>();
             foreach (var renderer in FindObjectsByType<Renderer>(FindObjectsInactive.Include))
@@ -382,10 +386,9 @@ namespace VRSL.URP
             {
                 return;
             }
-            if (audioLinkManager != null)
-            {
-                audioLinkManager.samplingTexture = videoSampleTargetTexture;
-            }
+            foreach (var (manager, _, _) in _otherManagers)
+                if (VRSLLightPaths.IsAlive(manager) && manager is IVRSLSamplingTextureTarget target)
+                    target.SamplingTexture = videoSampleTargetTexture;
             foreach (Material m in _laserMaterials)
             {
                 if (m.HasProperty(s_SamplingTexture))
@@ -431,19 +434,20 @@ namespace VRSL.URP
                 fixtureSliderText.text = Mathf.Round(fixtureSlider.value * 100.0f).ToString();
         }
 
-        /// <summary>The beams, on both managers, as a share of what the scene was
+        /// <summary>The beams, on every manager, as a share of what the scene was
         /// authored to.</summary>
         public void _SetVolumetricIntensity()
         {
             if (volumetricSlider == null) return;
             float scale = Mathf.Lerp(0.0f, volumetricIntensityMax, volumetricSlider.value);
             if (dmxManager != null) dmxManager.volumetricIntensity = _dmxAuthoredBeams * scale;
-            if (audioLinkManager != null) audioLinkManager.volumetricIntensity = _alAuthoredBeams * scale;
+            foreach (var (manager, _, beams) in _otherManagers)
+                if (VRSLLightPaths.IsAlive(manager)) manager.VolumetricIntensity = beams * scale;
             if (volumetricSliderText != null)
                 volumetricSliderText.text = Mathf.Round(volumetricSlider.value * 100.0f).ToString();
         }
 
-        /// <summary>The light the fixtures cast, on both managers, as a share of what the
+        /// <summary>The light the fixtures cast, on every manager, as a share of what the
         /// scene was authored to. The beams follow it, since they are the same light.</summary>
         public void _SetLightIntensity()
         {
@@ -454,7 +458,8 @@ namespace VRSL.URP
                 dmxManager.lightIntensity = _dmxAuthoredLight * scale;
                 dmxManager.MarkConfigDirty();
             }
-            if (audioLinkManager != null) audioLinkManager.lightIntensity = _alAuthoredLight * scale;
+            foreach (var (manager, light, _) in _otherManagers)
+                if (VRSLLightPaths.IsAlive(manager)) manager.LightIntensity = light * scale;
             if (lightSliderText != null)
                 lightSliderText.text = Mathf.Round(lightSlider.value * 100.0f).ToString();
         }
@@ -464,11 +469,9 @@ namespace VRSL.URP
         {
             if (discoBallSlider == null) return;
             float value = Mathf.Lerp(0.0f, discoballIntensityMax, discoBallSlider.value);
-            foreach (var (light, authored) in _dmxDiscoballs)
-                if (light != null) light.globalIntensity = authored * value;
-            foreach (var (light, authored) in _alDiscoballs)
-                if (light != null) light.globalIntensity = authored * value;
-            if (_dmxDiscoballs.Count > 0 && dmxManager != null) dmxManager.MarkConfigDirty();
+            foreach (var (light, authored) in _discoballs)
+                if (VRSLLightPaths.IsAlive(light)) light.GlobalIntensity = authored * value;
+            if (_dmxDiscoballs && dmxManager != null) dmxManager.MarkConfigDirty();
             if (discoBallSliderText != null)
                 discoBallSliderText.text = Mathf.Round(discoBallSlider.value * 100.0f).ToString();
         }
@@ -514,7 +517,8 @@ namespace VRSL.URP
         {
             var quality = ToManagerQuality(volumetricQuality);
             if (dmxManager != null) dmxManager.quality = quality;
-            if (audioLinkManager != null) audioLinkManager.quality = quality;
+            foreach (var (manager, _, _) in _otherManagers)
+                if (VRSLLightPaths.IsAlive(manager)) manager.QualitySetting = quality;
         }
 
         // The lens flares are shader fixtures with a blended mode and a dithered,
@@ -551,6 +555,14 @@ namespace VRSL.URP
             foreach (var list in new[] { _fixtureMaterials, _lensFlareMaterials, _laserMaterials })
                 foreach (var mat in list)
                     UnityEditor.EditorUtility.SetDirty(mat);
+        }
+
+        /// <summary>The same for the managers the panel adjusted.</summary>
+        public void MarkManagersDirty()
+        {
+            if (dmxManager != null) UnityEditor.EditorUtility.SetDirty(dmxManager);
+            foreach (var (manager, _, _) in _otherManagers)
+                if (manager is Object o && o != null) UnityEditor.EditorUtility.SetDirty(o);
         }
 #endif
 
@@ -621,14 +633,16 @@ namespace VRSL.URP
 
         static string ManagerStatus(VRSL_LocalUIControlPanel panel)
         {
-            var dmx = panel.dmxManager != null ? panel.dmxManager : Object.FindAnyObjectByType<VRSL_URPLightManager>();
-            var al  = panel.audioLinkManager != null ? panel.audioLinkManager : Object.FindAnyObjectByType<VRSL_AudioLinkURPLightManager>();
-            if (dmx == null && al == null)
+            var dmx    = panel.dmxManager != null ? panel.dmxManager : Object.FindAnyObjectByType<VRSL_URPLightManager>();
+            var others = VRSLLightPaths.OtherManagers(ownerOnly: false);
+            if (dmx == null && others.Count == 0)
                 return "No URP light manager in this scene. The beam quality buttons and the "
                      + "light and beam sliders will do nothing until one is added.";
             var parts = new List<string>();
             if (dmx != null) parts.Add("the DMX manager '" + dmx.name + "'");
-            if (al != null)  parts.Add("the AudioLink manager '" + al.name + "'");
+            foreach (var other in others)
+                if (other is Object o)
+                    parts.Add($"the {VRSLLightPaths.NameOf(other)} manager '{o.name}'");
             return "Adjusts " + string.Join(" and ", parts) + " for the local user.";
         }
 
@@ -642,14 +656,14 @@ namespace VRSL.URP
             VRSL_LocalUIControlPanel controlPanel = (VRSL_LocalUIControlPanel)target;
             EditorGUILayout.HelpBox(ManagerStatus(controlPanel), MessageType.Info);
             EditorGUILayout.Space();
-            if (GUILayout.Button(new GUIContent("Send Sample Texture To AudioLink Fixtures",
-                    "Hands the sample texture above to the AudioLink light manager and to any laser material that samples one.")))
+            if (GUILayout.Button(new GUIContent("Send Sample Texture To Fixtures",
+                    "Hands the sample texture above to every light manager that samples colour and to any laser material that samples one.")))
             {
                 controlPanel.ResolveManagers();
                 controlPanel.CollectMaterials();
                 controlPanel._ForceUpdateVideoSampleTexture();
                 controlPanel.MarkMaterialsDirty();
-                if (controlPanel.audioLinkManager != null) EditorUtility.SetDirty(controlPanel.audioLinkManager);
+                controlPanel.MarkManagersDirty();
             }
             EditorGUILayout.Space();
             if (GUILayout.Button(new GUIContent("Apply Quality Settings Now",
@@ -659,8 +673,7 @@ namespace VRSL.URP
                 controlPanel.CollectMaterials();
                 controlPanel._UpdateAllQualityModes();
                 controlPanel.MarkMaterialsDirty();
-                if (controlPanel.dmxManager != null) EditorUtility.SetDirty(controlPanel.dmxManager);
-                if (controlPanel.audioLinkManager != null) EditorUtility.SetDirty(controlPanel.audioLinkManager);
+                controlPanel.MarkManagersDirty();
             }
             EditorGUILayout.Space();
             base.OnInspectorGUI();

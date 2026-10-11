@@ -25,7 +25,8 @@ namespace VRSL.URP
     /// VRSLAudioLinkLightUpdate compute shader and Hidden/VRSL-URP/DeferredLighting shader.
     /// </summary>
     [AddComponentMenu("VRSL/AudioLink URP Light Manager")]
-    public class VRSL_AudioLinkURPLightManager : MonoBehaviour, IVRSLLightSource
+    public class VRSL_AudioLinkURPLightManager : MonoBehaviour, IVRSLLightManager,
+                                                 IVRSLSamplingTextureTarget
     {
         public static VRSL_AudioLinkURPLightManager Instance { get; private set; }
 
@@ -318,6 +319,69 @@ namespace VRSL.URP
         /// <summary>Per-tile light culling for the current camera. Null until the
         /// passes are allocated, and inert when <c>lightCullShader</c> is unassigned.</summary>
         public VRSLTileCullPass TileCullPass => _tileCullPass;
+
+        bool IVRSLLightManager.OwnsSingleton => Instance == this;
+        VRSLQuality IVRSLLightManager.QualitySetting { get => quality; set => quality = value; }
+        float IVRSLLightManager.LightIntensity { get => lightIntensity; set => lightIntensity = value; }
+        float IVRSLLightManager.VolumetricIntensity { get => volumetricIntensity; set => volumetricIntensity = value; }
+        SecondaryCameraMode IVRSLLightManager.SecondaryCameraMode => secondaryCameraMode;
+        bool IVRSLLightManager.ForceOwnNormals => forceOwnNormals;
+        LayerMask IVRSLLightManager.PrepassLayers => prepassLayers;
+        string IVRSLLightManager.DarkFixturesReason =>
+            "Nothing is driving the AudioLink bands, so every fixture reads zero — play "
+            + "audio into AudioLink before quoting these figures.";
+        Texture IVRSLSamplingTextureTarget.SamplingTexture { set => samplingTexture = value; }
+
+        // ── Registration with the package's tools ─────────────────────────────
+
+        static readonly VRSLLightPath s_Path = new("AudioLink",
+            typeof(VRSL_AudioLinkURPLightManager), typeof(VRStageLighting_AudioLink_RealtimeLight));
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// The five wiring fields. Four are the same assets the DMX manager uses —
+        /// the cull, the lighting, the prepass and the volumetric are shared — and only
+        /// the compute differs.
+        ///
+        /// <c>samplingTexture</c> is deliberately not here. It accepts any texture, falls
+        /// back to AudioLink's own atlas when empty, and is a palette an author chooses:
+        /// content rather than wiring, like <c>goboTextures</c>.
+        /// </summary>
+        internal static readonly VRSLWiringField[] WiringFields =
+        {
+            new() { Field = "computeShader",
+                    Guid  = "b62eba04b10a6cc19700ff31693a9066",
+                    Consequence = "nothing lights at all" },
+            new() { Optional = true, Field = "lightCullShader",
+                    Guid  = "5f41dc4adb8e42f8937cb0064c39ea17",
+                    Consequence = "the picture is right and every pixel pays for every "
+                                + "fixture on screen" },
+            new() { Field = "lightingShader",
+                    Guid  = "d8c757279dc0dc7ff544149ea9f3e897",
+                    Consequence = "no light lands on surfaces" },
+            new() { Optional = true, Field = "surfacePropertiesShader",
+                    Guid  = "5e926720f16a403487984bfa2578e36f",
+                    Consequence = "every surface lights as flat grey, whatever colour it is" },
+            new() { Optional = true, Field = "volumetricShader",
+                    Guid  = "ee4b25e5a146ba8b36ed731b36047774",
+                    Consequence = "no beams in the air" },
+        };
+#endif
+
+        /// <summary>Tell the benchmark, the presets, the control panel, validation and
+        /// wiring that this path exists. Both hooks, because the editor and a player
+        /// each run only one of them.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+#if UNITY_EDITOR
+        [UnityEditor.InitializeOnLoadMethod]
+#endif
+        static void RegisterPath()
+        {
+            VRSLLightPaths.Register(s_Path);
+#if UNITY_EDITOR
+            VRSLWiring.Register(typeof(VRSL_AudioLinkURPLightManager), WiringFields);
+#endif
+        }
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
         void Awake()

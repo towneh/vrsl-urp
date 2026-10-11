@@ -438,7 +438,9 @@ namespace VRSL.URP
             "VRSL Normals Prepass",
             "VRSL Tile Light Cull",
             VRSL_URPLightManager.DecodeMarker,
-            VRSL_AudioLinkURPLightManager.DecodeMarker,
+            // The AudioLink manager's DecodeMarker, spelt out because that manager is in
+            // an optional assembly; a row there checks the two agree.
+            "VRSL AudioLink Light Compute",
             "VRSL Lighting Pass",
             "VRSL AudioLink Lighting Pass",
             "VRSL Vol Depth Downsample",
@@ -462,7 +464,9 @@ namespace VRSL.URP
 
             public int Count => _managers.Count;
             public VRSL_URPLightManager Dmx { get; private set; }
-            public VRSL_AudioLinkURPLightManager AudioLink { get; private set; }
+            /// <summary>The running manager of the other path (AudioLink), when its
+            /// integration is installed and one is in the scene.</summary>
+            internal IVRSLLightManager Other { get; private set; }
 
             public static ManagerSet Find()
             {
@@ -470,8 +474,8 @@ namespace VRSL.URP
                 var dmx = VRSL_URPLightManager.Instance;
                 if (dmx != null) { set.Track(dmx); set.Dmx = dmx; }
 
-                var al = VRSL_AudioLinkURPLightManager.Instance;
-                if (al != null) { set.Track(al); set.AudioLink = al; }
+                var other = VRSLLightPaths.RunningOther();
+                if (other is Behaviour behaviour) { set.Track(behaviour); set.Other = other; }
                 return set;
             }
 
@@ -485,8 +489,8 @@ namespace VRSL.URP
             /// <see cref="VRSLVolumetricStatsProbe"/> for the two-frame turnaround.</summary>
             public void RequestVolumetricStats()
             {
-                if (Dmx       != null) Dmx.VolumetricStats.Request();
-                if (AudioLink != null) AudioLink.VolumetricStats.Request();
+                if (Dmx   != null) Dmx.VolumetricStats.Request();
+                if (VRSLLightPaths.IsAlive(Other)) Other.VolumetricStats.Request();
             }
 
             public void SetEnabled(bool on)
@@ -687,15 +691,15 @@ namespace VRSL.URP
         ///
         /// A single empty manager still wins, because there is no other path to name.
         /// </summary>
-        internal static bool MeasureDmxPath(bool hasDmx, int dmxFixtures, bool hasAudioLink) =>
-            hasDmx && (!hasAudioLink || dmxFixtures > 0);
+        internal static bool MeasureDmxPath(bool hasDmx, int dmxFixtures, bool hasOther) =>
+            hasDmx && (!hasOther || dmxFixtures > 0);
 
         static void ReadCounters(ManagerSet managers, VRSLCounters counters,
                                  VRSLBenchmarkRun run, Camera expectedTileCamera)
         {
-            var dmx       = managers.Dmx;
-            var audioLink = managers.AudioLink;
-            if (dmx == null && audioLink == null) return;
+            var dmx   = managers.Dmx;
+            var other = VRSLLightPaths.IsAlive(managers.Other) ? managers.Other : null;
+            if (dmx == null && other == null) return;
 
             // Reading the DMX manager alone left every counter at its default on an
             // AudioLink scene, and the summary presents defaults as findings: it
@@ -703,38 +707,37 @@ namespace VRSL.URP
             // the cull was running and the per-pass table said so. Silence would have
             // been better than that; either is worse than reading the manager present.
             counters.fixtures = (dmx != null ? dmx.FixtureCount : 0)
-                              + (audioLink != null ? audioLink.FixtureCount : 0);
+                              + (other != null ? other.FixtureCount : 0);
 
             // Whichever path is present, DMX first where both are. The tile and step
             // figures below describe one cull pass and one volumetric material, and
             // merging two of each would produce an average of two different scenes.
             bool useDmx = MeasureDmxPath(dmx != null, dmx != null ? dmx.FixtureCount : 0,
-                                         audioLink != null);
+                                         other != null);
+            IVRSLLightManager measured = useDmx ? dmx : other;
 
             // The denominator those figures actually have, recorded beside them.
             // Without it a reader holds a coverage average over one path and a
             // fixture count over both, with nothing saying the two do not divide.
-            counters.measuredPathFixtures = useDmx ? dmx.FixtureCount : audioLink.FixtureCount;
+            counters.measuredPathFixtures = measured.FixtureCount;
 
             // Named rather than left to be inferred. A reader of the summary should not
             // have to know the precedence rule to know which path a coverage figure is
             // over, and a summary that restates the rule can disagree with the counters
             // that applied it.
-            counters.measuredPath = useDmx ? "DMX" : "AudioLink";
+            counters.measuredPath = VRSLLightPaths.NameOf(measured);
 
             // Zero when the volumetric pass is not being enqueued at all, rather than
             // whatever the step field still says. The manager only enqueues the pass
             // where it holds a volumetric material, so a scene with volumetrics off
             // would otherwise report the step count of a march it never runs — a
             // counter that stays plausible while describing nothing.
-            counters.stepsPerLight =
-                useDmx ? (dmx.VolumetricsEnabled       ? dmx.Quality.VolumetricMaxSteps : 0)
-                       : (audioLink.VolumetricsEnabled ? audioLink.Quality.VolumetricMaxSteps : 0);
+            counters.stepsPerLight = measured.VolumetricsEnabled ? measured.Quality.VolumetricMaxSteps : 0;
 
             // What the march actually took, where a frame of it was collected. Absent
             // rather than zero when it was not: a run where the pass never ran, or a
             // request that no frame answered, must not read as a march of no steps.
-            var volumetric = useDmx ? dmx.VolumetricStats.Last : audioLink.VolumetricStats.Last;
+            var volumetric = measured.VolumetricStats.Last;
             counters.volumetricStatsMeasured  = volumetric.Valid && volumetric.Pixels > 0;
             counters.volumetricStepsPerLight  = counters.volumetricStatsMeasured ? volumetric.StepsPerLight : 0f;
             counters.volumetricLightsPerPixel = counters.volumetricStatsMeasured ? volumetric.LightsPerPixel : 0f;
@@ -744,9 +747,7 @@ namespace VRSL.URP
             // answer rather than a missing one.
             counters.channelCount = dmx != null ? dmx.ChannelCount : 0;
 
-            var emission = useDmx
-                ? VRSLDiagnostics.SummariseEmission(dmx.LightDataBuffer, dmx.FixtureCount)
-                : VRSLDiagnostics.SummariseEmission(audioLink.LightDataBuffer, audioLink.FixtureCount);
+            var emission = VRSLDiagnostics.SummariseEmission(measured.LightDataBuffer, measured.FixtureCount);
             counters.emittingFixtures = emission.Emitting;
             counters.peakIntensity    = emission.Peak;
 
@@ -764,23 +765,12 @@ namespace VRSL.URP
             // renders, still fills a report, and still produces differences that look
             // like measurements. Every one of them is of an empty frame.
             if (emission.Total > 0 && emission.Emitting == 0)
-                run.Note($"{emission.Total} fixture(s) on the "
-                       + (useDmx ? "DMX" : "AudioLink") + " path and NONE of them are "
-                       + "emitting, so this configuration measured an unlit scene. "
-                       + (!useDmx
-                          ? "Nothing is driving the AudioLink bands, so every fixture reads "
-                          + "zero — play audio into AudioLink before quoting these figures."
-                          : dmx.ChannelCount > 0
-                          ? "A channel source is publishing, so the values are reaching the "
-                          + "buffer but not the fixtures — check the patch."
-                          : dmx.dmxInput == VRSLDmxInput.StreamData
-                          ? "DMX Input is Stream data and nothing is sending it, so the lights "
-                          + "are dark."
-                          : "The CRT decode chain has nothing feeding it, so every channel "
-                          + "reads zero."));
+                run.Note($"{emission.Total} fixture(s) on the {counters.measuredPath} path "
+                       + "and NONE of them are emitting, so this configuration measured an "
+                       + "unlit scene. " + measured.DarkFixturesReason);
 
-            var tiles = VRSLDiagnostics.SummariseTiles(useDmx ? dmx.TileCullPass
-                                                              : audioLink.TileCullPass);
+            var cullPass = measured.TileCullPass;
+            var tiles = VRSLDiagnostics.SummariseTiles(cullPass);
             counters.tileCullEngaged      = tiles.Engaged;
             counters.activeTiles          = tiles.Tiles;
             counters.lightsPerTileAverage = tiles.Average;
@@ -788,7 +778,6 @@ namespace VRSL.URP
             counters.emptyTilePercent     = tiles.EmptyPercent;
             counters.cappedTiles          = tiles.Capped;
             counters.droppedFixtureTilePairs = tiles.Dropped;
-            var cullPass = useDmx ? dmx.TileCullPass : audioLink.TileCullPass;
             counters.tilesAcross = cullPass != null ? (int)cullPass.TileParams.x : 0;
             counters.tilesDown   = cullPass != null ? (int)cullPass.TileParams.y : 0;
             counters.tileCamera  = cullPass != null ? cullPass.LastRecordedCamera : null;
@@ -799,15 +788,12 @@ namespace VRSL.URP
             // For the camera the row is about. The manager-wide value is whichever
             // camera set up last, and a host camera on another renderer can be it.
             counters.normalsReuseEngaged = expectedTileCamera != null
-                ? (useDmx ? dmx.UsesUrpNormalsFor(expectedTileCamera)
-                          : audioLink.UsesUrpNormalsFor(expectedTileCamera))
-                : (useDmx ? dmx.UsesUrpNormals : audioLink.UsesUrpNormals);
+                ? measured.UsesUrpNormalsFor(expectedTileCamera)
+                : measured.UsesUrpNormals;
 
             // The level that camera rendered at. A camera rendering into a texture is
             // a secondary camera to the policy, and the sweep's own is one.
-            var level = expectedTileCamera != null
-                ? (useDmx ? dmx.QualityFor(expectedTileCamera) : audioLink.QualityFor(expectedTileCamera))
-                : null;
+            var level = expectedTileCamera != null ? measured.QualityFor(expectedTileCamera) : null;
             counters.cameraQuality = level.HasValue ? level.Value.ToString() : "";
 
             // Recorded as false rather than omitted so the row shape does not change

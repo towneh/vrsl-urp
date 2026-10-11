@@ -374,10 +374,8 @@ namespace VRSL.URP.EditorScripts
             // one, and it was the wrong shape anyway: a large scene has thousands of
             // components and two of them can be asked for directly.
             var managers = new List<Object>();
-            managers.AddRange(Object.FindObjectsByType<VRSL_URPLightManager>(
-                FindObjectsInactive.Include));
-            managers.AddRange(Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                FindObjectsInactive.Include));
+            foreach (var manager in VRSLLightPaths.Managers(FindObjectsInactive.Include))
+                if (manager is Object o) managers.Add(o);
 
             if (managers.Count == 0)
             {

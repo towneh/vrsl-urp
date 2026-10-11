@@ -47,14 +47,33 @@ namespace VRSL.URP.EditorScripts
         const string UPSTREAM_DMX_REALTIME = "VRSL.VRStageLighting_DMX_RealtimeLight";
         const string UPSTREAM_AL_LASER     = "VRSL.VRStageLighting_AudioLink_Laser";
 
-        // Upstream component FullName -> URP twin Type, for the in-place conversion path. Both
+        // This package's AudioLink components live in an assembly that compiles only where
+        // AudioLink is installed, so they are looked up by name too; UrpType answers null
+        // without AudioLink and the AudioLink fixtures are left for a later run.
+        const string URP_DMX_STATIC   = "VRSL.URP.VRStageLighting_DMX_Static";
+        const string URP_AL_STATIC    = "VRSL.URP.VRStageLighting_AudioLink_Static";
+        const string URP_AL_REALTIME  = "VRSL.URP.VRStageLighting_AudioLink_RealtimeLight";
+        const string URP_AL_LASER     = "VRSL.URP.VRStageLighting_AudioLink_Laser";
+
+        // Upstream component FullName -> URP twin FullName, for the in-place conversion path. Both
         // twins keep the upstream field layout, so values copy across by name with no translation.
-        static readonly (string upstreamTypeName, Type urpType)[] IN_PLACE_TYPES = new[]
+        static readonly (string upstreamTypeName, string urpTypeName)[] IN_PLACE_TYPES = new[]
         {
-            (UPSTREAM_DMX_STATIC, typeof(VRStageLighting_DMX_Static)),
-            (UPSTREAM_AL_STATIC,  typeof(VRStageLighting_AudioLink_Static)),
-            (UPSTREAM_AL_LASER,   typeof(VRStageLighting_AudioLink_Laser)),
+            (UPSTREAM_DMX_STATIC, URP_DMX_STATIC),
+            (UPSTREAM_AL_STATIC,  URP_AL_STATIC),
+            (UPSTREAM_AL_LASER,   URP_AL_LASER),
         };
+
+        const string LEFT_FOR_AUDIOLINK =
+            "AudioLink fixtures left as they are, because AudioLink isn't installed. "
+            + "Install AudioLink, then run this again:";
+
+        static Type UrpType(string fullName)
+        {
+            foreach (var t in TypeCache.GetTypesDerivedFrom<MonoBehaviour>())
+                if (t.FullName == fullName) return t;
+            return null;
+        }
 
         // Fields on the modern upstream RealtimeLight components we should NOT copy via name-match
         // because their values are Transform/Renderer references that point inside the source
@@ -84,13 +103,22 @@ namespace VRSL.URP.EditorScripts
             // we just inserted and try to migrate them too.
             var candidates = new List<(GameObject go, VRSLMigrationPair pair)>();
             var unported = new Dictionary<string, int>();
+            var leftForAudioLink = new Dictionary<string, int>();
+            bool audioLinkInstalled = UrpType(URP_AL_REALTIME) != null;
             foreach (var root in scene.GetRootGameObjects())
             {
                 foreach (var t in root.GetComponentsInChildren<Transform>(includeInactive: true))
                 {
                     if (!TryGetSourceGuid(t.gameObject, out string sourceGuid)) continue;
                     if (PAIRS_BY_UPSTREAM_GUID.TryGetValue(sourceGuid, out var pair))
-                        candidates.Add((t.gameObject, pair));
+                    {
+                        if (pair.Kind == VRSLMigrationKind.AudioLink && !audioLinkInstalled)
+                        {
+                            leftForAudioLink.TryGetValue(pair.FriendlyName, out int left);
+                            leftForAudioLink[pair.FriendlyName] = left + 1;
+                        }
+                        else candidates.Add((t.gameObject, pair));
+                    }
                     else if (VRSLMigrationTable.Unported.TryGetValue(sourceGuid, out var name))
                     {
                         unported.TryGetValue(name, out int n);
@@ -145,6 +173,9 @@ namespace VRSL.URP.EditorScripts
             if (unported.Count > 0)
                 summary += "\n\nLeft as they are, no URP prefab exists for them yet:\n" + string.Join("\n",
                     unported.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
+            if (leftForAudioLink.Count > 0)
+                summary += "\n\n" + LEFT_FOR_AUDIOLINK + "\n" + string.Join("\n",
+                    leftForAudioLink.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
 
             Debug.Log("[VRSL Migration] " + summary.Replace("\n", "  "));
             EditorUtility.DisplayDialog("VRSL Migration", summary, "OK");
@@ -179,6 +210,7 @@ namespace VRSL.URP.EditorScripts
 
             // Snapshot first: we add and remove components as we go, so walking live would be unsafe.
             var candidates = new List<(GameObject go, Component upstream, Type urpType)>();
+            int leftForAudioLink = 0;
             foreach (var root in scene.GetRootGameObjects())
             {
                 foreach (var c in root.GetComponentsInChildren<Component>(includeInactive: true))
@@ -187,8 +219,10 @@ namespace VRSL.URP.EditorScripts
                     string typeName = c.GetType().FullName;
                     foreach (var map in IN_PLACE_TYPES)
                     {
-                        if (typeName == map.upstreamTypeName)
-                            candidates.Add((c.gameObject, c, map.urpType));
+                        if (typeName != map.upstreamTypeName) continue;
+                        var urpType = UrpType(map.urpTypeName);
+                        if (urpType != null) candidates.Add((c.gameObject, c, urpType));
+                        else leftForAudioLink++;
                     }
                 }
             }
@@ -233,6 +267,8 @@ namespace VRSL.URP.EditorScripts
             string summary =
                 $"Converted: {converted}\nSkipped (already URP): {skipped}\nErrors: {errors}\n" +
                 $"Materials reshaded: {changedMaterials.Count}";
+            if (leftForAudioLink > 0)
+                summary += $"\n\n{LEFT_FOR_AUDIOLINK}\n  AudioLink fixtures: {leftForAudioLink}";
             Debug.Log("[VRSL In-Place] " + summary.Replace("\n", "  "));
             EditorUtility.DisplayDialog("VRSL In-Place Conversion", summary, "OK");
         }
@@ -337,11 +373,14 @@ namespace VRSL.URP.EditorScripts
 
         static void CopyAudioLinkParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset)
         {
-            var dst = target.GetComponentInChildren<VRStageLighting_AudioLink_RealtimeLight>(includeInactive: true);
+            // Run only finds AudioLink candidates when the realtime light's type resolves.
+            var realtimeType = UrpType(URP_AL_REALTIME);
+            if (realtimeType == null) return;
+            var dst = target.GetComponentInChildren(realtimeType, includeInactive: true);
             if (dst == null)
             {
-                if (!CopyTwinParameters(source, target, UPSTREAM_AL_STATIC, typeof(VRStageLighting_AudioLink_Static)))
-                    CopyTwinParameters(source, target, UPSTREAM_AL_LASER, typeof(VRStageLighting_AudioLink_Laser));
+                if (!CopyTwinParameters(source, target, UPSTREAM_AL_STATIC, UrpType(URP_AL_STATIC)))
+                    CopyTwinParameters(source, target, UPSTREAM_AL_LASER, UrpType(URP_AL_LASER));
                 return;
             }
 
@@ -368,8 +407,9 @@ namespace VRSL.URP.EditorScripts
             CopyField(srcStatic, dst, "targetToFollow");
 
             // Renames
-            dst.emissionColor = ScaledTint(srcStatic, sourceAsset, UPSTREAM_AL_STATIC,
-                targetAsset.GetComponentInChildren<VRStageLighting_AudioLink_RealtimeLight>(true).emissionColor);
+            var urpDefault = ReadField(targetAsset.GetComponentInChildren(realtimeType, true),
+                "emissionColor", Color.white);
+            WriteField(dst, "emissionColor", ScaledTint(srcStatic, sourceAsset, UPSTREAM_AL_STATIC, urpDefault));
             CopyField(srcStatic, dst, srcName: "selectGOBO",     dstName: "goboIndex");
 
             // Spin: only carry over the value when upstream's enableAutoSpin is true,
@@ -387,12 +427,14 @@ namespace VRSL.URP.EditorScripts
             bool trad  = ReadField(srcStatic, "traditionalColorTextureSampling", false);
             int  themeIdx = ReadField(srcStatic, "themeColorTarget", 1);
 
-            ALRealtimeColorMode mode;
-            if (theme)      mode = ALRealtimeColorMode.ThemeColor0 + Mathf.Clamp(themeIdx - 1, 0, 3);
-            else if (chord) mode = ALRealtimeColorMode.ColorChord;
-            else if (tex)   mode = trad ? ALRealtimeColorMode.ColorTextureTraditional : ALRealtimeColorMode.ColorTexture;
-            else            mode = ALRealtimeColorMode.Emission;
-            dst.colorMode = mode;
+            // By member name, since the enum lives with the component.
+            string mode;
+            if (theme)      mode = "ThemeColor" + Mathf.Clamp(themeIdx - 1, 0, 3);
+            else if (chord) mode = "ColorChord";
+            else if (tex)   mode = trad ? "ColorTextureTraditional" : "ColorTexture";
+            else            mode = "Emission";
+            var modeField = realtimeType.GetField("colorMode");
+            modeField.SetValue(dst, Enum.Parse(modeField.FieldType, mode));
 
             EditorUtility.SetDirty(dst);
         }
@@ -446,6 +488,7 @@ namespace VRSL.URP.EditorScripts
         // prefab keeps its own renderers.
         static bool CopyTwinParameters(GameObject source, GameObject target, string upstreamTypeName, Type urpType)
         {
+            if (urpType == null) return false;
             var src = FindComponentByTypeName(source, upstreamTypeName);
             if (src == null) return false;
             var dst = target.GetComponentInChildren(urpType, includeInactive: true);

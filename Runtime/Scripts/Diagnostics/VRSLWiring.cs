@@ -97,44 +97,26 @@ namespace VRSL.URP
                     Consequence = "no beams in the air" },
         };
 
-        /// <summary>
-        /// The AudioLink manager's five. Four are the same assets the DMX manager uses —
-        /// the cull, the lighting, the prepass and the volumetric are shared — and only
-        /// the compute differs.
-        ///
-        /// <c>samplingTexture</c> is deliberately not here. It accepts any texture, falls
-        /// back to AudioLink's own atlas when empty, and is a palette an author chooses:
-        /// content rather than wiring, like <c>goboTextures</c>.
-        /// </summary>
-        public static readonly VRSLWiringField[] AudioLink =
-        {
-            new() { Field = "computeShader",
-                    Guid  = "b62eba04b10a6cc19700ff31693a9066",
-                    Consequence = "nothing lights at all" },
-            new() { Optional = true, Field = "lightCullShader",
-                    Guid  = "5f41dc4adb8e42f8937cb0064c39ea17",
-                    Consequence = "the picture is right and every pixel pays for every "
-                                + "fixture on screen" },
-            new() { Field = "lightingShader",
-                    Guid  = "d8c757279dc0dc7ff544149ea9f3e897",
-                    Consequence = "no light lands on surfaces" },
-            new() { Optional = true, Field = "surfacePropertiesShader",
-                    Guid  = "5e926720f16a403487984bfa2578e36f",
-                    Consequence = "every surface lights as flat grey, whatever colour it is" },
-            new() { Optional = true, Field = "volumetricShader",
-                    Guid  = "ee4b25e5a146ba8b36ed731b36047774",
-                    Consequence = "no beams in the air" },
-        };
+        /// <summary>The tables of managers from optional integrations, which register
+        /// their own at editor load so this assembly never names them.</summary>
+        static readonly Dictionary<System.Type, VRSLWiringField[]> s_Registered = new();
 
-        /// <summary>Every field either manager has, deduplicated by GUID — which is what
+        /// <summary>Add a manager type's table. Registering it again replaces it.</summary>
+        public static void Register(System.Type manager, VRSLWiringField[] fields)
+        {
+            if (manager != null && fields != null) s_Registered[manager] = fields;
+        }
+
+        /// <summary>Every field any manager has, deduplicated by GUID — which is what
         /// a row checking the table against the project wants to walk.</summary>
         public static IEnumerable<VRSLWiringField> All
         {
             get
             {
                 var seen = new HashSet<string>();
-                foreach (var f in Dmx)       if (seen.Add(f.Guid)) yield return f;
-                foreach (var f in AudioLink) if (seen.Add(f.Guid)) yield return f;
+                foreach (var f in Dmx) if (seen.Add(f.Guid)) yield return f;
+                foreach (var table in s_Registered.Values)
+                    foreach (var f in table) if (seen.Add(f.Guid)) yield return f;
             }
         }
 
@@ -153,12 +135,12 @@ namespace VRSL.URP
             field == null ? "" : AssetDatabase.GUIDToAssetPath(field.Guid);
 
         /// <summary>The table for a manager, or null for anything else.</summary>
-        public static VRSLWiringField[] FieldsFor(Object manager) => manager switch
+        public static VRSLWiringField[] FieldsFor(Object manager)
         {
-            VRSL_URPLightManager          => Dmx,
-            VRSL_AudioLinkURPLightManager => AudioLink,
-            _                             => null,
-        };
+            if (manager == null) return null;
+            if (manager is VRSL_URPLightManager) return Dmx;
+            return s_Registered.TryGetValue(manager.GetType(), out var fields) ? fields : null;
+        }
 
         /// <summary>
         /// Fill every empty wiring field on a manager.

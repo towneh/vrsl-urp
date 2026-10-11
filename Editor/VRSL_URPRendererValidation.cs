@@ -86,10 +86,13 @@ namespace VRSL.URP.EditorScripts
             foreach (var m in Object.FindObjectsByType<VRSL_URPLightManager>(
                          FindObjectsInactive.Exclude))
                 if (m != null && m.isActiveAndEnabled) { dmx = m; break; }
-            VRSL_AudioLinkURPLightManager audioLink = null;
-            foreach (var m in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                         FindObjectsInactive.Exclude))
-                if (m != null && m.isActiveAndEnabled) { audioLink = m; break; }
+            // The other path (AudioLink), when its integration is installed.
+            IVRSLLightManager other = null;
+            Behaviour otherBehaviour = null;
+            foreach (var m in VRSLLightPaths.Managers(FindObjectsInactive.Exclude))
+                if (m is not VRSL_URPLightManager && m is Behaviour b && b != null && b.isActiveAndEnabled)
+                { other = m; otherBehaviour = b; break; }
+            string otherPath = VRSLLightPaths.NameOf(other);
 
             bool dmxHasFixtures = Application.isPlaying
                 ? dmx != null && dmx.FixtureCount > 0
@@ -97,7 +100,7 @@ namespace VRSL.URP.EditorScripts
                       FindObjectsInactive.Exclude).Length > 0;
 
             report.AppendLine("Where VRSL's surface normals come from:");
-            if (dmx == null && audioLink == null)
+            if (dmx == null && other == null)
                 report.AppendLine("      NOT CHECKED — no VRSL light manager switched on in the open "
                                 + "scene. Below is what one would do on each camera, at its defaults.");
 
@@ -115,11 +118,11 @@ namespace VRSL.URP.EditorScripts
                 var dmxDecision = dmx != null
                     ? VRSLCameraFilter.Evaluate(camera, dmx.secondaryCameraMode, dmx.quality, null)
                     : VRSLCameraDecision.Skip;
-                var audioLinkDecision = audioLink != null
-                    ? VRSLCameraFilter.Evaluate(camera, audioLink.secondaryCameraMode, audioLink.quality, null)
+                var otherDecision = other != null
+                    ? VRSLCameraFilter.Evaluate(camera, other.SecondaryCameraMode, other.QualitySetting, null)
                     : VRSLCameraDecision.Skip;
-                bool dmxRenders       = dmxDecision.Render;
-                bool audioLinkRenders = audioLinkDecision.Render;
+                bool dmxRenders   = dmxDecision.Render;
+                bool otherRenders = otherDecision.Render;
 
                 string who; bool forceOwn; LayerMask mask; string at;
                 if (dmxRenders && dmxHasFixtures)
@@ -127,17 +130,18 @@ namespace VRSL.URP.EditorScripts
                     who = dmx.name; forceOwn = dmx.forceOwnNormals; mask = dmx.prepassLayers;
                     at  = dmxDecision.ToString();
                 }
-                else if (audioLinkRenders)
+                else if (otherRenders)
                 {
-                    who = audioLink.name; forceOwn = audioLink.forceOwnNormals; mask = audioLink.prepassLayers;
-                    at  = audioLinkDecision.ToString();
+                    who = otherBehaviour.name; forceOwn = other.ForceOwnNormals; mask = other.PrepassLayers;
+                    at  = otherDecision.ToString();
                 }
-                else if (dmx != null || audioLink != null)
+                else if (dmx != null || other != null)
                 {
                     report.AppendLine($"      {camera.name}: VRSL draws no prepass here — "
                                     + (dmxRenders
-                                        ? "the DMX manager has no fixtures to light and no "
-                                          + "AudioLink manager renders this camera."
+                                        ? "the DMX manager has no fixtures to light"
+                                          + (other != null ? $" and the {otherPath} manager "
+                                                           + "skips this camera." : ".")
                                         : "every manager skips this camera (Secondary cameras)."));
                     continue;
                 }
@@ -169,8 +173,8 @@ namespace VRSL.URP.EditorScripts
                                 + "camera to decide for.");
             if (dmx != null)
                 report.AppendLine($"      {dmx.name}: " + VRSLCameraFilter.Describe(dmx.secondaryCameraMode, dmx.quality));
-            if (audioLink != null)
-                report.AppendLine($"      {audioLink.name}: " + VRSLCameraFilter.Describe(audioLink.secondaryCameraMode, audioLink.quality));
+            if (other != null)
+                report.AppendLine($"      {otherBehaviour.name}: " + VRSLCameraFilter.Describe(other.SecondaryCameraMode, other.QualitySetting));
             report.AppendLine();
         }
 
@@ -184,21 +188,12 @@ namespace VRSL.URP.EditorScripts
         {
             report.AppendLine("Surfaces VRSL lights in their own colour:");
             int seen = 0;
-            foreach (var manager in Object.FindObjectsByType<VRSL_URPLightManager>(
-                         FindObjectsInactive.Exclude))
+            foreach (var manager in VRSLLightPaths.Managers(FindObjectsInactive.Exclude))
             {
-                if (manager == null || !manager.isActiveAndEnabled) continue;
+                if (manager is not Behaviour b || b == null || !b.isActiveAndEnabled) continue;
                 seen++;
                 VRSLDepthPolicyReport.PrepassLayersLine(
-                    $"{manager.name} (DMX)", manager.prepassLayers, report);
-            }
-            foreach (var manager in Object.FindObjectsByType<VRSL_AudioLinkURPLightManager>(
-                         FindObjectsInactive.Exclude))
-            {
-                if (manager == null || !manager.isActiveAndEnabled) continue;
-                seen++;
-                VRSLDepthPolicyReport.PrepassLayersLine(
-                    $"{manager.name} (AudioLink)", manager.prepassLayers, report);
+                    $"{b.name} ({VRSLLightPaths.NameOf(manager)})", manager.PrepassLayers, report);
             }
             if (seen == 0)
                 report.AppendLine("      NOT CHECKED — no VRSL light manager switched on in the "

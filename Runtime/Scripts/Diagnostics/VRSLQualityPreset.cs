@@ -85,13 +85,15 @@ namespace VRSL.URP
             public override void        MarkDirty() => _m.MarkConfigDirty();
         }
 
-        sealed class AudioLinkTarget : Target
+        /// <summary>The other path's manager (AudioLink), reached through the interface
+        /// because it lives in an optional assembly.</summary>
+        sealed class OtherTarget : Target
         {
-            readonly VRSL_AudioLinkURPLightManager _m;
-            public AudioLinkTarget(VRSL_AudioLinkURPLightManager m) => _m = m;
+            readonly IVRSLLightManager _m;
+            public OtherTarget(IVRSLLightManager m) => _m = m;
 
-            public override Behaviour   Component => _m;
-            public override VRSLQuality Quality   { get => _m.quality; set => _m.quality = value; }
+            public override Behaviour   Component => _m as Behaviour;
+            public override VRSLQuality Quality   { get => _m.QualitySetting; set => _m.QualitySetting = value; }
         }
 
         public sealed class Session
@@ -100,15 +102,14 @@ namespace VRSL.URP
 
             public static Session Begin(VRSL_URPLightManager manager) => Begin(manager, null);
 
-            public static Session Begin(VRSL_URPLightManager dmx,
-                                        VRSL_AudioLinkURPLightManager audioLink)
+            public static Session Begin(VRSL_URPLightManager dmx, IVRSLLightManager other)
             {
                 // Apply and Restore both tolerate an empty set, so Begin has to as well —
                 // otherwise the one entry point throws while the two that follow it are
                 // carefully defensive.
                 var session = new Session();
                 session.Add(dmx != null ? new DmxTarget(dmx) : null);
-                session.Add(audioLink != null ? new AudioLinkTarget(audioLink) : null);
+                session.Add(VRSLLightPaths.IsAlive(other) ? new OtherTarget(other) : null);
                 return session;
             }
 

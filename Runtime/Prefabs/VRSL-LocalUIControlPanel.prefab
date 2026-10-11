@@ -2827,7 +2827,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   dmxManager: {fileID: 0}
-  audioLinkManager: {fileID: 0}
   volumetricQuality: 1
   lockVolumetricQualityMode: 0
   lensFlareQuality: 0

@@ -219,9 +219,9 @@ namespace VRSL.URP.EditorScripts
                 // with an AudioLink rig that the package was costing them nothing, on a
                 // scene full of VRSL fixtures. This has to work on any scene they have
                 // open.
-                var dmx       = VRSL_URPLightManager.Instance;
-                var audioLink = VRSL_AudioLinkURPLightManager.Instance;
-                if (dmx == null && audioLink == null)
+                var dmx   = VRSL_URPLightManager.Instance;
+                var other = VRSLLightPaths.RunningOther();
+                if (dmx == null && other == null)
                 {
                     Finish(null, "There is no VRSL light manager in this scene, so the "
                                + "package is not costing anything here.");
@@ -239,7 +239,7 @@ namespace VRSL.URP.EditorScripts
                 VRSLQualityPreset.Session quality = null;
                 try
                 {
-                quality = VRSLQualityPreset.Session.Begin(dmx, audioLink);
+                quality = VRSLQualityPreset.Session.Begin(dmx, other);
                 using var determinism = new VRSLBenchmark.DeterminismScope(settings);
 
                 var warm = VRSLBenchmark.WarmUpSession(settings, null, run);
@@ -257,7 +257,7 @@ namespace VRSL.URP.EditorScripts
                         // from both and reporting one manager's share would understate what
                         // the row measured.
                         fixtureCount  = (dmx != null ? dmx.FixtureCount : 0)
-                                      + (audioLink != null ? audioLink.FixtureCount : 0),
+                                      + (VRSLLightPaths.IsAlive(other) ? other.FixtureCount : 0),
                         cameraVariant = "SceneCamera",
                         quality       = level.ToString(),
                     };
