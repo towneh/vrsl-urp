@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.1] — 2026-10-11
+
 ### Added
 
 - **One DMX manager for any grid, or for stream data.** **DMX Input** on the manager chooses where the lights read DMX: the **Horizontal**, **Vertical** or **Legacy grid** in the video, or **Stream data** from a channel source (Truss records from a Basis stream, or the Truss OSC source). Every fixture takes the layout from the manager, so one prefab works on any layout. A world can switch while it runs with `SetDmxInput` (0 to 3, ready for a UI Dropdown), and keeps the choice the same on every client with a networked script of its own; the wiki has an example.
