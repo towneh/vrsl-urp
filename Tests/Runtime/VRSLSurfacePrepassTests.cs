@@ -133,6 +133,9 @@ namespace VRSL.URP.Tests
             public int              targetSamples, assetMsaa, supportedSamples;
             public bool             allowMsaa, storeAndResolve;
             public bool             urpHandle;
+            /// <summary>Whether URP primed the camera's depth, as its renderer decided for
+            /// the last frame; null where this URP doesn't record it.</summary>
+            public bool?            primed;
             public int              vrslWritten, urpWritten, both, onlyVrsl, onlyUrp, differing, maxDiff;
             public Vector3          vrslMean, urpMean;
             public float            frameLitPercent;
@@ -141,7 +144,7 @@ namespace VRSL.URP.Tests
             public override string ToString()
                 => $"{name}: msaa {msaaSeen} (asked {msaaAsked}; target {targetSamples}, asset {assetMsaa}, "
                  + $"allowMSAA {allowMsaa}, platform allows {supportedSamples}, store+resolve {storeAndResolve}), "
-                 + $"recorded {recorded}, "
+                 + $"recorded {recorded}, primed {(primed.HasValue ? primed.Value.ToString() : "unknown")}, "
                  + $"URP handle {(urpHandle ? "valid" : "invalid")}, "
                  + $"VRSL wrote {vrslWritten}, URP wrote {urpWritten}, both {both}, "
                  + $"only VRSL {onlyVrsl}, only URP {onlyUrp}, differing {differing} (max {maxDiff}/255), "
@@ -160,6 +163,22 @@ namespace VRSL.URP.Tests
         {
             foreach (var r in renderers)
                 if (r != null && r.depthPrimingMode != mode) r.depthPrimingMode = mode;
+        }
+
+        /// <summary>
+        /// Whether URP primed <paramref name="camera"/>'s depth on the frame it last
+        /// rendered. The setting only asks: stock URP declines to prime a multisampled
+        /// camera, and a modified URP may not. URP keeps its answer on the renderer in an
+        /// internal property; null where it isn't there.
+        /// </summary>
+        static bool? PrimedLastFrame(Camera camera)
+        {
+            var renderer = camera.GetUniversalAdditionalCameraData()?.scriptableRenderer;
+            var property = typeof(ScriptableRenderer).GetProperty("useDepthPriming",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic
+              | System.Reflection.BindingFlags.Public);
+            if (renderer == null || property == null || property.PropertyType != typeof(bool)) return null;
+            return (bool)property.GetValue(renderer);
         }
 
         static List<UniversalRendererData> Renderers()
@@ -245,6 +264,10 @@ namespace VRSL.URP.Tests
                     HoldPriming(renderers, mode);
                     rig.RenderFrame();
                 }
+
+                // Read before anything else renders: the renderer keeps only its last
+                // camera's decision.
+                outcome.primed = PrimedLastFrame(rig.Camera);
 
                 RenderPipelineManager.beginCameraRendering -= enqueue;
                 enqueue = null;
@@ -1138,6 +1161,12 @@ namespace VRSL.URP.Tests
         /// draws into the multisampled depth attachment beside a normals target that
         /// is never multisampled, and a project gets a Render Graph error and no
         /// frame at all. That outcome is what the reuse policy has to refuse.
+        ///
+        /// Asking for priming isn't getting it: stock URP declines to prime a
+        /// multisampled camera, and a modified URP may not. The row reads what URP
+        /// decided (<see cref="PrimedLastFrame"/>) and judges priming Forced at MSAA 2
+        /// as the failing case only where URP really primed; where it declined, the
+        /// frame is the priming-Disabled case and must match.
         /// </summary>
         [UnityTest]
         public IEnumerator S13_UrpNormalsMatchVrslNormalsWhereUrpCanProduceThem()
@@ -1189,22 +1218,31 @@ namespace VRSL.URP.Tests
                       + "its target when the pipeline asset allows MSAA at all, and the "
                       + "platform has to support the count on that target.");
                 }
-                bool primedWithMsaa = o.priming == DepthPrimingMode.Forced && o.msaaAsked > 1;
-                if (primedWithMsaa)
+                if (o.priming == DepthPrimingMode.Forced && o.msaaAsked > 1)
                 {
-                    // The configuration the reuse policy exists to refuse. What matters
-                    // is that it is refused for a reason this row has seen, not guessed.
-                    // Measured 2026-09-03 on Basis's URP: a Render Graph execution error
-                    // every frame and a camera that rendered nothing, so VRSL's own
-                    // texture is empty here too and the whole frame is the casualty.
-                    bool unusable = o.errors.Count > 0 || o.urpWritten == 0;
-                    if (!unusable)
-                        failures.AppendLine($"{o.name}: URP produced a normals texture under priming with "
-                                          + "MSAA, with no error, and it matched VRSL's on "
-                                          + $"{o.both - o.differing} of {o.both} pixels. The reuse policy "
-                                          + "refuses this configuration on the strength of it failing; if "
-                                          + "it no longer fails, the policy is leaving a saving on the table.");
-                    continue;
+                    if (!o.primed.HasValue)
+                        Assert.Inconclusive($"{o.name}: this URP doesn't record whether it primed the "
+                                          + "camera, so the row can't tell which configuration it reached.");
+                    if (o.primed.Value)
+                    {
+                        // The configuration the reuse policy exists to refuse. Measured
+                        // 2026-09-03 on a URP that primed multisampled cameras: a Render Graph
+                        // execution error every frame and a camera that rendered nothing.
+                        bool unusable = o.errors.Count > 0 || o.urpWritten == 0;
+                        if (!unusable)
+                            failures.AppendLine($"{o.name}: URP primed a multisampled camera and still produced "
+                                              + "a normals texture, with no error, matching VRSL's on "
+                                              + $"{o.both - o.differing} of {o.both} pixels. The reuse policy "
+                                              + "refuses this configuration on the strength of it failing.");
+                        continue;
+                    }
+                    // URP declined to prime, as stock URP does for a multisampled camera, so
+                    // its prepass drew into the single-sample depth like priming Disabled, and
+                    // is judged like it below. The policy can't see that decision before the
+                    // frame and refuses this configuration anyway, so VRSL draws its own
+                    // normals here too.
+                    Debug.Log($"[S13] {o.name}: URP declined to prime, so its normals were usable; "
+                            + "the reuse policy still draws VRSL's own for this setting.");
                 }
 
                 if (o.vrslWritten == 0)
