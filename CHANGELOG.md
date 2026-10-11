@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **Migrated fixtures glow like fresh ones.** The migration tool scales a mover's, par's, blinder's or discoball's tint by the two prefabs' defaults instead of copying it as it is. The original package's fixtures mostly default to a tint of 2 and this package's movers and discoballs to 1, so a fixture migrated with 0.3.0-rc.1 or earlier can glow twice as bright as one placed fresh.
+
+### Fixed
+
+- **Migrating a VRSL v2.3.0 world keeps each AudioLink fixture's band.** v2.3.0 stores it as a number, and every migrated AudioLink fixture ended on Bass. A setting the tool can't carry across now shows a warning in the Console.
+- **No more missing scripts from the shipped prefabs.** Seventeen fixture prefabs and the AudioLink smoothing controller carried VRChat components that don't exist outside VRChat, so every instance arrived with a missing script. The smoothing controller's sliders and reset button now call its smoothing panel directly; they were wired to it through one of those components, so they changed nothing.
 
 ## [0.3.0-rc.1] — 2026-10-11
 
