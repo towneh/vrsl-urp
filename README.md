@@ -55,9 +55,8 @@ There is no renderer feature to add and no URP setting to find. After you instal
    |---|---|
    | `VRSL-ExampleScene-AudioLink-URPRealtimeLights` | `Runtime/Example Scenes/AudioLink-Scenes/` |
    | `VRSL-ExampleScene-EditorViaOSC-Horizontal-URPRealtimeLights` | `Runtime/Example Scenes/DMX-EditorViaOSCScenes/` |
-   | `VRSL-ExampleScene-EditorViaOSC-Vertical-URPRealtimeLights` | `Runtime/Example Scenes/DMX-EditorViaOSCScenes/` |
 
-   The AudioLink scene lights up as soon as audio plays. The DMX scenes need a desk or a DMX sender to feed them, and until one does they stay dark, which is the expected state rather than a fault.
+   The AudioLink scene lights up as soon as audio plays. The DMX scene needs a desk or a DMX sender to feed it, and until one does it stays dark, which is the expected state rather than a fault.
 
 2. **Add a light manager to your scene.** Run **VRSL → URP → Add Light Manager to Active Scene**. Use one manager per scene for each data path. The manager arrives with every shader and texture reference filled in. Its inspector shows one status line that says whether it is wired. If a reference goes missing, run **VRSL → URP → Repair Manager Wiring**.
 

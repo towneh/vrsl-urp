@@ -7,15 +7,13 @@ using UnityEngine.SceneManagement;
 namespace VRSL.URP.EditorScripts
 {
     /// <summary>
-    /// Suppresses "missing script" noise on legacy VRSL prefabs that ship with
-    /// component slots referencing scripts which don't exist in this URP-only
-    /// package.
+    /// Suppresses "missing script" noise on VRSL fixtures carrying component
+    /// slots whose scripts aren't in the project.
     ///
-    /// Some shipped prefabs serialise script references that bind to types
-    /// outside this package's compile set. In a project that only has the
-    /// URP package installed, those references can't bind and every prefab
-    /// instance in every scene logs missing-script warnings. The unbound
-    /// components are non-functional in that environment anyway, but the
+    /// A scene saved with an earlier release, or migrated from the original
+    /// VRSL package and then left without it, can hold fixtures whose UdonSharp
+    /// or VRChat components no longer bind. Every such slot logs a missing-script
+    /// warning. The unbound components can't do anything here anyway, but the
     /// warnings clutter the console and fail Play Mode entry checks.
     ///
     /// This utility walks each scene as it loads and silently removes the

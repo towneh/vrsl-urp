@@ -4,7 +4,16 @@
 
 ### Changed
 
+- **One set of prefabs.** Every DMX fixture and the DMX manager sit together in `Runtime/Prefabs/DMX/`, the AudioLink ones in `Runtime/Prefabs/AudioLink/`, and the names lose `-H-` and `-URP` (`VRSL-DMX-Mover-Spotlight-13CH`, `VRSL-AudioLink-Discoball`). Each fixture prefab serves every grid layout and the one DMX manager takes the layout from its DMX Input. The prefabs keep their GUIDs, so scenes that use them are unaffected.
+- **The per-layout prefabs are superseded.** The Legacy and Vertical fixtures and managers moved to `Runtime/Prefabs/DMX/Superseded/`. **VRSL → URP → Replace Superseded Prefabs in Scene** moves a scene onto the single prefabs, keeping what was set on each instance and each manager's DMX Input. They'll be removed in a later release.
+- **The migration tool brings the Horizontal and Legacy example surfaces across** onto the example surface prefab, which serves every layout like the rest.
+
 - **Migrated fixtures glow like fresh ones.** The migration tool scales a mover's, par's, blinder's or discoball's tint by the two prefabs' defaults instead of copying it as it is. The original package's fixtures mostly default to a tint of 2 and this package's movers and discoballs to 1, so a fixture migrated with 0.3.0-rc.1 or earlier can glow twice as bright as one placed fresh.
+
+### Removed
+
+- **The shader-driven discoballs** (`VRSL-DMX-Static-DiscoBall-H-1CH`, `-V-1CH` and `VRSL-AudioLink-DiscoBall`) with their materials and shaders. The realtime discoball replaces them, and the migration tool already paired upstream's discoballs with it. The control panel's discoball quality buttons only changed those, so they're hidden; its discoball intensity slider still drives the realtime discoballs.
+- **The Vertical DMX example scene.** The Horizontal one shows the same rig; set its manager's DMX Input for another layout.
 
 ### Fixed
 
