@@ -201,7 +201,6 @@ namespace VRSL.URP.Tests
             "Superseded/VRSL-DMX-Static-LightBar-V-13CH.prefab",
             "Superseded/VRSL-DMX-Static-MultiLightBar-V-15CH.prefab",
             "Superseded/VRSL-DMX-Static-6x4StrobeLight-V-5CH.prefab",
-            null,   // the shader-driven discoball's place, kept so the stored capture's layout holds
             "Superseded/VRSL-DMX-Mover-Spotlight-V-13CH-URP.prefab",
             "Superseded/VRSL-DMX-Mover-WashLight-V-13CH-URP.prefab",
             "Superseded/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
@@ -278,7 +277,6 @@ namespace VRSL.URP.Tests
             {
                 for (int i = 0; i < prefabs.Length; i++)
                 {
-                    if (prefabs[i] == null) continue;
                     var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + prefabs[i]);
                     Assert.IsNotNull(prefab, $"{prefabs[i]} is not in the package");
                     var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
