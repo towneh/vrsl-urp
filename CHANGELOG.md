@@ -12,7 +12,7 @@
 
 ### Removed
 
-- **The shader-driven discoballs** (`VRSL-DMX-Static-DiscoBall-H-1CH`, `-V-1CH` and `VRSL-AudioLink-DiscoBall`) with their materials and shaders. The realtime discoball replaces them, and the migration tool already paired upstream's discoballs with it. The control panel's discoball quality buttons only changed those, so they're hidden; its discoball intensity slider still drives the realtime discoballs.
+- **The shader-driven discoballs** (`VRSL-DMX-Static-DiscoBall-H-1CH`, `-V-1CH` and `VRSL-AudioLink-DiscoBall`) with their materials and shaders. The realtime discoball replaces them, and the migration tool already paired upstream's discoballs with it. The control panel's discoball quality buttons only changed those, so they're gone too; its discoball intensity slider still drives the realtime discoballs.
 - **The Vertical DMX example scene.** The Horizontal one shows the same rig; set its manager's DMX Input for another layout.
 
 ### Fixed
