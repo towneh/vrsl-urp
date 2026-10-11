@@ -30,7 +30,7 @@ namespace VRSL.URP
     /// fixtures, their light and their beams are, how much the beams cost, and whether
     /// strobes run. It drives the scene's URP light managers for the light and the beams,
     /// and the fixture materials for the parts that are still shader-driven (the body
-    /// glow, the lens flares, the discoball and the lasers). Nothing it sets leaves the
+    /// glow, the lens flares and the lasers). Nothing it sets leaves the
     /// local client.
     /// </summary>
     public class VRSL_LocalUIControlPanel : MonoBehaviour
@@ -51,11 +51,6 @@ namespace VRSL.URP
         public VolumetricQualityModes volumetricQuality = VolumetricQualityModes.Standard;
         [Tooltip("Stop the user changing the beam quality from the panel.")]
         public bool lockVolumetricQualityMode;
-        [Space(5.0f)]
-        [Tooltip("High blends the discoball's spots; Low dithers them, which is cheaper "
-               + "under MSAA.")]
-        public DefaultQualityModes discoballQuality;
-        public bool lockDiscoballQualityMode;
         [Space(5.0f)]
         [Tooltip("High blends the lens flares; Low dithers them, which is cheaper under MSAA.")]
         public DefaultQualityModes lensFlareQuality;
@@ -84,8 +79,6 @@ namespace VRSL.URP
 
         public Button volumetricHighButton, volumetricMedButton, volumetricLowButton;
         public Text volumetricHighText, volumetricMedText, volumetricLowText;
-        public Button discoballHighButton, discoballLowButton;
-        public Text discoballHighText, discoballLowText;
         public Button lensFlareHighButton, lensFlareLowButton;
         public Text lensFlareHighText, lensFlareLowText;
 
@@ -115,7 +108,6 @@ namespace VRSL.URP
         // the shader side.
         readonly List<Material> _fixtureMaterials   = new();
         readonly List<Material> _lensFlareMaterials = new();
-        readonly List<Material> _discoBallMaterials = new();
         readonly List<Material> _laserMaterials     = new();
 
         // Realtime discoballs and what each was authored to, so the discoball slider
@@ -160,7 +152,6 @@ namespace VRSL.URP
             _SetBloomIntensity();
             _ForceUpdateVideoSampleTexture();
             RefreshVolumetricButtons();
-            _SetDiscoBallQualityMode();
             _SetLensFlareQualtiyMode();
             _CheckButtonLockStatus();
             SetStrobeStatus();
@@ -220,7 +211,6 @@ namespace VRSL.URP
         {
             _fixtureMaterials.Clear();
             _lensFlareMaterials.Clear();
-            _discoBallMaterials.Clear();
             _laserMaterials.Clear();
             _dmxDiscoballs.Clear();
             _alDiscoballs.Clear();
@@ -240,7 +230,6 @@ namespace VRSL.URP
                     if (!shader.StartsWith("VRSL-URP/")) continue;
 
                     if (shader.Contains("Lens Flare"))        _lensFlareMaterials.Add(mat);
-                    else if (shader.Contains("Discoball"))    _discoBallMaterials.Add(mat);
                     else if (shader.Contains("Basic Laser"))  _laserMaterials.Add(mat);
                     else if (mat.HasProperty(s_UniversalIntensity)) _fixtureMaterials.Add(mat);
                 }
@@ -288,21 +277,6 @@ namespace VRSL.URP
                 if (lensFlareHighText) { lensFlareHighText.color = disabledTextColor; }
                 if (lensFlareLowText) { lensFlareLowText.color = disabledTextColor; }
             }
-            if (lockDiscoballQualityMode)
-            {
-                if (discoballHighButton)
-                {
-                    discoballHighButton.image.color = discoballQuality == DefaultQualityModes.High ? disableButEnabledColor : disableColor;
-                    discoballHighButton.interactable = false;
-                }
-                if (discoballLowButton)
-                {
-                    discoballLowButton.image.color = discoballQuality == DefaultQualityModes.Low ? disableButEnabledColor : disableColor;
-                    discoballLowButton.interactable = false;
-                }
-                if (discoballHighText) { discoballHighText.color = disabledTextColor; }
-                if (discoballLowText) { discoballLowText.color = disabledTextColor; }
-            }
         }
 
         public void _SetVolumetricHigh()
@@ -323,18 +297,6 @@ namespace VRSL.URP
             volumetricQuality = VolumetricQualityModes.Off;
             _SetVolumetricQualityMode();
         }
-        public void _SetDiscoballHigh()
-        {
-            if (lockDiscoballQualityMode) { return; }
-            discoballQuality = DefaultQualityModes.High;
-            _SetDiscoBallQualityMode();
-        }
-        public void _SetDiscoballLow()
-        {
-            if (lockDiscoballQualityMode) { return; }
-            discoballQuality = DefaultQualityModes.Low;
-            _SetDiscoBallQualityMode();
-        }
         public void _SetLensFlareHigh()
         {
             if (lockLensFlareQualityMode) { return; }
@@ -349,7 +311,6 @@ namespace VRSL.URP
         }
         public void _UpdateAllQualityModes()
         {
-            _SetDiscoBallQualityMode();
             _SetVolumetricQualityMode();
             _SetLensFlareQualtiyMode();
         }
@@ -381,23 +342,6 @@ namespace VRSL.URP
                 default:
                     break;
             }
-        }
-        public void _SetDiscoBallQualityMode()
-        {
-            switch (discoballQuality)
-            {
-                case DefaultQualityModes.High:
-                    if (discoballHighButton) { discoballHighButton.colors = cbOn; }
-                    if (discoballLowButton) { discoballLowButton.colors = defaultColorBlock; }
-                    break;
-                case DefaultQualityModes.Low:
-                    if (discoballHighButton) { discoballHighButton.colors = defaultColorBlock; }
-                    if (discoballLowButton) { discoballLowButton.colors = cbOn; }
-                    break;
-                default:
-                    break;
-            }
-            SetDiscoballQuality();
         }
         public void _SetLensFlareQualtiyMode()
         {
@@ -515,16 +459,11 @@ namespace VRSL.URP
                 lightSliderText.text = Mathf.Round(lightSlider.value * 100.0f).ToString();
         }
 
-        /// <summary>The discoballs: realtime ones as a share of what each was authored to,
-        /// and any still on the shader path through their material.</summary>
+        /// <summary>The discoballs, each as a share of what it was authored to.</summary>
         public void _SetDiscoBallIntensity()
         {
             if (discoBallSlider == null) return;
             float value = Mathf.Lerp(0.0f, discoballIntensityMax, discoBallSlider.value);
-            foreach (Material mat in _discoBallMaterials)
-            {
-                mat.SetFloat(s_UniversalIntensity, value);
-            }
             foreach (var (light, authored) in _dmxDiscoballs)
                 if (light != null) light.globalIntensity = authored * value;
             foreach (var (light, authored) in _alDiscoballs)
@@ -578,8 +517,8 @@ namespace VRSL.URP
             if (audioLinkManager != null) audioLinkManager.quality = quality;
         }
 
-        // The discoball and the lens flares are shader fixtures with a blended mode and a
-        // dithered, alpha-to-coverage mode. Both modes are set through the material.
+        // The lens flares are shader fixtures with a blended mode and a dithered,
+        // alpha-to-coverage mode. Both modes are set through the material.
         static void SetBlendedMode(Material target, bool blended)
         {
             if (blended)
@@ -609,17 +548,11 @@ namespace VRSL.URP
         /// the inspector has to be marked for saving or it is lost on the next reload.</summary>
         public void MarkMaterialsDirty()
         {
-            foreach (var list in new[] { _fixtureMaterials, _lensFlareMaterials, _discoBallMaterials, _laserMaterials })
+            foreach (var list in new[] { _fixtureMaterials, _lensFlareMaterials, _laserMaterials })
                 foreach (var mat in list)
                     UnityEditor.EditorUtility.SetDirty(mat);
         }
 #endif
-
-        void SetDiscoballQuality()
-        {
-            foreach (Material target in _discoBallMaterials)
-                SetBlendedMode(target, discoballQuality == DefaultQualityModes.High);
-        }
 
         void SetLensFlareQuality()
         {
@@ -720,7 +653,7 @@ namespace VRSL.URP
             }
             EditorGUILayout.Space();
             if (GUILayout.Button(new GUIContent("Apply Quality Settings Now",
-                    "Pushes the beam quality to the light managers and the discoball and lens flare modes to their materials.")))
+                    "Pushes the beam quality to the light managers and the lens flare mode to their materials.")))
             {
                 controlPanel.ResolveManagers();
                 controlPanel.CollectMaterials();
