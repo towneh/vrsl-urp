@@ -21,7 +21,7 @@ Upgrading from 0.2.0-rc.6:
 
 ### Fixed
 
-- **Decoding:** strobe from a video grid, Vertical and Legacy managers' strobe timing, and 5-channel pars and blinders casting light from the wrong channels.
+- **Decoding:** strobe from a video grid, Vertical and Legacy managers' strobe timing, the 13th channel of some sectors read from the wrong grid cell, and 5-channel pars and blinders casting light from the wrong channels.
 - **Fixtures:** mover heads now turn with their beams under a channel source and draw their depth in the same pose as their colour, and the Vertical flasher glows only at its lens.
 - **Editor:** Play mode no longer saves changes into the package's decode textures, and the control panel's strobe toggle no longer edits the package's materials.
 
