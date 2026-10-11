@@ -318,22 +318,24 @@ namespace VRSL.URP.EditorScripts
 
             instance.name = source.gameObject.name + " (URP)";
 
-            CopyParameters(source.gameObject, instance, pair.Kind);
+            var sourceAsset = PrefabUtility.GetCorrespondingObjectFromOriginalSource(source.gameObject);
+            CopyParameters(source.gameObject, instance, sourceAsset, urpAsset, pair.Kind);
             return instance;
         }
 
         // ── Field translation ─────────────────────────────────────────────────────
 
-        static void CopyParameters(GameObject source, GameObject target, VRSLMigrationKind kind)
+        static void CopyParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset,
+            VRSLMigrationKind kind)
         {
             switch (kind)
             {
-                case VRSLMigrationKind.AudioLink: CopyAudioLinkParameters(source, target); break;
-                case VRSLMigrationKind.Dmx:       CopyDmxParameters(source, target);       break;
+                case VRSLMigrationKind.AudioLink: CopyAudioLinkParameters(source, target, sourceAsset, targetAsset); break;
+                case VRSLMigrationKind.Dmx:       CopyDmxParameters(source, target, sourceAsset, targetAsset);       break;
             }
         }
 
-        static void CopyAudioLinkParameters(GameObject source, GameObject target)
+        static void CopyAudioLinkParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset)
         {
             var dst = target.GetComponentInChildren<VRStageLighting_AudioLink_RealtimeLight>(includeInactive: true);
             if (dst == null)
@@ -366,7 +368,8 @@ namespace VRSL.URP.EditorScripts
             CopyField(srcStatic, dst, "targetToFollow");
 
             // Renames
-            CopyField(srcStatic, dst, srcName: "lightColorTint", dstName: "emissionColor");
+            dst.emissionColor = ScaledTint(srcStatic, sourceAsset, UPSTREAM_AL_STATIC,
+                targetAsset.GetComponentInChildren<VRStageLighting_AudioLink_RealtimeLight>(true).emissionColor);
             CopyField(srcStatic, dst, srcName: "selectGOBO",     dstName: "goboIndex");
 
             // Spin: only carry over the value when upstream's enableAutoSpin is true,
@@ -394,7 +397,7 @@ namespace VRSL.URP.EditorScripts
             EditorUtility.SetDirty(dst);
         }
 
-        static void CopyDmxParameters(GameObject source, GameObject target)
+        static void CopyDmxParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset)
         {
             var dst = target.GetComponentInChildren<VRStageLighting_DMX_RealtimeLight>(includeInactive: true);
             if (dst == null)
@@ -428,7 +431,8 @@ namespace VRSL.URP.EditorScripts
             CopyField(srcStatic, dst, "maxMinPan");
             CopyField(srcStatic, dst, "maxMinTilt");
 
-            CopyField(srcStatic, dst, srcName: "lightColorTint",     dstName: "shellEmissionTint");
+            dst.shellEmissionTint = ScaledTint(srcStatic, sourceAsset, UPSTREAM_DMX_STATIC,
+                targetAsset.GetComponentInChildren<VRStageLighting_DMX_RealtimeLight>(true).shellEmissionTint);
             CopyField(srcStatic, dst, srcName: "tiltOffsetBlue",     dstName: "tiltOffset");
             CopyField(srcStatic, dst, srcName: "panOffsetBlueGreen", dstName: "panOffset");
             CopyField(srcStatic, dst, srcName: "enableAutoSpin",     dstName: "enableGoboSpin");
@@ -525,6 +529,22 @@ namespace VRSL.URP.EditorScripts
             if (s_WarnedFields.Add(dst.GetType().Name + "." + field))
                 Debug.LogWarning($"[VRSL Migration] '{field}' on {dst.GetType().Name} was not carried over ({reason}), " +
                                  "so migrated fixtures keep the new prefab's value. Check it by hand.");
+        }
+
+        // The old tint scaled by the two prefabs' defaults, so a fixture left at upstream's
+        // default arrives at ours and glows like a freshly placed one. Upstream's defaults are
+        // brighter than this package's (2 against 1 on most fixtures).
+        static Color ScaledTint(Component srcStatic, GameObject sourceAsset, string upstreamTypeName, Color urpDefault)
+        {
+            var tint = ReadField(srcStatic, "lightColorTint", urpDefault);
+            var srcDefaultComponent = sourceAsset != null ? FindComponentByTypeName(sourceAsset, upstreamTypeName) : null;
+            if (srcDefaultComponent == null) return tint;
+
+            float upstreamLevel = ReadField(srcDefaultComponent, "lightColorTint", urpDefault).maxColorComponent;
+            if (upstreamLevel <= 0f) return tint;
+
+            float k = urpDefault.maxColorComponent / upstreamLevel;
+            return new Color(tint.r * k, tint.g * k, tint.b * k, tint.a);
         }
 
         // For modern-RT-light → URP-RT-light migrations: copy every same-named field except
