@@ -254,5 +254,7 @@ MonoBehaviour:
   panOffset: 0
   tiltOffset: 90
   localLightDirection: {x: 0, y: -1, z: 0}
-  fixtureShellRenderers: []
-  shellEmissionTint: {r: 1, g: 1, b: 1, a: 1}
+  fixtureShellRenderers:
+  - {fileID: 7794633454614840187}
+  - {fileID: 8366583819614568630}
+  shellEmissionTint: {r: 2, g: 2, b: 2, a: 1}

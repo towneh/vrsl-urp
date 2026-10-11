@@ -167,8 +167,10 @@ MonoBehaviour:
   panOffset: 0
   tiltOffset: 90
   localLightDirection: {x: 0, y: -1, z: 0}
-  fixtureShellRenderers: []
-  shellEmissionTint: {r: 1, g: 1, b: 1, a: 1}
+  fixtureShellRenderers:
+  - {fileID: 3439614969517226840}
+  - {fileID: 4870603974529980485}
+  shellEmissionTint: {r: 2, g: 2, b: 2, a: 1}
 --- !u!1 &8891725695758557024
 GameObject:
   m_ObjectHideFlags: 0

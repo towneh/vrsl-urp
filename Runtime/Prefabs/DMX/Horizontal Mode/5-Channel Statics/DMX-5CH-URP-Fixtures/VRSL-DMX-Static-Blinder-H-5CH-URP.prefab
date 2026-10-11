@@ -229,6 +229,7 @@ MonoBehaviour:
   fixtureType: 2
   enableDMXChannels: 1
   enableFineChannels: 0
+  use5ChannelMode: 1
   useLegacySectorMode: 0
   sector: 0
   dmxChannel: 1
@@ -251,3 +252,7 @@ MonoBehaviour:
   panOffset: 0
   tiltOffset: 90
   localLightDirection: {x: 0, y: -1, z: 0}
+  fixtureShellRenderers:
+  - {fileID: 227367878400409762}
+  - {fileID: 7186078127535477412}
+  shellEmissionTint: {r: 2, g: 2, b: 2, a: 1}
