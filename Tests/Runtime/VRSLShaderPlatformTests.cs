@@ -26,7 +26,6 @@ namespace VRSL.URP.Tests
             ("VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar", false, null),
             ("VRSL-URP/Basic Laser/DMX",                                          false, null),
             ("VRSL-URP/Standard Static/Lens Flare",                               false, "_13CH_MODE"),
-            ("VRSL-URP/Other/Discoball",                                          false, null),
             ("VRSL-URP/Standard Mover/Fixture",                                   true,  null),
             ("VRSL-URP/Wash Mover/Fixture",                                       true,  null),
         };

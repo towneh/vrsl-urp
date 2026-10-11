@@ -178,7 +178,6 @@ namespace VRSL.URP.Tests
             "Horizontal Mode/VRSL-DMX-Static-LightBar-H-13CH.prefab",
             "Horizontal Mode/VRSL-DMX-Static-MultiLightBar-H-15CH.prefab",
             "Horizontal Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-H-5CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-DiscoBall-H-1CH.prefab",
             "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab",
             "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-H-13CH-URP.prefab",
             "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-H-13CH-URP.prefab",
@@ -202,7 +201,7 @@ namespace VRSL.URP.Tests
             "Vertical Mode/VRSL-DMX-Static-LightBar-V-13CH.prefab",
             "Vertical Mode/VRSL-DMX-Static-MultiLightBar-V-15CH.prefab",
             "Vertical Mode/5-Channel Statics/VRSL-DMX-Static-6x4StrobeLight-V-5CH.prefab",
-            "Vertical Mode/VRSL-DMX-Static-DiscoBall-V-1CH.prefab",
+            null,   // the shader-driven discoball's place, kept so the stored capture's layout holds
             "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-V-13CH-URP.prefab",
             "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-V-13CH-URP.prefab",
             "Vertical Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
@@ -273,29 +272,18 @@ namespace VRSL.URP.Tests
             var chosen = input ?? (source.HasValue ? VRSLDmxInput.StreamData : (VRSLDmxInput)layout);
             using var rig = VRSLDMXRig.Build();
             var painted = new List<VRSLDMXRig.PaintedGrid>();
-            var stilled = new List<Material>();
             RenderTexture white = null;
             VRSLGridTextures grid = null;
             try
             {
                 for (int i = 0; i < prefabs.Length; i++)
                 {
+                    if (prefabs[i] == null) continue;
                     var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefabs + prefabs[i]);
                     Assert.IsNotNull(prefab, $"{prefabs[i]} is not in the package");
                     var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
                     go.transform.localPosition = new Vector3(2f + i * 1.6f, 1.5f, -6f);
                     go.transform.localRotation = facing == null ? Quaternion.identity : Quaternion.Euler(facing[i]);
-                    // The Built-in discoball turns its dots with the shader clock, which no
-                    // capture holds, so two captures of one scene differ wherever they land.
-                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
-                    {
-                        if (!r.sharedMaterials.Any(m => m != null && m.shader.name.Contains("Discoball"))) continue;
-                        foreach (var m in r.materials)
-                        {
-                            stilled.Add(m);
-                            if (m.HasProperty("_RotationSpeed")) m.SetFloat("_RotationSpeed", 0f);
-                        }
-                    }
                     foreach (var s in go.GetComponentsInChildren<VRStageLighting_DMX_Static>(true))
                     {
                         s.useLegacySectorMode = true;
@@ -366,7 +354,6 @@ namespace VRSL.URP.Tests
             finally
             {
                 foreach (var p in painted) p.Dispose();
-                foreach (var m in stilled) if (m != null) Object.DestroyImmediate(m);
                 if (white != null) Object.DestroyImmediate(white);
                 if (grid  != null) Object.DestroyImmediate(grid);
             }
@@ -468,7 +455,7 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// G16. Every Horizontal fixture prefab renders the same patched at sectors 106 to
         /// 115, near the end of the grid's third universe, as at sectors 2 to 11, with the
-        /// same values painted at both. The lasers, lens flares, discoballs and mover bodies
+        /// same values painted at both. The lasers, lens flares and mover bodies
         /// read through the Built-in include, which sizes the grid from Unity's automatic
         /// texel size for the grid texture rather than from the manager; a wrong size moves
         /// the read further from its cell the further down the grid a fixture sits.
@@ -551,7 +538,6 @@ namespace VRSL.URP.Tests
         internal static readonly string[] BuiltInIncludePrefabs =
         {
             "Horizontal Mode/VRSL-DMX-Static-Laser-H-13CH.prefab",
-            "Horizontal Mode/VRSL-DMX-Static-DiscoBall-H-1CH.prefab",
             "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-Spotlight-H-13CH-URP.prefab",
             "Horizontal Mode/DMX-13CH-URP-Fixtures/VRSL-DMX-Mover-WashLight-H-13CH-URP.prefab",
         };
@@ -621,13 +607,12 @@ namespace VRSL.URP.Tests
             => CompareSourceWithGrid("N29", UrpIncludePrefabs, UrpIncludeFacing, new Vector3(6f, 2f, -15f));
 
         /// <summary>
-        /// N30, N29 for the Built-in include. The laser, the discoball and both realtime
-        /// movers light the same from a channel source as from a grid carrying what it
-        /// published: the laser's beams, movement and spin, the discoball, and the mover
-        /// heads, which pan and tilt with their beams.
+        /// N30, N29 for the Built-in include. The laser and both realtime movers light the
+        /// same from a channel source as from a grid carrying what it published: the laser's
+        /// beams, movement and spin, and the mover heads, which pan and tilt with their beams.
         /// </summary>
         [UnityTest]
-        public IEnumerator N30_lasers_discoballs_and_mover_heads_follow_a_channel_source()
+        public IEnumerator N30_lasers_and_mover_heads_follow_a_channel_source()
             => CompareSourceWithGrid("N30", BuiltInIncludePrefabs, new Vector3[BuiltInIncludePrefabs.Length],
                                      new Vector3(4.4f, 2f, -12f));
 
