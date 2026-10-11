@@ -2,7 +2,24 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **AudioLink is optional.** The package no longer depends on `com.llealloo.audiolink`, so a DMX-only project, or a Basis project with AudioLink removed, installs it without AudioLink and the DMX side works as before. Install AudioLink 3.1.2 or newer to use the AudioLink fixtures, their light manager, the AudioLink menus and the AudioLink example scene; scenes and prefabs that use them reconnect when it's installed.
+- **The AudioLink components moved to their own assemblies,** `Towneh.VRSL.URP.AudioLink` and `Towneh.VRSL.URP.AudioLink.Editor`, which compile only where AudioLink is installed. Their names and the `VRSL.URP` namespace are unchanged. If an assembly definition of your own uses the AudioLink manager or fixtures, add a reference to `Towneh.VRSL.URP.AudioLink`.
+- **The control panel adjusts every VRSL light manager in the scene.** Its AudioLink Manager field is gone; the panel already found the manager itself when the field was empty, which is how the shipped panel used it.
+- **The AudioLink example scene uses AudioLink's own AudioLink and controller prefabs,** set up as before, with the VRSL smoothing panel as part of the scene.
+
+### Removed
+
+- **`AudioLink-VRSLEdition` and `AudioLinkController-WithVRSLSmoothing`.** Both wrapped AudioLink's own prefabs, so they failed to import in a project without AudioLink. A scene of your own that placed one shows a missing prefab: use AudioLink's prefabs as the AudioLink example scene does.
+
+### Fixed
+
+- **AudioLink theme colours on fixture bodies.** A realtime light set to a theme colour gave its body the wrong one: ThemeColor0 drew a black body, and the others showed the colour before theirs. The cast light was already right.
+- **AudioLink texture colour modes with no sampling texture** now read AudioLink's own atlas, as the manager says they do. They read a black stand-in, so a fixture lit flat white or black.
+- **Removing an AudioLink fixture while playing** no longer stops every AudioLink light until `RefreshFixtures()` is called; the removed fixture goes dark until then.
+- **An AudioLink static fixture or laser with no renderers** says so in the Console instead of throwing.
+- **The AudioLink smoothing panel** shows whole percentages.
 
 ## [0.3.0-rc.2] — 2026-10-11
 
