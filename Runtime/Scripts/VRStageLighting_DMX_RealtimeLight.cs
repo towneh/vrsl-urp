@@ -194,17 +194,15 @@ namespace VRSL.URP
         // ──────────────────────────────────────────────────────────────────────────
         // Fixture shell driving
         // ──────────────────────────────────────────────────────────────────────────
-        [Tooltip("MeshRenderers on the fixture body that should react to this fixture's "
-               + "DMX state (lit lamp lens, status indicators, etc.). When a sibling "
-               + "VRStageLighting_DMX_Static is present it owns these renderers — leave "
-               + "this list empty in that case. On URP-only prefabs without a Static "
-               + "sibling, populate with the fixture body's MeshRenderer(s) so the lens "
-               + "still lights up under DMX without the legacy Static component.")]
+        [Tooltip("The fixture's body and lens flare. Each one follows this fixture's DMX: "
+               + "dark at black, lit in the desk's colour, strobing with it. The tint below, "
+               + "Curve Mod and the intensities above replace the material's own on these, "
+               + "so change them here rather than on the material.")]
         public MeshRenderer[] fixtureShellRenderers;
 
         [ColorUsage(showAlpha: false)]
-        [Tooltip("Color tint applied to the fixture body's emissive output. Multiplies "
-               + "with the DMX-decoded color. White = no tint.")]
+        [Tooltip("How brightly the body and flare glow, multiplying the colour the desk sends. "
+               + "The package's pars and blinders use 2; raise it for a brighter glow.")]
         public Color shellEmissionTint = Color.white;
 
         // ──────────────────────────────────────────────────────────────────────────
@@ -245,14 +243,10 @@ namespace VRSL.URP
         }
 
         // ──────────────────────────────────────────────────────────────────────────
-        // Fixture shell driving — pushes a MaterialPropertyBlock to the body
-        // MeshRenderers so the legacy fixture-mesh shader (which samples DMX
-        // textures globally) sees the right per-instance channel offset.
-        //
-        // Skipped when a sibling VRStageLighting_DMX_Static is present — Static
-        // is the authoritative driver in that case and pushes its own (richer)
-        // set of properties. This component takes over only on URP-only prefab
-        // variants that have intentionally dropped the Static sibling.
+        // Fixture shell driving — pushes a MaterialPropertyBlock to the body and
+        // flare renderers so their shaders read this fixture's address with DMX on.
+        // The block carries the tint, curve and intensities too, so the material's
+        // own values for those stop counting on a listed renderer.
         // ──────────────────────────────────────────────────────────────────────────
         public void DriveFixtureShells()
         {

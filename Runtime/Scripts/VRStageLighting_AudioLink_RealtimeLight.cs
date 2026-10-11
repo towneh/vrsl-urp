@@ -149,12 +149,10 @@ namespace VRSL.URP
         public Transform lensTransform;
 
         // ── Fixture shell driving ─────────────────────────────────────────────
-        [Tooltip("MeshRenderers on the fixture body that should react to AudioLink (lit "
-               + "lamp lens, status indicators, etc.). When a sibling "
-               + "VRStageLighting_AudioLink_Static is present it owns these renderers — "
-               + "leave this list empty in that case. On URP-only prefabs without a "
-               + "Static sibling, populate with the fixture body's MeshRenderer(s) so "
-               + "the lens still reacts under AudioLink without the legacy Static.")]
+        [Tooltip("The fixture's body renderers, such as the lamp lens. Each one glows with "
+               + "this fixture's AudioLink band and colour. The emission colour, colour mode "
+               + "and intensities set here replace the material's own on these, so change "
+               + "them here rather than on the material.")]
         public MeshRenderer[] fixtureShellRenderers;
 
         MaterialPropertyBlock _shellProps;
