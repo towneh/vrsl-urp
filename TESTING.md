@@ -834,6 +834,7 @@ what proves them.
 |---|---|---|---|
 | T1 | — | Every shader in the package, every pass of the subshaders URP uses, vertex and fragment programs, compiled for Android on Vulkan: plain, with `STEREO_MULTIVIEW_ON` (how a Quest renders both eyes in one pass) and with `INSTANCING_ON` | Every program compiles. The log names each borrowed pass left to URP |
 | T2 | — | The same for desktop Linux on Vulkan: plain and with `INSTANCING_ON`. Linux runs in desktop mode, so there is no stereo variant | Every program compiles |
+| T3 | — | Every shader in the package, by the name it declares | No two share a name; `Shader.Find` on a shared name returns whichever Unity loaded first. A failure names the shared name and the files declaring it |
 
 ---
 

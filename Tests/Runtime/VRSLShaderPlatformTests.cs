@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The package's shaders compiled for a platform the editor is not running on. Rows N34,
-    /// T1 and T2.
+    /// T1 and T2; T3 checks their names.
     /// </summary>
     class VRSLShaderPlatformTests
     {
@@ -265,6 +265,24 @@ namespace VRSL.URP.Tests
             Assert.Greater(shaders, 0, $"no shaders found under {PackageRuntime}");
             Assert.Greater(compiled, 0, "no program was compiled, so the row checked nothing");
             Assert.IsEmpty(failures, string.Join("\n", failures));
+        }
+
+        /// <summary>
+        /// T3. Every shader in the package has a name of its own. Where two share one,
+        /// <c>Shader.Find</c> returns whichever Unity loaded first.
+        /// </summary>
+        [Test]
+        public void T3_every_shader_has_its_own_name()
+        {
+            var shaders = PackageShaders();
+            Assert.Greater(shaders.Count, 0, $"no shaders found under {PackageRuntime}");
+            var shared = shaders.GroupBy(s => s.name)
+                                .Where(g => g.Count() > 1)
+                                .Select(g => $"\"{g.Key}\" is the name of "
+                                           + string.Join(" and ", g.Select(AssetDatabase.GetAssetPath)))
+                                .ToList();
+            Debug.Log($"[T3] {shaders.Count} shaders, {shared.Count} name(s) shared");
+            Assert.IsEmpty(shared, string.Join("\n", shared));
         }
     }
 }

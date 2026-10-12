@@ -1407,7 +1407,6 @@ namespace VRSL.URP.Tests
         /// of red, green or blue at 1, which the movers' pan, tilt and projection scaling
         /// would move. The floor has to leave its normal nowhere in VRSL's normals texture
         /// and drop out of the camera's depth.
-        /// The shaders are loaded by path: the two AudioLink movers share a name.
         /// Inconclusive for URP's texture if URP drew no normals for the Lit floor.
         /// </summary>
         [UnityTest]

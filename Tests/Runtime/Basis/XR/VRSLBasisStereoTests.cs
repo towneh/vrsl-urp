@@ -33,7 +33,7 @@ namespace VRSL.URP.Tests
 
         /// <summary>
         /// The body shaders, a group in frame at a time, each body in its group taking red,
-        /// green and blue in turn. Loaded by path: the two AudioLink movers share a name.
+        /// green and blue in turn.
         /// </summary>
         static readonly (string path, bool mover)[][] BodyGroups =
         {

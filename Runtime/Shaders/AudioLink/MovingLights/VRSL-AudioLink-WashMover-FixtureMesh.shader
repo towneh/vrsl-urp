@@ -1,4 +1,4 @@
-﻿Shader "VRSL-URP/AudioLink/Standard Mover/Fixture"
+﻿Shader "VRSL-URP/AudioLink/Wash Mover/Fixture"
 {
 	Properties
 	{
