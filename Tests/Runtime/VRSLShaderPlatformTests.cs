@@ -157,6 +157,7 @@ namespace VRSL.URP.Tests
             }
             // The UsePass errors are expected and judged below, so the framework mustn't
             // fail the test on them; anything else logged becomes a failure here instead.
+            bool ignoreFailingWas = UnityEngine.TestTools.LogAssert.ignoreFailingMessages;
             UnityEngine.TestTools.LogAssert.ignoreFailingMessages = true;
             Application.logMessageReceived += OnLog;
             var found = PackageShaders();
@@ -215,7 +216,11 @@ namespace VRSL.URP.Tests
                         }
                 }
             }
-            finally { Application.logMessageReceived -= OnLog; }
+            finally
+            {
+                Application.logMessageReceived -= OnLog;
+                UnityEngine.TestTools.LogAssert.ignoreFailingMessages = ignoreFailingWas;
+            }
             borrowed = leftToUrp;
             return failures;
         }

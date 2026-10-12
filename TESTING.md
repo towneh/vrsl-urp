@@ -71,6 +71,21 @@ A third, `Towneh.VRSL.URP.AudioLink.Tests`, exists only when `com.llealloo.audio
 project, like the AudioLink assemblies it tests. It holds the AudioLink halves of H8, Q5, C9,
 C10, the AudioLink wiring check and the **AudioLink (optional)** rows Y4 to Y6.
 
+A fourth, `Towneh.VRSL.URP.Basis.XR.Tests`, exists only when `com.unity.xr.mock-hmd` is in the
+project and holds the suite half of X4. It renders through Unity's Mock HMD in single-pass
+instanced stereo on Basis's own desktop and Android pipeline assets, and ignores itself where
+they aren't at `Assets/Basis/Settings/Quality Settiings/`. It needs the editor window: in batch
+mode Mock HMD gets a 0x0 eye texture and nothing renders, so the row ignores itself there. Run
+it on its own without `-batchmode`; the editor opens, runs it and quits:
+
+```
+Unity.exe -projectPath <project> -runTests -testPlatform PlayMode \
+  -assemblyNames "Towneh.VRSL.URP.Basis.XR.Tests" -testResults results.xml -logFile -
+```
+
+Importing Mock HMD writes its loader and settings assets under the project's `Assets/XR/`;
+nothing references them.
+
 The rows are written out in full below, because they are the specification the tests
 implement and because a failure message is only useful next to the claim it belongs to. Do
 them by hand when you need to see something on screen, or when a test fails and you want to
@@ -794,7 +809,7 @@ script, so a check that opens the example scenes opens copies of them.
 | X1 | — | Any lit scene in headset | Lighting identical in both eyes |
 | X2 | — | Volumetric cones in headset | Cones in the same world position in both eyes |
 | X3 | — | Diagnostics, tile culling active | No vertical mirroring of lighting between eyes. Mirroring points at the `renderIntoTexture` inference in `VRSLTileCullPass`; clearing `lightCullShader` isolates it |
-| X4 | — | Fixture body meshes in headset | Visible in both eyes |
+| X4 | — | Fixture body meshes in headset. **Suite half** (`VRSLBasisStereoTests`, Mock HMD): a cube per body shader in its own colour (AudioLink static red, DMX surface green, multi-channel bar blue) beside a white URP Lit cube, rendered single-pass instanced on Basis's desktop and Android pipeline assets in turn, both eyes read back from the display's eye texture | Visible in both eyes. Suite half: each body covers at least 200 pixels of its colour in each eye, the two eyes within a factor of two. Inconclusive if the display didn't hand back a two-slice eye texture, URP Lit isn't seen in both eyes, or the backend can't copy an array slice into a 2D texture (`CopyTextureSupport.DifferentTypes`), which the readback needs. The Android asset renders on the editor's GPU, so the suite half checks the Quest renderer's configuration, not the headset's GPU; the headset half stays. Mock HMD hands back a single-sample eye texture even where the asset asks for MSAA, so the readback's multisampled path is checked on its own: a 2x multisampled two-slice array cleared red and green reads back red and green |
 | X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye |
 
 ### Platforms

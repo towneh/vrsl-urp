@@ -1,0 +1,33 @@
+{
+    "name": "Towneh.VRSL.URP.Basis.XR.Tests",
+    "rootNamespace": "VRSL.URP.Tests",
+    "references": [
+        "Towneh.VRSL.URP",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "Unity.RenderPipelines.Core.Runtime",
+        "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.XR.Management",
+        "Unity.XR.MockHMD"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS",
+        "VRSL_MOCK_HMD_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.xr.mock-hmd",
+            "expression": "",
+            "define": "VRSL_MOCK_HMD_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}
