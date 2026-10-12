@@ -174,8 +174,7 @@ namespace VRSL.URP.Tests
         /// bodies (AudioLink static red, DMX surface green, multi-channel bar blue), the
         /// DMX movers (spot red, wash green) and the AudioLink movers (spot red, wash
         /// green). The movers' cubes carry black vertex colours, which the movers draw
-        /// in place, and take their colour from the decorative emissive map, since their
-        /// bodies read no URP light. Each pipeline asset is made the active one in turn
+        /// in place. Each pipeline asset is made the active one in turn
         /// and put back afterwards. The display's eye texture, what the headset would be
         /// handed, is read back a slice per eye for each group. Each body has to cover
         /// a fair number of pixels of its colour in each eye, and the two eyes' counts
@@ -294,19 +293,9 @@ namespace VRSL.URP.Tests
                         go.transform.position = new Vector3(-2.25f + 1.5f * i, 1f, 0f);
                         go.GetComponent<MeshRenderer>().sharedMaterial = m;
                         if (mover)
-                        {
-                            var emissive = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = $"VRSL X4 emissive {g}.{i}" };
-                            made.Add(emissive);
-                            emissive.SetPixel(0, 0, colour);
-                            emissive.Apply();
-                            m.SetTexture("_DecorativeEmissiveMap", emissive);
-                            m.SetFloat("_DecorativeEmissiveMapStrength", 1f);
                             go.GetComponent<MeshFilter>().sharedMesh = moverMesh;
-                        }
                         else
-                        {
                             m.SetTexture("_NormalMap", Texture2D.normalTexture);
-                        }
                         go.SetActive(false);
                         group[i] = (path, go);
                     }

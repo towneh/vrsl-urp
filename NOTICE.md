@@ -12,7 +12,7 @@ The following are direct derivatives of upstream — copied (with renames for co
 - Discoball and BasicLaser shaders (AudioLink and DMX variants).
 - The `VRSL-URP/Standard Static/Surface Shaders/*` shader family (Opaque, 12 Channel Bar).
 - The DMX CRT decode chain: all five `DMXRTShader-*.shader` files plus their CustomRenderTexture assets, materials, and output `RenderTexture` assets.
-- Shared HLSL includes: `VRSL-Defines-URP.hlsl`, `VRSL-DMXFunctions-URP.hlsl`, `VRSL-AudioLink-Functions-URP.hlsl`, `VRSL-LightingFunctions.cginc`, `VRSL-StandardLighting.cginc`, the per-fixture vertex / projection / volumetric `.cginc` includes.
+- Shared HLSL includes: `VRSL-Defines-URP.hlsl`, `VRSL-DMXFunctions-URP.hlsl`, `VRSL-AudioLink-Functions-URP.hlsl`, the Built-in `.cginc` read includes, and the pan, tilt and lens emission in `VRSL-MoverBody-URP.hlsl`.
 - The fixture geometry FBX meshes (Mover Spotlight HQ, Mover Washlight HQ, ParLight, StrobeLight, etc.).
 - All GOBO atlases, fixture body / projection / volumetric / lens-flare textures, mover light textures, static light textures.
 - The legacy fixture authoring components: `VRStageLighting_AudioLink_Static`, `VRStageLighting_DMX_Static`, `VRStageLighting_AudioLink_Laser`, `VRSL_AudioLink_SmoothingPanel`, `VRSL_LocalUIControlPanel`, plus their associated prefabs and the GridReader OSC integration.

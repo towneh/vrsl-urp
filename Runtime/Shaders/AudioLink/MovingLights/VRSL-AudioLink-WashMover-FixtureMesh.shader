@@ -2,7 +2,6 @@
 {
 	Properties
 	{
-		[Enum(Legacy, 0, GGX, 1)]_LightingModel("Lighting Model", Int) = 0
 		//[Header (INSTANCED PROPERITES)]
 		 [HideInInspector][Toggle] _PanInvert ("Invert Mover Pan", Int) = 0
 		 [HideInInspector][Toggle] _TiltInvert ("Invert Mover Tilt", Int) = 0
@@ -87,7 +86,6 @@
 
 		//[Space(48)]
 		//[Header(MAIN)]
-	[Enum(Unity Default, 0, Non Linear, 1)]_LightProbeMethod("Light Probe Sampling", Int) = 0
 		// [Enum(UVs, 0, Triplanar World, 1, Triplanar Object, 2)]_TextureSampleMode("Texture Mode", Int) = 0
 		// _TriplanarFalloff("Triplanar Blend", Range(0.5,1)) = 1
 		_MainTex("Main Texture", 2D) = "white" {}
@@ -110,294 +108,113 @@
 
 
 	}
-    SubShader
-    {
-        Tags
-        {
-            "Queue" = "AlphaTest+1" "RenderType" = "Opaque" "RenderPipeline"="UniversalPipeline"
-        }
 
-        Pass
-        {
-            Tags
-            {
-                "LightMode" = "UniversalForward"
-            }
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #pragma multi_compile_fwdbase
-            #pragma multi_compile_instancing
-            #pragma shader_feature_local _LIGHTING_MODEL
-            //REMOVE THIS WHEN FINISHED DEBUGGING
-            //#pragma target 4.5
+	SubShader
+	{
+		Tags { "Queue" = "AlphaTest+1" "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
 
-            #define GEOMETRY
-            #define FIXTURE_EMIT
-            #define VRSL_AUDIOLINK
-            #define WASH
-            #ifndef UNITY_PASS_FORWARDBASE
-            #define UNITY_PASS_FORWARDBASE
-            #endif
-            //DEBUGGING BUFFER
-            RWStructuredBuffer<float> buffer : register(u1);
-            RWStructuredBuffer<float4> buffer4 : register(u2);
+		Pass
+		{
+			Name "UniversalForward"
+			Tags { "LightMode" = "UniversalForward" }
 
-            #include "UnityCG.cginc"
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
+			HLSLPROGRAM
+			#pragma target 4.5
+			#pragma vertex VRSLMoverVertex
+			#pragma fragment VRSLMoverForwardFragment
+			#pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE _MAIN_LIGHT_SHADOWS_SCREEN
+			#pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+			#pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
+			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BLENDING
+			#pragma multi_compile_fragment _ _REFLECTION_PROBE_BOX_PROJECTION
+			#pragma multi_compile_fragment _ _REFLECTION_PROBE_ATLAS
+			#pragma multi_compile_fragment _ _SHADOWS_SOFT _SHADOWS_SOFT_LOW _SHADOWS_SOFT_MEDIUM _SHADOWS_SOFT_HIGH
+			#pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
+			#pragma multi_compile_fragment _ _LIGHT_COOKIES
+			#pragma multi_compile _ _LIGHT_LAYERS
+			#pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
+			#pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
+			#pragma multi_compile _ SHADOWS_SHADOWMASK
+			#pragma multi_compile _ PROBE_VOLUMES_L1 PROBE_VOLUMES_L2
+			#pragma multi_compile_fog
+			#pragma multi_compile_instancing
+			#pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv1 : TEXCOORD1;
-                float2 uv2 : TEXCOORD2;
-                float3 normal : NORMAL;
-                float3 tangent : TANGENT;
-                float4 color : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-            };
+			#define VRSL_AUDIOLINK
+			#define WASH
+			#define VRSL_MOVER_FORWARD
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-MoverBody-URP.hlsl"
+			ENDHLSL
+		}
 
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv1 : TEXCOORD1;
-                float2 uv2 : TEXCOORD2;
-                float3 btn[3] : TEXCOORD3; //TEXCOORD2, TEXCOORD3 | bitangent, tangent, worldNormal
-                float3 worldPos : TEXCOORD6;
-                #ifdef _LIGHTING_MODEL
-			        UNITY_LIGHTING_COORDS(7,8)
-			        float4 eyeVec : TEXCOORD12;
-			        half4 ambientOrLightmapUV : TEXCOORD13;
-                #else
-                float3 objPos : TEXCOORD7;
-                float3 objNormal : TEXCOORD8;
-                SHADOW_COORDS(11)
-                #endif
-                float4 color : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-                // SHADOW_COORDS(11)
-                UNITY_VERTEX_OUTPUT_STEREO
-            };
+		Pass
+		{
+			Name "ShadowCaster"
+			Tags { "LightMode" = "ShadowCaster" }
+			ZWrite On
+			ZTest LEqual
+			ColorMask 0
 
-            //#include "../Shared/VRSL-AudioLink-Defines.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
-            #include "../Shared/VRSL-AudioLink-Functions.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-LightingFunctions.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-StandardLighting.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
-            ENDCG
-        }
-        //UsePass "Legacy Shaders/VertexLit/SHADOWCASTER"
-        Pass
-        {
-            Tags
-            {
-                "LightMode"="ShadowCaster"
-            }
+			HLSLPROGRAM
+			#pragma target 4.5
+			#pragma vertex VRSLMoverShadowVertex
+			#pragma fragment VRSLMoverShadowFragment
+			#pragma multi_compile_instancing
+			#pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
 
-            CGPROGRAM
-            #pragma vertex vert
-            #pragma fragment frag
-            #pragma multi_compile_shadowcaster
-            #pragma multi_compile_instancing
-            #pragma multi_compile _ LOD_FADE_CROSSFADE
-            #define WASH
-            #define VRSL_AUDIOLINK
-            #include "UnityCG.cginc"
+			#define VRSL_AUDIOLINK
+			#define WASH
+			#define VRSL_MOVER_SHADOW
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-MoverBody-URP.hlsl"
+			ENDHLSL
+		}
 
-            struct v2f
-            {
-                V2F_SHADOW_CASTER;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-                UNITY_VERTEX_OUTPUT_STEREO
-            };
+		Pass
+		{
+			Name "DepthOnly"
+			Tags { "LightMode" = "DepthOnly" }
+			ZWrite On
+			ColorMask R
 
-            v2f vert(appdata_full v)
-            {
-                v2f o;
-                UNITY_SETUP_INSTANCE_ID(v);
-                    UNITY_INITIALIZE_OUTPUT(v2f, o); //DON'T INITIALIZE OR IT WILL BREAK PROJECTION
-                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-                UNITY_TRANSFER_INSTANCE_ID(v, o);
-                o.pos = ComputeScreenPos(UnityObjectToClipPos(v.vertex));
-                TRANSFER_SHADOW_CASTER_NORMALOFFSET(o)
-                return o;
-            }
+			HLSLPROGRAM
+			#pragma target 4.5
+			#pragma vertex VRSLMoverVertex
+			#pragma fragment VRSLMoverDepthOnlyFragment
+			#pragma multi_compile_instancing
+			#pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
-            float4 frag(v2f i) : SV_Target
-            {
-                #ifdef LOD_FADE_CROSSFADE
-                    float2 vpos = i.pos.xy / i.pos.w * _ScreenParams.xy;
-                    UnityApplyDitherCrossFade(vpos);
-                #endif
+			#define VRSL_AUDIOLINK
+			#define WASH
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-MoverBody-URP.hlsl"
+			ENDHLSL
+		}
 
-                SHADOW_CASTER_FRAGMENT(i)
-            }
-            ENDCG
-        }
+		Pass
+		{
+			Name "DepthNormals"
+			Tags { "LightMode" = "DepthNormals" }
+			ZWrite On
 
-        // Used for handling Depth Buffer (DBuffer) and Depth Priming
-        Pass
-        {
-            Name "DepthOnly"
-            Tags { "LightMode" = "DepthOnly" }
+			HLSLPROGRAM
+			#pragma target 4.5
+			#pragma vertex VRSLMoverVertex
+			#pragma fragment VRSLMoverDepthNormalsFragment
+			#pragma multi_compile_instancing
+			#pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+			#pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 
-            CGPROGRAM
-            // Declared here rather than taken from URP's Lit shader with UsePass.
-            //
-            // Under depth priming URP renders a depth prepass and then draws opaque
-            // geometry with an Equal depth test, so a depth pass whose vertex stage does
-            // not reproduce the forward pass exactly culls the geometry from the frame
-            // entirely. Lit's depth passes know nothing about this fixture's pan, tilt,
-            // cone scaling or the collapse that hides it at zero intensity, so they
-            // write a different depth and the body vanishes.
-            //
-            // Everything below mirrors the forward pass: the same defines, the same
-            // structs, the same include chain, and the same vert entry point. The
-            // fragment keeps the body's discards and lights nothing.
-            #pragma vertex vert
-            #pragma fragment fragDepthOnly
-            #pragma multi_compile_instancing
+			#define VRSL_AUDIOLINK
+			#define WASH
+			#include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+			#include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-MoverBody-URP.hlsl"
+			ENDHLSL
+		}
+	}
 
-            #define GEOMETRY
-            #define FIXTURE_EMIT
-            #define VRSL_AUDIOLINK
-            #ifndef UNITY_PASS_FORWARDBASE
-            #define UNITY_PASS_FORWARDBASE
-            #endif
-
-            #include "UnityCG.cginc"
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv1 : TEXCOORD1;
-                float2 uv2 : TEXCOORD2;
-                float3 normal : NORMAL;
-                float3 tangent : TANGENT;
-                float4 color : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-            };
-
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv1 : TEXCOORD1;
-                float2 uv2 : TEXCOORD2;
-                float3 btn[3] : TEXCOORD3; //TEXCOORD2, TEXCOORD3 | bitangent, tangent, worldNormal
-                float3 worldPos : TEXCOORD6;
-                #ifdef _LIGHTING_MODEL
-			        UNITY_LIGHTING_COORDS(7,8)
-			        float4 eyeVec : TEXCOORD12;
-			        half4 ambientOrLightmapUV : TEXCOORD13;
-                #else
-                float3 objPos : TEXCOORD7;
-                float3 objNormal : TEXCOORD8;
-                SHADOW_COORDS(11)
-                #endif
-                float4 color : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-                // SHADOW_COORDS(11)
-                UNITY_VERTEX_OUTPUT_STEREO
-            };
-
-            //#include "../Shared/VRSL-AudioLink-Defines.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
-            #include "../Shared/VRSL-AudioLink-Functions.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-LightingFunctions.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-StandardLighting.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
-            ENDCG
-        }
-
-        Pass
-        {
-            Name "DepthNormals"
-            Tags { "LightMode" = "DepthNormals" }
-
-            CGPROGRAM
-            // Declared here rather than taken from URP's Lit shader with UsePass.
-            //
-            // Under depth priming URP renders a depth prepass and then draws opaque
-            // geometry with an Equal depth test, so a depth pass whose vertex stage does
-            // not reproduce the forward pass exactly culls the geometry from the frame
-            // entirely. Lit's depth passes know nothing about this fixture's pan, tilt,
-            // cone scaling or the collapse that hides it at zero intensity, so they
-            // write a different depth and the body vanishes.
-            //
-            // Everything below mirrors the forward pass: the same defines, the same
-            // structs, the same include chain, and the same vert entry point. The
-            // fragment keeps the body's discards and writes its world-space normal.
-            #pragma vertex vert
-            #pragma fragment fragDepthNormals
-            #pragma multi_compile_instancing
-            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
-            #pragma shader_feature_local _LIGHTING_MODEL
-
-            #define GEOMETRY
-            #define FIXTURE_EMIT
-            #define VRSL_AUDIOLINK
-            #ifndef UNITY_PASS_FORWARDBASE
-            #define UNITY_PASS_FORWARDBASE
-            #endif
-
-            #include "UnityCG.cginc"
-            #include "Lighting.cginc"
-            #include "AutoLight.cginc"
-
-            struct appdata
-            {
-                float4 vertex : POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv1 : TEXCOORD1;
-                float2 uv2 : TEXCOORD2;
-                float3 normal : NORMAL;
-                float3 tangent : TANGENT;
-                float4 color : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-            };
-
-            struct v2f
-            {
-                float4 pos : SV_POSITION;
-                float2 uv : TEXCOORD0;
-                float2 uv1 : TEXCOORD1;
-                float2 uv2 : TEXCOORD2;
-                float3 btn[3] : TEXCOORD3; //TEXCOORD2, TEXCOORD3 | bitangent, tangent, worldNormal
-                float3 worldPos : TEXCOORD6;
-                #ifdef _LIGHTING_MODEL
-			        UNITY_LIGHTING_COORDS(7,8)
-			        float4 eyeVec : TEXCOORD12;
-			        half4 ambientOrLightmapUV : TEXCOORD13;
-                #else
-                float3 objPos : TEXCOORD7;
-                float3 objNormal : TEXCOORD8;
-                SHADOW_COORDS(11)
-                #endif
-                float4 color : COLOR;
-                UNITY_VERTEX_INPUT_INSTANCE_ID
-                // SHADOW_COORDS(11)
-                UNITY_VERTEX_OUTPUT_STEREO
-            };
-
-            //#include "../Shared/VRSL-AudioLink-Defines.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-Defines.cginc"
-            #include "../Shared/VRSL-AudioLink-Functions.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-LightingFunctions.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-StandardLighting.cginc"
-            #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/MovingLights/VRSL-StandardMover-Vertex.cginc"
-            ENDCG
-        }
-    }
-
-		
 	CustomEditor "VRSLInspector"
-	//CustomEditor "MoverProjectionLightCustomGUI"
 }

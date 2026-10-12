@@ -48,8 +48,8 @@ namespace VRSL.URP.Tests
         /// buffer compiles for Android on Vulkan, plain, instanced and instanced with
         /// multiview, and the passes that read the buffers still bind them there: the shader
         /// model the buffers need isn't lowered without a warning, which would leave the fixture on
-        /// the grid on Quest. Only passes that include the DMX read functions are compiled;
-        /// the others, among them those borrowed from URP's Lit shader, read no DMX.
+        /// the grid on Quest. Only passes that include the DMX read functions, directly or
+        /// through the mover body include, are compiled; the others read no DMX.
         /// </summary>
         [Test]
         public void N34_the_buffer_reading_shaders_compile_for_android_vulkan_and_keep_the_buffer()
@@ -65,7 +65,8 @@ namespace VRSL.URP.Tests
                 for (int p = 0; p < sub.PassCount; p++)
                 {
                     var pass = sub.GetPass(p);
-                    if (pass.SourceCode == null || !pass.SourceCode.Contains("VRSL-DMXFunctions")) continue;
+                    if (pass.SourceCode == null || !(pass.SourceCode.Contains("VRSL-DMXFunctions")
+                                                     || pass.SourceCode.Contains("VRSL-MoverBody-URP"))) continue;
                     foreach (var set in KeywordSets)
                     {
                         var keywords = mode == null ? set : set.Append(mode).ToArray();

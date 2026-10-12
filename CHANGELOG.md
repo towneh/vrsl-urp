@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **The mover body shaders have no Lighting Model or Light Probe Sampling setting.** Both lighting models now light through URP, so the two settings no longer choose anything. The body takes its smoothness from the metallic map's alpha times Smoothness, as the Legacy model did, so a material that was on GGX looks a little less glossy where its map's alpha is below 1.
+
 ### Fixed
+
+- **Moving-head bodies are lit by URP.** The spot and wash mover body shaders, DMX and AudioLink, lit themselves through the Built-in Render Pipeline's light variables, which URP never sets, so they took no main light, no additional lights and no shadows. They now light as URP Lit does, ambient from light probes or probe volumes included, and cast the shadow of what they draw, in the pose they're drawn in.
 
 - **AudioLink par, blinder, flasher and light bar bodies render lit.** Their shader drew them only while URP rendered main-light shadows with a single cascade, so with more than one (Basis uses four) they rendered black, emission included. On a Forward+ renderer they also lost the main light, because the shader wasn't built with URP's cluster light loop.
 - **DMX par, blinder and light bar bodies take the main light and ambient light.** Their shader wasn't built with URP's cluster light loop, so on a Forward+ renderer they lost the main light, and on any renderer it gave them no ambient or reflected light.

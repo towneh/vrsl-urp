@@ -231,7 +231,7 @@ half DMXValue(uint DMXChannel)
     return getValueAtCoords(DMXChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTexture, sampler_VRSLU_DMXGridRenderTexture));
 }
 
-half DMXMovement(uint DMXChannel)
+float DMXMovement(uint DMXChannel)
 {
     if (channelBufferLive()) return loadDMXMovement(DMXChannel);
     return getValueAtCoords(DMXChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridRenderTextureMovement, sampler_VRSLU_DMXGridRenderTextureMovement));
@@ -281,6 +281,11 @@ half DMXStrobe(uint DMXChannel)
 uint isDMX()
 {
     return UNITY_ACCESS_INSTANCED_PROP(Props,_EnableDMX);
+}
+
+uint allowFineChannels()
+{
+    return UNITY_ACCESS_INSTANCED_PROP(Props,_EnableFineChannels);
 }
 #ifndef LASER
 uint isStrobe()
@@ -405,13 +410,16 @@ half GetDMXChannel(uint DMXChannel)
 }
 
 //function for getting the Pan Value (Channel 2)
-half GetFinePanValue(uint DMXChannel)
+float GetFinePanValue(uint DMXChannel)
 {
+    if (allowFineChannels() == 0)
+        return 0;
+
     return DMXMovement(DMXChannel+1);
 }
-half GetPanValue(uint DMXChannel)
+float GetPanValue(uint DMXChannel)
 {
-    half inputValue = DMXMovement(DMXChannel);
+    float inputValue = DMXMovement(DMXChannel) + GetFinePanValue(DMXChannel) / 256.0;
     #if defined(VOLUMETRIC_YES) || defined(PROJECTION_YES) || defined(FIXTURE_EMIT) || defined(FIXTURE_SHADOWCAST) || defined(VRSL_SURFACE) || defined(VRSL_FLARE)
         return IF(isDMX() == 1, ((getMinMaxPan() * 2) * (inputValue)) - getMinMaxPan(), 0.0);
     #else
@@ -419,15 +427,18 @@ half GetPanValue(uint DMXChannel)
     #endif
 }
 
-half GetFineTiltValue(uint DMXChannel)
+float GetFineTiltValue(uint DMXChannel)
 {
+    if (allowFineChannels() == 0)
+        return 0;
+
     return DMXMovement(DMXChannel+3);
 }
 
 //function for getting the Tilt Value (Channel 3)
-half GetTiltValue(uint DMXChannel)
+float GetTiltValue(uint DMXChannel)
 {
-    half inputValue = DMXMovement(DMXChannel + 2);
+    float inputValue = DMXMovement(DMXChannel + 2) + GetFineTiltValue(DMXChannel) / 256.0;
     #if defined(VOLUMETRIC_YES) || defined(PROJECTION_YES) || defined(FIXTURE_EMIT) || defined(FIXTURE_SHADOWCAST) || defined(VRSL_SURFACE) || defined(VRSL_FLARE)
         return IF(isDMX() == 1, ((getMinMaxTilt() * 2) * (inputValue)) - getMinMaxTilt(), 0.0);
     #else

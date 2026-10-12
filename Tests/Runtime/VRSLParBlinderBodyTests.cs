@@ -342,8 +342,9 @@ namespace VRSL.URP.Tests
 
         /// <summary>
         /// J6. The fixture body shaders are lit by the main light whatever the shadow setup:
-        /// the AudioLink static body (par, blinder, flasher, light bar) and the DMX surface
-        /// bodies (par, blinder, and the multi-channel light bar).
+        /// the AudioLink static body (par, blinder, flasher, light bar), the DMX surface
+        /// bodies (par, blinder, and the multi-channel light bar) and the four mover bodies
+        /// (DMX and AudioLink, spot and wash).
         ///
         /// A cube on each body shader, emission off, beside a cube on URP Lit, under a white
         /// directional light that casts shadows, captured with the light off and then with
@@ -360,7 +361,8 @@ namespace VRSL.URP.Tests
         /// Forward+ renderer a body dark beside it at one cascade means its shader isn't
         /// built with the cluster light loop, so its main light reads a per-object
         /// attenuation Forward+ leaves at zero. The cubes cast their own shadows so the
-        /// shadow pass has something to draw at every count.
+        /// shadow pass has something to draw at every count. The mover cubes sit in a row
+        /// above the others and carry black vertex colours, which the movers draw in place.
         /// </summary>
         [UnityTest]
         public IEnumerator J6_fixture_bodies_are_lit_at_every_shadow_cascade_count()
@@ -377,20 +379,28 @@ namespace VRSL.URP.Tests
                 "VRSL-URP/Standard Static/Surface Shaders/Opaque",
                 "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
             };
+            string[] moverShaders =
+            {
+                "VRSL-URP/Standard Mover/Fixture",
+                "VRSL-URP/Wash Mover/Fixture",
+                "VRSL-URP/AudioLink/Standard Mover/Fixture",
+                "VRSL-URP/AudioLink/Wash Mover/Fixture",
+            };
             var lit = Shader.Find("Universal Render Pipeline/Lit");
             Assert.IsNotNull(lit, "URP Lit is not in the project");
 
             int cascadesWas = asset.shadowCascadeCount;
             var rig = VRSLDMXRig.Build(withSource: false, targetSize: 512);
             var materials = new List<Material>();
+            Mesh moverMesh = null;
             try
             {
-                MeshRenderer Cube(string name, float x, Material m)
+                MeshRenderer Cube(string name, float x, Material m, float y = 1f)
                 {
                     var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
                     go.name = name;
                     go.transform.SetParent(rig.Floor.transform.parent, false);
-                    go.transform.position = new Vector3(x, 1f, 0f);
+                    go.transform.position = new Vector3(x, y, 0f);
                     var r = go.GetComponent<MeshRenderer>();
                     r.sharedMaterial    = m;
                     r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
@@ -398,19 +408,36 @@ namespace VRSL.URP.Tests
                 }
 
                 var bodies = new List<(string shader, MeshRenderer renderer)>();
-                for (int i = 0; i < bodyShaders.Length; i++)
+                for (int i = 0; i < bodyShaders.Length + moverShaders.Length; i++)
                 {
-                    var shader = Shader.Find(bodyShaders[i]);
-                    Assert.IsNotNull(shader, $"{bodyShaders[i]} did not compile or is not in the project");
+                    bool mover = i >= bodyShaders.Length;
+                    string name = mover ? moverShaders[i - bodyShaders.Length] : bodyShaders[i];
+                    var shader = Shader.Find(name);
+                    Assert.IsNotNull(shader, $"{name} did not compile or is not in the project");
                     var material = new Material(shader) { name = $"VRSL J6 body {i}" };
                     materials.Add(material);
                     material.SetColor("_Color", Color.white);
-                    material.SetTexture("_NormalMap", Texture2D.normalTexture);
                     material.SetFloat("_Metallic", 0f);
                     material.SetFloat("_Glossiness", 0.2f);
                     material.SetFloat("_FixtureMaxIntensity", 0f);
                     material.SetFloat("_EnableDMX", 0f);
-                    bodies.Add((bodyShaders[i], Cube($"VRSL J6 body {i}", 197.75f + 1.5f * i, material)));
+                    if (!mover)
+                    {
+                        material.SetTexture("_NormalMap", Texture2D.normalTexture);
+                        bodies.Add((name, Cube($"VRSL J6 body {i}", 197.75f + 1.5f * i, material)));
+                        continue;
+                    }
+                    if (moverMesh == null)
+                    {
+                        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        moverMesh = Object.Instantiate(cube.GetComponent<MeshFilter>().sharedMesh);
+                        Object.DestroyImmediate(cube);
+                        moverMesh.name = "VRSL J6 mover cube";
+                        moverMesh.colors = Enumerable.Repeat(Color.black, moverMesh.vertexCount).ToArray();
+                    }
+                    var renderer = Cube($"VRSL J6 body {i}", 197.75f + 1.5f * (i - bodyShaders.Length), material, 2.4f);
+                    renderer.GetComponent<MeshFilter>().sharedMesh = moverMesh;
+                    bodies.Add((name, renderer));
                 }
                 // URP's own Lit with the same surface, beside the bodies, so a dark frame
                 // separates a body shader from the light and camera.
@@ -498,7 +525,9 @@ namespace VRSL.URP.Tests
                         $"{name} gains only {oneGain:F3} from the sun at one cascade ({oneCascade.body[i]} "
                       + $"against {dark.body[i]} with it off) while URP Lit beside it is lit. On a Forward+ "
                       + "renderer a shader built without _CLUSTER_LIGHT_LOOP takes its main light's "
-                      + "attenuation from unity_LightData.z, which Forward+ leaves at zero");
+                      + "attenuation from unity_LightData.z, which Forward+ leaves at zero. A shader lit "
+                      + "through the Built-in pipeline's light variables gains nothing on any renderer, "
+                      + "since URP never sets them");
                     if (Gain(fourCascade.body[i], dark.body[i]) < 0.5f * oneGain) failures.Add(
                         $"{name} reads {fourCascade.body[i]} at four cascades against {oneCascade.body[i]} at "
                       + $"one and {dark.body[i]} with the sun off. At more than one cascade URP sets "
@@ -517,6 +546,7 @@ namespace VRSL.URP.Tests
                 asset.shadowCascadeCount = cascadesWas;
                 rig.Dispose();
                 foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
+                if (moverMesh != null) Object.DestroyImmediate(moverMesh);
             }
         }
 

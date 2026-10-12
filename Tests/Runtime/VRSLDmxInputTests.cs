@@ -154,8 +154,8 @@ namespace VRSL.URP.Tests
             var sets = new[]
             {
                 (VRSLGridDecodeTests.UrpIncludePrefabs, VRSLGridDecodeTests.UrpIncludeFacing, new Vector3(6f, 2f, -15f)),
-                (VRSLGridDecodeTests.BuiltInIncludePrefabs,
-                 new Vector3[VRSLGridDecodeTests.BuiltInIncludePrefabs.Length], new Vector3(4.4f, 2f, -12f)),
+                (VRSLGridDecodeTests.MovingPrefabs,
+                 new Vector3[VRSLGridDecodeTests.MovingPrefabs.Length], new Vector3(4.4f, 2f, -12f)),
             };
             var fixtures = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
             foreach (var (prefabs, facing, eye) in sets)

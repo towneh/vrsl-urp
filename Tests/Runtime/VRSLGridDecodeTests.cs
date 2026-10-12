@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The decode in each grid layout and from a channel source, and what the fixtures
-    /// read from each. Rows G6 to G8, G10, G16, G17 and N29 to N33 of TESTING.md.
+    /// read from each. Rows G6 to G8, G10, G16 to G18 and N29 to N33 of TESTING.md.
     /// </summary>
     class VRSLGridDecodeTests : VRSLDMXTest
     {
@@ -453,10 +453,10 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// G16. Every Horizontal fixture prefab renders the same patched at sectors 106 to
         /// 115, near the end of the grid's third universe, as at sectors 2 to 11, with the
-        /// same values painted at both. The lasers, lens flares and mover bodies
-        /// read through the Built-in include, which sizes the grid from Unity's automatic
-        /// texel size for the grid texture rather than from the manager; a wrong size moves
-        /// the read further from its cell the further down the grid a fixture sits.
+        /// same values painted at both. The lasers and lens flares read through the
+        /// Built-in include, which sizes the grid from Unity's automatic texel size for the
+        /// grid texture rather than from the manager; a wrong size moves the read further
+        /// from its cell the further down the grid a fixture sits.
         /// </summary>
         [UnityTest]
         public IEnumerator G16_a_prefab_lights_the_same_at_the_end_of_the_grid()
@@ -531,9 +531,10 @@ namespace VRSL.URP.Tests
             new(90f, 0f, 0f), new(90f, 0f, 0f), new(0f, 180f, 0f), new(90f, 0f, 0f), Vector3.zero, Vector3.zero,
         };
 
-        /// <summary>The Horizontal prefabs whose beams or bodies read the grid through the
-        /// Built-in include, besides the lens flares on the flasher and the blinder.</summary>
-        internal static readonly string[] BuiltInIncludePrefabs =
+        /// <summary>The Horizontal prefabs that move: the laser, whose beams read the grid
+        /// through the Built-in include, and both realtime movers, whose heads read it through
+        /// the URP one.</summary>
+        internal static readonly string[] MovingPrefabs =
         {
             "VRSL-DMX-Static-Laser-13CH.prefab",
             "VRSL-DMX-Mover-Spotlight-13CH.prefab",
@@ -597,21 +598,21 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// N29. The flasher, light bar, 15-channel bar, 6x4 strobe and realtime
         /// blinder and par, with the rig's movers behind them, light the same from a channel
-        /// source as from a grid carrying what it published: bodies on the URP include, lens
-        /// flares and mover heads on the Built-in one, and the realtime light.
+        /// source as from a grid carrying what it published: bodies and mover heads on the URP
+        /// include, lens flares on the Built-in one, and the realtime light.
         /// </summary>
         [UnityTest]
         public IEnumerator N29_shader_driven_fixtures_follow_a_channel_source()
             => CompareSourceWithGrid("N29", UrpIncludePrefabs, UrpIncludeFacing, new Vector3(6f, 2f, -15f));
 
         /// <summary>
-        /// N30, N29 for the Built-in include. The laser and both realtime movers light the
-        /// same from a channel source as from a grid carrying what it published: the laser's
-        /// beams, movement and spin, and the mover heads, which pan and tilt with their beams.
+        /// N30, N29 for what moves. The laser and both realtime movers light the same from a
+        /// channel source as from a grid carrying what it published: the laser's beams,
+        /// movement and spin, and the mover heads, which pan and tilt with their beams.
         /// </summary>
         [UnityTest]
         public IEnumerator N30_lasers_and_mover_heads_follow_a_channel_source()
-            => CompareSourceWithGrid("N30", BuiltInIncludePrefabs, new Vector3[BuiltInIncludePrefabs.Length],
+            => CompareSourceWithGrid("N30", MovingPrefabs, new Vector3[MovingPrefabs.Length],
                                      new Vector3(4.4f, 2f, -12f));
 
         /// <summary>
@@ -619,11 +620,13 @@ namespace VRSL.URP.Tests
         /// by <paramref name="probe"/>: the value in red, the movement value in green and
         /// the spin phase in blue. The grid is <paramref name="grid"/> with
         /// <paramref name="spin"/> as its spin timer; with <paramref name="fromBuffer"/> the
-        /// manager's buffers are live as well.
+        /// manager's buffers are live as well. <paramref name="configure"/> sets anything else
+        /// the probe reads.
         /// </summary>
         static Color[] ReadThrough(string probe, int count, RenderTexture grid, RenderTexture spin,
                                    VRSL_URPLightManager manager, bool fromBuffer,
-                                   VRSLGridLayout layout = VRSLGridLayout.Horizontal)
+                                   VRSLGridLayout layout = VRSLGridLayout.Horizontal,
+                                   System.Action<Material> configure = null)
         {
             var shader = Shader.Find(probe);
             Assert.IsNotNull(shader, $"the {probe} test shader is not in this project");
@@ -644,6 +647,7 @@ namespace VRSL.URP.Tests
                 material.SetBuffer("_VRSLU_DMXSpinPhase",   manager.SpinPhaseBuffer);
                 material.SetBuffer("_VRSLU_DMXStrobePhase", manager.StrobePhaseBuffer);
                 material.SetInteger("_VRSLU_DMXChannelCount", fromBuffer ? manager.ChannelCount : 0);
+                configure?.Invoke(material);
                 cmd.SetRenderTarget(target);
                 cmd.DrawProcedural(Matrix4x4.identity, material, 0, MeshTopology.Triangles, 3);
                 Graphics.ExecuteCommandBuffer(cmd);
@@ -815,6 +819,68 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// G18. The pan and tilt a mover body reads through the URP include take the fine
+        /// channel after each coarse one, worth a 256th of a coarse step, when the fixture
+        /// enables fine channels, and leave it out when it doesn't, as the compute does for
+        /// the realtime light. Read from a painted grid at a 180-degree sweep each way.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G18_the_urp_include_reads_fine_pan_and_tilt()
+        {
+            const int channel = 27;
+            const float coarsePan = 100f / 255f, finePan = 200f / 255f;
+            const float coarseTilt = 60f / 255f, fineTilt = 30f / 255f;
+            var rig = VRSLDMXRig.Build();
+            VRSLDMXRig.PaintedGrid painted = null;
+            try
+            {
+                yield return rig.Step(2);
+                var values = new float[channel + 3];
+                values[channel - 1] = coarsePan;
+                values[channel]     = finePan;
+                values[channel + 1] = coarseTilt;
+                values[channel + 2] = fineTilt;
+                var size = SizeOf(VRSLGridLayout.Horizontal);
+                painted = VRSLDMXRig.PaintGrid(values, VRSLGridLayout.Horizontal, size.x, size.y);
+
+                Vector2 Read(bool fine)
+                {
+                    var read = ReadThrough("Hidden/VRSL-URP/Tests/UrpPanTilt", 1, painted.Texture, painted.Texture,
+                                           rig.Manager, fromBuffer: false, configure: m =>
+                    {
+                        m.SetInteger("_ProbeChannel", channel);
+                        m.SetInteger("_EnableDMX", 1);
+                        m.SetInteger("_EnableFineChannels", fine ? 1 : 0);
+                        m.SetFloat("_MaxMinPanAngle", 180f);
+                        m.SetFloat("_MaxMinTiltAngle", 180f);
+                    })[0];
+                    return new Vector2(read.r, read.g);
+                }
+
+                // Degrees across the full 360-degree sweep, centred on zero.
+                var coarse   = new Vector2(coarsePan * 360f - 180f, coarseTilt * 360f - 180f);
+                var withFine = new Vector2((coarsePan + finePan / 256f) * 360f - 180f,
+                                           (coarseTilt + fineTilt / 256f) * 360f - 180f);
+                var off = Read(fine: false);
+                var on  = Read(fine: true);
+                Debug.Log($"[G18] fine channels off: pan {off.x:F4}, tilt {off.y:F4}; "
+                        + $"on: pan {on.x:F4}, tilt {on.y:F4}");
+
+                Assert.That(off.x, Is.EqualTo(coarse.x).Within(0.01f), "pan with fine channels off");
+                Assert.That(off.y, Is.EqualTo(coarse.y).Within(0.01f), "tilt with fine channels off");
+                Assert.That(on.x, Is.EqualTo(withFine.x).Within(0.01f),
+                    $"pan with fine channels on reads {on.x:F4} where the fine channel puts it at {withFine.x:F4}");
+                Assert.That(on.y, Is.EqualTo(withFine.y).Within(0.01f),
+                    $"tilt with fine channels on reads {on.y:F4} where the fine channel puts it at {withFine.y:F4}");
+            }
+            finally
+            {
+                rig.Dispose();
+                painted?.Dispose();
+            }
+        }
+
+        /// <summary>
         /// N32, the strobe gate. A 13-channel light bar patched on the same sector as one
         /// of the rig's realtime movers, strobing from the synthetic source's Ramp: frame by
         /// frame, the bar glows exactly when the realtime light is open.
@@ -894,7 +960,7 @@ namespace VRSL.URP.Tests
             var sets = new[]
             {
                 (UrpIncludePrefabs, UrpIncludeFacing, new Vector3(6f, 2f, -15f)),
-                (BuiltInIncludePrefabs, new Vector3[BuiltInIncludePrefabs.Length], new Vector3(4.4f, 2f, -12f)),
+                (MovingPrefabs, new Vector3[MovingPrefabs.Length], new Vector3(4.4f, 2f, -12f)),
             };
             foreach (var (prefabs, facing, eye) in sets)
             {
