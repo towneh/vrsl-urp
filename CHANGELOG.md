@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.4] — 2026-10-12
+
 ### Changed
 
 - **The video output's Rotate 90° button is now two:** **Turn 90° Anticlockwise** and **Turn 90° Clockwise** (the old button turned clockwise). A horizontal grid strip goes in anticlockwise.
