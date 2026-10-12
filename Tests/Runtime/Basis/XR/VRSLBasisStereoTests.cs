@@ -29,6 +29,34 @@ namespace VRSL.URP.Tests
         /// <summary>Pixels an eye must give a body before it counts as seen.</summary>
         const int MinPixels = 200;
 
+        const string Shaders = "Packages/town.mr.vrsl-urp/Runtime/Shaders/";
+
+        /// <summary>
+        /// The body shaders, a group in frame at a time, each body in its group taking red,
+        /// green and blue in turn. Loaded by path: the two AudioLink movers share a name.
+        /// </summary>
+        static readonly (string path, bool mover)[][] BodyGroups =
+        {
+            new[]
+            {
+                ("AudioLink/StaticLights/VRSL-AudioLink-StaticLight-FixtureMesh.shader",       false),
+                ("Basic Surface Shaders/VRSL-StandardSurface-Opaque.shader",                    false),
+                ("Basic Surface Shaders/VRSL-StandardSurface-Opaque 12 Channel Bar.shader",     false),
+            },
+            new[]
+            {
+                ("MovingLights/VRSL-StandardMover-FixtureMesh.shader",                          true),
+                ("MovingLights/VRSL-WashMover-FixtureMesh.shader",                              true),
+            },
+            new[]
+            {
+                ("AudioLink/MovingLights/VRSL-AudioLink-StandardMover-FixtureMesh.shader",      true),
+                ("AudioLink/MovingLights/VRSL-AudioLink-WashMover-FixtureMesh.shader",          true),
+            },
+        };
+
+        static readonly Color[] BodyColours = { Color.red, Color.green, Color.blue };
+
         /// <summary>
         /// One eye of the display's eye texture, read back as linear floats. A copy needs
         /// matching sample counts, so a multisampled eye array is resolved into a
@@ -141,11 +169,15 @@ namespace VRSL.URP.Tests
         /// pipeline assets (Forward+ and Forward renderers), in single-pass instanced
         /// stereo through Mock HMD.
         ///
-        /// A cube per body shader, each body a different colour (AudioLink static red,
-        /// DMX surface green, multi-channel bar blue), beside a white URP Lit cube, under
-        /// a directional light with ambient off. Each pipeline asset is made the active
-        /// one in turn and put back afterwards. The display's eye texture, what the
-        /// headset would be handed, is read back a slice per eye. Each body has to cover
+        /// A cube per body shader beside a white URP Lit cube, under a directional light
+        /// with ambient off, the bodies in three groups framed one at a time: the static
+        /// bodies (AudioLink static red, DMX surface green, multi-channel bar blue), the
+        /// DMX movers (spot red, wash green) and the AudioLink movers (spot red, wash
+        /// green). The movers' cubes carry black vertex colours, which the movers draw
+        /// in place, and take their colour from the decorative emissive map, since their
+        /// bodies read no URP light. Each pipeline asset is made the active one in turn
+        /// and put back afterwards. The display's eye texture, what the headset would be
+        /// handed, is read back a slice per eye for each group. Each body has to cover
         /// a fair number of pixels of its colour in each eye, and the two eyes' counts
         /// have to agree within a factor of two, which parallax stays well inside.
         /// Counting colours rather than projecting bounds keeps the row independent of
@@ -232,28 +264,53 @@ namespace VRSL.URP.Tests
                 light.transform.rotation = Quaternion.Euler(30f, 20f, 0f);
                 RenderSettings.sun = light;
 
-                var bodies = new (string shader, Color colour)[]
+                var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                var moverMesh = Object.Instantiate(cube.GetComponent<MeshFilter>().sharedMesh);
+                Object.DestroyImmediate(cube);
+                moverMesh.name = "VRSL X4 mover cube";
+                moverMesh.colors = Enumerable.Repeat(Color.black, moverMesh.vertexCount).ToArray();
+                made.Add(moverMesh);
+
+                var groups = new List<(string path, GameObject go)[]>();
+                for (int g = 0; g < BodyGroups.Length; g++)
                 {
-                    ("VRSL-URP/AudioLink/Standard Static/Fixture",                        Color.red),
-                    ("VRSL-URP/Standard Static/Surface Shaders/Opaque",                   Color.green),
-                    ("VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar", Color.blue),
-                };
-                for (int i = 0; i < bodies.Length; i++)
-                {
-                    var shader = Shader.Find(bodies[i].shader);
-                    Assert.IsNotNull(shader, $"{bodies[i].shader} did not compile or is not in the project");
-                    var m = new Material(shader) { name = $"VRSL X4 body {i}" };
-                    made.Add(m);
-                    m.SetColor("_Color", bodies[i].colour);
-                    m.SetTexture("_NormalMap", Texture2D.normalTexture);
-                    m.SetFloat("_Metallic", 0f);
-                    m.SetFloat("_Glossiness", 0.2f);
-                    m.SetFloat("_FixtureMaxIntensity", 0f);
-                    m.SetFloat("_EnableDMX", 0f);
-                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    made.Add(go);
-                    go.transform.position = new Vector3(-2.25f + 1.5f * i, 1f, 0f);
-                    go.GetComponent<MeshRenderer>().sharedMaterial = m;
+                    var group = new (string path, GameObject go)[BodyGroups[g].Length];
+                    for (int i = 0; i < group.Length; i++)
+                    {
+                        var (path, mover) = BodyGroups[g][i];
+                        var shader = UnityEditor.AssetDatabase.LoadAssetAtPath<Shader>(Shaders + path);
+                        Assert.IsNotNull(shader, $"{path} is not in the project");
+                        Assert.IsTrue(shader.isSupported, $"{path} did not compile");
+                        var colour = BodyColours[i];
+                        var m = new Material(shader) { name = $"VRSL X4 body {g}.{i}" };
+                        made.Add(m);
+                        m.SetColor("_Color", colour);
+                        m.SetFloat("_Metallic", 0f);
+                        m.SetFloat("_Glossiness", 0.2f);
+                        m.SetFloat("_FixtureMaxIntensity", 0f);
+                        m.SetFloat("_EnableDMX", 0f);
+                        var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        made.Add(go);
+                        go.transform.position = new Vector3(-2.25f + 1.5f * i, 1f, 0f);
+                        go.GetComponent<MeshRenderer>().sharedMaterial = m;
+                        if (mover)
+                        {
+                            var emissive = new Texture2D(1, 1, TextureFormat.RGBA32, false) { name = $"VRSL X4 emissive {g}.{i}" };
+                            made.Add(emissive);
+                            emissive.SetPixel(0, 0, colour);
+                            emissive.Apply();
+                            m.SetTexture("_DecorativeEmissiveMap", emissive);
+                            m.SetFloat("_DecorativeEmissiveMapStrength", 1f);
+                            go.GetComponent<MeshFilter>().sharedMesh = moverMesh;
+                        }
+                        else
+                        {
+                            m.SetTexture("_NormalMap", Texture2D.normalTexture);
+                        }
+                        go.SetActive(false);
+                        group[i] = (path, go);
+                    }
+                    groups.Add(group);
                 }
                 var lit = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "VRSL X4 reference" };
                 made.Add(lit);
@@ -269,7 +326,10 @@ namespace VRSL.URP.Tests
 
                 var failures = new List<string>();
                 foreach (var (name, asset) in pipelines)
+                foreach (var group in groups)
                 {
+                    foreach (var other in groups)
+                        foreach (var (_, go) in other) go.SetActive(other == group);
                     rendersForCam = 0;
                     int errorsBefore = errors.Count;
                     for (int i = 0; i < 10; i++)
@@ -307,18 +367,18 @@ namespace VRSL.URP.Tests
                     var left  = ReadEye(eyes, 0);
                     var right = ReadEye(eyes, 1);
                     int refLeft = CountWhite(left), refRight = CountWhite(right);
-                    Debug.Log($"[X4] {name}: URP Lit left {refLeft} px, right {refRight} px");
+                    Debug.Log($"[X4] {name}, group {groups.IndexOf(group)}: URP Lit left {refLeft} px, right {refRight} px");
                     if (refLeft < MinPixels || refRight < MinPixels)
                         Assert.Inconclusive($"on Basis's {name} pipeline URP Lit covers {refLeft} px left and "
                                           + $"{refRight} px right, so the scene or the capture is wrong");
-                    for (int i = 0; i < bodies.Length; i++)
+                    for (int i = 0; i < group.Length; i++)
                     {
                         int l = CountHue(left, i), r = CountHue(right, i);
-                        Debug.Log($"[X4] {name}: {bodies[i].shader} left {l} px, right {r} px");
+                        Debug.Log($"[X4] {name}: {group[i].path} left {l} px, right {r} px");
                         if (l < MinPixels || r < MinPixels)
-                            failures.Add($"{name}: {bodies[i].shader} covers {l} px in the left eye and {r} px in the right");
+                            failures.Add($"{name}: {group[i].path} covers {l} px in the left eye and {r} px in the right");
                         else if (Mathf.Max(l, r) > 2f * Mathf.Min(l, r))
-                            failures.Add($"{name}: {bodies[i].shader} covers {l} px left against {r} px right, "
+                            failures.Add($"{name}: {group[i].path} covers {l} px left against {r} px right, "
                                        + "more than parallax explains");
                     }
                 }
