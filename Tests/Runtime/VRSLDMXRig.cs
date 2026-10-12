@@ -72,6 +72,8 @@ namespace VRSL.URP.Tests
         int           _assetMsaaWas;
         GPUResidentDrawerMode? _drawer;
         GPUResidentDrawerMode  _drawerWas;
+        float?        _renderScale;
+        float         _renderScaleWas;
         UnityEngine.Rendering.Universal.DepthPrimingMode? _priming;
         readonly Dictionary<UnityEngine.Rendering.Universal.UniversalRendererData,
                             UnityEngine.Rendering.Universal.DepthPrimingMode> _primingWas = new();
@@ -157,10 +159,14 @@ namespace VRSL.URP.Tests
         /// every render and put back on dispose; null holds nothing. Setting the
         /// asset's mode recreates the pipeline, so it is written only when it
         /// differs.</param>
+        /// <param name="renderScale">Render scale, held on the pipeline asset at every
+        /// render and put back on dispose; null holds nothing. Basis sets it from the
+        /// user's resolution setting.</param>
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
                                        int targetSize = TargetSize, int msaa = 1,
                                        UnityEngine.Rendering.Universal.DepthPrimingMode? priming = DefaultPriming,
-                                       GPUResidentDrawerMode? drawer = DefaultDrawer)
+                                       GPUResidentDrawerMode? drawer = DefaultDrawer,
+                                       float? renderScale = null)
         {
             VRSLDMXRig building = null;
             try
@@ -246,6 +252,9 @@ namespace VRSL.URP.Tests
             rig._drawer    = drawer;
             rig._drawerWas = rig._asset != null ? rig._asset.gpuResidentDrawerMode : GPUResidentDrawerMode.Disabled;
             rig.HoldDrawer();
+            rig._renderScale    = renderScale;
+            rig._renderScaleWas = rig._asset != null ? rig._asset.renderScale : 1f;
+            rig.HoldRenderScale();
             rig._camera = new GameObject("Camera").AddComponent<Camera>();
             rig._camera.transform.SetParent(rig._root.transform, false);
             // Aimed across the near end of the truss and down at the floor, so several
@@ -431,6 +440,7 @@ namespace VRSL.URP.Tests
                 _asset.msaaSampleCount = _msaa;
             HoldPriming();
             HoldDrawer();
+            HoldRenderScale();
             camera.Render();
         }
 
@@ -445,6 +455,13 @@ namespace VRSL.URP.Tests
             if (!_drawer.HasValue || _asset == null) return;
             if (_asset.gpuResidentDrawerMode != _drawer.Value)
                 _asset.gpuResidentDrawerMode = _drawer.Value;
+        }
+
+        void HoldRenderScale()
+        {
+            if (!_renderScale.HasValue || _asset == null) return;
+            if (_asset.renderScale != _renderScale.Value)
+                _asset.renderScale = _renderScale.Value;
         }
 
         void HoldPriming()
@@ -930,6 +947,8 @@ namespace VRSL.URP.Tests
             if (_asset != null && _drawer.HasValue && _asset.gpuResidentDrawerMode != _drawerWas)
                 _asset.gpuResidentDrawerMode = _drawerWas;
             _drawer = null;
+            if (_asset != null && _renderScale.HasValue) _asset.renderScale = _renderScaleWas;
+            _renderScale = null;
             _asset = null;
             foreach (var pair in _primingWas)
                 if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;

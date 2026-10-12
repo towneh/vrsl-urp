@@ -77,6 +77,7 @@
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile_fragment _ _SCREEN_SPACE_OCCLUSION
+            #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
             #pragma multi_compile _ SHADOWS_SHADOWMASK
             #pragma multi_compile_fog
@@ -110,7 +111,7 @@
                 float4 tangentWS : TEXCOORD3;
                 float3 viewDirWS : TEXCOORD4;
                 half4 fogFactorAndVertexLight : TEXCOORD5;
-                #ifdef _MAIN_LIGHT_SHADOWS
+                #if defined(_MAIN_LIGHT_SHADOWS) || defined(_MAIN_LIGHT_SHADOWS_SCREEN)
                 float4 shadowCoord : TEXCOORD6;
                 #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
@@ -142,7 +143,7 @@
                 half fogFactor = ComputeFogFactor(vertexInput.positionCS.z);
                 output.fogFactorAndVertexLight = half4(fogFactor, vertexLight);
 
-                #ifdef _MAIN_LIGHT_SHADOWS
+                #if defined(_MAIN_LIGHT_SHADOWS) || defined(_MAIN_LIGHT_SHADOWS_SCREEN)
                 output.shadowCoord = GetShadowCoord(vertexInput);
                 #endif
 
@@ -165,6 +166,7 @@
                 surfaceData.metallic = _Metallic;
                 surfaceData.smoothness = _Glossiness;
                 surfaceData.normalTS = normalTS;
+                surfaceData.occlusion = 1;
 
                 // Convert TBN from TS to WS
                 float3 normalWS = TransformTangentToWorld(
@@ -174,13 +176,20 @@
                 );
                 normalWS = normalize(normalWS);
 
-                // Calculate shadow coords
-                #ifdef _MAIN_LIGHT_SHADOWS
+                // Calculate shadow coords. Cascades pick their split per pixel, so they
+                // can't be interpolated from the vertices.
+                #if defined(_MAIN_LIGHT_SHADOWS) || defined(_MAIN_LIGHT_SHADOWS_SCREEN)
                 float4 shadowCoord = input.shadowCoord;
+                #elif defined(_MAIN_LIGHT_SHADOWS_CASCADE)
+                float4 shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                #else
+                float4 shadowCoord = float4(0, 0, 0, 0);
+                #endif
 
                 // Setup InputData
                 InputData inputData = (InputData)0;
                 inputData.positionWS = input.positionWS;
+                inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
                 inputData.normalWS = normalWS;
                 inputData.viewDirectionWS = SafeNormalize(input.viewDirWS);
                 inputData.shadowCoord = shadowCoord;
@@ -208,9 +217,6 @@
                 color.rgb = MixFog(color.rgb, inputData.fogCoord);
 
                 return color;
-                #else
-                return (0).xxxx;
-                #endif
             }
             ENDHLSL
         }

@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The surface prepass rows, S10 to S15: what it draws, for whom, where its
+    /// The surface prepass rows, S10 to S17: what it draws, for whom, where its
     /// normals may come from instead, and whether what it captured reaches the
     /// lighting pass.
     ///
@@ -60,6 +60,7 @@ namespace VRSL.URP.Tests
             public RTHandle[] Extras;
 
             public int  ObservedMsaa   { get; private set; }
+            public int  ObservedWidth  { get; private set; }
             public bool UrpHandleValid { get; private set; }
             public int  Recorded       { get; private set; }
 
@@ -81,6 +82,7 @@ namespace VRSL.URP.Tests
                 var camData   = frame.Get<UniversalCameraData>();
                 var resources = frame.Get<UniversalResourceData>();
                 ObservedMsaa   = camData.cameraTargetDescriptor.msaaSamples;
+                ObservedWidth  = camData.cameraTargetDescriptor.width;
                 UrpHandleValid = resources.cameraNormalsTexture.IsValid();
                 Recorded++;
 
@@ -702,6 +704,7 @@ namespace VRSL.URP.Tests
             public GPUResidentDrawerMode modeAsked, modeSeen;
             public bool    drawerInitialised;
             public string  drawerSupport;
+            public int     renderWidth;
             public int     floorPixels, captured;
             public Vector3 albedo, litMean;
             public float   smoothness, metallic, litPercent;
@@ -711,7 +714,7 @@ namespace VRSL.URP.Tests
                 => $"drawer {modeAsked} (asset read {modeSeen}, drawer "
                  + $"{(drawerInitialised ? "initialised" : "not initialised")}"
                  + (string.IsNullOrEmpty(drawerSupport) ? "" : $", project support: {drawerSupport}")
-                 + $"): floor pixels {floorPixels}, captured by the prepass {captured}, "
+                 + $"), rendered {renderWidth} wide: floor pixels {floorPixels}, captured by the prepass {captured}, "
                  + $"albedo {albedo:F1}, smoothness {smoothness:F1}, metallic {metallic:F1}, "
                  + $"frame lit {litPercent:F2}% at mean {litMean:F1}, errors {errors.Count}"
                  + (errors.Count > 0 ? $" — first: {errors[0]}" : "");
@@ -747,7 +750,8 @@ namespace VRSL.URP.Tests
         /// </summary>
         static IEnumerator CaptureSurfaceData(GPUResidentDrawerMode mode,
                                               System.Action<Material> configure,
-                                              System.Action<SurfaceReadback> done)
+                                              System.Action<SurfaceReadback> done,
+                                              float? renderScale = null)
         {
             var readback = new SurfaceReadback { modeAsked = mode };
             var asset    = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
@@ -794,7 +798,7 @@ namespace VRSL.URP.Tests
 
                 // The rig holds the drawer mode on the asset at every render, the way
                 // it holds priming: the host rewrites the asset at a moment of its own.
-                using var rig = VRSLDMXRig.Build(targetSize: ImageSize, drawer: mode);
+                using var rig = VRSLDMXRig.Build(targetSize: ImageSize, drawer: mode, renderScale: renderScale);
                 rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
                 rig.Source.speed   = 0f;
                 rig.Manager.quality = VRSLQuality.Off;
@@ -825,6 +829,7 @@ namespace VRSL.URP.Tests
 
                 readback.modeSeen          = asset != null ? asset.gpuResidentDrawerMode : GPUResidentDrawerMode.Disabled;
                 readback.drawerInitialised = DrawerInitialised(out readback.drawerSupport);
+                readback.renderWidth       = probe.ObservedWidth;
 
                 normalsTex  = VRSLImageCompare.Read(normalsRt);
                 albedoTex   = VRSLImageCompare.Read(albedoRt);
@@ -1076,6 +1081,59 @@ namespace VRSL.URP.Tests
             {
                 if (map     != null) Object.DestroyImmediate(map);
                 if (baseMap != null) Object.DestroyImmediate(baseMap);
+            }
+        }
+
+        /// <summary>
+        /// S17. The surface prepass captures the floor at any render scale.
+        ///
+        /// The floor on a URP Lit material of known colour, gloss and metallic,
+        /// captured with the pipeline asset's render scale held at 1, 0.5 and 1.5, the
+        /// ends of the range Basis offers. Below or above 1 the camera renders into
+        /// targets of the scaled size, so the depth gate has to find its pixel in the
+        /// camera depth by the scaled screen size; by the unscaled one it reads
+        /// somewhere else on the floor, rejects most of it, and the surface lights as
+        /// the neutral fallback. A capture whose camera target came back at the
+        /// unscaled width never scaled, and the row says so rather than passing.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S17_ThePrepassCapturesTheFloorAtAnyRenderScale()
+        {
+            if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset)
+                Assert.Ignore("No Universal Render Pipeline asset is active.");
+
+            var   baseColor  = new Color(0.8f, 0.5f, 0.2f, 1f);
+            const float smoothness = 0.3f, metallic = 0.25f;
+            var linear = QualitySettings.activeColorSpace == ColorSpace.Linear ? baseColor.linear : baseColor;
+            var expectedAlbedo = new Vector3(linear.r, linear.g, linear.b) * 255f;
+
+            void Configure(Material m)
+            {
+                m.SetColor("_BaseColor", baseColor);
+                m.SetFloat("_Smoothness", smoothness);
+                m.SetFloat("_Metallic", metallic);
+            }
+
+            foreach (float scale in new[] { 1f, 0.5f, 1.5f })
+            {
+                SurfaceReadback r = null;
+                yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled, Configure, x => r = x, scale);
+                Debug.Log($"[S17] render scale {scale}: {r}");
+
+                Assert.AreEqual(0, r.errors.Count, $"errors while capturing at render scale {scale}: {r}");
+                int expectedWidth = Mathf.RoundToInt(ImageSize * scale);
+                if (Mathf.Abs(r.renderWidth - expectedWidth) > 1)
+                    Assert.Inconclusive($"render scale {scale} was asked for but the camera rendered "
+                                      + $"{r.renderWidth} wide rather than {expectedWidth}, so the row "
+                                      + "never exercised a scaled target");
+                Assert.Greater(r.floorPixels, 1000, $"the floor covers too little of the frame to judge at render scale {scale}");
+                Assert.GreaterOrEqual(r.captured, 0.95f * r.floorPixels,
+                    $"at render scale {scale} the prepass captured {r.captured} of the floor's "
+                  + $"{r.floorPixels} pixels. The depth gate in VRSLSurfaceProperties has to find "
+                  + "its camera-depth pixel by the scaled screen size; by the unscaled size it "
+                  + "compares against another part of the floor and clips the surface away");
+                AssertSurface(r, expectedAlbedo, smoothness * 255f, metallic * 255f, 6f,
+                    $"at render scale {scale} the prepass read the floor's material wrongly");
             }
         }
 

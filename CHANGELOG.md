@@ -2,7 +2,11 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **AudioLink par, blinder, flasher and light bar bodies render lit.** Their shader drew them only while URP rendered main-light shadows with a single cascade, so with more than one (Basis uses four) they rendered black, emission included. On a Forward+ renderer they also lost the main light, because the shader wasn't built with URP's cluster light loop.
+- **DMX par, blinder and light bar bodies take the main light and ambient light.** Their shader wasn't built with URP's cluster light loop, so on a Forward+ renderer they lost the main light, and on any renderer it gave them no ambient or reflected light.
+- **Surfaces keep their colour under VRSL light at any render scale.** The surface capture looked up the camera's depth by the unscaled screen size, so at a render scale other than 100% it rejected most surfaces and they lit as neutral grey.
 
 ## [0.3.0-rc.4] — 2026-10-12
 

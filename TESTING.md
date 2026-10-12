@@ -150,7 +150,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 
 ### Surface accuracy
 
-`VRSLSurfacePrepassTests` in the suite covers S10 to S16. S1 to S9 are judged by eye.
+`VRSLSurfacePrepassTests` in the suite covers S10 to S17. S1 to S9 are judged by eye.
 
 **Where the normals come from decides which passes are in the frame.** Wherever URP's
 own depth-normals prepass can be drawn, the manager asks URP for it and VRSL's normals
@@ -186,6 +186,7 @@ their colour. `VRSL Diagnostics` and `Validate Renderer Setup` say when the draw
 | S14 | — | **Suite.** Volumetrics off, priming Forced: the floor lit at MSAA 1 and at MSAA 2, the sample count Basis ships, against the 2x frame with the floor left out of the prepass | The floor shades at 2x as it does at 1x, not as the neutral fallback. **`[Ignore]`d in the suite, naming the fault**: under priming with MSAA, `_CameraDepthTexture` is a resolve that takes the farthest sample, at a grazing angle centimetres from the depth the prepass rasterised, and `VRSL_SurfaceDataCovers` allows 0.05% of eye depth, so it rejects the surface and the lighting falls back to mid-grey. Remove the attribute to run it. A change to the gate wants S8 and S9 re-run on avatars |
 | S15 | — | **Suite.** The rig's floor on a URP Lit material of known colour, gloss and metallic, captured through the prepass targets with the GPU Resident Drawer Disabled and then on, the mode held on the pipeline asset per render | Disabled, the prepass reads the material back as authored. On, the floor is not captured at all and the frame still lights it, as the neutral fallback. Inconclusive if the drawer did not come up with the mode set, naming the project's reason |
 | S16 | — | **Suite.** The rig's floor on URP Lit with a one-colour metallic map (metallic in red, smoothness in alpha) and scalars that disagree with it, captured three ways: the map keyword on; the keyword off with the map still assigned; the keyword on with smoothness taken from the base map's alpha | Keyword on: metallic from the map's red channel, smoothness from its alpha times `_Smoothness`. Keyword off: the scalars, as URP Lit itself reads them. Albedo-alpha mode: the base texture's alpha times `_Smoothness`. The keyword-off capture separates "read the keyword" from "always read the map", and the row also shows a material's keywords reach an override-shader draw |
+| S17 | — | **Suite.** The rig's floor on URP Lit of known colour, gloss and metallic, captured through the prepass targets with the pipeline asset's render scale held at 1, 0.5 and 1.5 | At every scale the prepass captures at least 95% of the floor and reads its material back as authored. Inconclusive if the camera's target didn't come back at the scaled width, since then nothing scaled |
 
 ### Occlusion
 
@@ -739,6 +740,7 @@ lit at black.
 | J3 | D | The four 5-channel pars and blinders on Ramp, one universe | Each decodes its colour from +1 to +3 of its address |
 | J4 | D | A Horizontal 13-channel par, set up as in J2, moved from sector 3 (all 0) to sector 10 (dimmer and red full) through `ApplyAddress()` | The body renders dark before the call and red after it, its block carries channel 131, and the beam decodes sector 10's red |
 | J5 | D | **By eye.** A par and a blinder in the editor, body and flare, at black, half, full and strobing (the synthetic source's Sweep drives every channel through its range) | The glow reads as a lamp at tint 2, sits dark at black, and the flare reads well at its curve and tint |
+| J6 | — | A cube on each fixture body shader (the AudioLink static body, and the DMX surface body and multi-channel bar body), emission off, beside a cube on URP Lit, under a white directional light within the shadow distance; captured with the light off, then on at one shadow cascade, at four, and casting no shadows, reading back which main-light shadow keyword URP set for each | Each lit capture is measured as its gain over the light-off one, so only the light's own contribution counts. The URP Lit cube gains in every capture, or the light or camera is wrong. The one-cascade capture ran `_MAIN_LIGHT_SHADOWS` and the four-cascade one `_MAIN_LIGHT_SHADOWS_CASCADE`, or the row didn't exercise the variants it is for. Each body gains in all three, at four cascades and without shadows at least half its own one-cascade gain: lighting gated on `_MAIN_LIGHT_SHADOWS` goes black at four. On a Forward+ renderer a body that gains nothing at one cascade beside a lit URP Lit cube means the shader isn't built with `_CLUSTER_LIGHT_LOOP`, which costs it the main light as well as the additional ones. Inconclusive where the pipeline asset doesn't support main-light shadows, its shadow distance doesn't reach the cubes, the URP Lit cube doesn't gain, or either keyword is wrong |
 
 ### Basis video → DMX (optional integration)
 

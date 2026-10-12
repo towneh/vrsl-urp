@@ -65,6 +65,7 @@
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -138,24 +139,25 @@
                 // Calculate tangent space to world space matrix
                 float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv));
 
-                float3 normalWS;
-                float3 tangentWS = normalize(input.tangentWS.xyz);
-                float3 bitangentWS = normalize(cross(input.normalWS, tangentWS) * input.tangentWS.w);
-
-                // Transform normal from tangent to world space
-                float3x3 tangentToWorld = float3x3(tangentWS, bitangentWS, input.normalWS);
-                normalWS = normalize(mul(normalTS, tangentToWorld));
+                // Unnormalised basis, as in URP Lit: a mesh without tangents falls back to
+                // its vertex normal.
+                float3 bitangentWS = input.tangentWS.w * cross(input.normalWS, input.tangentWS.xyz);
+                float3x3 tangentToWorld = float3x3(input.tangentWS.xyz, bitangentWS, input.normalWS);
+                float3 normalWS = NormalizeNormalPerPixel(TransformTangentToWorld(normalTS, tangentToWorld));
 
                 // Surface data
                 InputData lightingInput = (InputData)0;
                 lightingInput.normalWS = normalWS;
                 lightingInput.positionWS = input.positionWS;
+                lightingInput.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionHCS);
                 lightingInput.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 lightingInput.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
+                lightingInput.bakedGI = SampleSH(normalWS);
 
                 SurfaceData surfaceData = (SurfaceData)0;
                 surfaceData.albedo = color.rgb;
                 surfaceData.alpha = color.a;
+                surfaceData.occlusion = 1;
 
                 // Metallic in R channel, Smoothness in A channel (standard convention)
                 surfaceData.metallic = metallicSmoothness.r * _Metallic;

@@ -206,7 +206,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
         {
             if (_VRSLSurfaceDepthGate < 0.5) return;
 
-            float2 screenUV = positionCS.xy / _ScreenParams.xy;
+            float2 screenUV = positionCS.xy / _ScaledScreenParams.xy;
 
             float cameraEye = LinearEyeDepth(SampleSceneDepth(screenUV), _ZBufferParams);
             float fragEye   = LinearEyeDepth(positionCS.z,               _ZBufferParams);

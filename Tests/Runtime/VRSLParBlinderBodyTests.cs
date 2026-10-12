@@ -13,7 +13,7 @@ namespace VRSL.URP.Tests
     /// The par and blinder bodies, and the blinders' lens flares, follow the fixture's
     /// DMX; the 5-channel ones cast light from a 5-channel patch.
     ///
-    /// Rows J1 to J4 of TESTING.md.
+    /// Rows J1 to J4 and J6 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -337,6 +337,186 @@ namespace VRSL.URP.Tests
             {
                 rig.Dispose();
                 source.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// J6. The fixture body shaders are lit by the main light whatever the shadow setup:
+        /// the AudioLink static body (par, blinder, flasher, light bar) and the DMX surface
+        /// bodies (par, blinder, and the multi-channel light bar).
+        ///
+        /// A cube on each body shader, emission off, beside a cube on URP Lit, under a white
+        /// directional light that casts shadows, captured with the light off and then with
+        /// the pipeline asset at one shadow cascade, at four, and with the light's shadows
+        /// off. Each lit capture counts only its gain over the light-off one, and the row
+        /// reads back the shadow keyword URP set, so a capture that never reached the
+        /// variant it is for is inconclusive rather than a pass. URP sets
+        /// <c>_MAIN_LIGHT_SHADOWS</c> only at exactly one cascade and
+        /// <c>_MAIN_LIGHT_SHADOWS_CASCADE</c> above it, so a body whose lighting hangs on the
+        /// first renders black at four, which is what Basis ships. With no shadow-casting
+        /// light URP sets no shadow keyword, or the single-map one over an empty map where
+        /// the project strips shadows-off variants; the third capture covers projects of the
+        /// first kind. The URP Lit cube is the control for the light and camera, and on a
+        /// Forward+ renderer a body dark beside it at one cascade means its shader isn't
+        /// built with the cluster light loop, so its main light reads a per-object
+        /// attenuation Forward+ leaves at zero. The cubes cast their own shadows so the
+        /// shadow pass has something to draw at every count.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J6_fixture_bodies_are_lit_at_every_shadow_cascade_count()
+        {
+            var asset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline
+                            as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            if (asset == null) Assert.Ignore("No Universal Render Pipeline asset is active.");
+            if (!asset.supportsMainLightShadows)
+                Assert.Inconclusive("the pipeline asset doesn't support main-light shadows, so no shadow keyword "
+                                  + "is ever set and the row can't separate the cases");
+            string[] bodyShaders =
+            {
+                "VRSL-URP/AudioLink/Standard Static/Fixture",
+                "VRSL-URP/Standard Static/Surface Shaders/Opaque",
+                "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
+            };
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.IsNotNull(lit, "URP Lit is not in the project");
+
+            int cascadesWas = asset.shadowCascadeCount;
+            var rig = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var materials = new List<Material>();
+            try
+            {
+                MeshRenderer Cube(string name, float x, Material m)
+                {
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    go.name = name;
+                    go.transform.SetParent(rig.Floor.transform.parent, false);
+                    go.transform.position = new Vector3(x, 1f, 0f);
+                    var r = go.GetComponent<MeshRenderer>();
+                    r.sharedMaterial    = m;
+                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                    return r;
+                }
+
+                var bodies = new List<(string shader, MeshRenderer renderer)>();
+                for (int i = 0; i < bodyShaders.Length; i++)
+                {
+                    var shader = Shader.Find(bodyShaders[i]);
+                    Assert.IsNotNull(shader, $"{bodyShaders[i]} did not compile or is not in the project");
+                    var material = new Material(shader) { name = $"VRSL J6 body {i}" };
+                    materials.Add(material);
+                    material.SetColor("_Color", Color.white);
+                    material.SetTexture("_NormalMap", Texture2D.normalTexture);
+                    material.SetFloat("_Metallic", 0f);
+                    material.SetFloat("_Glossiness", 0.2f);
+                    material.SetFloat("_FixtureMaxIntensity", 0f);
+                    material.SetFloat("_EnableDMX", 0f);
+                    bodies.Add((bodyShaders[i], Cube($"VRSL J6 body {i}", 197.75f + 1.5f * i, material)));
+                }
+                // URP's own Lit with the same surface, beside the bodies, so a dark frame
+                // separates a body shader from the light and camera.
+                var reference = new Material(lit) { name = "VRSL J6 reference" };
+                materials.Add(reference);
+                reference.SetColor("_BaseColor", Color.white);
+                reference.SetFloat("_Metallic", 0f);
+                reference.SetFloat("_Smoothness", 0.2f);
+                var refRenderer = Cube("VRSL J6 reference", 202.25f, reference);
+
+                var light = new GameObject("VRSL J6 sun").AddComponent<Light>();
+                light.transform.SetParent(rig.Floor.transform.parent, false);
+                light.type      = LightType.Directional;
+                light.color     = Color.white;
+                light.intensity = 1f;
+                // From above, behind and to the left of the camera, so the faces it sees are lit.
+                light.transform.rotation = Quaternion.Euler(30f, 20f, 0f);
+                RenderSettings.sun = light;
+
+                var eye = new Vector3(200f, 1f, -6f);
+                rig.Camera.transform.SetPositionAndRotation(eye, Quaternion.identity);
+                // Beyond the shadow distance URP renders an empty shadow map with the
+                // single-map keyword at any cascade count, so the cascade capture would
+                // test nothing.
+                float reach = Vector3.Distance(eye, refRenderer.bounds.center) + 1f;
+                if (asset.shadowDistance < reach)
+                    Assert.Inconclusive($"the pipeline asset's shadow distance is {asset.shadowDistance} m, inside the "
+                                      + $"{reach:F1} m to the cubes, so no capture renders their shadows");
+                yield return rig.Step(2);
+
+                (Vector3[] body, Vector3 control, string keyword) Capture(bool sun, int cascades, LightShadows shadows, string what)
+                {
+                    asset.shadowCascadeCount = cascades;
+                    light.enabled = sun;
+                    light.shadows = shadows;
+                    var frame = CaptureHdr(rig);
+                    try
+                    {
+                        // URP sets its main-light shadow keyword globally for the frame, so
+                        // it can be read back once the camera has rendered.
+                        string keyword = Shader.IsKeywordEnabled("_MAIN_LIGHT_SHADOWS_CASCADE") ? "_MAIN_LIGHT_SHADOWS_CASCADE"
+                                       : Shader.IsKeywordEnabled("_MAIN_LIGHT_SHADOWS_SCREEN")  ? "_MAIN_LIGHT_SHADOWS_SCREEN"
+                                       : Shader.IsKeywordEnabled("_MAIN_LIGHT_SHADOWS")         ? "_MAIN_LIGHT_SHADOWS"
+                                       : "none";
+                        var means = new Vector3[bodies.Count];
+                        for (int i = 0; i < bodies.Count; i++)
+                        {
+                            var (mean, peak) = Measure(rig.Camera, frame, bodies[i].renderer);
+                            means[i] = mean;
+                            Debug.Log($"[J6] {what}: {bodies[i].shader} peak {peak}, mean {mean}");
+                        }
+                        var (refMean, refPeak) = Measure(rig.Camera, frame, refRenderer);
+                        Debug.Log($"[J6] {what}: shadow keyword {keyword}; URP Lit peak {refPeak}, mean {refMean}");
+                        return (means, refMean, keyword);
+                    }
+                    finally { Object.DestroyImmediate(frame); }
+                }
+
+                // The sun's own contribution is each lit capture over this one: whatever
+                // reflection probes or the host leave in the frame is in both.
+                var dark        = Capture(false, 4, LightShadows.Hard, "sun off");
+                var oneCascade  = Capture(true,  1, LightShadows.Hard, "one cascade");
+                var fourCascade = Capture(true,  4, LightShadows.Hard, "four cascades");
+                var noShadows   = Capture(true,  4, LightShadows.None, "sun casting no shadows");
+
+                float Gain(Vector3 lit, Vector3 unlit) => (lit - unlit).magnitude;
+
+                foreach (var (c, what) in new[] { (oneCascade, "one cascade"), (fourCascade, "four cascades"),
+                                                  (noShadows, "the sun casting no shadows") })
+                    if (Gain(c.control, dark.control) < 0.1f)
+                        Assert.Inconclusive($"URP Lit beside the bodies gains only {Gain(c.control, dark.control):F3} from "
+                                          + $"the sun with {what} ({c.control} against {dark.control} with it off), so "
+                                          + "the light or the camera is wrong and the row has nothing to judge");
+                if (oneCascade.keyword != "_MAIN_LIGHT_SHADOWS" || fourCascade.keyword != "_MAIN_LIGHT_SHADOWS_CASCADE")
+                    Assert.Inconclusive($"the shadow captures ran {oneCascade.keyword} at one cascade and "
+                                      + $"{fourCascade.keyword} at four, not _MAIN_LIGHT_SHADOWS and "
+                                      + "_MAIN_LIGHT_SHADOWS_CASCADE, so the row didn't exercise the variants it is for");
+
+                var failures = new List<string>();
+                for (int i = 0; i < bodies.Count; i++)
+                {
+                    string name = bodies[i].shader;
+                    float oneGain = Gain(oneCascade.body[i], dark.body[i]);
+                    if (!(oneGain > 0.1f)) failures.Add(
+                        $"{name} gains only {oneGain:F3} from the sun at one cascade ({oneCascade.body[i]} "
+                      + $"against {dark.body[i]} with it off) while URP Lit beside it is lit. On a Forward+ "
+                      + "renderer a shader built without _CLUSTER_LIGHT_LOOP takes its main light's "
+                      + "attenuation from unity_LightData.z, which Forward+ leaves at zero");
+                    if (Gain(fourCascade.body[i], dark.body[i]) < 0.5f * oneGain) failures.Add(
+                        $"{name} reads {fourCascade.body[i]} at four cascades against {oneCascade.body[i]} at "
+                      + $"one and {dark.body[i]} with the sun off. At more than one cascade URP sets "
+                      + "_MAIN_LIGHT_SHADOWS_CASCADE instead of _MAIN_LIGHT_SHADOWS, so lighting gated on the "
+                      + "single-map keyword drops out");
+                    if (Gain(noShadows.body[i], dark.body[i]) < 0.5f * oneGain) failures.Add(
+                        $"{name} reads {noShadows.body[i]} with the sun casting no shadows against "
+                      + $"{oneCascade.body[i]} with shadows and {dark.body[i]} with it off. With no "
+                      + "shadow-casting light URP may set no main-light shadow keyword at all, and the "
+                      + "body must still be lit");
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
+                asset.shadowCascadeCount = cascadesWas;
+                rig.Dispose();
+                foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
             }
         }
 
