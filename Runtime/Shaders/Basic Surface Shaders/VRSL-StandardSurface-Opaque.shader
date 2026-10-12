@@ -30,7 +30,7 @@
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Albedo (RGB)", 2D) = "white" {}
         _MetallicSmoothness ("Metallic(R) / Smoothness(A) Map", 2D) = "white" {}
-        _NormalMap ("Normal Map", 2D) = "white" {}
+        _NormalMap ("Normal Map", 2D) = "bump" {}
         _Metallic ("Metallic Blend", Range(0,1)) = 0.0
         _Glossiness ("Smoothness Blend", Range(0,1)) = 0.5
         [Enum(1CH,0,4CH,1,5CH,2,13CH,3)] _ChannelMode ("Channel Mode", Int) = 2

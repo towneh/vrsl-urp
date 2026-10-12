@@ -23,7 +23,7 @@
         _FixutreIntensityMultiplier ("Intensity Multipler (For Bloom Scaling)", Range(1,15)) = 1
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Albedo (RGB)", 2D) = "white" {}
-        _NormalMap ("Normal Map", 2D) = "white" {}
+        _NormalMap ("Normal Map", 2D) = "bump" {}
         _Glossiness ("Smoothness", Range(0,1)) = 0.5
         _Metallic ("Metallic", Range(0,1)) = 0.0
         [Toggle]_UseTraditionalSampling("Use Traditional Texture Sampling", Int) = 0

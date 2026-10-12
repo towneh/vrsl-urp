@@ -166,7 +166,7 @@ Rows are independent. `D` = DMX path, `A` = AudioLink path, `—` = either.
 
 ### Surface accuracy
 
-`VRSLSurfacePrepassTests` in the suite covers S10 to S18. S1 to S9 are judged by eye.
+`VRSLSurfacePrepassTests` in the suite covers S10 to S19. S1 to S9 are judged by eye.
 
 **Where the normals come from decides which passes are in the frame.** Wherever URP's
 own depth-normals prepass can be drawn, the manager asks URP for it and VRSL's normals
@@ -204,6 +204,7 @@ their colour. `VRSL Diagnostics` and `Validate Renderer Setup` say when the draw
 | S16 | — | **Suite.** The rig's floor on URP Lit with a one-colour metallic map (metallic in red, smoothness in alpha) and scalars that disagree with it, captured three ways: the map keyword on; the keyword off with the map still assigned; the keyword on with smoothness taken from the base map's alpha | Keyword on: metallic from the map's red channel, smoothness from its alpha times `_Smoothness`. Keyword off: the scalars, as URP Lit itself reads them. Albedo-alpha mode: the base texture's alpha times `_Smoothness`. The keyword-off capture separates "read the keyword" from "always read the map", and the row also shows a material's keywords reach an override-shader draw |
 | S17 | — | **Suite.** The rig's floor on URP Lit of known colour, gloss and metallic, captured through the prepass targets with the pipeline asset's render scale held at 1, 0.5 and 1.5 | At every scale the prepass captures at least 95% of the floor and reads its material back as authored. Inconclusive if the camera's target didn't come back at the scaled width, since then nothing scaled |
 | S18 | — | **Suite.** The rig's floor tilted off level (a component on every axis) on URP Lit and then on each fixture body shader (Opaque, Opaque Multi-Channel Bar, the AudioLink static fixture), all with a flat normal map, each captured twice: with Force own normals on, so VRSL's own draw fills `_VRSLNormalsTexture`, and with URP asked for `_CameraNormalsTexture` | The forced capture ran VRSL's own draw and read nothing from URP. In both textures, on every body shader the floor reads as its own world-space normal over at least 90% of the pixels it does on URP Lit, and loses no more than a tenth of the floor's written pixels. Their `DepthNormals` pass writes the signed world-space normal URP's own passes write; a view-space, 0..1-packed or fixed-direction normal leaves almost none. Inconclusive for URP's texture if URP drew no normals for the Lit floor |
+| S19 | — | **Suite.** S18's tilted floor on URP Lit and then on each fixture body shader, nothing assigned to the normal map, Force own normals on | On every body shader the floor in `_VRSLNormalsTexture` reads as its own world-space normal over at least 90% of the pixels it does on URP Lit, and each shader's `_NormalMap` defaults to `bump`. A default that doesn't unpack to a flat normal tilts the floor off its normal |
 
 ### Occlusion
 

@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The surface prepass rows, S10 to S18: what it draws, for whom, where its
+    /// The surface prepass rows, S10 to S19: what it draws, for whom, where its
     /// normals may come from instead, and whether what it captured reaches the
     /// lighting pass.
     ///
@@ -1306,6 +1306,68 @@ namespace VRSL.URP.Tests
             finally
             {
                 if (flat != null) Object.DestroyImmediate(flat);
+            }
+        }
+
+        /// <summary>
+        /// S19. The fixture body shaders read a surface with no normal map as flat.
+        ///
+        /// S18's tilted floor on URP Lit and on each body shader, with nothing assigned
+        /// to the normal map and Force own normals on. Lit writes the vertex normal
+        /// without a map; a body's _NormalMap defaults to "bump", which unpacks to
+        /// (0, 0, 1) whether the platform reads normal maps from RGB or AG, so the floor
+        /// has to read as its own world-space normal there too. A "white" default
+        /// unpacks to a tilted normal and leaves almost none. The forward pass reads the
+        /// same property, so its default is checked by name as well, before the capture.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S19_FixtureBodiesWithNoNormalMapReadFlat()
+        {
+            if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset)
+                Assert.Ignore("No Universal Render Pipeline asset is active.");
+
+            var bodies = new[]
+            {
+                "VRSL-URP/Standard Static/Surface Shaders/Opaque",
+                "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
+                "VRSL-URP/AudioLink/Standard Static/Fixture",
+            };
+
+            var tilt = Quaternion.Euler(-15f, 0f, 10f);
+            IEnumerator Capture(Shader floorShader, System.Action<SurfaceReadback> done)
+                => CaptureSurfaceData(GPUResidentDrawerMode.Disabled, _ => { }, done,
+                                      floorShader: floorShader, forceOwnNormals: true, floorTilt: tilt);
+
+            SurfaceReadback control = null;
+            yield return Capture(null, x => control = x);
+            Debug.Log($"[S19] URP Lit: {control}");
+            Assert.AreEqual(0, control.errors.Count, $"errors while capturing the URP Lit floor: {control}");
+            Assert.Greater(control.onFloorNormal, 1000,
+                $"the URP Lit floor reads as its own normal over too little of the frame to judge: {control}");
+
+            foreach (var name in bodies)
+            {
+                var shader = Shader.Find(name);
+                Assert.IsNotNull(shader, $"{name} is not in the project");
+
+                int index = shader.FindPropertyIndex("_NormalMap");
+                Assert.GreaterOrEqual(index, 0, $"{name} has no _NormalMap property");
+                Assert.AreEqual(ShaderPropertyType.Texture, shader.GetPropertyType(index),
+                    $"{name}'s _NormalMap is not a texture property");
+                Assert.AreEqual("bump", shader.GetPropertyTextureDefaultName(index),
+                    $"{name}'s _NormalMap default, which every pass unpacks when no map is assigned");
+
+                SurfaceReadback r = null;
+                yield return Capture(shader, x => r = x);
+                Debug.Log($"[S19] {name}: {r}");
+                Assert.AreEqual(0, r.errors.Count, $"errors while capturing the floor on {name}: {r}");
+                if (r.ownNormalsDraws == 0 || r.urpNormalsReads > 0)
+                    Assert.Fail($"with Force own normals on, the capture on {name} did not run "
+                              + $"VRSL's own normals draw alone: {r}");
+                Assert.GreaterOrEqual(r.onFloorNormal, 0.9f * control.onFloorNormal,
+                    $"on {name} with no normal map the floor reads as its world-space normal "
+                  + $"{r.floorNormal:F3} over {r.onFloorNormal} pixels against {control.onFloorNormal} "
+                  + "on URP Lit. Its _NormalMap default has to unpack to a flat normal");
             }
         }
 
