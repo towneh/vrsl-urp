@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The surface prepass rows, S10 to S17: what it draws, for whom, where its
+    /// The surface prepass rows, S10 to S18: what it draws, for whom, where its
     /// normals may come from instead, and whether what it captured reaches the
     /// lighting pass.
     ///
@@ -342,6 +342,10 @@ namespace VRSL.URP.Tests
 
         static Vector3 Decode(Color32 c)
             => new Vector3(c.r / 255f * 2f - 1f, c.g / 255f * 2f - 1f, c.b / 255f * 2f - 1f);
+
+        /// <summary>A decoded normal equal to <paramref name="expected"/> within 8-bit
+        /// precision, in length as well as direction.</summary>
+        static bool Matches(Vector3 n, Vector3 expected) => (n - expected).magnitude < 0.03f;
 
         /// <summary>
         /// Render the rig with the floor on <paramref name="floorLayer"/> and the DMX
@@ -706,6 +710,17 @@ namespace VRSL.URP.Tests
             public string  drawerSupport;
             public int     renderWidth;
             public int     floorPixels, captured;
+            /// <summary>The floor's world-space normal, and the pixels VRSL's normals texture
+            /// holds a normal for and, of those, the ones holding the floor's.</summary>
+            public Vector3 floorNormal;
+            public int     written, onFloorNormal;
+            /// <summary>The same for URP's <c>_CameraNormalsTexture</c>, read only when the
+            /// capture asked URP for normals.</summary>
+            public bool    urpHandle;
+            public int     urpWritten, urpOnFloorNormal;
+            /// <summary>Where the manager took its normals from, and what its prepass did.</summary>
+            public string  normalsSource;
+            public int     ownNormalsDraws, urpNormalsReads;
             public Vector3 albedo, litMean;
             public float   smoothness, metallic, litPercent;
             public readonly List<string> errors = new();
@@ -714,7 +729,11 @@ namespace VRSL.URP.Tests
                 => $"drawer {modeAsked} (asset read {modeSeen}, drawer "
                  + $"{(drawerInitialised ? "initialised" : "not initialised")}"
                  + (string.IsNullOrEmpty(drawerSupport) ? "" : $", project support: {drawerSupport}")
-                 + $"), rendered {renderWidth} wide: floor pixels {floorPixels}, captured by the prepass {captured}, "
+                 + $"), rendered {renderWidth} wide: normals written {written}, "
+                 + $"floor pixels {floorPixels} ({onFloorNormal} at the floor's normal {floorNormal:F3}), "
+                 + (urpHandle ? $"URP normals written {urpWritten} ({urpOnFloorNormal} at the floor's normal), " : "")
+                 + $"normals source \"{normalsSource}\" (own draws {ownNormalsDraws}, URP reads {urpNormalsReads}), "
+                 + $"captured by the prepass {captured}, "
                  + $"albedo {albedo:F1}, smoothness {smoothness:F1}, metallic {metallic:F1}, "
                  + $"frame lit {litPercent:F2}% at mean {litMean:F1}, errors {errors.Count}"
                  + (errors.Count > 0 ? $" — first: {errors[0]}" : "");
@@ -741,17 +760,26 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// Render the rig with the floor on a fresh URP Lit material set up by
+        /// Render the rig with the floor on a fresh material of
+        /// <paramref name="floorShader"/> (URP Lit by default) set up by
         /// <paramref name="configure"/>, under the given drawer mode, and read back
         /// what the surface prepass captured for it, beside how the frame lit. The floor is found
         /// through VRSL's own normals texture: the one surface in view facing up; a
-        /// floor pixel counts as captured where the prepass wrote its depth. Yields
-        /// <c>null</c> itself: the runner drives one level of nesting.
+        /// floor pixel counts as captured where the prepass wrote its depth. With
+        /// <paramref name="requestNormals"/> the capture asks URP for its normals and
+        /// reads them back too; <paramref name="forceOwnNormals"/> sets the manager's
+        /// Force own normals; <paramref name="floorTilt"/> turns the floor before the
+        /// first render. Yields <c>null</c> itself: the runner drives one level of
+        /// nesting.
         /// </summary>
         static IEnumerator CaptureSurfaceData(GPUResidentDrawerMode mode,
                                               System.Action<Material> configure,
                                               System.Action<SurfaceReadback> done,
-                                              float? renderScale = null)
+                                              float? renderScale = null,
+                                              Shader floorShader = null,
+                                              bool requestNormals = false,
+                                              bool forceOwnNormals = false,
+                                              Quaternion? floorTilt = null)
         {
             var readback = new SurfaceReadback { modeAsked = mode };
             var asset    = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
@@ -767,7 +795,8 @@ namespace VRSL.URP.Tests
                           cameraDepthRt = null, surfaceDepthRt = null;
             RTHandle normalsHandle = null, urpHandle = null, albedoHandle = null, materialHandle = null,
                      cameraDepthHandle = null, surfaceDepthHandle = null;
-            Texture2D normalsTex = null, albedoTex = null, materialTex = null, depthTex = null, frame = null;
+            Texture2D normalsTex = null, urpTex = null, albedoTex = null, materialTex = null, depthTex = null,
+                      frame = null;
             System.Action<ScriptableRenderContext, Camera> enqueue = null;
             try
             {
@@ -778,7 +807,7 @@ namespace VRSL.URP.Tests
 
                 probeMaterial  = new Material(shader);
                 normalsRt      = ProbeTarget("VRSL surface probe (normals)");
-                urpRt          = ProbeTarget("VRSL surface probe (unused)");
+                urpRt          = ProbeTarget("VRSL surface probe (URP normals)");
                 albedoRt       = ProbeTarget("VRSL surface probe (albedo)");
                 materialRt     = ProbeTarget("VRSL surface probe (material)");
                 cameraDepthRt  = ProbeTarget("VRSL surface probe (camera depth)");
@@ -791,7 +820,7 @@ namespace VRSL.URP.Tests
                 surfaceDepthHandle = RTHandles.Alloc(surfaceDepthRt);
                 // The probe's extras are copied in pass order: albedo, material, camera
                 // depth, surface depth. The camera depth is along for the ride.
-                var probe = new ProbePass(probeMaterial, normalsHandle, urpHandle, requestNormals: false)
+                var probe = new ProbePass(probeMaterial, normalsHandle, urpHandle, requestNormals)
                 {
                     Extras = new[] { albedoHandle, materialHandle, cameraDepthHandle, surfaceDepthHandle },
                 };
@@ -805,8 +834,14 @@ namespace VRSL.URP.Tests
                 rig.Manager.enabled = false;
                 rig.Manager.enabled = true;
                 rig.FreezeForImageCapture();
+                // After the bounce, as CaptureNormalsSource does: the prepass whose counters
+                // are read is the one the bounce built.
+                rig.Manager.forceOwnNormals = forceOwnNormals;
+                if (floorTilt.HasValue)
+                    rig.Floor.transform.rotation = floorTilt.Value * rig.Floor.transform.rotation;
+                readback.floorNormal = rig.Floor.transform.up;
 
-                floorMaterial = new Material(lit) { name = "VRSL surface probe floor" };
+                floorMaterial = new Material(floorShader != null ? floorShader : lit) { name = "VRSL surface probe floor" };
                 configure(floorMaterial);
                 rig.Floor.GetComponent<Renderer>().sharedMaterial = floorMaterial;
 
@@ -830,6 +865,9 @@ namespace VRSL.URP.Tests
                 readback.modeSeen          = asset != null ? asset.gpuResidentDrawerMode : GPUResidentDrawerMode.Disabled;
                 readback.drawerInitialised = DrawerInitialised(out readback.drawerSupport);
                 readback.renderWidth       = probe.ObservedWidth;
+                readback.normalsSource     = rig.Manager.NormalsSource;
+                readback.ownNormalsDraws   = rig.Manager.SurfacePrepass.OwnNormalsDraws;
+                readback.urpNormalsReads   = rig.Manager.SurfacePrepass.UrpNormalsReads;
 
                 normalsTex  = VRSLImageCompare.Read(normalsRt);
                 albedoTex   = VRSLImageCompare.Read(albedoRt);
@@ -844,7 +882,11 @@ namespace VRSL.URP.Tests
                 float smoothSum = 0f, metalSum = 0f;
                 for (int i = 0; i < normals.Length; i++)
                 {
-                    if (normals[i].a <= 127 || Decode(normals[i]).y < 0.9f) continue;
+                    if (normals[i].a <= 127) continue;
+                    readback.written++;
+                    var n = Decode(normals[i]);
+                    if (Matches(n, readback.floorNormal)) readback.onFloorNormal++;
+                    if (n.y < 0.9f) continue;
                     readback.floorPixels++;
                     // The prepass depth is cleared to the far plane, which the probe
                     // copies out as linear 1.0; anything nearer was drawn.
@@ -852,6 +894,17 @@ namespace VRSL.URP.Tests
                     albedoSum += new Vector3(albedo[i].r, albedo[i].g, albedo[i].b);
                     smoothSum += albedo[i].a;
                     metalSum  += material[i].r;
+                }
+                readback.urpHandle = requestNormals && probe.UrpHandleValid;
+                if (readback.urpHandle)
+                {
+                    urpTex = VRSLImageCompare.Read(urpRt);
+                    foreach (var p in urpTex.GetPixels32())
+                    {
+                        if (p.a <= 127) continue;
+                        readback.urpWritten++;
+                        if (Matches(Decode(p), readback.floorNormal)) readback.urpOnFloorNormal++;
+                    }
                 }
                 readback.litPercent = LitPercent(frame);
                 readback.litMean    = LitMean(frame);
@@ -866,7 +919,7 @@ namespace VRSL.URP.Tests
             {
                 if (enqueue != null) RenderPipelineManager.beginCameraRendering -= enqueue;
                 Application.logMessageReceived -= OnLog;
-                foreach (var tex in new[] { normalsTex, albedoTex, materialTex, depthTex, frame })
+                foreach (var tex in new[] { normalsTex, urpTex, albedoTex, materialTex, depthTex, frame })
                     if (tex != null) Object.DestroyImmediate(tex);
                 normalsHandle?.Release();
                 urpHandle?.Release();
@@ -1134,6 +1187,125 @@ namespace VRSL.URP.Tests
                   + "compares against another part of the floor and clips the surface away");
                 AssertSurface(r, expectedAlbedo, smoothness * 255f, metallic * 255f, 6f,
                     $"at render scale {scale} the prepass read the floor's material wrongly");
+            }
+        }
+
+        /// <summary>
+        /// S18. The fixture body shaders write signed world-space normals in their
+        /// depth-normals pass, as URP's own shaders do.
+        ///
+        /// The floor on URP Lit, then on each body shader in turn, all with a flat
+        /// normal map. The three are every par, blinder, flasher and light bar body's
+        /// shader, DMX and AudioLink. The floor is tilted, so its normal has a component
+        /// on every axis. VRSL's normals texture and URP's camera normals are both drawn
+        /// through that pass and both read as world normals, so in each the floor has to
+        /// read as its own world-space normal over as much of the frame as it does on Lit.
+        /// Each shader is captured twice: with Force own normals on, so VRSL's own draw
+        /// runs, and with URP asked for its normals. A pass that writes view-space
+        /// normals, packs them into 0..1, swaps a component or writes one fixed
+        /// direction leaves the floor's pixels off its normal. Inconclusive for URP's
+        /// texture if URP drew no normals for the Lit floor.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S18_FixtureBodiesWriteWorldSpaceNormals()
+        {
+            if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset)
+                Assert.Ignore("No Universal Render Pipeline asset is active.");
+
+            var bodies = new[]
+            {
+                "VRSL-URP/Standard Static/Surface Shaders/Opaque",
+                "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
+                "VRSL-URP/AudioLink/Standard Static/Fixture",
+            };
+
+            Texture2D flat = null;
+            try
+            {
+                // Reads as (0, 0, 1) whether the platform unpacks normal maps from RGB or AG.
+                flat = SolidTexture(new Color(0.5f, 0.5f, 1f, 1f), "VRSL S18 flat normal map");
+                // The body shaders sample _NormalMap unconditionally; URP Lit samples _BumpMap
+                // only under _NORMALMAP and otherwise writes the vertex normal.
+                void Configure(Material m)
+                {
+                    if (m.HasProperty("_BumpMap"))
+                    {
+                        m.SetTexture("_BumpMap", flat);
+                        m.EnableKeyword("_NORMALMAP");
+                    }
+                    else
+                    {
+                        m.SetTexture("_NormalMap", flat);
+                    }
+                }
+
+                // The scene is the control's with only the floor's material swapped, so the
+                // written allowance is a tenth of the floor, whatever else writes normals.
+                void AssertNormals(string name, string texture, int written, int onNormal,
+                                   int controlWritten, int controlOnNormal, Vector3 floorNormal)
+                {
+                    Assert.GreaterOrEqual(written, controlWritten - 0.1f * controlOnNormal,
+                        $"on {name} {texture} holds a normal for {written} pixels against "
+                      + $"{controlWritten} on URP Lit: its DepthNormals pass wrote nothing over "
+                      + "part of the floor, a missing draw rather than a wrong normal");
+                    Assert.GreaterOrEqual(onNormal, 0.9f * controlOnNormal,
+                        $"on {name} the floor in {texture} reads as its world-space normal "
+                      + $"{floorNormal:F3} over {onNormal} pixels against {controlOnNormal} on URP "
+                      + "Lit. Its DepthNormals pass has to write the signed world-space normal "
+                      + "URP's passes write; readers of either normals texture decode it as that");
+                }
+
+                // Its far side raised and one side dropped, both well short of the camera.
+                var tilt = Quaternion.Euler(-15f, 0f, 10f);
+                IEnumerator Capture(Shader floorShader, bool urp, System.Action<SurfaceReadback> done)
+                    => CaptureSurfaceData(GPUResidentDrawerMode.Disabled, Configure, done,
+                                          floorShader: floorShader, requestNormals: urp,
+                                          forceOwnNormals: !urp, floorTilt: tilt);
+
+                void AssertOwnDraw(string name, SurfaceReadback r)
+                {
+                    if (r.ownNormalsDraws == 0 || r.urpNormalsReads > 0)
+                        Assert.Fail($"with Force own normals on, the capture on {name} did not run "
+                                  + $"VRSL's own normals draw alone: {r}");
+                }
+
+                SurfaceReadback control = null, controlUrp = null;
+                yield return Capture(null, false, x => control = x);
+                yield return Capture(null, true,  x => controlUrp = x);
+                Debug.Log($"[S18] URP Lit: {control}\n[S18] URP Lit, URP normals asked for: {controlUrp}");
+                Assert.AreEqual(0, control.errors.Count, $"errors while capturing the URP Lit floor: {control}");
+                Assert.AreEqual(0, controlUrp.errors.Count, $"errors while capturing the URP Lit floor with URP's normals: {controlUrp}");
+                AssertOwnDraw("URP Lit", control);
+                Assert.Greater(control.onFloorNormal, 1000,
+                    $"the URP Lit floor reads as its own normal over too little of the frame to judge: {control}");
+                bool urpJudged = controlUrp.urpHandle && controlUrp.urpOnFloorNormal > 1000;
+
+                foreach (var name in bodies)
+                {
+                    var shader = Shader.Find(name);
+                    Assert.IsNotNull(shader, $"{name} is not in the project");
+                    SurfaceReadback r = null, ru = null;
+                    yield return Capture(shader, false, x => r  = x);
+                    yield return Capture(shader, true,  x => ru = x);
+                    Debug.Log($"[S18] {name}: {r}\n[S18] {name}, URP normals asked for: {ru}");
+                    Assert.AreEqual(0, r.errors.Count,  $"errors while capturing the floor on {name}: {r}");
+                    Assert.AreEqual(0, ru.errors.Count, $"errors while capturing the floor on {name} with URP's normals: {ru}");
+                    AssertOwnDraw(name, r);
+                    AssertNormals(name, "VRSL's normals texture", r.written, r.onFloorNormal,
+                                  control.written, control.onFloorNormal, r.floorNormal);
+                    if (urpJudged)
+                        AssertNormals(name, "URP's _CameraNormalsTexture", ru.urpWritten, ru.urpOnFloorNormal,
+                                      controlUrp.urpWritten, controlUrp.urpOnFloorNormal, ru.floorNormal);
+                }
+
+                if (!urpJudged)
+                    Assert.Inconclusive("VRSL's normals texture passed for every body, but URP drew no "
+                                      + "normals for the Lit floor, so its _CameraNormalsTexture was "
+                                      + $"not judged: {controlUrp}");
+            }
+            finally
+            {
+                if (flat != null) Object.DestroyImmediate(flat);
             }
         }
 

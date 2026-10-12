@@ -7,6 +7,7 @@
 - **AudioLink par, blinder, flasher and light bar bodies render lit.** Their shader drew them only while URP rendered main-light shadows with a single cascade, so with more than one (Basis uses four) they rendered black, emission included. On a Forward+ renderer they also lost the main light, because the shader wasn't built with URP's cluster light loop.
 - **DMX par, blinder and light bar bodies take the main light and ambient light.** Their shader wasn't built with URP's cluster light loop, so on a Forward+ renderer they lost the main light, and on any renderer it gave them no ambient or reflected light.
 - **Surfaces keep their colour under VRSL light at any render scale.** The surface capture looked up the camera's depth by the unscaled screen size, so at a render scale other than 100% it rejected most surfaces and they lit as neutral grey.
+- **Fixture bodies write world-space normals in their depth-normals pass.** The par, blinder, flasher and light bar body shaders, DMX and AudioLink, wrote view-space normals packed into 0..1, where URP and VRSL both read signed world-space normals. Effects that read the camera's normals texture, such as SSAO, and VRSL light falling on the bodies saw them facing the wrong way.
 
 ## [0.3.0-rc.4] — 2026-10-12
 

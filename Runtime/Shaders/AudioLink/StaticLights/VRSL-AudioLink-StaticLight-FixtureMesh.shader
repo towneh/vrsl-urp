@@ -359,6 +359,7 @@
             #pragma fragment DepthNormalsFragment
 
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
@@ -410,18 +411,20 @@
                 // Read normal map
                 float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv));
 
-                // Calculate tangent space to world space matrix
-                float3 tangentWS = normalize(input.tangentWS.xyz);
-                float3 bitangentWS = normalize(cross(input.normalWS, tangentWS) * input.tangentWS.w);
+                // Unnormalised basis, as in URP Lit: a mesh without tangents falls back to
+                // its vertex normal.
+                float3 bitangentWS = input.tangentWS.w * cross(input.normalWS, input.tangentWS.xyz);
+                float3x3 tangentToWorld = float3x3(input.tangentWS.xyz, bitangentWS, input.normalWS);
+                float3 normalWS = NormalizeNormalPerPixel(TransformTangentToWorld(normalTS, tangentToWorld));
 
-                // Transform normal from tangent to world space
-                float3x3 tangentToWorld = float3x3(tangentWS, bitangentWS, input.normalWS);
-                float3 normalWS = normalize(mul(normalTS, tangentToWorld));
-
-                // Convert normal from [-1,1] to [0,1] range
-                float3 normalViewSpace = TransformWorldToViewDir(normalWS) * 0.5 + 0.5;
-
-                return half4(normalViewSpace, 0);
+                // World space, as URP's own DepthNormals passes write it and every reader of the
+                // normals texture decodes it; octahedral when the renderer asks for that.
+                #if defined(_GBUFFER_NORMALS_OCT)
+                    float2 octNormalWS = PackNormalOctQuadEncode(normalWS);
+                    return half4(PackFloat2To888(saturate(octNormalWS * 0.5 + 0.5)), 0.0);
+                #else
+                    return half4(normalWS, 0.0);
+                #endif
             }
             ENDHLSL
         }
