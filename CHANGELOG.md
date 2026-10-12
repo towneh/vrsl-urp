@@ -2,7 +2,14 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **The video output's Rotate 90° button is now two:** **Turn 90° Anticlockwise** and **Turn 90° Clockwise** (the old button turned clockwise). A horizontal grid strip goes in anticlockwise.
+
+### Fixed
+
+- **Horizontal grids from video read each fixture's channels in order.** `Add Basis DMX Video Output (Horizontal)` framed the grid reflected about its diagonal, so it read channel 1 from the strip's bottom row where a show puts it on the top, and every fixture's 13 channels came out backwards. It now frames the grid the way VRSL's own reader camera does, across the bottom 208 rows of a 1080p picture. Run the menu item again on an output it set up; for corners dragged by hand, press **Flip Horizontal** once.
+- **Bake Framing From Camera works with any flat screen.** It assumed a one-unit quad, so a bake from VRSL's stock DMX screen (two units across, mirrored) gave the wrong corners. It now reads the screen mesh's own UVs, and carries on past the screen's edges when the camera frames wider than it.
 
 ## [0.3.0-rc.3] — 2026-10-11
 

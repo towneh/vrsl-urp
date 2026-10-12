@@ -49,7 +49,25 @@ namespace VRSL.URP.BasisIntegration
                 bl = new Vector2(0f, 0f), br = new Vector2(1f, 0f),
                 tr = new Vector2(1f, 1f), tl = new Vector2(0f, 1f),
             };
+
+            /// <summary>
+            /// A horizontal-mode grid filling the frame's width between
+            /// <paramref name="bottom"/> and <paramref name="top"/> (V, from the
+            /// bottom). Each column is one fixture with channel 1 on the strip's
+            /// top row, so the grid goes into the 13-wide raw grid a quarter turn
+            /// round, as VRSL's own reader camera films it: the raw grid's left
+            /// edge reads along the strip's top.
+            /// </summary>
+            internal static Corners HorizontalStrip(float bottom, float top) => new Corners
+            {
+                bl = new Vector2(0f, top),    br = new Vector2(0f, bottom),
+                tr = new Vector2(1f, bottom), tl = new Vector2(1f, top),
+            };
         }
+
+        /// <summary>Height of a horizontal grid node's strip in a 1080p frame: 13 cells
+        /// of 16 px along the bottom edge, where VRSL's reader camera looks.</summary>
+        internal const float HorizontalStripHeight = 208f / 1080f;
 
         // Read while following the manager's layout, one set per layout, since each
         // layout's grid sits in its own place in the video.
@@ -77,7 +95,7 @@ namespace VRSL.URP.BasisIntegration
         [Tooltip("DMX camera to bake the framing from (editor only). Can be deleted after baking.")]
         public Camera SourceCamera;
 
-        [Tooltip("Screen quad the DMX camera filmed (editor only). Can be deleted after baking.")]
+        [Tooltip("Flat screen mesh the DMX camera filmed (editor only). Can be deleted after baking.")]
         public Renderer SourceScreen;
 
         internal const string BlitShaderName = "Hidden/VRSL-URP/BasisVideoUVBlit";
@@ -298,16 +316,28 @@ namespace VRSL.URP.BasisIntegration
             Graphics.Blit(src, dst, mat);
         }
 
-        // Projects the camera's viewport corners onto the screen quad's plane and converts
-        // the hits to the quad's UV space — a starting point for the four source UVs that the
-        // user then fine-tunes by dragging. Returns false if inputs are missing.
+        // Projects the camera's viewport corners onto the screen's mesh and reads the mesh's own
+        // UVs at the hits — a starting point for the four source UVs that the user then
+        // fine-tunes by dragging. Any flat screen bakes right whatever its size or UV layout
+        // (VRSL's stock screen is two units across with its U mirrored). A corner past the
+        // mesh's edge is extrapolated from the nearest triangle, since reader cameras often
+        // frame a little beyond the screen. Returns false if inputs are missing, the screen has
+        // no mesh with UVs, the camera doesn't face it, or the mesh has no Read/Write and the
+        // editor is in Play mode.
         public static bool ComputeUVsFromCamera(Camera cam, Renderer screen, RenderTexture target,
             out Vector2 bl, out Vector2 br, out Vector2 tr, out Vector2 tl)
         {
             bl = Vector2.zero; br = Vector2.right; tr = Vector2.one; tl = Vector2.up;
             if (cam == null || screen == null) return false;
+            var mesh = screen.TryGetComponent<MeshFilter>(out var filter) ? filter.sharedMesh : null;
+            // A mesh without Read/Write can only be read outside Play mode.
+            if (mesh == null || (!mesh.isReadable && Application.isPlaying)) return false;
+            var verts = mesh.vertices;
+            var uvs   = mesh.uv;
+            var tris  = mesh.triangles;
+            if (uvs.Length != verts.Length || tris.Length < 3) return false;
 
-            Transform qt = screen.transform;
+            Matrix4x4 toMesh = screen.transform.worldToLocalMatrix;
             float savedAspect = cam.aspect;
             bool forced = false;
             if (target != null && target.height > 0)
@@ -323,14 +353,10 @@ namespace VRSL.URP.BasisIntegration
             for (int i = 0; i < 4; i++)
             {
                 Ray r = cam.ViewportPointToRay(new Vector3(vp[i].x, vp[i].y, 0f));
-                Plane plane = new Plane(qt.forward, qt.position);
-                if (!plane.Raycast(r, out float enter))
-                {
-                    plane = new Plane(-qt.forward, qt.position);
-                    if (!plane.Raycast(r, out enter)) { ok = false; break; }
-                }
-                Vector3 local = qt.InverseTransformPoint(r.GetPoint(enter));
-                outUV[i] = new Vector2(local.x + 0.5f, local.y + 0.5f);
+                // Mesh space, scale included, so the barycentric weights are the mesh's own.
+                Vector3 origin = toMesh.MultiplyPoint3x4(r.origin);
+                Vector3 dir    = toMesh.MultiplyVector(r.direction);
+                if (!UVAtRay(verts, uvs, tris, origin, dir, out outUV[i])) { ok = false; break; }
             }
 
             if (forced) cam.aspect = savedAspect;
@@ -338,6 +364,42 @@ namespace VRSL.URP.BasisIntegration
 
             bl = outUV[0]; br = outUV[1]; tr = outUV[2]; tl = outUV[3];
             return true;
+        }
+
+        // The UV where a ray meets the mesh in front of its origin: interpolated inside the
+        // triangle it crosses, or extrapolated from the triangle it falls nearest to (the one
+        // whose smallest barycentric weight is largest) when it misses every one.
+        static bool UVAtRay(Vector3[] verts, Vector2[] uvs, int[] tris, Vector3 origin, Vector3 dir,
+                            out Vector2 uv)
+        {
+            uv = Vector2.zero;
+            float best = float.NegativeInfinity;
+            for (int t = 0; t + 2 < tris.Length; t += 3)
+            {
+                Vector3 a = verts[tris[t]], b = verts[tris[t + 1]], c = verts[tris[t + 2]];
+                Vector3 ab = b - a, ac = c - a;
+                Vector3 n = Vector3.Cross(ab, ac);
+                float facing = Vector3.Dot(n, dir);
+                if (Mathf.Abs(facing) < 1e-12f) continue;
+                float along = Vector3.Dot(n, a - origin) / facing;
+                if (along < 0f) continue;   // behind the camera's near plane
+                Vector3 p = origin + dir * along;
+
+                Vector3 ap = p - a;
+                float d00 = Vector3.Dot(ab, ab), d01 = Vector3.Dot(ab, ac), d11 = Vector3.Dot(ac, ac);
+                float d20 = Vector3.Dot(ap, ab), d21 = Vector3.Dot(ap, ac);
+                float denom = d00 * d11 - d01 * d01;
+                if (Mathf.Abs(denom) < 1e-12f) continue;
+                float wb = (d11 * d20 - d01 * d21) / denom;
+                float wc = (d00 * d21 - d01 * d20) / denom;
+                float wa = 1f - wb - wc;
+
+                float inside = Mathf.Min(wa, Mathf.Min(wb, wc));
+                if (inside <= best) continue;
+                best = inside;
+                uv = wa * uvs[tris[t]] + wb * uvs[tris[t + 1]] + wc * uvs[tris[t + 2]];
+            }
+            return best > float.NegativeInfinity;
         }
     }
 }

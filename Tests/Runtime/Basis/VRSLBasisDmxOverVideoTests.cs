@@ -42,15 +42,13 @@ namespace VRSL.URP.Tests
 
         const string HostedFixtures = "https://www.mr.town/vod";
 
-        // The strip is 1920x208 at y=864 in a 1920x1080 frame, and the RAW grid
-        // RT is 13 cells wide where the strip is 13 cells tall, so the framing
-        // is a transpose: the RT's bottom-right corner samples the strip's
-        // top-left. Getting this the other way round still fills the RT and
-        // still lights the rig, reading every channel off the wrong fixture.
-        internal static readonly Vector2 UvBL = new Vector2(0f, 8f / 1080f);
-        internal static readonly Vector2 UvBR = new Vector2(0f, 216f / 1080f);
-        internal static readonly Vector2 UvTR = new Vector2(1f, 216f / 1080f);
-        internal static readonly Vector2 UvTL = new Vector2(1f, 8f / 1080f);
+        // The strip is 1920x208 at y=864 in a 1920x1080 frame, channel 1 in its
+        // top-left cell as in a show. The framing the setup menu gives a strip at
+        // the frame's bottom edge, moved up the 8 rows this one sits above it: a
+        // reflection about the diagonal instead still fills the RT and still
+        // lights the rig, reading every fixture's channels backwards.
+        internal static readonly BasisVideoRenderTextureOutput.Corners Strip =
+            BasisVideoRenderTextureOutput.Corners.HorizontalStrip(8f / 1080f, 216f / 1080f);
 
         const string RawGridRT =
             "Packages/town.mr.vrsl-urp/Runtime/Textures/RTs/DMXRTViewer-RAWValues-Horizontal.renderTexture";
@@ -109,10 +107,10 @@ namespace VRSL.URP.Tests
                 rig.Video = host.AddComponent<BasisVideoRenderTextureOutput>();
                 rig.Video.Player = rig.Player;
                 rig.Video.Target = target;
-                rig.Video.uvBL = UvBL;
-                rig.Video.uvBR = UvBR;
-                rig.Video.uvTR = UvTR;
-                rig.Video.uvTL = UvTL;
+                rig.Video.uvBL = Strip.bl;
+                rig.Video.uvBR = Strip.br;
+                rig.Video.uvTR = Strip.tr;
+                rig.Video.uvTL = Strip.tl;
             }
 
             string url = Fixture();
@@ -248,9 +246,9 @@ namespace VRSL.URP.Tests
                 var values = new float[Channels];
                 for (int i = 0; i < Channels; i++)
                 {
-                    // The RT is 13 cells across where the strip is 13 cells tall,
-                    // and GetPixel counts rows from the bottom the way the accessor
-                    // does. Cell centres, clear of any bleed at the edges.
+                    // The RT is 13 cells across, one fixture to a row, and GetPixel
+                    // counts rows from the bottom the way the accessor does. Cell
+                    // centres, clear of any bleed at the edges.
                     int cx = i % 13, cy = i / 13;
                     values[i] = shot.GetPixel(cx * cw + cw / 2, cy * ch + ch / 2).r;
                 }
@@ -285,7 +283,7 @@ namespace VRSL.URP.Tests
                     Disagreeing(values, offset, Channels, 2f, "raw grid"),
                     "the RAW grid RT does not hold the ramp, so the fault is in the "
                   + "framing rather than in the decode chain: the strip is mispositioned, "
-                  + "or the corner UVs transpose it the wrong way");
+                  + "or the corner UVs turn it the wrong way");
             }
             finally { Close(rig); }
         }

@@ -9,19 +9,20 @@ namespace VRSL.URP.BasisIntegration
     /// horizontal-mode grid, so the one part of the setup that cannot be worked
     /// out by eye is not left to be worked out by eye.
     ///
-    /// The framing is a transpose, not a rotation. The RAW grid RT is 13 cells
-    /// wide with each row a fixture; a horizontal grid node's picture is 120
-    /// cells wide with each column a fixture, so the column index and the row
-    /// index swap. A rotation differs from that by a mirror and still fills the
-    /// RT and still lights the rig, reading every channel off the wrong fixture.
-    /// Vertical mode is numbered the way the RT is and wants no transpose at all,
-    /// which is why the component's own defaults are the identity mapping and
-    /// this is a menu item rather than a default.
+    /// The framing is a quarter turn. The RAW grid RT is 13 cells wide with
+    /// each row a fixture; a horizontal grid node's picture is 120 cells wide
+    /// with each column a fixture, channel 1 on the top row. VRSL's own reader
+    /// camera is rolled to match, so the RT's left edge reads along the strip's
+    /// top. A reflection about the diagonal still fills the RT and still lights
+    /// the rig while reading every fixture's 13 channels backwards; the turn the
+    /// other way reverses the fixtures as well. Vertical mode is numbered the way the RT is and wants no turn
+    /// at all, which is why the component's own defaults are the identity
+    /// mapping and this is a menu item rather than a default.
     ///
-    /// The corners set here transpose the whole frame, which is right as it
-    /// stands for a stream carrying nothing but the grid. Where the grid is a
-    /// strip inside a larger picture, drag the strip's edges afterwards: the
-    /// crop belongs to whoever composed the stream and cannot be guessed here.
+    /// The corners set here frame the strip where VRSL's reader camera looks:
+    /// the bottom 208 rows of a 1080p frame, across its full width. A stream
+    /// that puts the grid elsewhere needs the strip's edges dragged afterwards;
+    /// that crop belongs to whoever composed the stream.
     /// </summary>
     static class VRSL_BasisDmxVideoSetup
     {
@@ -61,12 +62,12 @@ namespace VRSL.URP.BasisIntegration
             so.FindProperty(nameof(BasisVideoRenderTextureOutput.Target))
               .objectReferenceValue = target;
 
-            // A full-frame transpose: the destination's bottom edge reads up the
-            // picture's left edge, and its left edge reads along the bottom.
-            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvBL)).vector2Value = new Vector2(0f, 0f);
-            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvBR)).vector2Value = new Vector2(0f, 1f);
-            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvTR)).vector2Value = new Vector2(1f, 1f);
-            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvTL)).vector2Value = new Vector2(1f, 0f);
+            var strip = BasisVideoRenderTextureOutput.Corners.HorizontalStrip(
+                0f, BasisVideoRenderTextureOutput.HorizontalStripHeight);
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvBL)).vector2Value = strip.bl;
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvBR)).vector2Value = strip.br;
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvTR)).vector2Value = strip.tr;
+            so.FindProperty(nameof(BasisVideoRenderTextureOutput.uvTL)).vector2Value = strip.tl;
 
             // Private, so it is named by string and worth checking for.
             var blit = so.FindProperty("blitShader");
@@ -103,9 +104,9 @@ namespace VRSL.URP.BasisIntegration
                                + "Assign one before playing.", output);
             else
                 Debug.Log($"[VRSL] {(added ? "Added" : "Framed")} the DMX video output on "
-                        + $"\"{go.name}\", transposed for a horizontal grid. If the grid is a "
-                        + "strip inside a larger frame rather than the whole picture, drag the "
-                        + "strip's edges in the inspector.", output);
+                        + $"\"{go.name}\", framed for a horizontal grid along the bottom of a "
+                        + "1080p picture, where VRSL's reader camera looks. If the stream puts "
+                        + "the grid somewhere else, drag the strip's edges in the inspector.", output);
         }
 
         static RenderTexture LoadRawGrid()

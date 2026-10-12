@@ -174,7 +174,11 @@ namespace VRSL.URP.BasisIntegration
                     props[2].vector2Value = new Vector2(1, 1);
                     props[3].vector2Value = new Vector2(0, 1);
                 }
-                if (GUILayout.Button("Rotate 90°")) Rotate90(props);
+            }
+            using (new EditorGUILayout.HorizontalScope())
+            {
+                if (GUILayout.Button("Turn 90° Anticlockwise")) Rotate90(props, clockwise: false);
+                if (GUILayout.Button("Turn 90° Clockwise")) Rotate90(props, clockwise: true);
             }
             using (new EditorGUILayout.HorizontalScope())
             {
@@ -185,7 +189,7 @@ namespace VRSL.URP.BasisIntegration
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Bake starting point from camera (optional)", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(serializedObject.FindProperty("SourceCamera"), L("DMX Camera", "Deletable after baking."));
-            EditorGUILayout.PropertyField(serializedObject.FindProperty("SourceScreen"), L("Screen Quad", "Deletable after baking."));
+            EditorGUILayout.PropertyField(serializedObject.FindProperty("SourceScreen"), L("Screen", "The flat screen mesh the camera filmed. Deletable after baking."));
             using (new EditorGUI.DisabledScope(
                 serializedObject.FindProperty("SourceCamera").objectReferenceValue == null ||
                 serializedObject.FindProperty("SourceScreen").objectReferenceValue == null))
@@ -199,7 +203,10 @@ namespace VRSL.URP.BasisIntegration
                     {
                         props[0].vector2Value = bl; props[1].vector2Value = br; props[2].vector2Value = tr; props[3].vector2Value = tl;
                     }
-                    else Debug.LogWarning("Bake failed: check the Camera and Screen Quad references.");
+                    else if (Application.isPlaying && screen != null && screen.TryGetComponent<MeshFilter>(out var mf)
+                             && mf.sharedMesh != null && !mf.sharedMesh.isReadable)
+                        Debug.LogWarning("Bake failed: the Screen's mesh can't be read in Play mode. Leave Play mode and bake again, or turn on Read/Write in the mesh's import settings.");
+                    else Debug.LogWarning("Bake failed: the Screen needs a MeshFilter whose mesh has UVs, and the DMX Camera has to face it.");
                 }
             }
 
@@ -344,10 +351,13 @@ namespace VRSL.URP.BasisIntegration
             }
         }
 
-        static void Rotate90(SerializedProperty[] p)
+        // Turns the framed picture a quarter turn by moving each corner's source UV to the
+        // next corner round. A horizontal grid strip goes in anticlockwise.
+        static void Rotate90(SerializedProperty[] p, bool clockwise)
         {
             var bl = p[0].vector2Value; var br = p[1].vector2Value; var tr = p[2].vector2Value; var tl = p[3].vector2Value;
-            p[0].vector2Value = br; p[1].vector2Value = tr; p[2].vector2Value = tl; p[3].vector2Value = bl;
+            if (clockwise) { p[0].vector2Value = br; p[1].vector2Value = tr; p[2].vector2Value = tl; p[3].vector2Value = bl; }
+            else           { p[0].vector2Value = tl; p[1].vector2Value = bl; p[2].vector2Value = br; p[3].vector2Value = tr; }
         }
 
         // Mirror horizontally: swap the source UVs feeding the left vs right output corners.

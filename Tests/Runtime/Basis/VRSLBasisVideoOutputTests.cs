@@ -145,11 +145,7 @@ namespace VRSL.URP.Tests
                 player.liveness = BmLiveness.Vod;
                 player.allowLocalAddresses = true;
 
-                var strip = new Corners
-                {
-                    bl = VRSLBasisDmxOverVideoTests.UvBL, br = VRSLBasisDmxOverVideoTests.UvBR,
-                    tr = VRSLBasisDmxOverVideoTests.UvTR, tl = VRSLBasisDmxOverVideoTests.UvTL,
-                };
+                var strip = VRSLBasisDmxOverVideoTests.Strip;
                 var video = host.AddComponent<BasisVideoRenderTextureOutput>();
                 video.Player = player;
                 video.followManagerLayout = true;
