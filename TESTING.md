@@ -30,7 +30,8 @@ cause. The Console entry is easy to lose in a project's normal noise.
 **What it doesn't cover:** editor shader compilation is lazy — Unity compiles the variants the
 importer asks for, not the full keyword matrix. Errors confined to a variant only a specific
 scene requests can still get through. It reliably catches base-variant failures, which
-includes anything structural.
+includes anything structural. It also compiles for the editor's own graphics API only; rows
+T1 and T2 (**Platforms**) compile every shader for Android and Linux on Vulkan.
 
 ### 2. The DMX suite
 
@@ -795,6 +796,26 @@ script, so a check that opens the example scenes opens copies of them.
 | X3 | — | Diagnostics, tile culling active | No vertical mirroring of lighting between eyes. Mirroring points at the `renderIntoTexture` inference in `VRSLTileCullPass`; clearing `lightCullShader` isolates it |
 | X4 | — | Fixture body meshes in headset | Visible in both eyes |
 | X5 | — | A blinder or flasher lens flare, a laser and the discoball in headset, DMX and AudioLink prefabs | Each visible in both eyes at the same world position, the flare quad facing each eye |
+
+### Platforms
+
+`VRSLShaderPlatformTests` in the suite. Basis ships Windows (Direct3D 11 and 12), Android for
+Quest (Vulkan) and desktop Linux (Vulkan); the suite and the headless shader validation run on
+the editor's own API, so these rows compile every shader in the package for the other two with
+`ShaderData.Pass.CompileVariant`, without switching the editor's platform. Each pass compiles
+with the keywords it always has on (the first of any list declared without an empty entry), so
+no variant that can't exist is built. A pass borrowed from URP's Lit with `UsePass` can't be
+compiled through the shader that borrows it; Unity reports it as a UsePass by subshader and
+pass index, and only a pass Unity names that way is left to URP and listed. Any other error,
+returned or logged, fails the row, and so does a run that compiles no program at all. Compute
+shaders aren't covered: Unity has no public
+call to compile one for another platform without switching, so a build for the target is still
+what proves them.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| T1 | — | Every shader in the package, every pass of the subshaders URP uses, vertex and fragment programs, compiled for Android on Vulkan: plain, with `STEREO_MULTIVIEW_ON` (how a Quest renders both eyes in one pass) and with `INSTANCING_ON` | Every program compiles. The log names each borrowed pass left to URP |
+| T2 | — | The same for desktop Linux on Vulkan: plain and with `INSTANCING_ON`. Linux runs in desktop mode, so there is no stereo variant | Every program compiles |
 
 ---
 
