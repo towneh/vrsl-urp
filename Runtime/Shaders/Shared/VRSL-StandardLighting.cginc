@@ -1,5 +1,30 @@
 ﻿//Since this is shared, and the output structs/input structs are all slightly differently named in each shader template, just handle them all here.
 #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
+#if defined(TESSELLATION) && !defined(GEOMETRY)
+    #define VRSL_BODY_INPUT vertexOutput
+#else
+    #define VRSL_BODY_INPUT v2f
+#endif
+
+// The parts of the fixture mesh the body doesn't draw, picked out by vertex colour. The
+// mover's depth passes discard the same pixels, so they hold no depth the body leaves empty.
+bool VRSLFixtureBodyDiscards(VRSL_BODY_INPUT i)
+{
+    return (((i.uv.x) == 0.9 && (i.uv.y) == 0.9) || (5.0 <= ceil(i.color.g * 10)) <= 7.0 && ceil(i.color.r) != 0 && ceil(i.color.b) != 0)
+        || !((!(ceil(i.color.r) != 0 && ceil(i.color.g) != 1 && ceil(i.color.b) != 0)) || _PureEmissiveToggle != 0);
+}
+
+// The world-space normal the body is lit with: its normal map over the vertex basis.
+float3 VRSLFixtureBodyNormal(VRSL_BODY_INPUT i)
+{
+    #ifdef _LIGHTING_MODEL
+        return PerPixelWorldNormal(i.uv, i.btn);
+    #else
+        float3 normalMap = texTPNorm(_BumpMap, _MainTex_ST, i.worldPos, i.objPos, i.btn[2], i.objNormal, _TriplanarFalloff, i.uv);
+        return getNormal(normalMap, i.btn[0], i.btn[1], i.btn[2]);
+    #endif
+}
+
 float4 CustomStandardLightingBRDF(
     #if defined(GEOMETRY)
         v2f i
@@ -23,13 +48,13 @@ float4 CustomStandardLightingBRDF(
     //     return IF(isDMX() == 1, (getEmissionColor() * GetDMXColor(getChannelSectorX())) * strobe, getEmissionColor() * strobe);
     // }
 
-    if ((((i.uv.x) == 0.9 && (i.uv.y) == 0.9) || (5.0 <= ceil(i.color.g * 10)) <= 7.0 && ceil(i.color.r) != 0 && ceil(i.color.b) != 0))
+    if (VRSLFixtureBodyDiscards(i))
     {
         discard;
         return float4(0,0,0,0);      
     }
 
-    else if((!(ceil(i.color.r) != 0 && ceil(i.color.g) != 1 && ceil(i.color.b) != 0)) || _PureEmissiveToggle != 0)
+    else
     {
         #ifdef _LIGHTING_MODEL
         UNITY_APPLY_DITHER_CROSSFADE(i.pos.xy);
@@ -68,8 +93,7 @@ float4 CustomStandardLightingBRDF(
             float4 lightCol = _LightColor0;
 
             //NORMAL
-            float3 normalMap = texTPNorm(_BumpMap, _MainTex_ST, i.worldPos, i.objPos, i.btn[2], i.objNormal, _TriplanarFalloff, i.uv);
-            float3 worldNormal = getNormal(normalMap, i.btn[0], i.btn[1], i.btn[2]);
+            float3 worldNormal = VRSLFixtureBodyNormal(i);
 
             //METALLIC SMOOTHNESS
             float4 metallicGlossMap = texTP(_MetallicGlossMap, _MainTex_ST, i.worldPos, i.objPos, i.btn[2], i.objNormal, _TriplanarFalloff, i.uv);
@@ -209,13 +233,6 @@ float4 CustomStandardLightingBRDF(
 
     }
 
-    else
-    {
-    discard;
-    return 0;
-
-    
-    }
 
 
 

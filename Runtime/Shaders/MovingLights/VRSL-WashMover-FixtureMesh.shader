@@ -190,10 +190,8 @@
             }
             CGPROGRAM
             #pragma vertex vert
-            #pragma fragment frag
-            #pragma multi_compile_fwdbase
+            #pragma fragment fragDepthOnly
             #pragma multi_compile_instancing
-            #pragma shader_feature_local _LIGHTING_MODEL
             //REMOVE THIS WHEN FINISHED DEBUGGING
             #pragma target 4.5
 
@@ -264,9 +262,9 @@
             }
             CGPROGRAM
             #pragma vertex vert
-            #pragma fragment frag
-            #pragma multi_compile_fwdbase
+            #pragma fragment fragDepthNormals
             #pragma multi_compile_instancing
+            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
             #pragma shader_feature_local _LIGHTING_MODEL
             //REMOVE THIS WHEN FINISHED DEBUGGING
             #pragma target 4.5

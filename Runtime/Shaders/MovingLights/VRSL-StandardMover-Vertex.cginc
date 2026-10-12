@@ -839,5 +839,43 @@ fixed4 frag (v2f i) : SV_Target
 }
 #endif
 
+// The body's depth passes. They run vert as the forward pass does, so the depth they
+// write is the depth the body is drawn at under depth priming, and discard where the
+// body does; neither lights anything.
+#if !defined(VOLUMETRIC_YES) && !defined(PROJECTION_YES) && !defined(FIXTURE_SHADOWCAST) && !defined(UNITY_PASS_SHADOWCASTER)
+half4 fragDepthOnly (v2f i) : SV_Target
+{
+	UNITY_SETUP_INSTANCE_ID(i);
+	UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+	if (VRSLFixtureBodyDiscards(i))
+		discard;
+	return 0;
+}
+
+half4 fragDepthNormals (v2f i) : SV_Target
+{
+	UNITY_SETUP_INSTANCE_ID(i);
+	UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+	if (VRSLFixtureBodyDiscards(i))
+		discard;
+	float3 normalWS = VRSLFixtureBodyNormal(i);
+
+	// World space, as URP's own DepthNormals passes write it. Octahedral when the
+	// renderer asks for that, encoded as URP's PackNormalOctQuadEncode and
+	// PackFloat2To888 do; those live in the core library, which a CG pass can't include.
+	#if defined(_GBUFFER_NORMALS_OCT)
+		normalWS *= rcp(max(dot(abs(normalWS), 1.0), 1e-6));
+		float t = saturate(-normalWS.z);
+		float2 octNormalWS = normalWS.xy + float2(normalWS.x >= 0.0 ? t : -t, normalWS.y >= 0.0 ? t : -t);
+		uint2 packed = (uint2)(saturate(octNormalWS * 0.5 + 0.5) * 4095.5);
+		uint2 hi = packed >> 8;
+		uint2 lo = packed & 255;
+		return half4(float3(lo, hi.x | (hi.y << 4)) / 255.0, 0.0);
+	#else
+		return half4(normalWS, 0.0);
+	#endif
+}
+#endif
+
 
 

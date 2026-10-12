@@ -9,6 +9,7 @@
 - **Surfaces keep their colour under VRSL light at any render scale.** The surface capture looked up the camera's depth by the unscaled screen size, so at a render scale other than 100% it rejected most surfaces and they lit as neutral grey.
 - **Fixture bodies write world-space normals in their depth-normals pass.** The par, blinder, flasher and light bar body shaders, DMX and AudioLink, wrote view-space normals packed into 0..1, where URP and VRSL both read signed world-space normals. Effects that read the camera's normals texture, such as SSAO, and VRSL light falling on the bodies saw them facing the wrong way.
 - **Fixture body materials with no normal map light as flat surfaces.** The same body shaders defaulted their normal map to white, which unpacks to a tilted normal, so a material with nothing assigned lit and wrote normals as if every surface faced off to one side. They now default to a flat normal map.
+- **Moving-head bodies write their normals in their depth-normals pass.** The spot and wash mover body shaders, DMX and AudioLink, wrote their lit colour where URP and VRSL read a world-space normal, so SSAO and VRSL light falling on the bodies used garbage normals. Their depth passes also ran the full lighting for nothing; they now keep only the body's discards.
 
 ## [0.3.0-rc.4] — 2026-10-12
 

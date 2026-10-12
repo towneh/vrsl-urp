@@ -254,9 +254,10 @@
             // write a different depth and the body vanishes.
             //
             // Everything below mirrors the forward pass: the same defines, the same
-            // structs, the same include chain, and the same vert entry point.
+            // structs, the same include chain, and the same vert entry point. The
+            // fragment keeps the body's discards and lights nothing.
             #pragma vertex vert
-            #pragma fragment frag
+            #pragma fragment fragDepthOnly
             #pragma multi_compile_instancing
 
             #define GEOMETRY
@@ -330,10 +331,13 @@
             // write a different depth and the body vanishes.
             //
             // Everything below mirrors the forward pass: the same defines, the same
-            // structs, the same include chain, and the same vert entry point.
+            // structs, the same include chain, and the same vert entry point. The
+            // fragment keeps the body's discards and writes its world-space normal.
             #pragma vertex vert
-            #pragma fragment frag
+            #pragma fragment fragDepthNormals
             #pragma multi_compile_instancing
+            #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
+            #pragma shader_feature_local _LIGHTING_MODEL
 
             #define GEOMETRY
             #define FIXTURE_EMIT

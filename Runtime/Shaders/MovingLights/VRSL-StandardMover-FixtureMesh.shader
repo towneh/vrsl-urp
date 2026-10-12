@@ -184,7 +184,7 @@
 		    #define FIXTURE_EMIT
 		    #define VRSL_DMX
 		    #pragma vertex vert
-		    #pragma fragment frag
+		    #pragma fragment fragDepthOnly
 		    #pragma multi_compile_instancing
 		    // #pragma multi_compile _ DOTS_INSTANCING_ON
 		    #include "UnityCG.cginc"
@@ -245,8 +245,10 @@
 		    #define FIXTURE_EMIT
 		    #define VRSL_DMX
 		    #pragma vertex vert
-		    #pragma fragment frag
+		    #pragma fragment fragDepthNormals
 		    #pragma multi_compile_instancing
+		    #pragma multi_compile_fragment _ _GBUFFER_NORMALS_OCT
+		    #pragma shader_feature_local _LIGHTING_MODEL
 		    // #pragma multi_compile _ DOTS_INSTANCING_ON
 		    #include "UnityCG.cginc"
             #include "Lighting.cginc"
