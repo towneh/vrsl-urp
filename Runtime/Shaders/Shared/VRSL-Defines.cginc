@@ -11,8 +11,7 @@ sampler2D _MainTex;
 
 #ifdef VRSL_DMX
     uint _UseRawGrid, _EnableExtraChannels;
-    uniform half4 _VRSLU_DMXGridRenderTexture_TexelSize;
-    sampler2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridStrobeOutput, _VRSLU_DMXGridSpinTimer;
+    Texture2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridStrobeOutput, _VRSLU_DMXGridSpinTimer;
     half _SpinSpeed;
 
     #ifdef FIXTURE_EMIT

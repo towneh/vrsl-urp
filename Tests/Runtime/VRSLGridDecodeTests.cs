@@ -881,6 +881,93 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// G19. Every reader samples the grid texel by texel whatever filter the grid texture
+        /// carries: G17's grid read through the compute and both includes' value, movement and
+        /// raw reads gives the same value for every channel with the texture set to Bilinear
+        /// as set to Point. A reader taking the texture's own sampler blends a channel with
+        /// its neighbours on a grid built from render textures left at Unity's default filter.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G19_every_reader_ignores_the_grid_textures_filter(
+            [Values(VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy)] VRSLGridLayout layout)
+        {
+            var size  = SizeOf(layout);
+            int count = layout == VRSLGridLayout.Legacy ? PatchedChannels : Mathf.Min(size.y / 2 * 13, 1536);
+            var rig = VRSLDMXRig.Build();
+            VRSLDMXRig.PaintedGrid painted = null;
+            RenderTexture white = null;
+            VRSLGridTextures grid = null;
+            try
+            {
+                yield return rig.Step(2);
+                var values = new float[count];
+                for (int i = 0; i < count; i++) values[i] = (i % 251 + 2) / 255f;
+                painted = VRSLDMXRig.PaintGrid(values, VRSLDMXRig.OwnCellsOf(count, layout, size.x, size.y),
+                                               layout, size.x, size.y);
+                white = Solid(Color.white);
+                grid  = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                var set = new VRSLGridTextures.Set
+                {
+                    main = painted.Texture, movement = painted.Texture, strobe = white, spinTimer = painted.Texture,
+                };
+                grid.horizontal = grid.vertical = grid.legacy = set;
+                rig.Manager.ChannelSource = null;
+                rig.Manager.enabled       = false;
+                rig.Manager.gridTextures  = grid;
+                rig.Manager.dmxInput      = (VRSLDmxInput)layout;
+                rig.Manager.enabled       = true;
+                yield return rig.Step(3);
+                Assert.AreEqual(0, rig.Manager.ChannelCount, "the manager is still reading the channel buffer");
+
+                var reads = new Dictionary<string, float[]>[2];
+                foreach (var filter in new[] { FilterMode.Point, FilterMode.Bilinear })
+                {
+                    painted.Texture.filterMode = filter;
+                    var byReader = reads[(int)filter] = new Dictionary<string, float[]>
+                    {
+                        ["compute"] = rig.ReadGridChannels(count),
+                    };
+                    foreach (var probe in new[] { "Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads" })
+                    {
+                        var probed = ReadThrough(probe, count, painted.Texture, painted.Texture, rig.Manager,
+                                                 fromBuffer: false, layout);
+                        string name = probe.Contains("Urp") ? "URP include" : "Built-in include";
+                        byReader[name + " value"]    = probed.Select(c => c.r).ToArray();
+                        byReader[name + " movement"] = probed.Select(c => c.g).ToArray();
+                        byReader[name + " raw"]      = probed.Select(c => c.b).ToArray();
+                    }
+                }
+                Assert.IsTrue(reads[(int)FilterMode.Point]["URP include value"].Distinct().Count() > 100,
+                    "the point-sampled reads hardly vary, so comparing them with the filtered ones proves nothing");
+
+                var moved = new Dictionary<string, List<int>>();
+                foreach (var reader in reads[(int)FilterMode.Point].Keys)
+                {
+                    var point = reads[(int)FilterMode.Point][reader];
+                    var blend = reads[(int)FilterMode.Bilinear][reader];
+                    var list  = Enumerable.Range(0, count).Where(i => Mathf.Abs(point[i] - blend[i]) > Half)
+                                          .Select(i => i + 1).ToList();
+                    if (list.Count > 0) moved[reader] = list;
+                }
+
+                Debug.Log($"[G19] {layout}: {count} channels; "
+                        + (moved.Count == 0 ? "no reader's value changed with the grid's filter"
+                           : string.Join("; ", moved.Select(m => $"{m.Key} changed on {m.Value.Count}: "
+                                                                + string.Join(", ", m.Value.Take(20))))));
+                Assert.IsEmpty(moved, $"{layout}: readers whose value depends on the grid texture's filter: "
+                                    + string.Join("; ", moved.Select(m => $"{m.Key} on {m.Value.Count} channels, "
+                                                                         + $"first {string.Join(", ", m.Value.Take(12))}")));
+            }
+            finally
+            {
+                rig.Dispose();
+                painted?.Dispose();
+                if (white != null) { white.Release(); Object.DestroyImmediate(white); }
+                if (grid != null) Object.DestroyImmediate(grid);
+            }
+        }
+
+        /// <summary>
         /// N32, the strobe gate. A 13-channel light bar patched on the same sector as one
         /// of the rig's realtime movers, strobing from the synthetic source's Ramp: frame by
         /// frame, the bar glows exactly when the realtime light is open.

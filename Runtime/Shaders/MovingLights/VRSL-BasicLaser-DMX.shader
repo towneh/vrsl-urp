@@ -94,8 +94,7 @@
             half _EndFade, _FadeStrength, _InternalShine, _LaserSoftening, _InternalShineLength;
             float _ScrollOffset;
             int _VRSLU_DMXGridLayout;   // the manager's grid layout, see VRSL-Defines
-            sampler2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridSpinTimer;
-            uniform float4 _VRSLU_DMXGridRenderTexture_TexelSize;
+            Texture2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridSpinTimer;
             uniform const half compatSampleYAxis = 0.019231;
             uniform const half standardSampleYAxis = 0.00762;
 

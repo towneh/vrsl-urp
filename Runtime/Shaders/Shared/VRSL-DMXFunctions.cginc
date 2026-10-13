@@ -1,5 +1,10 @@
 #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
 
+// Point/clamp sampling and the manager's grid texel size, as in VRSL-DMXFunctions-URP.hlsl,
+// so every reader takes a channel from its own cell whatever the grid texture's filter.
+SamplerState sampler_point_clamp;
+float4 _VRSLDMXTexelSize;
+
 // The DMX channel buffer and the compute's per-channel state, as in
 // VRSL-DMXFunctions-URP.hlsl, which says how they are published and read.
 uint   _VRSLU_DMXChannelCount;
@@ -122,15 +127,13 @@ float2 LegacyRead(int channel, int sector)
 
 float2 IndustryRead(int x, int y)
 {
-    
-    float resMultiplierX = (_VRSLU_DMXGridRenderTexture_TexelSize.z / 13);
+    float resMultiplierX = (_VRSLDMXTexelSize.z / 13);
     float2 xyUV = float2(0.0,0.0);
-    
-    xyUV.x = ((x * resMultiplierX) * _VRSLU_DMXGridRenderTexture_TexelSize.x);
-    xyUV.y = (y * resMultiplierX) * _VRSLU_DMXGridRenderTexture_TexelSize.y;
+
+    xyUV.x = ((x * resMultiplierX) * _VRSLDMXTexelSize.x);
+    xyUV.y = (y * resMultiplierX) * _VRSLDMXTexelSize.y;
     xyUV.y -= 0.001915;
     xyUV.x -= 0.015;
-   // xyUV.x = DMXChannel == 15 ? xyUV.x + 0.0769 : xyUV.x;
     return xyUV;
 }
 int getTargetRGBValue(uint universe)
@@ -157,14 +160,13 @@ float2 getDMXCellUV(uint DMXChannel)
 }
 
 //function for getting the value on the DMX Grid in the bottom right corner configuration
-half getValueAtCoords(uint DMXChannel, sampler2D _Tex)
+half getValueAtCoords(uint DMXChannel, Texture2D _Tex)
 {
     uint universe = ceil(((int) DMXChannel)/512.0);
     int targetColor = getTargetRGBValue(universe);
     float2 xyUV = getDMXCellUV(DMXChannel);
 
-    float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
-    half4 c = tex2Dlod(_Tex, uvcoords);
+    half4 c = _Tex.SampleLevel(sampler_point_clamp, xyUV, 0);
     half value = 0.0;
     
    if(getNineUniverseMode() && _VRSLU_DMXGridLayout != 2)
@@ -182,15 +184,13 @@ half getValueAtCoords(uint DMXChannel, sampler2D _Tex)
     return value;
 }
 
-half getValueAtCoordsRaw(uint DMXChannel, sampler2D _Tex)
+half getValueAtCoordsRaw(uint DMXChannel, Texture2D _Tex)
 {
-   // DMXChannel = DMXChannel == 15.0 ? DMXChannel + 1 : DMXChannel;
     uint universe = ceil(((int) DMXChannel)/512.0);
     int targetColor = getTargetRGBValue(universe);
     float2 xyUV = getDMXCellUV(DMXChannel);
 
-    float4 uvcoords = float4(xyUV.x, xyUV.y, 0,0);
-    float4 c = tex2Dlod(_Tex, uvcoords);
+    float4 c = _Tex.SampleLevel(sampler_point_clamp, xyUV, 0);
     half value = c.r;
     value = IF(targetColor > 0, c.g, value);
     value = IF(targetColor > 1, c.b, value);
