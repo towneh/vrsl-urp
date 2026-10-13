@@ -94,8 +94,6 @@
             #pragma shader_feature _1CH_MODE _4CH_MODE _5CH_MODE _13CH_MODE
             #define VRSL_DMX
             #define VRSL_FLARE
-            // make fog work
-            // #pragma multi_compile_fog
             #pragma multi_compile_instancing
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
@@ -112,7 +110,6 @@
             struct v2f
             {
                 float2 uv : TEXCOORD0;
-                // UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
                 float4 screenPos : TEXCOORD1;
                 float4 worldDirection : TEXCOORD2;
@@ -373,7 +370,6 @@
                 #if _ALPHATEST_ON
                     o.screenPos = ComputeScreenPos(o.vertex);
                 #endif
-                //  UNITY_TRANSFER_FOG(o,o.vertex);
                 return o;
             }
 
@@ -397,13 +393,9 @@
                    // col *= i.maskX;
                     //clip((col.a) - DITHER_THRESHOLDS[index]);
                     clip((((col.r + col.g + col.b)/3) * (_ClippingThreshold * 10)) - DITHER_THRESHOLDS[index]);
-                    UNITY_APPLY_FOG(i.fogCoord, col);
                     return col * i.dmx;
                 #else
                 fixed4 col = saturate(tex2D(_MainTex, i.uv) - _RemoveTextureArtifact) * i.color;
-                // apply fog
-                UNITY_APPLY_FOG(i.fogCoord, col);
-
                 col *= i.maskX;
                 return col;
                 #endif

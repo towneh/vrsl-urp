@@ -13,7 +13,7 @@ namespace VRSL.URP.Tests
     /// The par and blinder bodies, and the blinders' lens flares, follow the fixture's
     /// DMX; the 5-channel ones cast light from a 5-channel patch.
     ///
-    /// Rows J1 to J4 and J6 of TESTING.md.
+    /// Rows J1 to J4, J6 and J7 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -547,6 +547,134 @@ namespace VRSL.URP.Tests
                 rig.Dispose();
                 foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
                 if (moverMesh != null) Object.DestroyImmediate(moverMesh);
+            }
+        }
+
+        /// <summary>
+        /// J7. Scene fog leaves both lens flares as they are. Each flare is a quad on a copy
+        /// of its shipped blinder material, lit red with no AudioLink or DMX input, 5 m from
+        /// the camera, captured with the flares shown and hidden under no fog and then under
+        /// green linear, exponential and exponential squared fog that would take about half
+        /// of anything at that distance. A flare adds light, so the difference between the
+        /// two captures is all it contributes, and it must not change with fog. A cube on
+        /// URP Unlit beside them is the control that the fog was on.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J7_lens_flares_are_unchanged_by_scene_fog()
+        {
+            const string Materials = "Packages/town.mr.vrsl-urp/Runtime/Materials/Lights/";
+            var flares = new (string name, string material, string enable)[]
+            {
+                ("AudioLink Flare", "AudioLink/StaticLight-Blinder/VRSL-AudioLink-Blinder-LensFlareMat.mat", "_EnableAudioLink"),
+                ("DMX Flare",       "DMX/StaticLight-Blinder/VRSL-Blinder-LensFlareMat-Horizontal.mat",       "_EnableDMX"),
+            };
+            var unlit = Shader.Find("Universal Render Pipeline/Unlit");
+            Assert.IsNotNull(unlit, "URP Unlit is not in the project");
+
+            var fogMode    = RenderSettings.fogMode;
+            var fogColor   = RenderSettings.fogColor;
+            var fogDensity = RenderSettings.fogDensity;
+            var fogStart   = RenderSettings.fogStartDistance;
+            var fogEnd     = RenderSettings.fogEndDistance;
+            var rig        = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var materials  = new List<Material>();
+            try
+            {
+                var renderers = new List<MeshRenderer>();
+                for (int i = 0; i < flares.Length; i++)
+                {
+                    var shipped = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(Materials + flares[i].material);
+                    Assert.IsNotNull(shipped, $"{flares[i].material} is not in the package");
+                    var material = new Material(shipped) { name = $"VRSL J7 {flares[i].name}" };
+                    materials.Add(material);
+                    material.SetFloat(flares[i].enable, 0f);
+                    material.SetColor("_Emission", new Color(24f, 0f, 0f, 1f));
+                    var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    quad.name = $"VRSL J7 {flares[i].name}";
+                    quad.transform.SetParent(rig.Floor.transform.parent, false);
+                    quad.transform.position = new Vector3(300f + 1.5f * i, 1.5f, 0f);
+                    var r = quad.GetComponent<MeshRenderer>();
+                    r.sharedMaterial = material;
+                    renderers.Add(r);
+                }
+                var control = new Material(unlit) { name = "VRSL J7 control" };
+                materials.Add(control);
+                control.SetColor("_BaseColor", Color.red);
+                var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                cube.name = "VRSL J7 control";
+                cube.transform.SetParent(rig.Floor.transform.parent, false);
+                cube.transform.position = new Vector3(303.5f, 1.5f, 0f);
+                var controlRenderer = cube.GetComponent<MeshRenderer>();
+                controlRenderer.sharedMaterial = control;
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(301.5f, 1.5f, -5f), Quaternion.identity);
+                yield return rig.Step(2);
+
+                (Vector3[] flare, Vector3 control) Capture(bool fog, FogMode mode)
+                {
+                    RenderSettings.fog              = fog;
+                    RenderSettings.fogMode          = mode;
+                    RenderSettings.fogColor         = Color.green;
+                    RenderSettings.fogStartDistance = 0f;
+                    RenderSettings.fogEndDistance   = 10f;
+                    RenderSettings.fogDensity       = mode == FogMode.Exponential ? 0.14f : 0.17f;
+                    foreach (var r in renderers) r.enabled = true;
+                    var shown = CaptureHdr(rig);
+                    foreach (var r in renderers) r.enabled = false;
+                    var hidden = CaptureHdr(rig);
+                    foreach (var r in renderers) r.enabled = true;
+                    try
+                    {
+                        var added = new Vector3[renderers.Count];
+                        for (int i = 0; i < renderers.Count; i++)
+                            added[i] = Measure(rig.Camera, shown, renderers[i]).mean
+                                     - Measure(rig.Camera, hidden, renderers[i]).mean;
+                        return (added, Measure(rig.Camera, shown, controlRenderer).mean);
+                    }
+                    finally
+                    {
+                        Object.DestroyImmediate(shown);
+                        Object.DestroyImmediate(hidden);
+                    }
+                }
+
+                var clear = Capture(false, FogMode.Linear);
+                for (int i = 0; i < flares.Length; i++)
+                {
+                    Debug.Log($"[J7] {flares[i].name}, no fog: adds {clear.flare[i]:F4}");
+                    Assert.Greater(clear.flare[i].x, 0.02f, $"{flares[i].name} must be lit red with no fog (adds {clear.flare[i]:F4})");
+                }
+                Debug.Log($"[J7] control, no fog: {clear.control}");
+
+                var failures = new List<string>();
+                foreach (var mode in new[] { FogMode.Linear, FogMode.Exponential, FogMode.ExponentialSquared })
+                {
+                    var fogged = Capture(true, mode);
+                    Debug.Log($"[J7] control, {mode} fog: {fogged.control}");
+                    if (fogged.control.y < 0.25f || fogged.control.x > 0.75f * clear.control.x)
+                        Assert.Inconclusive($"URP Unlit beside the flares reads {fogged.control} under {mode} fog against "
+                                          + $"{clear.control} without, so the fog never reached the frame and the row "
+                                          + "has nothing to judge");
+                    for (int i = 0; i < flares.Length; i++)
+                    {
+                        Debug.Log($"[J7] {flares[i].name}, {mode} fog: adds {fogged.flare[i]:F4}");
+                        var drift = fogged.flare[i] - clear.flare[i];
+                        if (drift.magnitude > 0.02f * clear.flare[i].magnitude + 0.002f) failures.Add(
+                            $"{flares[i].name} adds {fogged.flare[i]:F4} under green {mode} fog against {clear.flare[i]:F4} "
+                          + "without. A flare is unfogged, so fog must neither dim it nor tint it; a fog-coloured "
+                          + "disc means the pass applies fog from a fog coordinate its vertex never wrote");
+                    }
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
+                RenderSettings.fogMode          = fogMode;
+                RenderSettings.fogColor         = fogColor;
+                RenderSettings.fogDensity       = fogDensity;
+                RenderSettings.fogStartDistance = fogStart;
+                RenderSettings.fogEndDistance   = fogEnd;
+                rig.Dispose();
+                foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
             }
         }
 

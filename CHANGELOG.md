@@ -17,6 +17,7 @@
 - **Fixture body materials with no normal map light as flat surfaces.** The same body shaders defaulted their normal map to white, which unpacks to a tilted normal, so a material with nothing assigned lit and wrote normals as if every surface faced off to one side. They now default to a flat normal map.
 - **Moving-head bodies write their normals in their depth-normals pass.** The spot and wash mover body shaders, DMX and AudioLink, wrote their lit colour where URP and VRSL read a world-space normal, so SSAO and VRSL light falling on the bodies used garbage normals. Their depth passes also ran the full lighting for nothing; they now keep only the body's discards.
 - **The AudioLink wash mover body shader has its own name,** `VRSL-URP/AudioLink/Wash Mover/Fixture`. It was named `VRSL-URP/AudioLink/Standard Mover/Fixture`, the same as the AudioLink spot mover, so `Shader.Find` on that name could return either. Materials refer to their shader by asset, so they're unaffected; code that looks the wash mover up by name needs the new one.
+- **AudioLink lens flares keep their colour in fog.** With scene fog on, the AudioLink blinder and flasher flares drew as a disc in the fog's colour instead of the light's, at the same brightness whatever the light's colour and level. Lens flares are now left unfogged, as the DMX ones already were.
 
 ## [0.3.0-rc.4] — 2026-10-12
 
