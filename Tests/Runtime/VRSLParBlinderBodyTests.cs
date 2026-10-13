@@ -13,7 +13,7 @@ namespace VRSL.URP.Tests
     /// The par and blinder bodies, and the blinders' lens flares, follow the fixture's
     /// DMX; the 5-channel ones cast light from a 5-channel patch.
     ///
-    /// Rows J1 to J4 and J6 to J8 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J9 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -373,80 +373,13 @@ namespace VRSL.URP.Tests
             if (!asset.supportsMainLightShadows)
                 Assert.Inconclusive("the pipeline asset doesn't support main-light shadows, so no shadow keyword "
                                   + "is ever set and the row can't separate the cases");
-            string[] bodyShaders =
-            {
-                "VRSL-URP/AudioLink/Standard Static/Fixture",
-                "VRSL-URP/Standard Static/Surface Shaders/Opaque",
-                "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
-            };
-            string[] moverShaders =
-            {
-                "VRSL-URP/Standard Mover/Fixture",
-                "VRSL-URP/Wash Mover/Fixture",
-                "VRSL-URP/AudioLink/Standard Mover/Fixture",
-                "VRSL-URP/AudioLink/Wash Mover/Fixture",
-            };
-            var lit = Shader.Find("Universal Render Pipeline/Lit");
-            Assert.IsNotNull(lit, "URP Lit is not in the project");
 
             int cascadesWas = asset.shadowCascadeCount;
             var rig = VRSLDMXRig.Build(withSource: false, targetSize: 512);
-            var materials = new List<Material>();
-            Mesh moverMesh = null;
+            var owned = new List<Object>();
             try
             {
-                MeshRenderer Cube(string name, float x, Material m, float y = 1f)
-                {
-                    var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                    go.name = name;
-                    go.transform.SetParent(rig.Floor.transform.parent, false);
-                    go.transform.position = new Vector3(x, y, 0f);
-                    var r = go.GetComponent<MeshRenderer>();
-                    r.sharedMaterial    = m;
-                    r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
-                    return r;
-                }
-
-                var bodies = new List<(string shader, MeshRenderer renderer)>();
-                for (int i = 0; i < bodyShaders.Length + moverShaders.Length; i++)
-                {
-                    bool mover = i >= bodyShaders.Length;
-                    string name = mover ? moverShaders[i - bodyShaders.Length] : bodyShaders[i];
-                    var shader = Shader.Find(name);
-                    Assert.IsNotNull(shader, $"{name} did not compile or is not in the project");
-                    var material = new Material(shader) { name = $"VRSL J6 body {i}" };
-                    materials.Add(material);
-                    material.SetColor("_Color", Color.white);
-                    material.SetFloat("_Metallic", 0f);
-                    material.SetFloat("_Glossiness", 0.2f);
-                    material.SetFloat("_FixtureMaxIntensity", 0f);
-                    material.SetFloat("_EnableDMX", 0f);
-                    if (!mover)
-                    {
-                        material.SetTexture("_NormalMap", Texture2D.normalTexture);
-                        bodies.Add((name, Cube($"VRSL J6 body {i}", 197.75f + 1.5f * i, material)));
-                        continue;
-                    }
-                    if (moverMesh == null)
-                    {
-                        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                        moverMesh = Object.Instantiate(cube.GetComponent<MeshFilter>().sharedMesh);
-                        Object.DestroyImmediate(cube);
-                        moverMesh.name = "VRSL J6 mover cube";
-                        moverMesh.colors = Enumerable.Repeat(Color.black, moverMesh.vertexCount).ToArray();
-                    }
-                    var renderer = Cube($"VRSL J6 body {i}", 197.75f + 1.5f * (i - bodyShaders.Length), material, 2.4f);
-                    renderer.GetComponent<MeshFilter>().sharedMesh = moverMesh;
-                    bodies.Add((name, renderer));
-                }
-                // URP's own Lit with the same surface, beside the bodies, so a dark frame
-                // separates a body shader from the light and camera.
-                var reference = new Material(lit) { name = "VRSL J6 reference" };
-                materials.Add(reference);
-                reference.SetColor("_BaseColor", Color.white);
-                reference.SetFloat("_Metallic", 0f);
-                reference.SetFloat("_Smoothness", 0.2f);
-                var refRenderer = Cube("VRSL J6 reference", 202.25f, reference);
+                var (bodies, refRenderer) = BodyCubes(rig, "J6", owned);
 
                 var light = new GameObject("VRSL J6 sun").AddComponent<Light>();
                 light.transform.SetParent(rig.Floor.transform.parent, false);
@@ -545,8 +478,7 @@ namespace VRSL.URP.Tests
             {
                 asset.shadowCascadeCount = cascadesWas;
                 rig.Dispose();
-                foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
-                if (moverMesh != null) Object.DestroyImmediate(moverMesh);
+                foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
             }
         }
 
@@ -792,6 +724,241 @@ namespace VRSL.URP.Tests
                 rig.Dispose();
                 foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
             }
+        }
+
+        /// <summary>
+        /// J9. The fixture body shaders take URP's point and spot lights on every path URP
+        /// lights them by: Forward+, Forward per pixel, and Forward per vertex, which is how
+        /// Basis's Quest renderer is set. The same cubes as J6 under a white point light in
+        /// front of them and no sun, captured with the light off and on for each path; the
+        /// row sets every renderer's rendering mode and the asset's additional-light mode for
+        /// each capture and puts them back after. Each lit capture counts only its gain over
+        /// the light-off one on the same path, and the row reads back the keyword URP set, so
+        /// a capture that never reached its path is inconclusive. URP Lit beside them is the
+        /// control. Forward+ defines <c>_ADDITIONAL_LIGHTS</c> itself under the cluster light
+        /// loop, so a body built without the additional-light keywords is lit there and dark
+        /// on plain Forward.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J9_fixture_bodies_take_urp_point_lights_on_every_lighting_path()
+        {
+            var asset = UnityEngine.Rendering.GraphicsSettings.currentRenderPipeline
+                            as UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset;
+            if (asset == null) Assert.Ignore("No Universal Render Pipeline asset is active.");
+            // URP gives the asset's additional-light mode no public setter, so the row writes
+            // the serialised field the asset reads. That marks the asset dirty, and the host
+            // rewrites the active asset's quality settings in memory during a run, so a dirty
+            // flag left behind saves the host's values over the project's at exit.
+            bool dirtyWas = UnityEditor.EditorUtility.IsDirty(asset);
+            var serializedAsset = new UnityEditor.SerializedObject(asset);
+            var lightMode = serializedAsset.FindProperty("m_AdditionalLightsRenderingMode");
+            if (lightMode == null)
+                Assert.Inconclusive("the pipeline asset has no m_AdditionalLightsRenderingMode field, so the row "
+                                  + "can't choose per-pixel or per-vertex additional lights");
+            int lightModeWas = lightMode.intValue;
+            void SetLightMode(int value)
+            {
+                serializedAsset.Update();
+                lightMode.intValue = value;
+                serializedAsset.ApplyModifiedPropertiesWithoutUndo();
+            }
+            var renderers = UniversalRenderers(asset);
+            if (renderers.Count == 0) Assert.Ignore("The pipeline asset has no Universal Renderer.");
+            var renderingModesWas = renderers.Select(r => r.renderingMode).ToList();
+
+            var rig = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var owned = new List<Object>();
+            try
+            {
+                var (bodies, refRenderer) = BodyCubes(rig, "J9", owned);
+
+                var light = new GameObject("VRSL J9 point light").AddComponent<Light>();
+                light.transform.SetParent(rig.Floor.transform.parent, false);
+                light.transform.position = new Vector3(200f, 1.7f, -2.5f);
+                light.type      = LightType.Point;
+                light.color     = Color.white;
+                light.range     = 10f;
+                light.intensity = 8f;
+                light.shadows   = LightShadows.None;
+
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(200f, 1f, -6f), Quaternion.identity);
+                yield return rig.Step(2);
+
+                (Vector3[] body, Vector3 control, string keyword) Capture(
+                    UnityEngine.Rendering.Universal.RenderingMode path,
+                    UnityEngine.Rendering.Universal.LightRenderingMode perLight, bool on, string what)
+                {
+                    foreach (var r in renderers)
+                        if (r.renderingMode != path) r.renderingMode = path;
+                    SetLightMode((int)perLight);
+                    if (asset.additionalLightsRenderingMode != perLight)
+                        Assert.Inconclusive($"the pipeline asset reads {asset.additionalLightsRenderingMode} additional "
+                                          + $"lights after the row set {perLight}");
+                    light.enabled = on;
+                    var frame = CaptureHdr(rig);
+                    try
+                    {
+                        // URP sets its additional-light keywords globally for the frame, so
+                        // they can be read back once the camera has rendered.
+                        string keyword = Shader.IsKeywordEnabled("_CLUSTER_LIGHT_LOOP")        ? "_CLUSTER_LIGHT_LOOP"
+                                       : Shader.IsKeywordEnabled("_ADDITIONAL_LIGHTS_VERTEX") ? "_ADDITIONAL_LIGHTS_VERTEX"
+                                       : Shader.IsKeywordEnabled("_ADDITIONAL_LIGHTS")        ? "_ADDITIONAL_LIGHTS"
+                                       : "none";
+                        var means = new Vector3[bodies.Count];
+                        for (int i = 0; i < bodies.Count; i++)
+                        {
+                            var (mean, peak) = Measure(rig.Camera, frame, bodies[i].renderer);
+                            means[i] = mean;
+                            Debug.Log($"[J9] {what}: {bodies[i].shader} peak {peak}, mean {mean}");
+                        }
+                        var (refMean, refPeak) = Measure(rig.Camera, frame, refRenderer);
+                        Debug.Log($"[J9] {what}: keyword {keyword}; URP Lit peak {refPeak}, mean {refMean}");
+                        return (means, refMean, keyword);
+                    }
+                    finally { Object.DestroyImmediate(frame); }
+                }
+
+                var paths = new (UnityEngine.Rendering.Universal.RenderingMode path,
+                                 UnityEngine.Rendering.Universal.LightRenderingMode perLight,
+                                 string keyword, string what)[]
+                {
+                    (UnityEngine.Rendering.Universal.RenderingMode.ForwardPlus,
+                     UnityEngine.Rendering.Universal.LightRenderingMode.PerPixel, "_CLUSTER_LIGHT_LOOP", "Forward+"),
+                    (UnityEngine.Rendering.Universal.RenderingMode.Forward,
+                     UnityEngine.Rendering.Universal.LightRenderingMode.PerPixel, "_ADDITIONAL_LIGHTS", "Forward per pixel"),
+                    (UnityEngine.Rendering.Universal.RenderingMode.Forward,
+                     UnityEngine.Rendering.Universal.LightRenderingMode.PerVertex, "_ADDITIONAL_LIGHTS_VERTEX", "Forward per vertex"),
+                };
+
+                float Gain(Vector3 lit, Vector3 unlit) => (lit - unlit).magnitude;
+
+                var failures = new List<string>();
+                foreach (var (path, perLight, keyword, what) in paths)
+                {
+                    var dark = Capture(path, perLight, false, $"{what}, light off");
+                    var lit  = Capture(path, perLight, true,  $"{what}, light on");
+                    if (lit.keyword != keyword)
+                        Assert.Inconclusive($"the {what} capture ran {lit.keyword}, not {keyword}, so the row didn't "
+                                          + "exercise the path it is for");
+                    if (Gain(lit.control, dark.control) < 0.1f)
+                        Assert.Inconclusive($"URP Lit beside the bodies gains only {Gain(lit.control, dark.control):F3} "
+                                          + $"from the point light on {what} ({lit.control} against {dark.control} with "
+                                          + "it off), so the light or the camera is wrong and the row has nothing to judge");
+                    for (int i = 0; i < bodies.Count; i++)
+                    {
+                        float gain = Gain(lit.body[i], dark.body[i]);
+                        if (!(gain > 0.1f)) failures.Add(
+                            $"{bodies[i].shader} gains only {gain:F3} from the point light on {what} ({lit.body[i]} "
+                          + $"against {dark.body[i]} with it off) while URP Lit beside it is lit. A shader without "
+                          + "the _ADDITIONAL_LIGHTS_VERTEX and _ADDITIONAL_LIGHTS variants, or one that never hands "
+                          + "URP its vertex lighting, takes no point or spot light on plain Forward");
+                    }
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
+                for (int i = 0; i < renderers.Count; i++)
+                    if (renderers[i] != null && renderers[i].renderingMode != renderingModesWas[i])
+                        renderers[i].renderingMode = renderingModesWas[i];
+                SetLightMode(lightModeWas);
+                if (!dirtyWas) UnityEditor.EditorUtility.ClearDirty(asset);
+                rig.Dispose();
+                foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
+            }
+        }
+
+        static List<UnityEngine.Rendering.Universal.UniversalRendererData> UniversalRenderers(
+            UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset asset)
+        {
+            var renderers = new List<UnityEngine.Rendering.Universal.UniversalRendererData>();
+            foreach (var data in asset.rendererDataList)
+                if (data is UnityEngine.Rendering.Universal.UniversalRendererData universal) renderers.Add(universal);
+            return renderers;
+        }
+
+        static readonly string[] BodyShaders =
+        {
+            "VRSL-URP/AudioLink/Standard Static/Fixture",
+            "VRSL-URP/Standard Static/Surface Shaders/Opaque",
+            "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
+        };
+
+        static readonly string[] MoverShaders =
+        {
+            "VRSL-URP/Standard Mover/Fixture",
+            "VRSL-URP/Wash Mover/Fixture",
+            "VRSL-URP/AudioLink/Standard Mover/Fixture",
+            "VRSL-URP/AudioLink/Wash Mover/Fixture",
+        };
+
+        /// <summary>
+        /// A cube on each fixture body shader, emission off, white with smoothness 0.2, in a
+        /// row at x 197.75 to 200.75, with the four mover bodies in a row above, and a cube on
+        /// URP Lit with the same surface at x 202.25, all casting shadows. The mover cubes
+        /// carry black vertex colours, which the movers draw in place. Everything the row
+        /// must destroy goes in <paramref name="owned"/>.
+        /// </summary>
+        static (List<(string shader, MeshRenderer renderer)> bodies, MeshRenderer reference) BodyCubes(
+            VRSLDMXRig rig, string row, List<Object> owned)
+        {
+            Mesh moverMesh = null;
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.IsNotNull(lit, "URP Lit is not in the project");
+
+            MeshRenderer Cube(string name, float x, Material m, float y = 1f)
+            {
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = name;
+                go.transform.SetParent(rig.Floor.transform.parent, false);
+                go.transform.position = new Vector3(x, y, 0f);
+                var r = go.GetComponent<MeshRenderer>();
+                r.sharedMaterial    = m;
+                r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
+                return r;
+            }
+
+            var bodies = new List<(string shader, MeshRenderer renderer)>();
+            for (int i = 0; i < BodyShaders.Length + MoverShaders.Length; i++)
+            {
+                bool mover = i >= BodyShaders.Length;
+                string name = mover ? MoverShaders[i - BodyShaders.Length] : BodyShaders[i];
+                var shader = Shader.Find(name);
+                Assert.IsNotNull(shader, $"{name} did not compile or is not in the project");
+                var material = new Material(shader) { name = $"VRSL {row} body {i}" };
+                owned.Add(material);
+                material.SetColor("_Color", Color.white);
+                material.SetFloat("_Metallic", 0f);
+                material.SetFloat("_Glossiness", 0.2f);
+                material.SetFloat("_FixtureMaxIntensity", 0f);
+                material.SetFloat("_EnableDMX", 0f);
+                if (!mover)
+                {
+                    material.SetTexture("_NormalMap", Texture2D.normalTexture);
+                    bodies.Add((name, Cube($"VRSL {row} body {i}", 197.75f + 1.5f * i, material)));
+                    continue;
+                }
+                if (moverMesh == null)
+                {
+                    var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    moverMesh = Object.Instantiate(cube.GetComponent<MeshFilter>().sharedMesh);
+                    Object.DestroyImmediate(cube);
+                    owned.Add(moverMesh);
+                    moverMesh.name = $"VRSL {row} mover cube";
+                    moverMesh.colors = Enumerable.Repeat(Color.black, moverMesh.vertexCount).ToArray();
+                }
+                var renderer = Cube($"VRSL {row} body {i}", 197.75f + 1.5f * (i - BodyShaders.Length), material, 2.4f);
+                renderer.GetComponent<MeshFilter>().sharedMesh = moverMesh;
+                bodies.Add((name, renderer));
+            }
+            // URP's own Lit with the same surface, beside the bodies, so a dark frame
+            // separates a body shader from the light and camera.
+            var reference = new Material(lit) { name = $"VRSL {row} reference" };
+            owned.Add(reference);
+            reference.SetColor("_BaseColor", Color.white);
+            reference.SetFloat("_Metallic", 0f);
+            reference.SetFloat("_Smoothness", 0.2f);
+            return (bodies, Cube($"VRSL {row} reference", 202.25f, reference));
         }
 
         /// <summary>

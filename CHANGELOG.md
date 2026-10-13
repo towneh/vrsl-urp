@@ -22,6 +22,7 @@
 - **AudioLink lens flares keep their colour in fog.** With scene fog on, the AudioLink blinder and flasher flares drew as a disc in the fog's colour instead of the light's, at the same brightness whatever the light's colour and level. Lens flares are now left unfogged, as the DMX ones already were.
 - **Lens flares on a new material hide behind what blocks their light.** Only the shipped flare materials did; a flare material made from either lens flare shader drew through walls.
 - **Shaders no longer name custom material inspectors the package doesn't include.** Their materials show Unity's standard inspector, as they already did.
+- **DMX par, blinder and light bar bodies take point and spot lights on a Forward renderer.** Their shader had no additional-light variants, so on plain Forward, the renderer Basis uses on Quest, scene point and spot lights didn't reach them, per pixel or per vertex. Forward+ already lit them.
 
 ## [0.3.0-rc.4] — 2026-10-12
 

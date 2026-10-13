@@ -65,6 +65,8 @@
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
             #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
             #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
+            #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
@@ -87,6 +89,7 @@
                 float3 normalWS : TEXCOORD1;
                 float3 positionWS : TEXCOORD2;
                 float4 tangentWS : TEXCOORD3;
+                half3 vertexLight : TEXCOORD4;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -115,6 +118,7 @@
                 // Normals and tangents
                 VertexNormalInputs normalInputs = GetVertexNormalInputs(input.normalOS, input.tangentOS);
                 output.normalWS = normalInputs.normalWS;
+                output.vertexLight = VertexLighting(posInputs.positionWS, normalInputs.normalWS);
 
                 // Calculate tangent for normal mapping
                 real sign = input.tangentOS.w * GetOddNegativeScale();
@@ -153,6 +157,7 @@
                 lightingInput.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 lightingInput.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                 lightingInput.bakedGI = SampleSH(normalWS);
+                lightingInput.vertexLighting = input.vertexLight;
 
                 SurfaceData surfaceData = (SurfaceData)0;
                 surfaceData.albedo = color.rgb;
