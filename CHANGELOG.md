@@ -6,6 +6,8 @@
 
 - **The mover body shaders have no Lighting Model or Light Probe Sampling setting.** Both lighting models now light through URP, so the two settings no longer choose anything. The body takes its smoothness from the metallic map's alpha times Smoothness, as the Legacy model did, so a material that was on GGX looks a little less glossy where its map's alpha is below 1.
 
+- **Lens flares have no "Toggle The Requirement of the depth light" setting.** It never reached the shader, and flares now always hide behind what blocks their light.
+
 ### Fixed
 
 - **Moving-head bodies are lit by URP.** The spot and wash mover body shaders, DMX and AudioLink, lit themselves through the Built-in Render Pipeline's light variables, which URP never sets, so they took no main light, no additional lights and no shadows. They now light as URP Lit does, ambient from light probes or probe volumes included, and cast the shadow of what they draw, in the pose they're drawn in.
@@ -18,6 +20,8 @@
 - **Moving-head bodies write their normals in their depth-normals pass.** The spot and wash mover body shaders, DMX and AudioLink, wrote their lit colour where URP and VRSL read a world-space normal, so SSAO and VRSL light falling on the bodies used garbage normals. Their depth passes also ran the full lighting for nothing; they now keep only the body's discards.
 - **The AudioLink wash mover body shader has its own name,** `VRSL-URP/AudioLink/Wash Mover/Fixture`. It was named `VRSL-URP/AudioLink/Standard Mover/Fixture`, the same as the AudioLink spot mover, so `Shader.Find` on that name could return either. Materials refer to their shader by asset, so they're unaffected; code that looks the wash mover up by name needs the new one.
 - **AudioLink lens flares keep their colour in fog.** With scene fog on, the AudioLink blinder and flasher flares drew as a disc in the fog's colour instead of the light's, at the same brightness whatever the light's colour and level. Lens flares are now left unfogged, as the DMX ones already were.
+- **Lens flares on a new material hide behind what blocks their light.** Only the shipped flare materials did; a flare material made from either lens flare shader drew through walls.
+- **Shaders no longer name custom material inspectors the package doesn't include.** Their materials show Unity's standard inspector, as they already did.
 
 ## [0.3.0-rc.4] — 2026-10-12
 

@@ -302,5 +302,4 @@ Shader "VRSL-URP/DMX CRTs/Interpolation"
             ENDCG
          }
     }
-    CustomEditor "VRSLInspector"
 }

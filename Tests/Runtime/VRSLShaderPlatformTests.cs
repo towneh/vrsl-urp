@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The package's shaders compiled for a platform the editor is not running on. Rows N34,
-    /// T1 and T2; T3 checks their names.
+    /// T1 and T2; T3 checks their names and T4 the inspectors they name.
     /// </summary>
     class VRSLShaderPlatformTests
     {
@@ -284,6 +284,43 @@ namespace VRSL.URP.Tests
                                 .ToList();
             Debug.Log($"[T3] {shaders.Count} shaders, {shared.Count} name(s) shared");
             Assert.IsEmpty(shared, string.Join("\n", shared));
+        }
+
+        static readonly System.Text.RegularExpressions.Regex CustomEditorLine = new(
+            @"^\s*CustomEditor(?:ForRenderPipeline)?\s+""([^""]+)""",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        /// <summary>
+        /// T4. Every custom material inspector a package shader names is a class the project
+        /// has and Unity can create: not abstract, not an open generic. Unity falls back to its
+        /// default inspector for one it can't find or create, so a name left behind fails
+        /// nowhere else.
+        /// </summary>
+        [Test]
+        public void T4_every_custom_inspector_a_shader_names_exists()
+        {
+            var shaders = PackageShaders();
+            Assert.Greater(shaders.Count, 0, $"no shaders found under {PackageRuntime}");
+            var inspectors = TypeCache.GetTypesDerivedFrom<ShaderGUI>()
+                                      .Concat(TypeCache.GetTypesDerivedFrom<MaterialEditor>())
+                                      .Where(t => !t.IsAbstract && !t.ContainsGenericParameters)
+                                      .SelectMany(t => new[] { t.FullName, t.Name })
+                                      .ToHashSet();
+            var missing = new List<string>();
+            int named = 0;
+            foreach (var shader in shaders)
+            {
+                string path = AssetDatabase.GetAssetPath(shader);
+                foreach (System.Text.RegularExpressions.Match m in
+                         CustomEditorLine.Matches(System.IO.File.ReadAllText(System.IO.Path.GetFullPath(path))))
+                {
+                    named++;
+                    string type = m.Groups[1].Value;
+                    if (!inspectors.Contains(type)) missing.Add($"{path} names CustomEditor \"{type}\", which no assembly defines as an inspector Unity can create");
+                }
+            }
+            Debug.Log($"[T4] {shaders.Count} shaders, {named} custom inspector(s) named, {missing.Count} missing");
+            Assert.IsEmpty(missing, string.Join("\n", missing));
         }
     }
 }

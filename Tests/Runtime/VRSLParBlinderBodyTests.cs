@@ -13,7 +13,7 @@ namespace VRSL.URP.Tests
     /// The par and blinder bodies, and the blinders' lens flares, follow the fixture's
     /// DMX; the 5-channel ones cast light from a 5-channel patch.
     ///
-    /// Rows J1 to J4, J6 and J7 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J8 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -673,6 +673,122 @@ namespace VRSL.URP.Tests
                 RenderSettings.fogDensity       = fogDensity;
                 RenderSettings.fogStartDistance = fogStart;
                 RenderSettings.fogEndDistance   = fogEnd;
+                rig.Dispose();
+                foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
+            }
+        }
+
+        /// <summary>
+        /// J8. A lens flare hides behind whatever blocks its light, on its shipped material and
+        /// on one an author makes from the shader. Each flare (AudioLink and DMX, the two
+        /// materials each) is a quad lit red with no AudioLink or DMX input, 5 m from the
+        /// camera, with a cube on URP Lit set 1 m in front of it on the line to the camera and
+        /// then moved aside; the
+        /// flares are captured shown and hidden each time. A flare draws over the scene
+        /// whatever its depth, so a blocked one adds nothing only because its own depth test
+        /// hid it.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J8_lens_flares_hide_behind_what_blocks_their_light()
+        {
+            const string Materials = "Packages/town.mr.vrsl-urp/Runtime/Materials/Lights/";
+            var flares = new (string name, string material, string enable)[]
+            {
+                ("AudioLink Flare", "AudioLink/StaticLight-Blinder/VRSL-AudioLink-Blinder-LensFlareMat.mat", "_EnableAudioLink"),
+                ("DMX Flare",       "DMX/StaticLight-Blinder/VRSL-Blinder-LensFlareMat-Horizontal.mat",       "_EnableDMX"),
+            };
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.IsNotNull(lit, "URP Lit is not in the project");
+
+            var rig       = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var materials = new List<Material>();
+            try
+            {
+                var renderers = new List<MeshRenderer>();
+                var blockers  = new List<Transform>();
+                var wall = new Material(lit) { name = "VRSL J8 blocker" };
+                materials.Add(wall);
+                wall.SetColor("_BaseColor", Color.grey);
+                foreach (var (name, path, enable) in flares)
+                {
+                    var shipped = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(Materials + path);
+                    Assert.IsNotNull(shipped, $"{path} is not in the package");
+                    // The author's own: only what lights it red is set, everything else is the
+                    // shader's default.
+                    var fresh = new Material(shipped.shader) { name = $"VRSL J8 {name} new material" };
+                    fresh.SetTexture("_MainTex", shipped.GetTexture("_MainTex"));
+                    var copy = new Material(shipped) { name = $"VRSL J8 {name} shipped material" };
+                    foreach (var m in new[] { copy, fresh })
+                    {
+                        materials.Add(m);
+                        m.SetFloat(enable, 0f);
+                        m.SetColor("_Emission", new Color(24f, 0f, 0f, 1f));
+                        int i = renderers.Count;
+                        var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                        quad.name = m.name;
+                        quad.transform.SetParent(rig.Floor.transform.parent, false);
+                        quad.transform.position = new Vector3(400f + 1.5f * i, 1.5f, 0f);
+                        var r = quad.GetComponent<MeshRenderer>();
+                        r.sharedMaterial = m;
+                        renderers.Add(r);
+                        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                        cube.name = $"VRSL J8 blocker {i}";
+                        cube.transform.SetParent(rig.Floor.transform.parent, false);
+                        cube.GetComponent<MeshRenderer>().sharedMaterial = wall;
+                        blockers.Add(cube.transform);
+                    }
+                }
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(402.25f, 1.5f, -5f), Quaternion.identity);
+
+                Vector3[] Capture(bool blocked)
+                {
+                    var eye = rig.Camera.transform.position;
+                    for (int i = 0; i < blockers.Count; i++)
+                    {
+                        var at = renderers[i].transform.position;
+                        blockers[i].position = blocked ? Vector3.Lerp(eye, at, 0.8f) : at + new Vector3(0f, -10f, 0f);
+                    }
+                    foreach (var r in renderers) r.enabled = true;
+                    var shown = CaptureHdr(rig);
+                    foreach (var r in renderers) r.enabled = false;
+                    var hidden = CaptureHdr(rig);
+                    foreach (var r in renderers) r.enabled = true;
+                    try
+                    {
+                        var added = new Vector3[renderers.Count];
+                        for (int i = 0; i < renderers.Count; i++)
+                            added[i] = Measure(rig.Camera, shown, renderers[i]).mean
+                                     - Measure(rig.Camera, hidden, renderers[i]).mean;
+                        return added;
+                    }
+                    finally
+                    {
+                        Object.DestroyImmediate(shown);
+                        Object.DestroyImmediate(hidden);
+                    }
+                }
+
+                yield return rig.Step(2);
+                var open = Capture(false);
+                yield return rig.Step(2);
+                var blocked = Capture(true);
+
+                var failures = new List<string>();
+                for (int i = 0; i < renderers.Count; i++)
+                {
+                    string name = renderers[i].name;
+                    Debug.Log($"[J8] {name}: adds {open[i]:F4} in the open, {blocked[i]:F4} blocked");
+                    if (!(open[i].x > 0.02f))
+                        failures.Add($"{name} adds only {open[i]:F4} with nothing in front of it, so it isn't lit and "
+                                   + "its blocked capture proves nothing");
+                    else if (blocked[i].magnitude > 0.002f)
+                        failures.Add($"{name} adds {blocked[i]:F4} behind a cube against {open[i]:F4} in the open: it "
+                                   + "draws through what blocks its light");
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
                 rig.Dispose();
                 foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
             }

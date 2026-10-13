@@ -157,5 +157,4 @@
             ENDCG
          }
     }
-    CustomEditor "VRSLInspector"
 }

@@ -156,5 +156,4 @@
 		}
 	}
 
-	CustomEditor "VRSLInspector"
 }

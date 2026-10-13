@@ -386,6 +386,5 @@
     }
 
     
-    CustomEditor "VRSLInspector"
     FallBack "Diffuse"
 }

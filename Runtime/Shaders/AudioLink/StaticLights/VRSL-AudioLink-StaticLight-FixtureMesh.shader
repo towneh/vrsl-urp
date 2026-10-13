@@ -432,5 +432,4 @@
 
     
     FallBack "Diffuse"
-    CustomEditor "VRSLInspector"
 }

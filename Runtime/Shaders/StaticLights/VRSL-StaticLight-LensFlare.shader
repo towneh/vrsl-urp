@@ -48,8 +48,6 @@
         _FlickerAnimSpeed("FlickerAnimSpeed", Float) = 5
         _FlickResultIntensityLowestPoint("FlickResultIntensityLowestPoint", range(0,1)) = 0.5
 
-        [Toggle]_UseDepthLight("Toggle The Requirement of the depth light to function.", Int) = 1
-
         [Enum(Transparent,1,AlphaToCoverage,2)] _RenderMode ("Render Mode", Int) = 1
         [Enum(Off,0,On,1)] _ZWrite ("Z Write", Int) = 0
 		[Enum(Off,0,On,1)] _AlphaToCoverage ("Alpha To Coverage", Int) = 0
@@ -90,7 +88,6 @@
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_local _ _ALPHATEST_ON
-            #pragma multi_compile_local _ _USE_DEPTH_LIGHT
             #pragma shader_feature _1CH_MODE _4CH_MODE _5CH_MODE _13CH_MODE
             #define VRSL_DMX
             #define VRSL_FLARE
@@ -144,7 +141,6 @@
             float _FlickResultIntensityLowestPoint;
             float _ShouldDoFlicker;
             half _RemoveTextureArtifact, _CurveMod;
-            uint _UseDepthLight;
             #pragma target 4.5
             #include "../Shared/VRSL-DMXFunctions.cginc"
 
@@ -290,7 +286,6 @@
                 //Test for n*n grid in view space, where quad pivot is grid's center.
                 //For each iteration,
                 //if that test point passed the scene depth occlusion test, we add 1 to visibilityTestPassedCount
-                #if _USE_DEPTH_LIGHT
                 
                     for(int x = -COUNT; x <= COUNT; x++)
                     {
@@ -329,7 +324,6 @@
                     visibilityResult01 *= smoothstep(_StartFadeinDistanceWorldUnit,_EndFadeinDistanceWorldUnit,linearEyeDepthOfFlarePivot);
                     o.vertex = visibilityResult01 < divider ? 0 : o.vertex;
                     o.color.a *= visibilityResult01;
-                #endif
                 // if(_ShouldDoFlicker)
                 // {
                 //     float flickerMul = 0;
@@ -406,5 +400,4 @@
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }
-    CustomEditor "VRSLInspector"
 }

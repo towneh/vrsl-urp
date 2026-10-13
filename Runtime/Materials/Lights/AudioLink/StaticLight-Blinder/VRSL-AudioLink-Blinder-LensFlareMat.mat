@@ -11,10 +11,8 @@ Material:
   m_Shader: {fileID: 4800000, guid: 095ccbd116ea5de43bb9b2e098de4d52, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _USE_DEPTH_LIGHT
+  m_ValidKeywords: []
   m_InvalidKeywords:
-  - _USEDEPTHLIGHT_ON
   - _USERAWGRID_ON
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 1
@@ -143,7 +141,6 @@ Material:
     - _UVScale: 1
     - _UVSec: 0
     - _UniversalIntensity: 0.8
-    - _UseDepthLight: 1
     - _UsePreMultiplyAlpha: 0
     - _UseRawGrid: 1
     - _UseTraditionalSampling: 0

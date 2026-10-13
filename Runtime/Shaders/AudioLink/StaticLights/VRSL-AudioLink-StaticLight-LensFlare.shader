@@ -51,8 +51,6 @@
         _FlickerAnimSpeed("FlickerAnimSpeed", Float) = 5
         _FlickResultIntensityLowestPoint("FlickResultIntensityLowestPoint", range(0,1)) = 0.5
 
-        [Toggle]_UseDepthLight("Toggle The Requirement of the depth light to function.", Int) = 1
-
         		[Toggle] _EnableThemeColorSampling ("Enable Theme Color Sampling", Int) = 0
 		 _ThemeColorTarget ("Choose Theme Color", Int) = 0
 
@@ -96,7 +94,6 @@
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            #pragma multi_compile_local _ _USE_DEPTH_LIGHT
             #pragma multi_compile_local _ _ALPHATEST_ON
             #pragma multi_compile_instancing
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
@@ -267,7 +264,6 @@
                 //Test for n*n grid in view space, where quad pivot is grid's center.
                 //For each iteration,
                 //if that test point passed the scene depth occlusion test, we add 1 to visibilityTestPassedCount
-                #if _USE_DEPTH_LIGHT
                         for(int x = -COUNT; x <= COUNT; x++)
                         {
                             for(int y = -COUNT; y <= COUNT ; y++)
@@ -318,7 +314,6 @@
                         o.color.a *= visibilityResult01;
                         o.vertex = visibilityResult01 < divider ? 0 : o.vertex;
                 // }
-                #endif
                 //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
                 //premultiply alpha to rgb after alpha's calculation is done
                 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// 
@@ -378,5 +373,4 @@
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }
-    CustomEditor "VRSLInspector"
 }
