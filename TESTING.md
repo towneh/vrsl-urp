@@ -839,6 +839,7 @@ what proves them.
 | T2 | — | The same for desktop Linux on Vulkan: plain and with `INSTANCING_ON`. Linux runs in desktop mode, so there is no stereo variant | Every program compiles |
 | T3 | — | Every shader in the package, by the name it declares | No two share a name; `Shader.Find` on a shared name returns whichever Unity loaded first. A failure names the shared name and the files declaring it |
 | T4 | — | Every shader in the package, read from its file for a `CustomEditor` line, against the material inspector classes the project defines | Each inspector a shader names exists and Unity can create it: not abstract, not an open generic. Unity shows its default inspector for a name it can't find or create, so nothing else fails. A failure names the shader file and the missing class |
+| T5 | — | Every `.shader`, `.hlsl` and `.cginc` file in the package, read from source, for a varyings struct carrying both `UNITY_VERTEX_INPUT_INSTANCE_ID` and `UNITY_VERTEX_OUTPUT_STEREO` | Each such file calls `UNITY_TRANSFER_INSTANCE_ID`. Without it the fragment's `UNITY_SETUP_INSTANCE_ID` reads id 0, which under single-pass instanced also sets the eye index to 0, and no render shows it until a fragment reads something per eye or per instance. Checked per file, not per vertex function. A failure names the file and the struct |
 
 ---
 

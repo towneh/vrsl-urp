@@ -10,7 +10,8 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The package's shaders compiled for a platform the editor is not running on. Rows N34,
-    /// T1 and T2; T3 checks their names and T4 the inspectors they name.
+    /// T1 and T2; T3 checks their names, T4 the inspectors they name and T5 that their
+    /// varyings pass the instance id on.
     /// </summary>
     class VRSLShaderPlatformTests
     {
@@ -320,6 +321,50 @@ namespace VRSL.URP.Tests
                 }
             }
             Debug.Log($"[T4] {shaders.Count} shaders, {named} custom inspector(s) named, {missing.Count} missing");
+            Assert.IsEmpty(missing, string.Join("\n", missing));
+        }
+
+        static readonly System.Text.RegularExpressions.Regex Comment = new(
+            @"//[^\n]*|/\*.*?\*/", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        static readonly System.Text.RegularExpressions.Regex StructBody = new(
+            @"struct\s+(\w+)\s*\{([^}]*)\}");
+
+        static readonly System.Text.RegularExpressions.Regex TransferCall = new(
+            @"\bUNITY_TRANSFER_INSTANCE_ID\s*\(");
+
+        /// <summary>
+        /// T5. Every shader source in the package whose varyings carry the instance id and the
+        /// stereo eye also transfers the id in its vertex program. Without the transfer the
+        /// fragment's <c>UNITY_SETUP_INSTANCE_ID</c> reads id 0, which under single-pass
+        /// instanced also sets the eye index to 0, and nothing renders wrong until a fragment
+        /// reads something per eye or per instance. Checked per file, read from source.
+        /// </summary>
+        [Test]
+        public void T5_varyings_that_carry_the_instance_id_have_it_transferred()
+        {
+            string root = System.IO.Path.GetFullPath(PackageRuntime);
+            var sources = System.IO.Directory.EnumerateFiles(root, "*", System.IO.SearchOption.AllDirectories)
+                                .Where(p => p.EndsWith(".shader") || p.EndsWith(".hlsl") || p.EndsWith(".cginc"))
+                                .ToList();
+            var missing = new List<string>();
+            int carriers = 0;
+            foreach (string path in sources)
+            {
+                string text = Comment.Replace(System.IO.File.ReadAllText(path), "");
+                var structs = StructBody.Matches(text).Cast<System.Text.RegularExpressions.Match>()
+                                        .Where(m => m.Groups[2].Value.Contains("UNITY_VERTEX_INPUT_INSTANCE_ID")
+                                                 && m.Groups[2].Value.Contains("UNITY_VERTEX_OUTPUT_STEREO"))
+                                        .Select(m => m.Groups[1].Value)
+                                        .Distinct()
+                                        .ToList();
+                if (structs.Count == 0) continue;
+                carriers++;
+                if (!TransferCall.IsMatch(text))
+                    missing.Add($"{path.Substring(root.Length + 1)}: {string.Join(", ", structs)} carries the instance id, and nothing in the file transfers it");
+            }
+            Debug.Log($"[T5] {sources.Count} sources, {carriers} with varyings carrying the instance id, {missing.Count} not transferring it");
+            Assert.Greater(carriers, 0, $"no varyings carrying the instance id found under {PackageRuntime}");
             Assert.IsEmpty(missing, string.Join("\n", missing));
         }
     }

@@ -197,6 +197,7 @@
                 v2f o;
                 UNITY_SETUP_INSTANCE_ID(v); //Insert
                     UNITY_INITIALIZE_OUTPUT(v2f, o); //Insert
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o); //Insert
 
                 uint dmx = getDMXChannel();
