@@ -8,6 +8,8 @@
 
 - **Lens flares have no "Toggle The Requirement of the depth light" setting.** It never reached the shader, and flares now always hide behind what blocks their light.
 
+- **`SmoothingPanelOpener` and `VRSL_AudioLink_SmoothingPanel` are in the `VRSL.URP` namespace,** like the rest of the package. In the global namespace they could clash with a type of the same name in another package or the project. Scenes and prefabs that use them are unaffected; code that names either one needs `using VRSL.URP;`.
+
 ### Fixed
 
 - **Moving-head bodies are lit by URP.** The spot and wash mover body shaders, DMX and AudioLink, lit themselves through the Built-in Render Pipeline's light variables, which URP never sets, so they took no main light, no additional lights and no shadows. They now light as URP Lit does, ambient from light probes or probe volumes included, and cast the shadow of what they draw, in the pose they're drawn in.

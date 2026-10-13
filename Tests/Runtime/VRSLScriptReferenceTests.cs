@@ -99,6 +99,52 @@ namespace VRSL.URP.Tests
             }
             return false;
         }
+
+        /// <summary>
+        /// L8. Every public type in the package's assemblies sits in a namespace. One in the
+        /// global namespace clashes with any type of the same name in another package or in
+        /// the project.
+        /// </summary>
+        [Test]
+        public void L8_EveryPublicTypeIsInANamespace()
+        {
+            var assemblies = System.AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => a.GetName().Name == "Towneh.VRSL.URP"
+                         || a.GetName().Name.StartsWith("Towneh.VRSL.URP."))
+                .ToList();
+            Assert.IsTrue(assemblies.Any(a => a.GetName().Name == "Towneh.VRSL.URP"),
+                "the package's runtime assembly isn't loaded");
+
+            var unreadable = new List<string>();
+            var global = assemblies
+                .SelectMany(a => PublicTypes(a, unreadable).Select(t => (assembly: a.GetName().Name, type: t)))
+                .Where(x => string.IsNullOrEmpty(x.type.Namespace))
+                .Select(x => $"{x.type.FullName} ({x.assembly})")
+                .OrderBy(s => s)
+                .ToList();
+            Assert.IsEmpty(global,
+                $"{global.Count} public type(s) in the global namespace, across "
+              + $"{assemblies.Count} package assemblies:\n  " + string.Join("\n  ", global)
+              + (unreadable.Count > 0 ? "\nNot every type could be read:\n  " + string.Join("\n  ", unreadable) : ""));
+            Assert.IsEmpty(unreadable,
+                "no public type read is in the global namespace, but not every type could be read, "
+              + "so the row can't say the rest aren't:\n  " + string.Join("\n  ", unreadable));
+        }
+
+        // The types that did load when a dependency didn't, so the row still lists what it can;
+        // the assembly and its loader errors go to unreadable.
+        static IEnumerable<System.Type> PublicTypes(System.Reflection.Assembly assembly, List<string> unreadable)
+        {
+            System.Type[] types;
+            try { types = assembly.GetTypes(); }
+            catch (System.Reflection.ReflectionTypeLoadException e)
+            {
+                types = e.Types;
+                var errors = e.LoaderExceptions.Where(x => x != null).Select(x => x.Message).Distinct();
+                unreadable.Add($"{assembly.GetName().Name}: {string.Join("; ", errors)}");
+            }
+            return types.Where(t => t != null && t.IsVisible);
+        }
     }
 }
 #endif
