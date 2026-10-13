@@ -131,7 +131,6 @@ half _TriplanarFalloff;
 half _LMStrength;
 half _RTLMStrength;
 int _TextureSampleMode;
-int _LightProbeMethod;
 half _Saturation, _SaturationLength, _LensMaxBrightness, _UniversalIntensity;
 // The grid layout the DMX manager reads, published as a global: 0 Horizontal,
 // 1 Vertical, 2 Legacy (VRSLGridLayout). Unset it reads 0, so a scene with no DMX

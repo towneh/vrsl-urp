@@ -12,8 +12,7 @@ Material:
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
-  m_InvalidKeywords:
-  - _USE_DEPTH_LIGHT
+  m_InvalidKeywords: []
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 0
@@ -117,7 +116,6 @@ Material:
     - _ThemeColorTarget: 0
     - _UVSec: 0
     - _UniversalIntensity: 0.8
-    - _UseDepthLight: 1
     - _UseTraditionalSampling: 0
     - _VertexConeLength: 1.19
     - _VertexConeWidth: 1

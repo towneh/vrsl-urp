@@ -11,15 +11,13 @@ Material:
   m_Shader: {fileID: 4800000, guid: 69eebd7a13e6b12fd1ea01bc3522a66d, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
-  m_ValidKeywords:
-  - _LIGHTING_MODEL
+  m_ValidKeywords: []
   m_InvalidKeywords:
   - _DNENABLER_NONE
   - _ENABLEOSC_ON
   - _ENABLESPIN_ON
   - _FORWARD_Y
   - _USERAWGRID_ON
-  - _USE_DEPTH_LIGHT
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 1
   m_DoubleSidedGI: 0
@@ -166,8 +164,6 @@ Material:
     - _IsEven: 0
     - _LMStrength: 1
     - _LensMaxBrightness: 0.1
-    - _LightProbeMethod: 0
-    - _LightingModel: 1
     - _MaxMinPanAngle: 0
     - _MaxMinTiltAngle: 0
     - _Metallic: 0.908

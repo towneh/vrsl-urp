@@ -20,7 +20,6 @@ Material:
   - _METALLICGLOSSMAP
   - _NORMALMAP
   - _USERAWGRID_ON
-  - _USE_DEPTH_LIGHT
   m_LightmapFlags: 1
   m_EnableInstancingVariants: 1
   m_DoubleSidedGI: 0
@@ -167,7 +166,6 @@ Material:
     - _Glossiness: 0.609
     - _GlossyReflections: 1
     - _LMStrength: 1
-    - _LightProbeMethod: 0
     - _MaxMinPanAngle: 180
     - _MaxMinTiltAngle: 180
     - _Metallic: 0.375

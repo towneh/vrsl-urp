@@ -23,7 +23,6 @@ Material:
   - _SHOULDDOFLICKER_ON
   - _USEDEPTHLIGHT_ON
   - _USERAWGRID_ON
-  - _USE_DEPTH_LIGHT
   m_LightmapFlags: 1
   m_EnableInstancingVariants: 1
   m_DoubleSidedGI: 0
@@ -192,7 +191,6 @@ Material:
     - _Glossiness: 0.554
     - _GlossyReflections: 1
     - _LMStrength: 1
-    - _LightProbeMethod: 0
     - _LightSourceViewSpaceRadius: 0.05
     - _MaxMinPanAngle: 180
     - _MaxMinTiltAngle: 180
@@ -245,7 +243,6 @@ Material:
     - _UVScroll: 0
     - _UVSec: 0
     - _UniversalIntensity: 0.8
-    - _UseDepthLight: 1
     - _UsePreMultiplyAlpha: 0
     - _UseRawGrid: 1
     - _UseWorldNorm: 0
