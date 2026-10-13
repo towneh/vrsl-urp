@@ -230,7 +230,12 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             Name "VRSL_SurfaceProperties"
             ZWrite On
             ZTest  LEqual
-            Cull   Back
+            // Both faces: the material's own culling is one more visibility
+            // decision this pass can't see, so the depth test in
+            // ClipToCameraDepth makes it. A double-sided material keeps its
+            // back face; a face its own shader culled finds nothing in the
+            // camera depth and is clipped.
+            Cull   Off
 
             HLSLPROGRAM
             #pragma vertex   vert
@@ -268,7 +273,7 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             Name "VRSL_SurfacePropertiesAlphaTest"
             ZWrite On
             ZTest  LEqual
-            Cull   Back
+            Cull   Off
 
             HLSLPROGRAM
             #pragma vertex   vert

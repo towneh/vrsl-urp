@@ -724,6 +724,9 @@ namespace VRSL.URP.Tests
             /// <summary>Pixels the camera's depth texture holds anything nearer than the far
             /// plane at.</summary>
             public int     cameraDepthNear;
+            /// <summary>Pixels the prepass wrote depth at where the camera's depth texture
+            /// holds nothing: geometry the camera didn't keep.</summary>
+            public int     leaked;
             public Vector3 albedo, litMean;
             public float   smoothness, metallic, litPercent;
             public readonly List<string> errors = new();
@@ -737,6 +740,7 @@ namespace VRSL.URP.Tests
                  + (urpHandle ? $"URP normals written {urpWritten} ({urpOnFloorNormal} at the floor's normal), " : "")
                  + $"normals source \"{normalsSource}\" (own draws {ownNormalsDraws}, URP reads {urpNormalsReads}), "
                  + $"captured by the prepass {captured}, camera depth near {cameraDepthNear}, "
+                 + $"prepass depth where the camera's holds nothing {leaked}, "
                  + $"albedo {albedo:F1}, smoothness {smoothness:F1}, metallic {metallic:F1}, "
                  + $"frame lit {litPercent:F2}% at mean {litMean:F1}, errors {errors.Count}"
                  + (errors.Count > 0 ? $" — first: {errors[0]}" : "");
@@ -773,7 +777,9 @@ namespace VRSL.URP.Tests
         /// reads them back too; <paramref name="forceOwnNormals"/> sets the manager's
         /// Force own normals; <paramref name="floorTilt"/> turns the floor before the
         /// first render; <paramref name="floorVertexColor"/> gives the floor a mesh of
-        /// that vertex colour. Yields <c>null</c> itself: the runner drives one level
+        /// that vertex colour; <paramref name="floorWindingReversed"/> gives it a mesh
+        /// whose triangles wind the other way, so the camera sees its back face with the
+        /// normals still facing up. Yields <c>null</c> itself: the runner drives one level
         /// of nesting.
         /// </summary>
         static IEnumerator CaptureSurfaceData(GPUResidentDrawerMode mode,
@@ -784,7 +790,8 @@ namespace VRSL.URP.Tests
                                               bool requestNormals = false,
                                               bool forceOwnNormals = false,
                                               Quaternion? floorTilt = null,
-                                              Color? floorVertexColor = null)
+                                              Color? floorVertexColor = null,
+                                              bool floorWindingReversed = false)
         {
             var readback = new SurfaceReadback { modeAsked = mode };
             var asset    = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
@@ -846,14 +853,24 @@ namespace VRSL.URP.Tests
                 if (floorTilt.HasValue)
                     rig.Floor.transform.rotation = floorTilt.Value * rig.Floor.transform.rotation;
                 readback.floorNormal = rig.Floor.transform.up;
-                if (floorVertexColor.HasValue)
+                if (floorVertexColor.HasValue || floorWindingReversed)
                 {
                     var filter = rig.Floor.GetComponent<MeshFilter>();
                     floorMesh = Object.Instantiate(filter.sharedMesh);
                     floorMesh.name = "VRSL surface probe floor mesh";
-                    var colours = new Color[floorMesh.vertexCount];
-                    System.Array.Fill(colours, floorVertexColor.Value);
-                    floorMesh.colors = colours;
+                    if (floorVertexColor.HasValue)
+                    {
+                        var colours = new Color[floorMesh.vertexCount];
+                        System.Array.Fill(colours, floorVertexColor.Value);
+                        floorMesh.colors = colours;
+                    }
+                    if (floorWindingReversed)
+                    {
+                        var triangles = floorMesh.triangles;
+                        for (int t = 0; t < triangles.Length; t += 3)
+                            (triangles[t + 1], triangles[t + 2]) = (triangles[t + 2], triangles[t + 1]);
+                        floorMesh.triangles = triangles;
+                    }
                     filter.sharedMesh = floorMesh;
                 }
 
@@ -924,8 +941,12 @@ namespace VRSL.URP.Tests
                     }
                 }
                 // Linear depth as 0..255: the far plane, where nothing was drawn, reads 255.
-                foreach (var p in cameraDepthTex.GetPixels32())
-                    if (p.r < 250) readback.cameraDepthNear++;
+                var cameraDepth = cameraDepthTex.GetPixels32();
+                for (int i = 0; i < cameraDepth.Length; i++)
+                {
+                    if (cameraDepth[i].r < 250) readback.cameraDepthNear++;
+                    else if (depth[i].r < 250) readback.leaked++;
+                }
                 readback.litPercent = LitPercent(frame);
                 readback.litMean    = LitMean(frame);
                 if (readback.floorPixels > 0)
@@ -1503,6 +1524,72 @@ namespace VRSL.URP.Tests
                 Assert.Inconclusive("VRSL's normals texture and the camera's depth passed for every "
                                   + "mover, but URP drew no normals for the Lit floor, so its "
                                   + $"_CameraNormalsTexture was not judged: {controlUrp}");
+        }
+
+        /// <summary>
+        /// S21. The surface prepass captures the back face of a double-sided material.
+        ///
+        /// The floor on URP Lit with culling off, captured with its triangles wound as
+        /// shipped and then reversed, so the camera sees its back face with the normals
+        /// still facing up; then reversed with Lit's culling back on. A double-sided
+        /// surface has to capture the same from either side. Seen from behind, a
+        /// single-sided one is drawn by nothing, and the prepass must not capture it
+        /// either: whatever its own culling, the prepass writes depth nowhere the
+        /// camera's depth texture holds nothing.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator S21_ThePrepassCapturesTheBackFaceOfADoubleSidedMaterial()
+        {
+            if (GraphicsSettings.currentRenderPipeline is not UniversalRenderPipelineAsset)
+                Assert.Ignore("No Universal Render Pipeline asset is active.");
+
+            var   baseColor  = new Color(0.8f, 0.5f, 0.2f, 1f);
+            const float smoothness = 0.3f, metallic = 0.25f;
+            var linear = QualitySettings.activeColorSpace == ColorSpace.Linear ? baseColor.linear : baseColor;
+            var expectedAlbedo = new Vector3(linear.r, linear.g, linear.b) * 255f;
+
+            System.Action<Material> Configure(CullMode cull) => m =>
+            {
+                m.SetColor("_BaseColor", baseColor);
+                m.SetFloat("_Smoothness", smoothness);
+                m.SetFloat("_Metallic", metallic);
+                m.SetFloat("_Cull", (float)cull);
+            };
+
+            SurfaceReadback front = null, back = null, singleSided = null;
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled, Configure(CullMode.Off),
+                r => front = r);
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled, Configure(CullMode.Off),
+                r => back = r, floorWindingReversed: true);
+            yield return CaptureSurfaceData(GPUResidentDrawerMode.Disabled, Configure(CullMode.Back),
+                r => singleSided = r, floorWindingReversed: true);
+            Debug.Log($"[S21] double-sided, front face: {front}\n[S21] double-sided, back face: {back}\n"
+                    + $"[S21] single-sided, back face: {singleSided}");
+
+            foreach (var r in new[] { front, back, singleSided })
+                Assert.AreEqual(0, r.errors.Count, $"errors while capturing: {r}");
+
+            foreach (var (r, side) in new[] { (front, "front"), (back, "back") })
+            {
+                Assert.Greater(r.floorPixels, 1000,
+                    $"the double-sided floor seen from the {side} covers too little of the frame to judge: {r}");
+                Assert.GreaterOrEqual(r.captured, 0.95f * r.floorPixels,
+                    $"seen from the {side}, the prepass captured {r.captured} of the double-sided floor's "
+                  + $"{r.floorPixels} pixels. The material's own shader draws both faces, so the "
+                  + $"prepass has to as well, or the surface lights as the neutral fallback: {r}");
+                AssertSurface(r, expectedAlbedo, smoothness * 255f, metallic * 255f, 6f,
+                    $"seen from the {side}, the prepass read the double-sided floor's material wrongly");
+            }
+
+            Assert.Less(singleSided.floorPixels, 0.01f * back.floorPixels,
+                $"the single-sided floor seen from behind still reached the normals texture, so the "
+              + $"row never showed a surface its own shader leaves out: {singleSided}");
+            foreach (var (r, name) in new[] { (front, "double-sided, front"), (back, "double-sided, back"),
+                                              (singleSided, "single-sided, back") })
+                Assert.AreEqual(0, r.leaked,
+                    $"{name}: the prepass wrote depth at {r.leaked} pixels where the camera's depth "
+                  + "texture holds nothing. That is geometry the camera didn't keep, and its albedo "
+                  + $"would land on whatever the camera does see there: {r}");
         }
 
         /// <summary>

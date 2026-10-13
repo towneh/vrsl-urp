@@ -23,6 +23,7 @@
 - **Lens flares on a new material hide behind what blocks their light.** Only the shipped flare materials did; a flare material made from either lens flare shader drew through walls.
 - **Shaders no longer name custom material inspectors the package doesn't include.** Their materials show Unity's standard inspector, as they already did.
 - **DMX par, blinder and light bar bodies take point and spot lights on a Forward renderer.** Their shader had no additional-light variants, so on plain Forward, the renderer Basis uses on Quest, scene point and spot lights didn't reach them, per pixel or per vertex. Forward+ already lit them.
+- **Double-sided surfaces keep their colour under VRSL light from both sides.** The surface capture drew front faces only, so the back of a material with culling off (a sheet, a banner, a leaf card) lit as neutral grey. It now captures both faces and still leaves out any face the material's own shader culls.
 
 ## [0.3.0-rc.4] — 2026-10-12
 
