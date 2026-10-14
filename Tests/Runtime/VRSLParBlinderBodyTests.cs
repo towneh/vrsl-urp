@@ -11,9 +11,10 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The par and blinder bodies, and the blinders' lens flares, follow the fixture's
-    /// DMX; the 5-channel ones cast light from a 5-channel patch.
+    /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
+    /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J10 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J11 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1008,6 +1009,149 @@ namespace VRSL.URP.Tests
             }
             finally
             {
+                rig.Dispose();
+                foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
+            }
+        }
+
+        /// <summary>
+        /// J11. The AudioLink laser takes its colour and brightness from each of its inputs.
+        /// The laser's mesh on a copy of its shipped material (scroll 0, so the beams hold
+        /// still), in front of the camera, fed an AudioLink texture the row writes: band 0 at
+        /// a chosen amplitude, the four theme colours red, green, blue and yellow, and a blue
+        /// colour chord light. Each capture is the frame with the laser shown less the frame
+        /// with it hidden, summed over the frame, on a half-float capture.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J11_the_audiolink_laser_follows_its_colour_and_amplitude_inputs()
+        {
+            var shipped = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(
+                "Packages/town.mr.vrsl-urp/Runtime/Materials/Lights/AudioLink/VRSL-BasicLaser-AudioLInk.mat");
+            Assert.IsNotNull(shipped, "the AudioLink laser material is not in the package");
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Packages/town.mr.vrsl-urp/Runtime/Prefabs/AudioLink/VRSL-AudioLink-BasicLaser.prefab");
+            Assert.IsNotNull(prefab, "the AudioLink laser prefab is not in the package");
+
+            var audioWas = Shader.GetGlobalTexture("_AudioTexture");
+            var rig      = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var owned    = new List<Object>();
+            try
+            {
+                var audio = new Texture2D(128, 64, TextureFormat.RGBAFloat, false, true)
+                    { name = "VRSL J11 AudioLink", filterMode = FilterMode.Point };
+                owned.Add(audio);
+                // AudioLink's texture layout, as the laser reads it (VRSL-AudioLink-Data.hlsl):
+                // ALPASS_AUDIOLINK is one row per band from row 0, 128 delays wide; ALPASS_THEME_COLOR0
+                // to 3 are four texels on one row; ALPASS_CCLIGHTS is two rows, 128 wide. Only band 0
+                // carries the amplitude, so a laser reading another band reads silence.
+                const int Band0Row = 0, ThemeRow = 23, ChordRow = 25, ChordRows = 2;
+                void WriteAudio(float amplitude)
+                {
+                    var pixels = new Color[128 * 64];
+                    for (int x = 0; x < 128; x++) pixels[Band0Row * 128 + x] = new Color(amplitude, amplitude, amplitude, 1f);
+                    pixels[ThemeRow * 128 + 0] = Color.red;
+                    pixels[ThemeRow * 128 + 1] = Color.green;
+                    pixels[ThemeRow * 128 + 2] = Color.blue;
+                    pixels[ThemeRow * 128 + 3] = new Color(1f, 1f, 0f, 1f);
+                    for (int y = ChordRow; y < ChordRow + ChordRows; y++)
+                        for (int x = 0; x < 128; x++) pixels[y * 128 + x] = Color.blue;
+                    audio.SetPixels(pixels);
+                    audio.Apply();
+                    Shader.SetGlobalTexture("_AudioTexture", audio);
+                }
+
+                var magenta = new Texture2D(2, 2, TextureFormat.RGBA32, false) { name = "VRSL J11 sample" };
+                owned.Add(magenta);
+                magenta.SetPixels(Enumerable.Repeat(Color.magenta, 4).ToArray());
+                magenta.Apply();
+
+                var material = new Material(shipped) { name = "VRSL J11 laser" };
+                owned.Add(material);
+                var laser = new GameObject("VRSL J11 laser");
+                laser.transform.SetParent(rig.Floor.transform.parent, false);
+                laser.transform.position   = new Vector3(500f, 3f, 0f);
+                laser.transform.localScale = prefab.transform.localScale;
+                laser.AddComponent<MeshFilter>().sharedMesh = prefab.GetComponentInChildren<MeshFilter>().sharedMesh;
+                var renderer = laser.AddComponent<MeshRenderer>();
+                renderer.sharedMaterial = material;
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(500f, 1.5f, -8f), Quaternion.identity);
+                yield return rig.Step(2);
+
+                Vector3 Adds(float amplitude, string mode, Color emission)
+                {
+                    WriteAudio(amplitude);
+                    material.SetFloat("_Scroll", 0f);
+                    material.SetColor("_Emission", emission);
+                    material.SetFloat("_EnableAudioLink", mode == "off" ? 0f : 1f);
+                    material.SetFloat("_Band", 0f);
+                    material.SetFloat("_EnableThemeColorSampling", mode.StartsWith("theme") ? 1f : 0f);
+                    material.SetFloat("_ThemeColorTarget", mode == "theme 2" ? 2f : mode == "theme 3" ? 3f : 0f);
+                    material.SetFloat("_EnableColorChord", mode == "chord" ? 1f : 0f);
+                    material.SetFloat("_EnableColorTextureSample", mode == "texture" ? 1f : 0f);
+                    material.SetFloat("_UseTraditionalSampling", 0f);
+                    material.SetTexture("_SamplingTexture", magenta);
+                    renderer.enabled = true;
+                    var shown = CaptureHdr(rig);
+                    renderer.enabled = false;
+                    var hidden = CaptureHdr(rig);
+                    renderer.enabled = true;
+                    try
+                    {
+                        var a = shown.GetPixels();
+                        var b = hidden.GetPixels();
+                        var sum = Vector3.zero;
+                        for (int i = 0; i < a.Length; i++)
+                            sum += new Vector3(a[i].r - b[i].r, a[i].g - b[i].g, a[i].b - b[i].b);
+                        Debug.Log($"[J11] {mode}, amplitude {amplitude}, emission {emission}: adds {sum.x:F6} {sum.y:F6} {sum.z:F6}");
+                        return sum;
+                    }
+                    finally
+                    {
+                        Object.DestroyImmediate(shown);
+                        Object.DestroyImmediate(hidden);
+                    }
+                }
+
+                var red    = new Color(1f, 0f, 0f, 1f);
+                var white  = Color.white;
+                var off    = Adds(0.03f, "off", red);
+                var full   = Adds(1f, "band", red);
+                var half   = Adds(0.5f, "band", red);
+                var above  = Adds(0.051f, "band", red);
+                var quiet  = Adds(0.049f, "band", red);
+                var theme2 = Adds(1f, "theme 2", white);
+                var theme3 = Adds(1f, "theme 3", white);
+                var chord  = Adds(1f, "chord", red);
+                var sample = Adds(1f, "texture", white);
+
+                var failures = new List<string>();
+                if (!(off.x > 1f && off.x > 3f * off.y && off.x > 3f * off.z)) failures.Add(
+                    $"with AudioLink off the laser should add its red emission whatever the band reads, and adds {off:F3}");
+                if (!(full.x > 1f && full.x > 3f * full.y)) failures.Add(
+                    $"at full amplitude the laser should add red, and adds {full:F3}");
+                if (!(half.x > 0f && half.x < 0.75f * full.x)) failures.Add(
+                    $"at half amplitude the laser should add less than at full ({half.x:F3} against {full.x:F3})");
+                // The two captures sit either side of the 0.05 cutoff, so a cutoff moved by more than
+                // 0.001 fails one of them. Without a cutoff 0.049 adds most of what 0.051 does,
+                // so "nothing" is judged against the capture just above it, not full.
+                if (!(above.x > 0f && above.x > 3f * above.y)) failures.Add(
+                    $"just above the amplitude threshold the laser should add red, and adds {above:F4}");
+                if (above.x > 0f && !(Mathf.Abs(quiet.x) + Mathf.Abs(quiet.y) + Mathf.Abs(quiet.z) < 1e-2f * above.x)) failures.Add(
+                    $"below the amplitude threshold the laser should add nothing, and adds {quiet:F4} "
+                  + $"against {above:F4} just above it");
+                if (!(theme2.y > 1f && theme2.y > 3f * theme2.x && theme2.y > 3f * theme2.z)) failures.Add(
+                    $"on theme colour 2 (AudioLink's second, green) the laser should add green, and adds {theme2:F3}");
+                if (!(theme3.z > 1f && theme3.z > 3f * theme3.x && theme3.z > 3f * theme3.y)) failures.Add(
+                    $"on theme colour 3 (AudioLink's third, blue) the laser should add blue, and adds {theme3:F3}");
+                if (!(chord.z > 1f && chord.z > 3f * chord.x)) failures.Add(
+                    $"on the colour chord light (blue) the laser should add blue over its red emission, and adds {chord:F3}");
+                if (!(sample.x > 1f && sample.z > 1f && sample.x > 3f * sample.y && sample.z > 3f * sample.y)) failures.Add(
+                    $"sampling a magenta texture the laser should add magenta, and adds {sample:F3}");
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
+                Shader.SetGlobalTexture("_AudioTexture", audioWas);
                 rig.Dispose();
                 foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
             }
