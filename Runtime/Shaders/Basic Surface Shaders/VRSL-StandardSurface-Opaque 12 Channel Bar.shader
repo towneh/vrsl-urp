@@ -166,7 +166,7 @@
 
                 // Metallic in R channel, Smoothness in A channel (standard convention)
                 surfaceData.metallic = metallicSmoothness.r * _Metallic;
-                surfaceData.smoothness = metallicSmoothness.r * _Glossiness;
+                surfaceData.smoothness = metallicSmoothness.a * _Glossiness;
 
                 // Albedo comes from a texture tinted by color
                 float2 emUV = TRANSFORM_TEX(input.uv, _EmissionMask);

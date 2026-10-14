@@ -13,7 +13,7 @@ namespace VRSL.URP.Tests
     /// The par and blinder bodies, and the blinders' lens flares, follow the fixture's
     /// DMX; the 5-channel ones cast light from a 5-channel patch.
     ///
-    /// Rows J1 to J4 and J6 to J9 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J10 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -863,6 +863,151 @@ namespace VRSL.URP.Tests
                         renderers[i].renderingMode = renderingModesWas[i];
                 SetLightMode(lightModeWas);
                 if (!dirtyWas) UnityEditor.EditorUtility.ClearDirty(asset);
+                rig.Dispose();
+                foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
+            }
+        }
+
+        /// <summary>
+        /// J10. Every fixture body with a metallic-smoothness map reads smoothness from the
+        /// map's alpha, as the map's label says, not from its red. A sphere on each such body
+        /// shader (the two DMX surface bodies and the four movers, which carry black vertex
+        /// colours) and one on URP Lit, under a white sun, smoothness 0.8 and Metallic 0, are
+        /// captured with three maps: red 0 alpha 1, red 1 alpha 1, red 0 alpha 0. With Metallic
+        /// at 0 the red channel can't change anything, so the first two must look the same,
+        /// and the third, a rough surface, must look different. URP Lit, given the alpha as
+        /// its smoothness, is the control that the light and camera show smoothness at all.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J10_fixture_bodies_take_smoothness_from_their_maps_alpha()
+        {
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.IsNotNull(lit, "URP Lit is not in the project");
+            var rig = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var owned = new List<Object>();
+            try
+            {
+                Texture2D Map(float red, float alpha)
+                {
+                    var t = new Texture2D(2, 2, TextureFormat.RGBA32, false, true) { name = $"VRSL J10 map r{red} a{alpha}" };
+                    t.SetPixels(Enumerable.Repeat(new Color(red, 0f, 0f, alpha), 4).ToArray());
+                    t.Apply();
+                    owned.Add(t);
+                    return t;
+                }
+                var maps = new[] { (map: Map(0f, 1f), alpha: 1f, what: "red 0 alpha 1"),
+                                   (map: Map(1f, 1f), alpha: 1f, what: "red 1 alpha 1"),
+                                   (map: Map(0f, 0f), alpha: 0f, what: "red 0 alpha 0") };
+
+                var sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                var sphereMesh = sphere.GetComponent<MeshFilter>().sharedMesh;
+                var moverMesh = Object.Instantiate(sphereMesh);
+                Object.DestroyImmediate(sphere);
+                owned.Add(moverMesh);
+                moverMesh.name = "VRSL J10 mover sphere";
+                moverMesh.colors = Enumerable.Repeat(Color.black, moverMesh.vertexCount).ToArray();
+
+                MeshRenderer Sphere(string name, int slot, Material m, Mesh mesh)
+                {
+                    var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+                    go.name = name;
+                    go.transform.SetParent(rig.Floor.transform.parent, false);
+                    go.transform.position = new Vector3(197.75f + 1.5f * slot, 1f, 0f);
+                    go.GetComponent<MeshFilter>().sharedMesh = mesh;
+                    var r = go.GetComponent<MeshRenderer>();
+                    r.sharedMaterial = m;
+                    return r;
+                }
+
+                var shaders = new[] { BodyShaders[1], BodyShaders[2] }.Concat(MoverShaders).ToArray();
+                var bodies = new List<(string shader, string mapProperty, Material material, MeshRenderer renderer)>();
+                for (int i = 0; i < shaders.Length; i++)
+                {
+                    var shader = Shader.Find(shaders[i]);
+                    Assert.IsNotNull(shader, $"{shaders[i]} did not compile or is not in the project");
+                    var material = new Material(shader) { name = $"VRSL J10 body {i}" };
+                    owned.Add(material);
+                    string mapProperty = material.HasTexture("_MetallicSmoothness") ? "_MetallicSmoothness"
+                                       : material.HasTexture("_MetallicGlossMap")    ? "_MetallicGlossMap"
+                                       : null;
+                    Assert.IsNotNull(mapProperty, $"{shaders[i]} has no metallic-smoothness map");
+                    material.SetColor("_Color", Color.white);
+                    material.SetFloat("_Metallic", 0f);
+                    material.SetFloat("_Glossiness", 0.8f);
+                    material.SetFloat("_FixtureMaxIntensity", 0f);
+                    material.SetFloat("_EnableDMX", 0f);
+                    if (material.HasTexture("_NormalMap")) material.SetTexture("_NormalMap", Texture2D.normalTexture);
+                    bool mover = i >= 2;
+                    bodies.Add((shaders[i], mapProperty, material,
+                                Sphere($"VRSL J10 body {i}", i, material, mover ? moverMesh : sphereMesh)));
+                }
+                var reference = new Material(lit) { name = "VRSL J10 reference" };
+                owned.Add(reference);
+                reference.SetColor("_BaseColor", Color.white);
+                reference.SetFloat("_Metallic", 0f);
+                var refRenderer = Sphere("VRSL J10 reference", shaders.Length, reference, sphereMesh);
+
+                var light = new GameObject("VRSL J10 sun").AddComponent<Light>();
+                light.transform.SetParent(rig.Floor.transform.parent, false);
+                light.type      = LightType.Directional;
+                light.color     = Color.white;
+                light.intensity = 1f;
+                light.transform.rotation = Quaternion.Euler(30f, 20f, 0f);
+                RenderSettings.sun = light;
+
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(197.75f + 0.75f * shaders.Length, 1f, -10f),
+                                                            Quaternion.identity);
+                yield return rig.Step(2);
+
+                // Each sphere's mean colour and brightest channel: a smooth surface gathers
+                // the sun into a small bright highlight, a rough one spreads it.
+                Vector4 Look(Vector3 mean, float peak) => new Vector4(mean.x, mean.y, mean.z, peak);
+                var looks = new Vector4[maps.Length, bodies.Count];
+                var refLooks = new Vector4[maps.Length];
+                for (int m = 0; m < maps.Length; m++)
+                {
+                    foreach (var b in bodies) b.material.SetTexture(b.mapProperty, maps[m].map);
+                    reference.SetFloat("_Smoothness", 0.8f * maps[m].alpha);
+                    var frame = CaptureHdr(rig);
+                    try
+                    {
+                        for (int i = 0; i < bodies.Count; i++)
+                        {
+                            var (mean, peak) = Measure(rig.Camera, frame, bodies[i].renderer);
+                            looks[m, i] = Look(mean, peak);
+                            Debug.Log($"[J10] {maps[m].what}: {bodies[i].shader} peak {peak}, mean {mean}");
+                        }
+                        var (refMean, refPeak) = Measure(rig.Camera, frame, refRenderer);
+                        refLooks[m] = Look(refMean, refPeak);
+                        Debug.Log($"[J10] {maps[m].what}: URP Lit peak {refPeak}, mean {refMean}");
+                    }
+                    finally { Object.DestroyImmediate(frame); }
+                }
+
+                float refRough = (refLooks[0] - refLooks[2]).magnitude;
+                if (refRough < 0.1f)
+                    Assert.Inconclusive($"URP Lit looks nearly the same at smoothness 0.8 and 0 ({refLooks[0]} against "
+                                      + $"{refLooks[2]}), so the light or camera shows no highlight and the row has "
+                                      + "nothing to judge");
+
+                var failures = new List<string>();
+                for (int i = 0; i < bodies.Count; i++)
+                {
+                    string name = bodies[i].shader;
+                    float byRed   = (looks[0, i] - looks[1, i]).magnitude;
+                    float byAlpha = (looks[0, i] - looks[2, i]).magnitude;
+                    if (!(byAlpha > 0.1f)) failures.Add(
+                        $"{name} looks the same with {bodies[i].mapProperty}'s alpha at 1 and at 0 ({looks[0, i]} "
+                      + $"against {looks[2, i]}), so its smoothness doesn't follow the map's alpha");
+                    if (!(byRed < 0.1f * byAlpha)) failures.Add(
+                        $"{name} changes by {byRed:F3} when only {bodies[i].mapProperty}'s red changes, with Metallic "
+                      + $"at 0 ({looks[0, i]} against {looks[1, i]}), against {byAlpha:F3} for its alpha, so it "
+                      + "reads smoothness from the red channel");
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
                 rig.Dispose();
                 foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
             }

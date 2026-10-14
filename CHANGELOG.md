@@ -27,6 +27,7 @@
 - **DMX par, blinder and light bar bodies take point and spot lights on a Forward renderer.** Their shader had no additional-light variants, so on plain Forward, the renderer Basis uses on Quest, scene point and spot lights didn't reach them, per pixel or per vertex. Forward+ already lit them.
 - **Double-sided surfaces keep their colour under VRSL light from both sides.** The surface capture drew front faces only, so the back of a material with culling off (a sheet, a banner, a leaf card) lit as neutral grey. It now captures both faces and still leaves out any face the material's own shader culls.
 - **The DMX laser and lens flares read each channel from its own cell of a grid with any filter.** They sampled the video grid through its texture's own filter, so on a Grid Textures asset filled with render textures left at Unity's default Bilinear filter they blended each channel with its neighbours. They now read the grid point by point, sized by the DMX manager, as the fixture bodies and realtime lights already did. The shipped grid textures are Point, so the package's own grids read the same as before.
+- **DMX par, blinder and light bar bodies take smoothness from the metallic map's alpha,** as the map's label says. They read it from the red channel, the metallic one, so a material with a metallic map but a black red channel rendered fully rough, and one with a bright red channel rendered glossier than its alpha. A material with no map looks the same as before.
 
 ## [0.3.0-rc.4] — 2026-10-12
 
