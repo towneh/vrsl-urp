@@ -244,25 +244,32 @@ float DMXSpinPhase(uint DMXChannel)
 }
 
 // 1 open, 0 closed. Below a channel value of 0.2 the fixture is held open.
+// One exit: with two early returns, fxc splits the grid and buffer paths into two ifs on
+// the same flag and warns that the result is potentially uninitialized.
 half DMXStrobe(uint DMXChannel)
 {
+    half strobe = 1.0;
     if (!channelBufferLive())
-        return getValueAtCoords(DMXChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridStrobeOutput, sampler_VRSLU_DMXGridStrobeOutput));
-    if (_VRSLU_StrobeDisabled > 0) return 1.0;
-
-    float status = loadDMXChannel(DMXChannel);
-    float phase = 0.0;
-    if (_VRSLU_StrobeStatic > 0u)
     {
-        float speed = status > 0.2 ? _VRSLU_StrobeFreqs.y : _VRSLU_StrobeFreqs.x;
-        speed       = status > 0.5 ? _VRSLU_StrobeFreqs.z : speed;
-        phase       = _VRSLU_TimeY * speed;
+        strobe = getValueAtCoords(DMXChannel, TEXTURE2D_ARGS(_VRSLU_DMXGridStrobeOutput, sampler_VRSLU_DMXGridStrobeOutput));
     }
-    else
+    else if (_VRSLU_StrobeDisabled <= 0)
     {
-        phase = loadDMXStrobePhase(DMXChannel);
+        float status = loadDMXChannel(DMXChannel);
+        float phase = 0.0;
+        if (_VRSLU_StrobeStatic > 0u)
+        {
+            float speed = status > 0.2 ? _VRSLU_StrobeFreqs.y : _VRSLU_StrobeFreqs.x;
+            speed       = status > 0.5 ? _VRSLU_StrobeFreqs.z : speed;
+            phase       = _VRSLU_TimeY * speed;
+        }
+        else
+        {
+            phase = loadDMXStrobePhase(DMXChannel);
+        }
+        strobe = status > 0.2 ? (sin(phase) > 0.0 ? 1.0 : 0.0) : 1.0;
     }
-    return status > 0.2 ? (sin(phase) > 0.0 ? 1.0 : 0.0) : 1.0;
+    return strobe;
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
