@@ -99,10 +99,6 @@
             #include "../Shared/VRSL-DMXFunctions-URP.hlsl"
             #include "VRSL-StandardSurface-Functions-URP.hlsl"
 
-            #if !defined(UNIVERSAL_RENDER_PIPELINE)
-            #define half4 float4
-            #endif
-
             Varyings vert(Attributes input)
             {
                 Varyings output = (Varyings)0;
