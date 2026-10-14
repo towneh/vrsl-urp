@@ -55,8 +55,6 @@
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            // make fog work
-            //#pragma multi_compile_fog
             #pragma multi_compile_instancing
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
@@ -77,7 +75,6 @@
                centroid float2 uv : TEXCOORD0;
                centroid float2 uv2 : TEXCOORD1;
                 float3 normal : TEXCOORD2;
-                UNITY_FOG_COORDS(1)
                 float4 vertex : SV_POSITION;
                 float4 worldPos : TEXCOORD3;
                 float3 viewDir : TEXCOORD4;

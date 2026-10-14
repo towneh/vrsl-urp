@@ -88,7 +88,7 @@
             #pragma vertex vert
             #pragma fragment frag
             #pragma multi_compile_local _ _ALPHATEST_ON
-            #pragma shader_feature _1CH_MODE _4CH_MODE _5CH_MODE _13CH_MODE
+            #pragma shader_feature_local _1CH_MODE _4CH_MODE _5CH_MODE _13CH_MODE
             #define VRSL_DMX
             #define VRSL_FLARE
             #pragma multi_compile_instancing

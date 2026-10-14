@@ -423,7 +423,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             #pragma vertex   vert
             #pragma fragment frag
             #pragma target   4.5
-            #pragma multi_compile _ _VRSL_VOLUMETRIC_NOISE
+            #pragma multi_compile_local_fragment _ _VRSL_VOLUMETRIC_NOISE
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
             // TEXTURE2D_X resolves to Texture2DArray under SPI VR (manager

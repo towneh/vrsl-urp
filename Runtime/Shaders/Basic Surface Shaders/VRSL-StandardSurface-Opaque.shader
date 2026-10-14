@@ -63,10 +63,9 @@
 
             #define VRSL_DMX
             #define VRSL_SURFACE
-            #pragma shader_feature _ _1CH_MODE _4CH_MODE _5CH_MODE _13CH_MODE
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
-            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
-            #pragma multi_compile _ _SHADOWS_SOFT
+            #pragma shader_feature_local _ _1CH_MODE _4CH_MODE _5CH_MODE _13CH_MODE
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile_fragment _ _SHADOWS_SOFT
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
@@ -200,7 +199,6 @@
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
-            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/SurfaceInput.hlsl"
 
             #include "../Shared/VRSL-Defines-URP.hlsl"
 

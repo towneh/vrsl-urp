@@ -10,6 +10,10 @@
 
 - **`SmoothingPanelOpener` and `VRSL_AudioLink_SmoothingPanel` are in the `VRSL.URP` namespace,** like the rest of the package. In the global namespace they could clash with a type of the same name in another package or the project. Scenes and prefabs that use them are unaffected; code that names either one needs `using VRSL.URP;`.
 
+### Removed
+
+- **The `VRSL-URP/Other/Standard` shader.** It was a copy of URP's Lit shader, so the package's five materials that used it (the discoball sphere, the example truss and the three AudioLink controller materials) now use URP Lit itself and look the same. A material of your own on it shows pink: switch it to `Universal Render Pipeline/Lit`, which takes the same properties.
+
 ### Fixed
 
 - **Moving-head bodies are lit by URP.** The spot and wash mover body shaders, DMX and AudioLink, lit themselves through the Built-in Render Pipeline's light variables, which URP never sets, so they took no main light, no additional lights and no shadows. They now light as URP Lit does, ambient from light probes or probe volumes included, and cast the shadow of what they draw, in the pose they're drawn in.
