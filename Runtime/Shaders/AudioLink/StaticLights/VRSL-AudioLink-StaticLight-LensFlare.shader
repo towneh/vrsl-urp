@@ -262,21 +262,25 @@
                 float divider = 1.0 / totalTestCount;
                 float maxSingleAxisOffset = _LightSourceViewSpaceRadius / testLoopSingleAxisWidth;
 
+                //Projection and ComputeScreenPos are both linear, so each test point's screen position is the
+                //pivot's plus whole multiples of one grid step along view space x and y.
+                float4 pivotScreenPos = ComputeScreenPos(mul(UNITY_MATRIX_P, float4(quadPivotPosVS, 1)));
+                float4 tapStepX = ComputeScreenPos(mul(UNITY_MATRIX_P, float4(maxSingleAxisOffset, 0, 0, 0)));
+                float4 tapStepY = ComputeScreenPos(mul(UNITY_MATRIX_P, float4(0, maxSingleAxisOffset, 0, 0)));
+
                 //Test for n*n grid in view space, where quad pivot is grid's center.
                 //For each iteration,
                 //if that test point passed the scene depth occlusion test, we add 1 to visibilityTestPassedCount
                         for(int x = -COUNT; x <= COUNT; x++)
                         {
+                            float4 rowScreenPos = pivotScreenPos + x * tapStepX;
                             for(int y = -COUNT; y <= COUNT ; y++)
                             {
-                                float3 testPosVS = quadPivotPosVS;
-                                testPosVS.xy += float2(x,y) * maxSingleAxisOffset;//add 2D test grid offset, in const view space unit
-                                float4 PivotPosCS = mul(UNITY_MATRIX_P,float4(testPosVS,1));
-                                float4 PivotScreenPos = ComputeScreenPos(PivotPosCS);
+                                float4 PivotScreenPos = rowScreenPos + y * tapStepY;
                                 float2 screenUV = PivotScreenPos.xy/PivotScreenPos.w;
 
                                 //if screenUV out of bound, treat it as occluded, because no correct depth texture data can be used to compare
-                                if(screenUV.x > 1 || screenUV.x < 0 || screenUV.y > 1 || screenUV.y < 0)
+                                if(any(screenUV != saturate(screenUV)))
                                     continue; //exit means occluded
 
                                 //we don't have tex2D() in vertex shader, because rasterization is not done by GPU, so we use tex2Dlod() with mip0 instead
@@ -286,7 +290,7 @@
                                 sampledSceneDepth = lerp(UNITY_NEAR_CLIP_VALUE, 1, sampledSceneDepth);
                                 #endif
                                 float linearEyeDepthFromSceneDepthTexture = LinearEyeDepth(sampledSceneDepth);
-                                float linearEyeDepthFromSelfALU = PivotPosCS.w; //clip space .w is view space z, = linear eye depth
+                                float linearEyeDepthFromSelfALU = PivotScreenPos.w; //clip space .w is view space z, = linear eye depth
 
                                 //do the actual depth comparision test
                                 //+1 means flare test point is visible in screen space
@@ -349,7 +353,7 @@
                 #if _ALPHATEST_ON
                     float2 pos = i.screenPos.xy / i.screenPos.w;
                     pos *= _ScreenParams.xy;
-                    float DITHER_THRESHOLDS[16] =
+                    static const float DITHER_THRESHOLDS[16] =
                     {
                         1.0 / 17.0,  9.0 / 17.0,  3.0 / 17.0, 11.0 / 17.0,
                         13.0 / 17.0,  5.0 / 17.0, 15.0 / 17.0,  7.0 / 17.0,
