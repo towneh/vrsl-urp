@@ -88,15 +88,10 @@
 
             struct v2f
             {
-                float2 uv : TEXCOORD0;
-                float2 uv2 : TEXCOORD1;
-                float3 normal : TEXCOORD2;
+                float2 uv2 : TEXCOORD0;
                 float4 vertex : SV_POSITION;
-                float4 worldPos : TEXCOORD3;
-                float3 viewDir : TEXCOORD4;
-                float4 panTiltLengthWidth : TEXCOORD5; //ch 1,2,3,4
-                float4 flatnessBeamCountSpinThickness : TEXCOORD6; //ch 5,6,7,12
-                float4 rgbIntensity : TEXCOORD7; // ch 8,9,10,11
+                nointerpolation float4 color : TEXCOORD1;
+                nointerpolation float2 intensityAndFlatMix : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -373,20 +368,22 @@
                 UNITY_INITIALIZE_OUTPUT(v2f, o);
                 UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
                 UNITY_TRANSFER_INSTANCE_ID(v, o);
-                o.rgbIntensity.w = 1;
-                if (getGlobalIntensity() <= 0.05 || getFinalIntensity() <= 0.05 || _UniversalIntensity <= 0.05 || o.
-      rgbIntensity.w <= 0.05)
+                // The colour and every intensity are the same for the whole draw, so they are
+                // worked out once per vertex rather than once per pixel.
+                float amplitude = GetAudioReactAmplitude();
+                if (getGlobalIntensity() <= 0.05 || getFinalIntensity() <= 0.05 || _UniversalIntensity <= 0.05 || amplitude <= 0.05)
                 {
                     o.vertex = UnityObjectToClipPos(float4(0, 0, 0, 0));
                     return o;
                 }
-                //replacement for _WorldSpaceCameraPos
-                float3 wpos;
-                wpos.x = unity_CameraToWorld[0][3];
-                wpos.y = unity_CameraToWorld[1][3];
-                wpos.z = unity_CameraToWorld[2][3];
+                float4 color = lerp(float4(0, 0, 0, 0), getEmissionColor() * _Multiplier, getGlobalIntensity());
+                float3 hsv = RGB2HSV(color.rgb);
+                hsv.y -= 0.1;
+                color.rgb = hsb2rgb(hsv);
+                o.color = color * getFinalIntensity() * _UniversalIntensity * amplitude;
+                o.intensityAndFlatMix.x = getFinalIntensity() * _UniversalIntensity * amplitude;
+                o.intensityAndFlatMix.y = pow(((getConeFlatness() / 2.0) - 1.0) * -1, 0.95);
 
-                o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 o.uv2 = TRANSFORM_TEX(v.uv2, _MainTex);
 
 
@@ -407,11 +404,6 @@
                 float xRot = getPan() + getAltPan();
                 float yRot = getTilt() + getAltTilt();
                 vert = CalculateRotations(v, vert, _ZRotation + getAltTwist(), xRot, yRot);
-
-                o.viewDir = normalize(wpos - mul(unity_ObjectToWorld, vert).xyz);
-                v.normal = CalculateRotations(v, float4(v.normal, 1), _ZRotation + getAltTwist(), xRot, yRot).xyz;
-                o.normal = normalize(mul(float4(v.normal, 0.0), unity_WorldToObject).xyz);
-                o.worldPos = mul(unity_ObjectToWorld, vert);
                 o.vertex = UnityObjectToClipPos(vert);
                 return o;
             }
@@ -421,30 +413,9 @@
             {
                 UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
                 UNITY_SETUP_INSTANCE_ID(i);
-                i.rgbIntensity.w = GetAudioReactAmplitude();
-                if (getGlobalIntensity() <= 0.05 || getFinalIntensity() <= 0.05 || _UniversalIntensity <= 0.05 || i.
-     rgbIntensity.w <= 0.05)
-                {
-                    return half4(0, 0, 0, 0);
-                }
-                float fade = pow(saturate(dot(normalize(i.normal), i.viewDir)), _FadeStrength);
-
-
-                // fade = pow(fade, pow(_FadeStrength, _FadeAmt)) * fade;
-                // sample the texture
-                float4 actualcolor = getEmissionColor() * _Multiplier;
-                float4 color = lerp(float4(0, 0, 0, 0), actualcolor, getGlobalIntensity());
-                float3 newColor = RGB2HSV(color.rgb);
-                newColor.y -= 0.1;
-                color.rgb = hsb2rgb(newColor);
-
-                color = color * getFinalIntensity();
-                color = color * _UniversalIntensity;
-                color = color * i.rgbIntensity.w;
-                fixed4 col = float4(1, 1, 1, 1);
-                fixed4 alphaMask = tex2D(_MainTex, i.uv2);
+                float4 color = i.color;
+                fixed4 col = color;
                 float2 laserUV = i.uv2;
-                col *= color;
 
                 //Draw Beams
                 float scroll = getScrollSpeed();
@@ -491,11 +462,9 @@
 
                 // col = col * col *;
                 // float4 flatCol = col * flatEdgeMask.r;
-                float flatness = getConeFlatness();
-
                 float4 flatCol = col * edgeMask;
-                col = lerp(flatCol, col, pow(((flatness / 2.0) - 1.0) * -1, 0.95));
-                col *= getFinalIntensity() * _UniversalIntensity * i.rgbIntensity.w;
+                col = lerp(flatCol, col, i.intensityAndFlatMix.y);
+                col *= i.intensityAndFlatMix.x;
                 col *= UNITY_ACCESS_INSTANCED_PROP(Props, _BlackOut);
                 return col;
             }
