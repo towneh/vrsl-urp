@@ -220,22 +220,28 @@ float DMXSpinPhase(uint DMXChannel)
 // 1 open, 0 closed. Below a channel value of 0.2 the fixture is held open.
 half DMXStrobe(uint DMXChannel)
 {
-    if (!channelBufferLive()) return getValueAtCoords(DMXChannel, _VRSLU_DMXGridStrobeOutput);
-    if (_VRSLU_StrobeDisabled > 0) return 1.0;
-
-    float status = loadDMXChannel(DMXChannel);
-    float phase = 0.0;
-    if (_VRSLU_StrobeStatic > 0u)
+    half strobe = 1.0;
+    if (!channelBufferLive())
     {
-        float speed = status > 0.2 ? _VRSLU_StrobeFreqs.y : _VRSLU_StrobeFreqs.x;
-        speed       = status > 0.5 ? _VRSLU_StrobeFreqs.z : speed;
-        phase       = _VRSLU_TimeY * speed;
+        strobe = getValueAtCoords(DMXChannel, _VRSLU_DMXGridStrobeOutput);
     }
-    else
+    else if (_VRSLU_StrobeDisabled <= 0)
     {
-        phase = loadDMXStrobePhase(DMXChannel);
+        float status = loadDMXChannel(DMXChannel);
+        float phase = 0.0;
+        if (_VRSLU_StrobeStatic > 0u)
+        {
+            float speed = status > 0.2 ? _VRSLU_StrobeFreqs.y : _VRSLU_StrobeFreqs.x;
+            speed       = status > 0.5 ? _VRSLU_StrobeFreqs.z : speed;
+            phase       = _VRSLU_TimeY * speed;
+        }
+        else
+        {
+            phase = loadDMXStrobePhase(DMXChannel);
+        }
+        strobe = status > 0.2 ? (sin(phase) > 0.0 ? 1.0 : 0.0) : 1.0;
     }
-    return status > 0.2 ? (sin(phase) > 0.0 ? 1.0 : 0.0) : 1.0;
+    return strobe;
 }
 #endif
 
