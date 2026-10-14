@@ -121,7 +121,7 @@ float VRSL_SpotAttenuation(float3 lightDir, float3 toLight, float cosInner,
 {
     float3 toApex = toLight - lightDir * emitterDepth;
     float cosAngle = dot(-lightDir, normalize(toApex));
-    float t = saturate((cosAngle - cosOuter) / max(cosInner - cosOuter, 0.0001));
+    float t = saturate((cosAngle - cosOuter) * (1.0 / max(cosInner - cosOuter, 0.0001)));
 
     float forwardOfLens = dot(-toLight, lightDir);
     float lensClip      = smoothstep(0.0, 0.05, forwardOfLens);
@@ -144,8 +144,8 @@ float VRSL_SpotAttenuation(float3 lightDir, float3 toLight, float cosInner,
 float VRSL_HenyeyGreenstein(float cosTheta, float g)
 {
     float g2 = g * g;
-    float denom = 1.0 + g2 - 2.0 * g * cosTheta;
-    return (1.0 - g2) / (4.0 * VRSL_PI * pow(max(denom, 0.0001), 1.5));
+    float denom = max(1.0 + g2 - 2.0 * g * cosTheta, 0.0001);
+    return (1.0 - g2) / (4.0 * VRSL_PI * denom * sqrt(denom));
 }
 
 // The largest value the phase function takes at this g, over every angle.
@@ -312,8 +312,9 @@ float SampleGobo(float goboIdx, float spinAngle, float3 posWS,
     float sinOuter = sqrt(max(0.0, 1.0 - cosOuter * cosOuter));
     float tanHalf  = sinOuter / max(cosOuter, 0.0001);
 
-    float u = dot(toPixel, right) / (depth * tanHalf) * 0.5 + 0.5;
-    float v = dot(toPixel, up)    / (depth * tanHalf) * 0.5 + 0.5;
+    float uvScale = 0.5 / (depth * tanHalf);
+    float u = dot(toPixel, right) * uvScale + 0.5;
+    float v = dot(toPixel, up)    * uvScale + 0.5;
 
     if (spinAngle != 0.0)
     {
