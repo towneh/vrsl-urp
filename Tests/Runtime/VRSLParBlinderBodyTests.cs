@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
     /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J11 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J12 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1154,6 +1154,160 @@ namespace VRSL.URP.Tests
                 Shader.SetGlobalTexture("_AudioTexture", audioWas);
                 rig.Dispose();
                 foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
+            }
+        }
+
+        /// <summary>
+        /// J12. A lens flare dims by the share of its occlusion test points that something
+        /// blocks. Each flare tests a 17 x 17 grid of points around its centre, one
+        /// seventeenth of its light source radius apart in view space, against the camera's
+        /// depth. Each flare (AudioLink, and DMX Horizontal) is a quad on a copy of its
+        /// shipped material with that radius at 1 m, lit red with AudioLink and DMX off, 5 m
+        /// from the camera; a cube on URP Lit 1 m in front of it covers the grid's columns
+        /// right of column 4 of 17, then right of column 11, then its rows above row 6, its
+        /// edge halfway between two columns or rows as seen from the camera. Captured with the
+        /// flares shown and then hidden; measured on a half-float capture.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J12_lens_flares_dim_by_the_share_of_their_light_that_is_blocked()
+        {
+            const string Materials = "Packages/town.mr.vrsl-urp/Runtime/Materials/Lights/";
+            const int    Side      = 17;
+            const float  Radius    = 1f;
+            const float  Step      = Radius / Side;
+            const float  Depth     = 0.8f;
+            var flares = new (string name, string material, string enable)[]
+            {
+                ("AudioLink Flare", "AudioLink/StaticLight-Blinder/VRSL-AudioLink-Blinder-LensFlareMat.mat", "_EnableAudioLink"),
+                ("DMX Flare",       "DMX/StaticLight-Blinder/VRSL-Blinder-LensFlareMat-Horizontal.mat",       "_EnableDMX"),
+            };
+            // Visible columns or rows out of 17, the axis the edge cuts, and the last grid
+            // index (-8 to 8) left uncovered.
+            var cases = new (string what, bool columns, int lastOpen)[]
+            {
+                ("columns right of the 4th covered", true,  -5),
+                ("columns right of the 11th covered", true,  2),
+                ("rows above the 6th covered",        false, -3),
+            };
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            Assert.IsNotNull(lit, "URP Lit is not in the project");
+
+            var rig       = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var materials = new List<Material>();
+            try
+            {
+                var renderers = new List<MeshRenderer>();
+                var blockers  = new List<Transform>();
+                var wall = new Material(lit) { name = "VRSL J12 blocker" };
+                materials.Add(wall);
+                wall.SetColor("_BaseColor", Color.grey);
+                for (int i = 0; i < flares.Length; i++)
+                {
+                    var shipped = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(Materials + flares[i].material);
+                    Assert.IsNotNull(shipped, $"{flares[i].material} is not in the package");
+                    var m = new Material(shipped) { name = $"VRSL J12 {flares[i].name}" };
+                    materials.Add(m);
+                    m.SetFloat(flares[i].enable, 0f);
+                    m.SetColor("_Emission", new Color(24f, 0f, 0f, 1f));
+                    m.SetFloat("_LightSourceViewSpaceRadius", Radius);
+                    var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+                    quad.name = m.name;
+                    quad.transform.SetParent(rig.Floor.transform.parent, false);
+                    quad.transform.position = new Vector3(500f + 3f * i, 1.5f, 0f);
+                    var r = quad.GetComponent<MeshRenderer>();
+                    r.sharedMaterial = m;
+                    renderers.Add(r);
+                    var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    cube.name = $"VRSL J12 blocker {i}";
+                    cube.transform.SetParent(rig.Floor.transform.parent, false);
+                    cube.GetComponent<MeshRenderer>().sharedMaterial = wall;
+                    blockers.Add(cube.transform);
+                }
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(501.5f, 1.5f, -5f), Quaternion.identity);
+
+                // The camera is unrotated, so view space x and y are world x and y. A point a
+                // fraction t of the way from the camera to the flare's plane sits t of the way
+                // along the line from the eye to the test point.
+                void Place(bool open, bool columns, int lastOpen)
+                {
+                    var eye = rig.Camera.transform.position;
+                    for (int i = 0; i < blockers.Count; i++)
+                    {
+                        var at = renderers[i].transform.position;
+                        if (open)
+                        {
+                            blockers[i].position   = at + new Vector3(0f, -10f, 0f);
+                            blockers[i].localScale = Vector3.one;
+                            continue;
+                        }
+                        var centre = Vector3.Lerp(eye, at, Depth);
+                        float edge = (lastOpen + 0.5f) * Step * Depth;
+                        blockers[i].localScale = columns ? new Vector3(1f, 1.5f, 0.05f) : new Vector3(1.5f, 1f, 0.05f);
+                        blockers[i].position   = centre + (columns ? new Vector3(edge + 0.5f, 0f, 0f) : new Vector3(0f, edge + 0.5f, 0f));
+                    }
+                }
+
+                // Red less green: the flare's white core doesn't scale with what is visible on
+                // the DMX flare, its red does on both.
+                float[] Capture()
+                {
+                    foreach (var r in renderers) r.enabled = true;
+                    var shown = CaptureHdr(rig);
+                    foreach (var r in renderers) r.enabled = false;
+                    var hidden = CaptureHdr(rig);
+                    foreach (var r in renderers) r.enabled = true;
+                    try
+                    {
+                        var added = new float[renderers.Count];
+                        for (int i = 0; i < renderers.Count; i++)
+                        {
+                            var d = Measure(rig.Camera, shown, renderers[i]).mean - Measure(rig.Camera, hidden, renderers[i]).mean;
+                            added[i] = d.x - d.y;
+                        }
+                        return added;
+                    }
+                    finally
+                    {
+                        Object.DestroyImmediate(shown);
+                        Object.DestroyImmediate(hidden);
+                    }
+                }
+
+                Place(true, true, 0);
+                yield return rig.Step(2);
+                var open = Capture();
+                var failures = new List<string>();
+                for (int i = 0; i < renderers.Count; i++)
+                {
+                    Debug.Log($"[J12] {renderers[i].name}: adds {open[i]:F4} red in the open");
+                    if (!(open[i] > 0.02f)) failures.Add(
+                        $"{renderers[i].name} adds only {open[i]:F4} red with nothing in front of it, so it isn't lit "
+                      + "and its blocked captures prove nothing");
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+
+                foreach (var (what, columns, lastOpen) in cases)
+                {
+                    Place(false, columns, lastOpen);
+                    yield return rig.Step(2);
+                    var part = Capture();
+                    float expected = (lastOpen + Side / 2 + 1) / (float)Side;
+                    for (int i = 0; i < renderers.Count; i++)
+                    {
+                        float share = part[i] / open[i];
+                        Debug.Log($"[J12] {renderers[i].name}, {what}: {share:F4} of its open light, expected {expected:F4}");
+                        if (Mathf.Abs(share - expected) > 0.25f / Side) failures.Add(
+                            $"{renderers[i].name} with its {what} keeps {share:F4} of its open light against "
+                          + $"{expected:F4}, the share of its test points left visible. A flare whose test points "
+                          + "sit at the wrong spacing along either axis dims by the wrong amount");
+                    }
+                }
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
+                rig.Dispose();
+                foreach (var m in materials) if (m != null) Object.DestroyImmediate(m);
             }
         }
 
