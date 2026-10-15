@@ -15,7 +15,7 @@ The following are direct derivatives of upstream — copied (with renames for co
 - Shared HLSL includes: `VRSL-Defines-URP.hlsl`, `VRSL-DMXFunctions-URP.hlsl`, `VRSL-AudioLink-Functions-URP.hlsl`, the Built-in `.cginc` read includes, and the pan, tilt and lens emission in `VRSL-MoverBody-URP.hlsl`.
 - The fixture geometry FBX meshes (Mover Spotlight HQ, Mover Washlight HQ, ParLight, StrobeLight, etc.).
 - All GOBO atlases, fixture body / projection / volumetric / lens-flare textures, mover light textures, static light textures.
-- The legacy fixture authoring components: `VRStageLighting_AudioLink_Static`, `VRStageLighting_DMX_Static`, `VRStageLighting_AudioLink_Laser`, `VRSL_AudioLink_SmoothingPanel`, `VRSL_LocalUIControlPanel`, plus their associated prefabs and the GridReader OSC integration.
+- The legacy fixture authoring components: `VRSLAudioLinkStatic`, `VRSLDMXStatic` and `VRSLAudioLinkLaser` (upstream's `VRStageLighting_AudioLink_Static`, `VRStageLighting_DMX_Static` and `VRStageLighting_AudioLink_Laser`), `VRSL_AudioLink_SmoothingPanel`, `VRSL_LocalUIControlPanel`, plus their associated prefabs and the GridReader OSC integration.
 - The example scenes and most of their non-URP scene content (truss prefab, audio prefab, AudioLink controller prefab).
 
 Modifications applied during the fork: shader picker names rewritten from `VRSL/...` to `VRSL-URP/...`, C# namespaces from `VRSL` to `VRSL.URP`, runtime DMX globals from `_Udon_DMX*` to `_VRSLU_DMX*`, asset GUIDs regenerated for coexistence, BIRP / VRChat / UdonSharp accommodations stripped, and asmdef names re-prefixed to `Towneh.VRSL.URP*`.
@@ -31,7 +31,7 @@ The following were authored by towneh on the `urp-volumetric-lights` development
 - `VRSLSurfaceBRDF.hlsl`, `VRSLTileCulling.hlsl` (surface BRDF evaluation and the tile-list read side).
 - `VRSLSurfaceProperties.shader` (prepass override shader for albedo / smoothness / metallic capture).
 - `VRSLCameraFilter`, `VRSLGoboWheel`, `VRSLDiagnostics` (camera classification, GPU gobo packing, runtime diagnostics).
-- `VRStageLighting_{DMX,AudioLink}_RealtimeLight` (per-fixture realtime light components consumed by the managers).
+- `VRSLDMXRealtimeLight`, `VRSLAudioLinkRealtimeLight` (per-fixture realtime light components consumed by the managers).
 - `VRSLDMXLightUpdate.compute`, `VRSLAudioLinkLightUpdate.compute` (per-fixture state decode kernels).
 - `VRSLLightingLibrary.hlsl` (struct definitions and lighting evaluation helpers shared between the URP fullscreen passes).
 - `Runtime/Shaders/Surface/VRSLDeferredLighting.shader`, `VRSLVolumetricLighting.shader` (the URP-only fullscreen surface lighting and raymarched in-scattering passes).

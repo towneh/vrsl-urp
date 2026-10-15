@@ -61,7 +61,7 @@ There is no renderer feature to add and no URP setting to find. After you instal
 
 2. **Add a light manager to your scene.** Run **VRSL → URP → Add Light Manager to Active Scene**. Use one manager per scene for each data path. The manager arrives with every shader and texture reference filled in. Its inspector shows one status line that says whether it is wired. If a reference goes missing, run **VRSL → URP → Repair Manager Wiring**.
 
-3. **Add fixtures.** Drag prefabs in from `Runtime/Prefabs/DMX/` or `Runtime/Prefabs/AudioLink/`. Or add `VRStageLighting_DMX_RealtimeLight` or `VRStageLighting_AudioLink_RealtimeLight` to fixture geometry of your own. For an AudioLink rig, run **VRSL → URP → AudioLink Config → Setup AudioLink Realtime Lights in Scene**. It adds and wires the component on every mover in the scene.
+3. **Add fixtures.** Drag prefabs in from `Runtime/Prefabs/DMX/` or `Runtime/Prefabs/AudioLink/`. Or add `VRSLDMXRealtimeLight` or `VRSLAudioLinkRealtimeLight` to fixture geometry of your own. For an AudioLink rig, run **VRSL → URP → AudioLink Config → Setup AudioLink Realtime Lights in Scene**. It adds and wires the component on every mover in the scene.
 
 4. **Patch them.** Give each DMX fixture the universe and start channel that match the desk. The prefabs use VRSL's 13-channel layout, and the five-channel statics have a layout of their own. An AudioLink fixture takes a frequency band and a colour source instead.
 

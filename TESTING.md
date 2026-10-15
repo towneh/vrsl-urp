@@ -770,7 +770,7 @@ delivered every frame.
 
 `VRSLReaddressTests` in the suite. A world script moves a fixture to another address by
 setting its address fields and calling `ApplyAddress()` on the fixture, on either
-`VRStageLighting_DMX_RealtimeLight` or `VRStageLighting_DMX_Static`. Without the call a
+`VRSLDMXRealtimeLight` or `VRSLDMXStatic`. Without the call a
 realtime light's body keeps glowing to the old address, and its beam follows only once
 something else makes the manager re-upload its fixture data. The par and blinder bodies
 move with their beams too (J4).
