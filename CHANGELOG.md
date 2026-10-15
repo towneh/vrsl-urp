@@ -6,6 +6,7 @@
 
 - **A supported way for a shader of your own to read DMX: `Runtime/Shaders/VRSLDMX.hlsl`.** Include it in a URP shader and call `VRSLDMX_Channel`, `VRSLDMX_ChannelRaw`, `VRSLDMX_Strobe` or `VRSLDMX_Color` with a channel number, the one a `VRStageLighting_DMX_Static` writes to its renderers as `_DMXChannel`. They read whatever the DMX manager reads, any grid layout or Stream data, and work in the vertex stage as well as the fragment stage. The include declares no material properties, so a shader using it stays SRP Batcher compatible, and it sits beside URP's Lit inputs and depth texture. It is the package's public shader API, and changes to it will be listed here. The wiki's [DMX in Your Own Shaders](https://github.com/towneh/vrsl-urp/wiki/DMX-in-Your-Own-Shaders) page covers it, the values the fixture component writes, and porting a shader from VR Stage Lighting's `VRSLDMX.cginc`.
 - **Grid Textures have a Raw slot,** for the grid as it arrives from the video, before smoothing. `VRSLDMX_ChannelRaw` reads it, so a value can jump in the frame the desk changes it where the smoothed read eases. The package's Grid Textures fill it for all three layouts. In a Grid Textures asset of your own with Raw left empty, the raw read gets the smoothed values. A camera rendering into a Raw texture gets no VRSL lighting, as one rendering into the decode textures already didn't.
+- **A discoball's ball turns with its dots,** DMX and AudioLink, about the fixture's up axis at its Spin Speed, while the world runs. Before, only the dots turned. The fixture's inspector shows the ball as **Ball** in its Discoball section (the field is `lensTransform`), and both discoball prefabs set it to their sphere. A discoball of your own turns whatever you set there; leave it empty and nothing turns.
 
 ### Changed
 
@@ -22,6 +23,8 @@
 - **Lens flares have no "Toggle The Requirement of the depth light" setting.** It never reached the shader, and flares now always hide behind what blocks their light.
 
 - **`SmoothingPanelOpener` and `VRSL_AudioLink_SmoothingPanel` are in the `VRSL.URP` namespace,** like the rest of the package. In the global namespace they could clash with a type of the same name in another package or the project. Scenes and prefabs that use them are unaffected; code that names either one needs `using VRSL.URP;`.
+
+- **The discoball's ball is a mirror.** Its material is fully smooth, as the original VRSL's was, so it reflects the room as sharp facets where it read as a dull grey. What it shows comes from the world's reflection probes, so in a world without one it reads dark.
 
 - **The migration tool names the original VRSL's light stencils.** Both **VRSL → URP** migration menu items list any light stencil mask prefab, either of its two materials, or a material of your own on either stencil shader found in the scene, and say how to keep light off an area without one. They're left in place for you to delete, and each one's Console line selects it.
 

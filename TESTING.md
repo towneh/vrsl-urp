@@ -614,13 +614,16 @@ mismatch.
 
 ### Discoball
 
-`VRSLDiscoballTests` in the suite covers K1 and K2. K3 is by eye.
+`VRSLDiscoballTests` in the suite covers K1, K2, K4 and K6, and `VRSLAudioLinkDiscoballTests` (AudioLink tests assembly) covers K5. K3 is by eye.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
 | K1 | D | A `Discoball` fixture from the shipped prefab on the rig, dimmer at full, spin at 90°/s | Its light record reads as the discoball type with no gobo slice, its spin axis is the fixture's up, it is lit, white tint reads white, and the spin phase advances by the authored rate between two reads a dozen frames apart (within a quarter). Proves the config, the compute branch and the clock, on the same path every reader uses |
 | K2 | D | The same ball three metres over the rig's floor, movers dark, the surface prepass off so the floor lights as neutral grey; four frames: ball off, no cubemap, a cubemap black but for its downward face, the shipped cubemap | Judged as what the ball adds over the ball-off frame. No cubemap floods over 5% of the frame; the one-face cube and the shipped dots each light more than 0.2% and under 60% of that flood. The one-face cube proves the mask, the shipped asset proves its import. The prepass is off so the row judges the ball alone |
-| K3 | — | The DMX example scene's discoball (sector 39, on) by eye, then `discoballBeams` on, then a coloured cubemap | Dots sweep the room about the ball's vertical at about 8°/s; with beams on they hang in the haze as thin shafts; a coloured cubemap tints them. Cost: one more light in every tile inside its range, plus a cubemap fetch per raymarch step with beams on |
+| K3 | — | The DMX example scene's discoball (sector 39, on) by eye, then `discoballBeams` on, then a coloured cubemap | Dots sweep the room about the ball's vertical at about 8°/s, and the ball turns with them, the same way at the same rate; with beams on the dots hang in the haze as thin shafts; a coloured cubemap tints them. The ball reflects the room as sharp facets where a reflection probe covers it. Cost: one more light in every tile inside its range, plus a cubemap fetch per raymarch step with beams on |
+| K4 | D | The shipped prefab on the rig tilted 30°, dimmer at full, spin at 90°/s, twelve frames; then Spin Speed 0 for six | The ball (`lensTransform`) turns about the fixture's up by the authored angle (within a quarter), in the same sense as the light record's spin phase, without moving. At Spin Speed 0 it holds where it was rather than jumping to a new angle |
+| K5 | A | The shipped AudioLink prefab tilted 30° beside the AudioLink manager, spin at 90°/s, twelve frames | The prefab's `lensTransform` is its sphere and the sphere is a mirror (as K6); the ball turns about the fixture's up by the authored angle (within a quarter), in the dots' sense, without moving |
+| K6 | D | The shipped DMX prefab, not instantiated | Its `lensTransform` is its `Discoball-Sphere`, whose material is fully metallic and fully smooth with the facet normal map on |
 
 ### Volumetrics
 
