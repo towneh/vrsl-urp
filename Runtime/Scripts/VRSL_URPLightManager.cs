@@ -1891,13 +1891,18 @@ namespace VRSL.URP
 
         void OnBeginCameraRendering(ScriptableRenderContext ctx, Camera cam)
         {
-            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, OwnedSources());
-            if (!decision.Render) return;
-
             var camData = cam.GetUniversalAdditionalCameraData();
             if (camData == null) return;
             var renderer = camData.scriptableRenderer;
             if (renderer == null) return;
+
+            // Every camera, lit or not, and with or without realtime fixtures: Render Graph
+            // puts the grid globals back to black after each camera that published them,
+            // so a camera that skipped this would show the shader-driven fixtures dark.
+            renderer.EnqueuePass(_gridTexturePass);
+
+            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, OwnedSources());
+            if (!decision.Render) return;
 
             // The level this camera's passes cost at. The passes are shared across
             // cameras and record for one camera at a time, so a field set here is
@@ -1946,7 +1951,6 @@ namespace VRSL.URP
             // pays for it and the rest read what it wrote.
             DispatchDecode();
 
-            renderer.EnqueuePass(_gridTexturePass);
             // The surface prepass output is identical whichever manager drives it,
             // so with both active only one enqueues it. The DMX manager takes
             // priority; VRSL_AudioLinkURPLightManager defers when it sees one.

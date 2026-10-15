@@ -61,6 +61,11 @@ namespace VRSL.URP
         /// A pass with no attachments and nothing to draw, kept for the globals it
         /// sets, which is how URP publishes its own. It writes nothing the graph can
         /// see consumed, so it opts out of pass culling.
+        ///
+        /// Render Graph sets every global it published back to black once a camera has
+        /// rendered, so the manager enqueues this for every camera, including those it
+        /// lights nothing in and frames with no realtime fixtures: the shader-driven
+        /// fixtures read the grid in all of them.
         /// </remarks>
         public class GridTexturePass : ScriptableRenderPass
         {
@@ -74,7 +79,7 @@ namespace VRSL.URP
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
                 var mgr = VRSL_URPLightManager.Instance;
-                if (mgr == null || mgr.FixtureCount == 0 || mgr.DMXMainHandle == null) return;
+                if (mgr == null || mgr.DMXMainHandle == null) return;
 
                 using var builder = rg.AddRasterRenderPass<PassData>("VRSL DMX Grid Textures", out _);
                 builder.AllowPassCulling(false);
