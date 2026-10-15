@@ -745,6 +745,29 @@ move with their beams too (J4).
 | R2 | — | A Horizontal flasher (a `DMX_Static` with two renderers) moved to universe 2 channel 27, then to sector 3 in single-channel mode on channel 4 | Both renderers read `_DMXChannel` 547, then 44 |
 | R3 | D | The rig on Ramp with strobe disabled, every fixture's `ApplyAddress()` called once to settle, then again with nothing changed | Colour and intensity bit-identical across the second call for all 50 fixtures; every body still on its own sector's channel |
 
+### Fixtures switched on and off
+
+`VRSLRuntimeEnableTests` (DMX, on the rig) and `VRSLAudioLinkRuntimeEnableTests` (AudioLink, plain
+fixtures beside the rig, which only lends its camera) in the suite. Both managers follow their realtime
+fixtures being switched on and off while the world runs: a fixture's `OnEnable` and `OnDisable` mark
+the manager, which looks through the scene once at its next once-a-frame point (the DMX manager's
+`LateUpdate`, the AudioLink manager's first camera of the frame) and rebuilds its buffers only if the
+set changed. Presence is read from the light data by position, since a rebuild reorders the slots.
+Each row runs on both paths, under the same number.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| Z1 | D, A | A collected fixture's GameObject switched off, then on, with no call to `RefreshFixtures()` | The frame after the switch off the manager holds one fixture fewer and its light data has nothing at the fixture's position; the frame after the switch on, both are back |
+| Z2 | D, A | The same with the fixture under a parent, the parent switched | As Z1 |
+| Z3 | D, A | Seventy extra fixtures under one parent, switched on with it; then all seventy switched off one by one in a single frame, then on one by one in a single frame | The manager holds them after the parent comes on; each single-frame switch costs one scan and one rebuild, and the frames after it neither |
+| Z4 | D, A | A manager with one fixture; the fixture switched off, then on | With it off the manager holds no fixtures, no light data and no fixture configs; with it on it is drawn again |
+| Z5 | D, A | Ten frames with nothing switched; on the DMX path, then a fixture moved to a new address with `ApplyAddress()` | No scan and no rebuild in those frames, and none for the new address |
+| Z6 | D, A | A collected fixture's component switched off on a GameObject left on, then on | As Z1: a switched-off component casts no light. Its body keeps glowing with the show, since the body reads DMX or AudioLink itself |
+
+Nothing here runs in edit mode: neither realtime light nor either manager runs in the editor outside
+Play, so Unity never calls the hooks there, and placing or removing fixtures in a scene, in Prefab
+Mode or through the migration tool is unchanged.
+
 ### Par and blinder bodies
 
 `VRSLParBlinderBodyTests` in the suite. Every DMX par and blinder lists its body, and a blinder

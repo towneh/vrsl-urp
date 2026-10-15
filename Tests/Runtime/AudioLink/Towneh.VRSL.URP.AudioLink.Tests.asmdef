@@ -4,10 +4,12 @@
     "references": [
         "Towneh.VRSL.URP",
         "Towneh.VRSL.URP.AudioLink",
+        "Towneh.VRSL.URP.Tests",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime",
+        "Unity.RenderPipelines.GPUDriven.Runtime",
         "UnityEngine.UI"
     ],
     "includePlatforms": [],
