@@ -472,6 +472,7 @@ namespace VRSL.URP
             // the component silently changes nothing.
             _surfacePrepass = null;
             ReleaseBuffers();
+            ReleaseMaterials();
             ReleaseAudioLinkHandle();
             ReleaseSamplingTextureHandle();
             ReleaseFallbackBlackRT();
@@ -600,9 +601,6 @@ namespace VRSL.URP
 
             if (lightingShader != null && LightingMaterial == null)
                 LightingMaterial = new Material(lightingShader) { hideFlags = HideFlags.HideAndDontSave };
-
-            if (volumetricShader != null && VolumetricMaterial == null)
-                VolumetricMaterial = new Material(volumetricShader) { hideFlags = HideFlags.HideAndDontSave };
 
             BuildGoboArray();
             TryRefreshAudioLinkHandle();
@@ -875,6 +873,15 @@ namespace VRSL.URP
             VolumetricStats.Dispose();
         }
 
+        // On disable, not with the buffers: RefreshFixtures releases those whenever
+        // fixtures come and go. Made HideAndDontSave, so nothing else destroys them,
+        // and a shader changed while switched off is picked up on the next enable.
+        void ReleaseMaterials()
+        {
+            CoreUtils.Destroy(LightingMaterial);   LightingMaterial   = null;
+            CoreUtils.Destroy(VolumetricMaterial); VolumetricMaterial = null;
+        }
+
 
         // Textures this manager consumes. A camera rendering into any of them must
         // never receive the lighting pass — see VRSLCameraFilter.
@@ -1036,6 +1043,9 @@ namespace VRSL.URP
                     _volumetricNoise = VRSLVolumetricNoise.Bake(computeShader, this);
                 Shader.SetGlobalTexture("_VRSLVolNoise", _volumetricNoise);
             }
+            // Made here for the same reason, and so a level without beams makes none.
+            if (VolumetricsEnabled && VolumetricMaterial == null)
+                VolumetricMaterial = new Material(volumetricShader) { hideFlags = HideFlags.HideAndDontSave };
 
             // Before anything of this camera's records. The first camera of the frame
             // pays for it and the rest read what it wrote.

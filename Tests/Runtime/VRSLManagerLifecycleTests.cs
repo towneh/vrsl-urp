@@ -209,5 +209,90 @@ namespace VRSL.URP.Tests
                 rig.Dispose();
             }
         }
+
+        /// <summary>
+        /// C11. A manager switched off destroys the lighting and volumetric materials it
+        /// made, and makes new ones when it is switched back on.
+        ///
+        /// They are made with HideAndDontSave, which a scene unload doesn't collect, so
+        /// any that outlive the manager are leaked for the rest of the session.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator C11_a_manager_switched_off_destroys_the_materials_it_made()
+        {
+            var rig = VRSLDMXRig.Build();
+            try
+            {
+                yield return rig.Step(3);
+                var manager    = rig.Manager;
+                var lighting   = manager.LightingMaterial;
+                var volumetric = manager.VolumetricMaterial;
+                Assert.IsTrue(lighting != null && volumetric != null,
+                    "the rig's manager made no lighting or no volumetric material, so there is "
+                  + "nothing for this row to see released");
+
+                manager.enabled = false;
+                yield return null;
+                Assert.IsTrue(lighting == null,
+                    "the lighting material outlived the manager that made it: it is "
+                  + "HideAndDontSave, so nothing else will ever destroy it");
+                Assert.IsTrue(volumetric == null,
+                    "the volumetric material outlived the manager that made it");
+
+                manager.enabled = true;
+                yield return rig.Step(2);
+                Assert.IsTrue(manager.LightingMaterial != null && manager.VolumetricMaterial != null,
+                    "switched back on, the manager has no materials to light with");
+            }
+            finally { rig.Dispose(); }
+        }
+
+        /// <summary>
+        /// C12. A shader changed while the manager is switched off is the one it draws with
+        /// once it is switched back on; at quality Off it makes no volumetric material, and
+        /// switching to a level with beams while it runs makes one.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator C12_the_materials_follow_the_shaders_and_the_quality()
+        {
+            var rig = VRSLDMXRig.Build();
+            var manager = rig.Manager;
+            var shipped = manager.lightingShader;
+            var other   = Shader.Find("Hidden/VRSL-URP/Tests/UrpReads");
+            try
+            {
+                Assert.IsNotNull(other, "the stand-in shader is not in this project");
+                yield return rig.Step(3);
+                Assert.IsTrue(manager.LightingMaterial != null && manager.LightingMaterial.shader == shipped,
+                    "the manager isn't drawing with its own lighting shader to begin with");
+
+                manager.enabled = false;
+                manager.lightingShader = other;
+                manager.enabled = true;
+                yield return rig.Step(1);
+                Assert.IsTrue(manager.LightingMaterial != null && manager.LightingMaterial.shader == other,
+                    "switched off, given another lighting shader and switched back on, the "
+                  + "manager still draws with the shader it had before");
+
+                manager.enabled = false;
+                manager.lightingShader = shipped;
+                manager.quality = VRSLQuality.Off;
+                manager.enabled = true;
+                yield return rig.Step(2);
+                Assert.IsTrue(manager.VolumetricMaterial == null,
+                    "at quality Off, which draws no beams, the manager made a volumetric material");
+
+                manager.quality = VRSLQuality.Standard;
+                yield return rig.Step(2);
+                Assert.IsTrue(manager.VolumetricMaterial != null,
+                    "switched from Off to Standard while running, the manager has no volumetric "
+                  + "material, so no beams appear");
+            }
+            finally
+            {
+                manager.lightingShader = shipped;
+                rig.Dispose();
+            }
+        }
     }
 }

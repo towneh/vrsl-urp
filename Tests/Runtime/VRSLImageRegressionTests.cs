@@ -141,16 +141,8 @@ namespace VRSL.URP.Tests
                     so.FindProperty(field.Field).objectReferenceValue = null;
                 so.ApplyModifiedProperties();
 
-                // Clearing the fields is not enough, and this row passed with a
-                // deliberately wrong shader until it did this. The manager builds its
-                // lighting and volumetric materials once, from whatever the fields held
-                // at the time, and never drops them — so both survived every bounce, the
-                // capture kept rendering through the prefab's own materials, and the row
-                // could not see resolution's answer at all. Destroying them makes the
-                // manager's references fake-null so the next enable rebuilds from
-                // whatever resolution put back.
-                DropMaterials(rig.Manager);
-
+                // The bounce makes the lighting and volumetric materials again, from
+                // whatever resolution put back, so the capture renders through them.
                 rig.Manager.enabled = false;
                 rig.Manager.enabled = true;
 
@@ -174,7 +166,6 @@ namespace VRSL.URP.Tests
                 // paths are exercised, and the capture needs all ten or it would be
                 // comparing a scene with no volumetrics against one that has them.
                 VRSLWiring.Resolve(rig.Manager, includeOptional: true);
-                DropMaterials(rig.Manager);
                 rig.Manager.enabled = false;
                 rig.Manager.enabled = true;
 
@@ -208,19 +199,6 @@ namespace VRSL.URP.Tests
                 if (wired != null)    Object.DestroyImmediate(wired);
                 if (repaired != null) Object.DestroyImmediate(repaired);
             }
-        }
-
-        /// <summary>
-        /// Destroy the materials the manager built, so its next enable builds them again
-        /// from whatever the shader fields hold now.
-        ///
-        /// DestroyImmediate rather than Destroy: a test advances frames itself and the
-        /// deferred destruction would land after the bounce that is meant to see it.
-        /// </summary>
-        static void DropMaterials(VRSL_DMXURPLightManager manager)
-        {
-            if (manager.LightingMaterial   != null) Object.DestroyImmediate(manager.LightingMaterial);
-            if (manager.VolumetricMaterial != null) Object.DestroyImmediate(manager.VolumetricMaterial);
         }
 
         /// <summary>

@@ -627,6 +627,7 @@ namespace VRSL.URP
             // the component silently changes nothing.
             _surfacePrepass = null;
             ReleaseBuffers();
+            ReleaseMaterials();
             ReleaseChannelBuffers();
             ReleaseTextureHandles();
             VRSLVolumetricNoise.Release(ref _volumetricNoise);
@@ -1220,9 +1221,6 @@ namespace VRSL.URP
             if (lightingShader != null && LightingMaterial == null)
                 LightingMaterial = new Material(lightingShader) { hideFlags = HideFlags.HideAndDontSave };
 
-            if (volumetricShader != null && VolumetricMaterial == null)
-                VolumetricMaterial = new Material(volumetricShader) { hideFlags = HideFlags.HideAndDontSave };
-
             BuildGoboArray();
             _configDirty = true;
         }
@@ -1730,6 +1728,15 @@ namespace VRSL.URP
             VolumetricStats.Dispose();
         }
 
+        // On disable, not with the buffers: RefreshFixtures releases those whenever
+        // fixtures come and go. Made HideAndDontSave, so nothing else destroys them,
+        // and a shader changed while switched off is picked up on the next enable.
+        void ReleaseMaterials()
+        {
+            CoreUtils.Destroy(LightingMaterial);   LightingMaterial   = null;
+            CoreUtils.Destroy(VolumetricMaterial); VolumetricMaterial = null;
+        }
+
         // Deliberately not part of ReleaseBuffers. That one is fixture-scoped and
         // RefreshFixtures calls it, which is public and meant to be called at
         // runtime when fixtures come and go. Releasing the channel buffers there
@@ -1949,6 +1956,9 @@ namespace VRSL.URP
                     _volumetricNoise = VRSLVolumetricNoise.Bake(computeShader, this);
                 Shader.SetGlobalTexture("_VRSLVolNoise", _volumetricNoise);
             }
+            // Made here for the same reason, and so a level without beams makes none.
+            if (VolumetricsEnabled && VolumetricMaterial == null)
+                VolumetricMaterial = new Material(volumetricShader) { hideFlags = HideFlags.HideAndDontSave };
 
             // Before anything of this camera's records. The first camera of the frame
             // pays for it and the rest read what it wrote.

@@ -24,6 +24,7 @@
 
 ### Fixed
 
+- **The light managers destroy the materials they make when they're switched off.** A DMX or AudioLink manager removed by a scene change left its lighting and volumetric materials behind for the rest of the session, and a lighting or volumetric shader changed while the manager was switched off wasn't used when it came back on. At quality Off a manager no longer makes a volumetric material.
 - **Moving-head bodies are lit by URP.** The spot and wash mover body shaders, DMX and AudioLink, lit themselves through the Built-in Render Pipeline's light variables, which URP never sets, so they took no main light, no additional lights and no shadows. They now light as URP Lit does, ambient from light probes or probe volumes included, and cast the shadow of what they draw, in the pose they're drawn in.
 
 - **AudioLink par, blinder, flasher and light bar bodies render lit.** Their shader drew them only while URP rendered main-light shadows with a single cascade, so with more than one (Basis uses four) they rendered black, emission included. On a Forward+ renderer they also lost the main light, because the shader wasn't built with URP's cluster light loop.
