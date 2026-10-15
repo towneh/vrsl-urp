@@ -1,5 +1,6 @@
 #pragma kernel UpdateLights
 #pragma kernel ValidateChannels
+#pragma kernel ValidateReads
 #pragma kernel AdvanceState
 #pragma kernel AdvanceStrobe
 #pragma kernel AdvanceMovement
@@ -512,4 +513,21 @@ void ValidateChannels(uint3 id : SV_DispatchThreadID)
 {
     if (id.x >= _VRSLU_ValidationCount) return;
     _VRSLU_ValidationOut[id.x] = MainChannel(_VRSLU_ValidationStart + id.x);
+}
+
+// The same for each of the reads the lights take, for the test rows: 0 the colour and
+// intensity value, 1 movement, 2 spin phase, 3 strobe. Its own kernel, because it binds
+// every texture and buffer those reads name, which the editor tools above don't.
+uint _VRSLU_ValidationRead;
+
+[numthreads(64, 1, 1)]
+void ValidateReads(uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _VRSLU_ValidationCount) return;
+    uint ch = _VRSLU_ValidationStart + id.x;
+    float value = MainChannel(ch);
+    if      (_VRSLU_ValidationRead == 1u) value = MovementChannel(ch);
+    else if (_VRSLU_ValidationRead == 2u) value = SpinPhase(ch);
+    else if (_VRSLU_ValidationRead == 3u) value = StrobeValue(ch);
+    _VRSLU_ValidationOut[id.x] = value;
 }

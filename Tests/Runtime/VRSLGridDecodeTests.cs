@@ -554,15 +554,17 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// Channels 1..<paramref name="count"/> through one include's read functions, drawn
         /// by <paramref name="probe"/>: the value in red, the movement value in green and
-        /// the spin phase in blue. The grid is <paramref name="grid"/> with
-        /// <paramref name="spin"/> as its spin timer; with <paramref name="fromBuffer"/> the
-        /// manager's buffers are live as well. <paramref name="configure"/> sets anything else
-        /// the probe reads.
+        /// the spin phase in blue and the strobe in alpha. The grid is <paramref name="grid"/>
+        /// with <paramref name="spin"/> as its spin timer and <paramref name="strobe"/> (white
+        /// when not given) as its strobe output; with <paramref name="fromBuffer"/> the
+        /// manager's buffers are live as well. Texel 0 reads <paramref name="firstChannel"/>.
+        /// <paramref name="configure"/> sets anything else the probe reads.
         /// </summary>
         static Color[] ReadThrough(string probe, int count, RenderTexture grid, RenderTexture spin,
                                    VRSL_DMXURPLightManager manager, bool fromBuffer,
                                    VRSLGridLayout layout = VRSLGridLayout.Horizontal,
-                                   System.Action<Material> configure = null)
+                                   System.Action<Material> configure = null,
+                                   Texture strobe = null, int firstChannel = 1)
         {
             var shader = Shader.Find(probe);
             Assert.IsNotNull(shader, $"the {probe} test shader is not in this project");
@@ -576,7 +578,9 @@ namespace VRSL.URP.Tests
                 material.SetTexture("_VRSLU_DMXGridRenderTexture",         grid);
                 material.SetTexture("_VRSLU_DMXGridRenderTextureMovement", grid);
                 material.SetTexture("_VRSLU_DMXGridSpinTimer",             spin);
-                material.SetVector("_VRSLDMXTexelSize", new Vector4(1f / grid.width, 1f / grid.height, grid.width, grid.height));
+                material.SetTexture("_VRSLU_DMXGridStrobeOutput",          strobe != null ? strobe : Texture2D.whiteTexture);
+                material.SetInteger("_ProbeChannelOffset", firstChannel - 1);
+                material.SetVector("_VRSLDMXTexelSize",new Vector4(1f / grid.width, 1f / grid.height, grid.width, grid.height));
                 material.SetInteger("_VRSLU_DMXGridLayout", (int)layout);
                 material.SetBuffer("_VRSLU_DMXChannels",    manager.ChannelBuffer);
                 material.SetBuffer("_VRSLU_DMXMovement",    manager.MovementBuffer);
@@ -668,6 +672,15 @@ namespace VRSL.URP.Tests
             }
         }
 
+        /// <summary>How many channels a layout's decode textures carry: 13 to a row of
+        /// 2-pixel cells on Horizontal and Vertical, 50 sectors on Legacy.</summary>
+        internal static int Capacity(VRSLGridLayout layout)
+        {
+            if (layout == VRSLGridLayout.Legacy) return 50 * 13;
+            var size = SizeOf(layout);
+            return 13 * size.y / size.x * 13;
+        }
+
         /// <summary>
         /// G17. Every channel the layout carries, painted in its own cell
         /// with a value no neighbour shares, reads back as its own value through the compute
@@ -680,10 +693,9 @@ namespace VRSL.URP.Tests
             [Values(VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy)] VRSLGridLayout layout)
         {
             var size  = SizeOf(layout);
-            // As many channels as the layout carries (2-pixel cells, 13 to a row), up to 1536:
-            // past three universes of 512 the includes split the grid by colour, which is
-            // another question.
-            int count = layout == VRSLGridLayout.Legacy ? PatchedChannels : Mathf.Min(size.y / 2 * 13, 1536);
+            // Every channel the layout carries (2-pixel cells, 13 to a row): on Horizontal
+            // that is the whole of universe 3, up to its last padding slot at 1560.
+            int count = layout == VRSLGridLayout.Legacy ? PatchedChannels : Capacity(layout);
             var rig = VRSLDMXRig.Build();
             VRSLDMXRig.PaintedGrid painted = null;
             RenderTexture white = null;
@@ -750,6 +762,207 @@ namespace VRSL.URP.Tests
                 rig.Dispose();
                 painted?.Dispose();
                 if (white != null) { white.Release(); Object.DestroyImmediate(white); }
+                if (grid != null) Object.DestroyImmediate(grid);
+            }
+        }
+
+        /// <summary>
+        /// G17, nine-universe mode. A Horizontal grid holding three universes per colour
+        /// component (universes 1 to 3 in red, 4 to 6 in green, 7 to 9 in blue), every
+        /// channel of all nine painted with a value of its own, reads back through both
+        /// includes' value, movement and raw reads with the fixture's nine-universe flag on:
+        /// each channel from its own cell's own component. Universes are 520 flat channels,
+        /// so the last eight slots of universes 3, 6 and 9 are where a reader counting
+        /// universes of 512 goes wrong.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G17_nine_universe_mode_reads_each_universe_from_its_own_component()
+        {
+            const VRSLGridLayout layout = VRSLGridLayout.Horizontal;
+            var size  = SizeOf(layout);
+            int cells = Capacity(layout);
+            int count = cells * 3;
+            var rig = VRSLDMXRig.Build();
+            RenderTexture grid = null;
+            try
+            {
+                yield return rig.Step(2);
+                var own    = VRSLDMXRig.OwnCellsOf(cells, layout, size.x, size.y);
+                var values = new float[count];
+                for (int i = 0; i < count; i++) values[i] = ((i * 13) % 251 + 2) / 255f;
+                var pixels = new Color[size.x * size.y];
+                for (int c = 0; c < cells; c++)
+                    pixels[own[c].y * size.x + own[c].x] =
+                        new Color(values[c], values[c + cells], values[c + 2 * cells], 1f);
+                grid = Painted(pixels, size, "Painted nine-universe grid");
+
+                var wrong = new Dictionary<string, List<int>>();
+                foreach (var probe in new[] { "Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads" })
+                {
+                    var reads = ReadThrough(probe, count, grid, grid, rig.Manager, fromBuffer: false, layout,
+                                            m => m.SetInteger("_NineUniverseMode", 1));
+                    string name = probe.Contains("Urp") ? "URP include" : "Built-in include";
+                    for (int i = 0; i < count; i++)
+                        foreach (var (what, read) in new[] { ("value", reads[i].r), ("movement", reads[i].g), ("raw", reads[i].b) })
+                        {
+                            if (Mathf.Abs(read - values[i]) <= Half) continue;
+                            string key = $"{name} {what}";
+                            if (!wrong.TryGetValue(key, out var list)) wrong[key] = list = new List<int>();
+                            list.Add(i + 1);
+                        }
+                }
+
+                Debug.Log($"[G17] nine-universe: {count} channels; "
+                        + (wrong.Count == 0 ? "every read took its channel from its own cell and component"
+                           : string.Join("; ", wrong.Select(w => $"{w.Key} misread {w.Value.Count}: "
+                                                                + string.Join(", ", w.Value.Take(20))))));
+                Assert.IsEmpty(wrong, "nine-universe reads that take a channel from a cell or component not its own: "
+                                    + string.Join("; ", wrong.Select(w => $"{w.Key} on {w.Value.Count} channels, "
+                                                                         + $"first {string.Join(", ", w.Value.Take(12))}")));
+            }
+            finally
+            {
+                rig.Dispose();
+                if (grid != null) { grid.Release(); Object.DestroyImmediate(grid); }
+            }
+        }
+
+        /// <summary>A float grid of the given pixels, point-sampled and clamped.</summary>
+        internal static RenderTexture Painted(Color[] pixels, Vector2Int size, string name)
+        {
+            var source = new Texture2D(size.x, size.y, TextureFormat.RGBAFloat, false, true);
+            try
+            {
+                source.SetPixels(pixels);
+                source.Apply(false);
+                var rt = new RenderTexture(size.x, size.y, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear)
+                         { name = name, filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+                rt.Create();
+                Graphics.CopyTexture(source, rt);
+                return rt;
+            }
+            finally { Object.DestroyImmediate(source); }
+        }
+
+        /// <summary>A grid of one colour in every texel.</summary>
+        internal static RenderTexture Filled(Color colour, Vector2Int size, string name)
+        {
+            var pixels = new Color[size.x * size.y];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = colour;
+            return Painted(pixels, size, name);
+        }
+
+        /// <summary>The channels G20 asks about on <paramref name="layout"/>: the unpatched
+        /// channel 0, and channels past what the layout carries, the first of them, the next
+        /// sector's, and some way beyond.</summary>
+        internal static int[] Uncarried(VRSLGridLayout layout)
+        {
+            int cap = Capacity(layout);
+            return new[] { 0, cap + 1, cap + 2, cap + 7, cap + 13, cap + 14, cap + 200, 2 * cap + 5 };
+        }
+
+        /// <summary>
+        /// G20. A channel the grid doesn't carry reads as a channel at 0 in every reader:
+        /// value, movement and spin 0, strobe open. That is channel 0 (an unpatched fixture)
+        /// and every channel past the layout's last cell. The grid is painted grey in every
+        /// texel and its strobe closed everywhere, so a reader landing on any cell, clamped
+        /// edge or another universe's, reads something else. Through the compute's four reads,
+        /// both includes' and the public include's (the last drawn as a scene renderer, so it
+        /// reads what the manager publishes). Channels the grid does carry are checked beside
+        /// them: grey and strobe closed.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G20_a_channel_the_grid_does_not_carry_reads_as_zero_in_every_reader(
+            [Values(VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy)] VRSLGridLayout layout)
+        {
+            const float Grey = 0.6f;
+            var size  = SizeOf(layout);
+            int cap   = Capacity(layout);
+            var none  = Uncarried(layout);
+            var some  = new[] { 1, 7, 13, cap - 12, cap };
+            int span  = none.Max() + 1;
+            var rig   = VRSLDMXRig.Build();
+            RenderTexture grey = null, closed = null;
+            VRSLGridTextures grid = null;
+            VRSLDmxReadProbe probe = null;
+            try
+            {
+                yield return rig.Step(2);
+                grey   = Filled(new Color(Grey, Grey, Grey, 1f), size, "Grey test grid");
+                closed = Filled(Color.black, size, "Closed strobe test grid");
+                grid   = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                var set = new VRSLGridTextures.Set
+                {
+                    main = grey, raw = grey, movement = grey, strobe = closed, spinTimer = grey,
+                };
+                grid.horizontal = grid.vertical = grid.legacy = set;
+                rig.Manager.ChannelSource = null;
+                rig.Manager.enabled       = false;
+                rig.Manager.gridTextures  = grid;
+                rig.Manager.dmxInput      = (VRSLDmxInput)layout;
+                rig.Manager.enabled       = true;
+                probe = VRSLDmxReadProbe.Create(rig, span);
+                yield return rig.Step(3);
+                Assert.AreEqual(0, rig.Manager.ChannelCount, "the manager is still reading the channel buffer");
+                Assert.AreEqual((VRSLGridLayout?)layout, rig.Manager.GridLayout);
+
+                // reader -> (channel -> (value-like reads, strobe))
+                var readers = new Dictionary<string, System.Func<int, (float[] values, float strobe)>>();
+                var compute = Enumerable.Range(0, 4).Select(r => rig.ReadComputeReads(0, span, r)).ToArray();
+                readers["compute"] = ch => (new[] { compute[0][ch], compute[1][ch], compute[2][ch] }, compute[3][ch]);
+                foreach (var name in new[] { "Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads" })
+                {
+                    var reads = ReadThrough(name, span, grey, grey, rig.Manager, fromBuffer: false, layout,
+                                            strobe: closed, firstChannel: 0);
+                    readers[name.Contains("Urp") ? "URP include" : "Built-in include"] =
+                        ch => (new[] { reads[ch].r, reads[ch].g, reads[ch].b }, reads[ch].a);
+                }
+                foreach (bool vertex in new[] { false, true })
+                {
+                    var reads = probe.Read(rig, vertex, colour: false, first: 0);
+                    readers[$"public include, {(vertex ? "vertex" : "fragment")}"] =
+                        ch => (new[] { reads[ch].r, reads[ch].g }, reads[ch].b);
+                }
+
+                var wrong = new List<string>();
+                foreach (var reader in readers)
+                {
+                    foreach (int ch in none)
+                    {
+                        var (values, strobe) = reader.Value(ch);
+                        if (values.Any(v => Mathf.Abs(v) > Half) || Mathf.Abs(strobe - 1f) > Half)
+                            wrong.Add($"{reader.Key} reads ch {ch} as [{string.Join(", ", values.Select(v => (v * 255f).ToString("F1")))}]"
+                                    + $", strobe {strobe:F2}");
+                    }
+                    foreach (int ch in some)
+                    {
+                        var (values, strobe) = reader.Value(ch);
+                        if (values.Any(v => Mathf.Abs(v - Grey) > Half) || Mathf.Abs(strobe) > Half)
+                            wrong.Add($"{reader.Key} misreads carried ch {ch}: [{string.Join(", ", values.Select(v => (v * 255f).ToString("F1")))}]"
+                                    + $", strobe {strobe:F2}");
+                    }
+                }
+
+                // A fixture patched wholly past the grid is black.
+                foreach (bool vertex in new[] { false, true })
+                {
+                    var colour = probe.Read(rig, vertex, colour: true, first: 0);
+                    var c = colour[cap + 1];
+                    if (c.r > Half || c.g > Half || c.b > Half)
+                        wrong.Add($"public include colour, {(vertex ? "vertex" : "fragment")}, for a fixture at ch {cap + 1}: {c}");
+                }
+
+                Debug.Log($"[G20] {layout}: capacity {cap}; "
+                        + (wrong.Count == 0 ? "every reader reads the uncarried channels as 0" : string.Join("; ", wrong.Take(20))));
+                Assert.IsEmpty(wrong, $"{layout}: {wrong.Count} reads of channels the grid doesn't carry: "
+                                    + string.Join("; ", wrong.Take(24)));
+            }
+            finally
+            {
+                probe?.Dispose();
+                rig.Dispose();
+                foreach (var rt in new[] { grey, closed })
+                    if (rt != null) { rt.Release(); Object.DestroyImmediate(rt); }
                 if (grid != null) Object.DestroyImmediate(grid);
             }
         }

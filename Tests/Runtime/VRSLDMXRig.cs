@@ -86,6 +86,7 @@ namespace VRSL.URP.Tests
         Light         _sunWas;
         bool          _fogWas;
         int           _validateKernel = -1;
+        int           _readsKernel    = -1;
         GraphicsBuffer _dummyChannels;
         int[]         _map;
 
@@ -897,6 +898,52 @@ namespace VRSL.URP.Tests
             cs.SetVector("_VRSLDMXTexelSize", new Vector4(
                 1f / grid.width, 1f / grid.height, grid.width, grid.height));
             return Validate(cs, count);
+        }
+
+        /// <summary>The compute's own reads, the ones the realtime lights take, for channels
+        /// <paramref name="start"/> onwards (0 is a channel too, the unpatched one): 0 the
+        /// colour and intensity value, 1 movement, 2 spin phase, 3 strobe (1 open). From
+        /// whatever the manager reads, the grid textures it holds or the channel buffer while
+        /// one is live, with the strobe clock and settings the shaders were last given.</summary>
+        public float[] ReadComputeReads(int start, int count, int read)
+        {
+            var cs = Manager.computeShader;
+            Assert(cs != null, "the manager has no compute shader");
+            if (_readsKernel < 0) _readsKernel = cs.FindKernel("ValidateReads");
+            _dummyChannels ??= new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, sizeof(uint));
+
+            var live = Manager.LiveTextures;
+            Texture Or(RenderTexture rt) => rt != null ? rt : Texture2D.blackTexture;
+            cs.SetTexture(_readsKernel, "_DMXMainTex",      Or(live.main));
+            cs.SetTexture(_readsKernel, "_DMXMovementTex",  Or(live.movement));
+            cs.SetTexture(_readsKernel, "_DMXStrobeTex",    Or(live.strobe));
+            cs.SetTexture(_readsKernel, "_DMXSpinTimerTex", Or(live.spinTimer));
+            cs.SetBuffer(_readsKernel, "_VRSLU_DMXChannels",    Manager.ChannelBuffer     ?? _dummyChannels);
+            cs.SetBuffer(_readsKernel, "_VRSLU_DMXMovement",    Manager.MovementBuffer    ?? _dummyChannels);
+            cs.SetBuffer(_readsKernel, "_VRSLU_DMXSpinPhase",   Manager.SpinPhaseBuffer   ?? _dummyChannels);
+            cs.SetBuffer(_readsKernel, "_VRSLU_DMXStrobePhase", Manager.StrobePhaseBuffer ?? _dummyChannels);
+            cs.SetInt("_VRSLU_DMXChannelCount", Manager.ChannelCount);
+            cs.SetInt("_VRSLU_DMXGridLayout", (int)(Manager.GridLayout ?? VRSLGridLayout.Horizontal));
+            var size = live.main != null ? new Vector2(live.main.width, live.main.height) : Vector2.one;
+            cs.SetVector("_VRSLDMXTexelSize", new Vector4(1f / size.x, 1f / size.y, size.x, size.y));
+            cs.SetInt("_VRSLU_StrobeStatic",   Shader.GetGlobalInteger("_VRSLU_StrobeStatic"));
+            cs.SetVector("_VRSLU_StrobeFreqs", Shader.GetGlobalVector("_VRSLU_StrobeFreqs"));
+            cs.SetFloat("_VRSLU_TimeY",        Shader.GetGlobalFloat("_VRSLU_TimeY"));
+            cs.SetInt("_VRSLU_StrobeDisabled", Shader.GetGlobalInteger("_VRSLU_StrobeDisabled"));
+            cs.SetInt("_VRSLU_ValidationRead", read);
+
+            var readback = new GraphicsBuffer(GraphicsBuffer.Target.Structured, count, sizeof(float));
+            var values = new float[count];
+            try
+            {
+                cs.SetBuffer(_readsKernel, "_VRSLU_ValidationOut", readback);
+                cs.SetInt("_VRSLU_ValidationStart", start);
+                cs.SetInt("_VRSLU_ValidationCount", count);
+                cs.Dispatch(_readsKernel, Mathf.CeilToInt(count / 64f), 1, 1);
+                readback.GetData(values);
+            }
+            finally { readback.Release(); }
+            return values;
         }
 
         /// <summary>Run the validation kernel over channels 1..<paramref name="count"/>
