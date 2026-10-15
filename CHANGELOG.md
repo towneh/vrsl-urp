@@ -12,7 +12,7 @@
 
 ### Removed
 
-- **The superseded per-layout prefabs.** The Legacy and Vertical fixture and manager prefabs under `Runtime/Prefabs/DMX/Superseded/`, the eighteen materials and two textures only they used, and **VRSL → URP → Replace Superseded Prefabs in Scene** are gone. A scene still holding one of those prefabs shows a Missing Prefab in its place, and running the migration tool over it again adds a second fixture beside each one. Open such a scene with 0.3.0-rc.4 or earlier and run the replace menu first.
+- **The superseded per-layout prefabs.** The Legacy and Vertical fixture and manager prefabs under `Runtime/Prefabs/DMX/Superseded/`, every Legacy and Vertical fixture material, two textures only those used, and **VRSL → URP → Replace Superseded Prefabs in Scene** are gone. A scene still holding one of those prefabs shows a Missing Prefab in its place, and running the migration tool over it again adds a second fixture beside each one. Open such a scene with 0.3.0-rc.4 or earlier and run the replace menu first.
 
 - **The `VRSL-URP/Other/Standard` shader.** It was a copy of URP's Lit shader, so the package's five materials that used it (the discoball sphere, the example truss and the three AudioLink controller materials) now use URP Lit itself and look the same. A material of your own on it shows pink: switch it to `Universal Render Pipeline/Lit`, which takes the same properties.
 
