@@ -61,7 +61,7 @@ namespace VRSL.URP.Tests
             foreach (var path in ParsAndBlinders)
             {
                 var prefab = Load(path);
-                var light  = prefab.GetComponent<VRStageLighting_DMX_RealtimeLight>();
+                var light  = prefab.GetComponent<VRSLDMXRealtimeLight>();
                 Assert.IsNotNull(light, $"{path} has no realtime light on its root");
                 CollectionAssert.AreEquivalent(prefab.GetComponentsInChildren<MeshRenderer>(true),
                     light.fixtureShellRenderers ?? new MeshRenderer[0],
@@ -73,7 +73,7 @@ namespace VRSL.URP.Tests
                 var go = Object.Instantiate(prefab);
                 try
                 {
-                    var woken = go.GetComponent<VRStageLighting_DMX_RealtimeLight>();
+                    var woken = go.GetComponent<VRSLDMXRealtimeLight>();
                     foreach (var r in woken.fixtureShellRenderers)
                     {
                         Assert.IsTrue(r.HasPropertyBlock(), $"{path}: {r.name} was not driven on wake");
@@ -104,7 +104,7 @@ namespace VRSL.URP.Tests
                 rig.Source.pattern   = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
                 rig.Source.universes = 1;
 
-                var placed = new List<(string path, VRStageLighting_DMX_RealtimeLight light)>();
+                var placed = new List<(string path, VRSLDMXRealtimeLight light)>();
                 int i = 0;
                 foreach (var path in FiveChannel)
                 {
@@ -112,7 +112,7 @@ namespace VRSL.URP.Tests
                     // Well away from the rig's own fixtures, so each record is told apart
                     // by where its light sits.
                     go.transform.localPosition = new Vector3(100f + 10f * i, 1.5f, 0f);
-                    var light = go.GetComponent<VRStageLighting_DMX_RealtimeLight>();
+                    var light = go.GetComponent<VRSLDMXRealtimeLight>();
                     light.useLegacySectorMode = true;
                     light.sector = 3 + 3 * i;
                     placed.Add((path, light));
@@ -159,14 +159,14 @@ namespace VRSL.URP.Tests
             try
             {
                 yield return rig.Step(2);
-                var placed = new List<(string path, VRStageLighting_DMX_RealtimeLight light)>();
+                var placed = new List<(string path, VRSLDMXRealtimeLight light)>();
                 for (int i = 0; i < paths.Length; i++)
                 {
                     var go = Object.Instantiate(Load(paths[i]), rig.Floor.transform.parent);
                     // Upright, a par's lens faces the floor and the camera sees its rim.
                     go.transform.SetPositionAndRotation(new Vector3(100f + 1.6f * i, 1.5f, 0f),
                                                         Quaternion.Euler(90f, 0f, 0f));
-                    var light = go.GetComponent<VRStageLighting_DMX_RealtimeLight>();
+                    var light = go.GetComponent<VRSLDMXRealtimeLight>();
                     light.useLegacySectorMode = true;
                     light.sector = 2 + 2 * i;
                     // Held on, so lit or dark is the dimmer's alone.
@@ -272,7 +272,7 @@ namespace VRSL.URP.Tests
                 var go = Object.Instantiate(Load(ParsAndBlinders[0]), rig.Floor.transform.parent);
                 // Turned so its lens faces the camera, as in J2.
                 go.transform.SetPositionAndRotation(new Vector3(100f, 1.5f, 0f), Quaternion.Euler(90f, 0f, 0f));
-                var par = go.GetComponent<VRStageLighting_DMX_RealtimeLight>();
+                var par = go.GetComponent<VRSLDMXRealtimeLight>();
                 par.useLegacySectorMode = true;
                 par.sector = 3;
                 par.enableStrobe = false;

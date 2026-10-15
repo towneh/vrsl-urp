@@ -21,14 +21,14 @@ namespace VRSL.URP.Tests
 
         /// <summary>Hang a discoball from the prefab above the rig's floor, patched at
         /// the channel whose dimmer the Fixtures pattern holds at full.</summary>
-        static VRStageLighting_DMX_RealtimeLight Hang(VRSLDMXRig rig, float spinDegPerSec)
+        static VRSLDMXRealtimeLight Hang(VRSLDMXRig rig, float spinDegPerSec)
         {
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefab);
             Assert.IsNotNull(prefab, $"the discoball prefab is not at {Prefab}");
             var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
             go.name = "Discoball";
             go.transform.position = rig.Floor.transform.position + new Vector3(0f, 3f, 0f);
-            var ball = go.GetComponent<VRStageLighting_DMX_RealtimeLight>();
+            var ball = go.GetComponent<VRSLDMXRealtimeLight>();
             Assert.IsNotNull(ball, "the discoball prefab carries no realtime light");
             Assert.AreEqual(DMXFixtureType.Discoball, ball.fixtureType, "the prefab is not a discoball");
             // The Fixtures pattern holds every thirteenth channel's dimmer at full, so a
@@ -157,7 +157,7 @@ namespace VRSL.URP.Tests
             Assert.IsNotNull(prefab, $"the discoball prefab is not at {Prefab}");
             var sphere = prefab.transform.Find("Discoball-Sphere");
             Assert.IsNotNull(sphere, "the discoball prefab has no Discoball-Sphere");
-            Assert.AreSame(sphere, prefab.GetComponent<VRStageLighting_DMX_RealtimeLight>().lensTransform,
+            Assert.AreSame(sphere, prefab.GetComponent<VRSLDMXRealtimeLight>().lensTransform,
                 "the discoball prefab's lensTransform is not its sphere, so nothing turns the ball");
             AssertMirror(sphere.GetComponent<MeshRenderer>().sharedMaterial);
         }

@@ -14,7 +14,7 @@ namespace VRSL.URP
         Treble
     }
 
-    public class VRStageLighting_AudioLink_Static : MonoBehaviour
+    public class VRSLAudioLinkStatic : MonoBehaviour
     {
         //////////////////Public Variables////////////////////
 
@@ -756,7 +756,7 @@ namespace VRSL.URP
         //EDITOR STUFF
         #if UNITY_EDITOR
 
-        void SetConstraints(VRStageLighting_AudioLink_Static fixture)
+        void SetConstraints(VRSLAudioLinkStatic fixture)
         {
 
             UnityEngine.Animations.ConstraintSource s = new UnityEngine.Animations.ConstraintSource();
@@ -772,7 +772,7 @@ namespace VRSL.URP
             }
             //Debug.Log(fixture.name + " is set to follow " + fixture.targetConstraint.GetSource(0).sourceTransform.name);
         }
-        public void _CheckConstraints(VRStageLighting_AudioLink_Static fixture)
+        public void _CheckConstraints(VRSLAudioLinkStatic fixture)
         {
             if(fixture.targetToFollow != null)
             {

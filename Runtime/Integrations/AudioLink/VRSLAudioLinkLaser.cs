@@ -9,7 +9,7 @@ using UnityEditor;
 #endif
 namespace VRSL.URP
 {
-    public class VRStageLighting_AudioLink_Laser : MonoBehaviour
+    public class VRSLAudioLinkLaser : MonoBehaviour
     {
 
         //////////////////Public Variables////////////////////

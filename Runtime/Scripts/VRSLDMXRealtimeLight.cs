@@ -11,7 +11,7 @@ namespace VRSL.URP
     /// channel data each frame and a fullscreen additive pass renders the lighting.
     ///
     /// This component is the sole authoring surface on URP fixture prefabs —
-    /// no VRStageLighting_DMX_Static sibling participates in the URP path.
+    /// no VRSLDMXStatic sibling participates in the URP path.
     ///
     /// 13-channel layout (relative to the fixture's base DMX channel):
     ///   +0  Pan coarse       +1  Pan fine        +2  Tilt coarse     +3  Tilt fine
@@ -19,7 +19,7 @@ namespace VRSL.URP
     ///   +8  Green            +9  Blue             +10 Gobo spin       +11 Gobo select
     /// </summary>
     [AddComponentMenu("VRSL/DMX Realtime Light")]
-    public class VRStageLighting_DMX_RealtimeLight : MonoBehaviour, IVRSLRealtimeLight
+    public class VRSLDMXRealtimeLight : MonoBehaviour, IVRSLRealtimeLight
     {
         // ──────────────────────────────────────────────────────────────────────────
         // Fixture type — drives inspector field visibility
@@ -31,7 +31,7 @@ namespace VRSL.URP
         public DMXFixtureType fixtureType = DMXFixtureType.MoverSpotlight;
 
         // ──────────────────────────────────────────────────────────────────────────
-        // DMX Addressing — mirrors VRStageLighting_DMX_Static field names/defaults
+        // DMX Addressing — mirrors VRSLDMXStatic field names/defaults
         // ──────────────────────────────────────────────────────────────────────────
         [Tooltip("Enables DMX control for this fixture.")]
         public bool enableDMXChannels = true;
@@ -214,7 +214,7 @@ namespace VRSL.URP
         MaterialPropertyBlock _shellProps;
 
         /// <summary>
-        /// Fires when any inspector field on a VRStageLighting_DMX_RealtimeLight
+        /// Fires when any inspector field on a VRSLDMXRealtimeLight
         /// changes, and from <see cref="ApplyAddress"/>. The URP light manager
         /// subscribes to this so a per-fixture edit (e.g. emitterDepth) or a
         /// runtime re-address marks the GPU config buffer dirty and the
@@ -224,7 +224,7 @@ namespace VRSL.URP
         public static event System.Action ConfigChanged;
 
         /// <summary>
-        /// Fires when any VRStageLighting_DMX_RealtimeLight is switched on or off, by its
+        /// Fires when any VRSLDMXRealtimeLight is switched on or off, by its
         /// component or its GameObject. The manager subscribes and collects its fixtures
         /// again once, before the next frame renders, however many switched.
         /// </summary>
@@ -269,7 +269,7 @@ namespace VRSL.URP
 
             if (_shellProps == null) _shellProps = new MaterialPropertyBlock();
 
-            // Property names and value semantics mirror VRStageLighting_DMX_Static's
+            // Property names and value semantics mirror VRSLDMXStatic's
             // _UpdateInstancedProperties() so the same body shader works under either
             // driver. Fields with no equivalent on this component use sensible
             // defaults (no NineUniverse, no legacy gobo range, no global brightness
@@ -301,7 +301,7 @@ namespace VRSL.URP
             }
         }
 
-        // Matches RawDMXConversion() / SectorConversion() in VRStageLighting_DMX_Static
+        // Matches RawDMXConversion() / SectorConversion() in VRSLDMXStatic
         // so the URP path resolves the same absolute channel index that the legacy
         // shader path would for the same addressing inputs.
         public int ComputeAbsoluteChannel()
@@ -312,7 +312,7 @@ namespace VRSL.URP
         }
     }
 
-    /// <summary>Fixture archetype for <see cref="VRStageLighting_DMX_RealtimeLight"/>.
+    /// <summary>Fixture archetype for <see cref="VRSLDMXRealtimeLight"/>.
     /// Drives inspector field visibility — movers expose pan/tilt, spotlights expose
     /// gobo selection, static fixtures hide both. StaticPointLight additionally emits
     /// omnidirectionally — the manager forces point-light mode for it, so the inspector

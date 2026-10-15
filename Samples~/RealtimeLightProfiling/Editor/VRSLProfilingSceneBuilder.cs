@@ -286,8 +286,8 @@ namespace VRSL.URP.Profiling.Editor
             }
         }
 
-        // Both VRStageLighting_DMX_Static (shader-driven fixtures) and
-        // VRStageLighting_DMX_RealtimeLight (realtime lights) expose
+        // Both VRSLDMXStatic (shader-driven fixtures) and
+        // VRSLDMXRealtimeLight (realtime lights) expose
         // identically-named SerializedProperty paths for sector addressing,
         // so a single sweep across MonoBehaviours on the prefab handles both
         // fixture families without taking a hard reference to either type.

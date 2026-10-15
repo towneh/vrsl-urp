@@ -62,7 +62,7 @@ namespace VRSL.URP.Tests
 
         public VRSL_DMXURPLightManager             Manager { get; private set; }
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
-        public readonly List<VRStageLighting_DMX_RealtimeLight> Fixtures = new();
+        public readonly List<VRSLDMXRealtimeLight> Fixtures = new();
 
         GameObject    _root;
         Camera        _camera;
@@ -309,7 +309,7 @@ namespace VRSL.URP.Tests
                 // Legacy sector mode walks the flat space directly, which is what
                 // every row's prediction assumes. The universe field only exists
                 // on the non-legacy path and is exercised separately.
-                foreach (var f in go.GetComponentsInChildren<VRStageLighting_DMX_RealtimeLight>())
+                foreach (var f in go.GetComponentsInChildren<VRSLDMXRealtimeLight>())
                 {
                     f.useLegacySectorMode = true;
                     f.sector = i;

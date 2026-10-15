@@ -4,9 +4,9 @@ using UnityEngine;
 
 namespace VRSL.URP
 {
-    [CustomEditor(typeof(VRStageLighting_DMX_RealtimeLight))]
+    [CustomEditor(typeof(VRSLDMXRealtimeLight))]
     [CanEditMultipleObjects]
-    public class VRStageLighting_DMX_RealtimeLightEditor : Editor
+    public class VRSLDMXRealtimeLightEditor : Editor
     {
         GUIStyle _sectionLabel;
 

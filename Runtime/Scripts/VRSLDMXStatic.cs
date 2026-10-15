@@ -9,7 +9,7 @@ using UnityEditor;
 
 namespace VRSL.URP
 {
-    public class VRStageLighting_DMX_Static : MonoBehaviour
+    public class VRSLDMXStatic : MonoBehaviour
     {
         //////////////////Public Variables////////////////////
         [Header("DMX Settings")]

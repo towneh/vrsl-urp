@@ -15,7 +15,7 @@ namespace VRSL.URP
     /// <summary>
     /// Singleton manager for the URP realtime light path (DMX data source).
     ///
-    /// Collects every VRStageLighting_DMX_RealtimeLight in the scene, uploads
+    /// Collects every VRSLDMXRealtimeLight in the scene, uploads
     /// their static configuration to a GPU StructuredBuffer once (and again
     /// whenever a fixture's settings change), and exposes the persistent
     /// GraphicsBuffers and DMX texture RTHandles that the VRSLDMXLightPasses
@@ -433,7 +433,7 @@ namespace VRSL.URP
             public Vector4 spotParams;
         }
 
-        List<VRStageLighting_DMX_RealtimeLight> _fixtures = new();
+        List<VRSLDMXRealtimeLight> _fixtures = new();
         bool _configDirty = true;
 
         // The input the owner last bound, so a dmxInput changed by anything (the
@@ -611,8 +611,8 @@ namespace VRSL.URP
             EnsureMovementBuffer(0);
             EnsureUniverseStepBuffer(0);
             SubscribeRuntimeInjection();
-            VRStageLighting_DMX_RealtimeLight.ConfigChanged  += OnFixtureConfigChanged;
-            VRStageLighting_DMX_RealtimeLight.EnabledChanged += OnFixtureEnabledChanged;
+            VRSLDMXRealtimeLight.ConfigChanged  += OnFixtureConfigChanged;
+            VRSLDMXRealtimeLight.EnabledChanged += OnFixtureEnabledChanged;
         }
 
         void OnDisable()
@@ -623,8 +623,8 @@ namespace VRSL.URP
             // fire, because Instance is never null for it to claim.
             bool wasOwner = Instance == this;
             if (wasOwner) Instance = null;
-            VRStageLighting_DMX_RealtimeLight.ConfigChanged  -= OnFixtureConfigChanged;
-            VRStageLighting_DMX_RealtimeLight.EnabledChanged -= OnFixtureEnabledChanged;
+            VRSLDMXRealtimeLight.ConfigChanged  -= OnFixtureConfigChanged;
+            VRSLDMXRealtimeLight.EnabledChanged -= OnFixtureEnabledChanged;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;
@@ -711,7 +711,7 @@ namespace VRSL.URP
         }
 
 
-        // Inspector tweak on any VRStageLighting_DMX_RealtimeLight in the scene.
+        // Inspector tweak on any VRSLDMXRealtimeLight in the scene.
         // Mark dirty so the next LateUpdate re-uploads the config buffer with the
         // new field values (emitterDepth, range, spot angles, etc.).
         void OnFixtureConfigChanged() => MarkConfigDirty();
@@ -1187,7 +1187,7 @@ namespace VRSL.URP
         bool[]   _dataTimeSeen;
 
         // ── Public ────────────────────────────────────────────────────────────
-        /// <summary>Look through the scene for the VRStageLighting_DMX_RealtimeLight
+        /// <summary>Look through the scene for the VRSLDMXRealtimeLight
         /// fixtures that are switched on and rebuild the GPU buffers from them. The
         /// manager does this itself whenever a fixture is switched on or off, so nothing
         /// needs to call it; calling it anyway does no harm.</summary>
@@ -1199,11 +1199,11 @@ namespace VRSL.URP
 
         /// <summary>Every DMX realtime light whose component and GameObject are both
         /// on. A fixture with its component switched off casts no light.</summary>
-        void Collect(List<VRStageLighting_DMX_RealtimeLight> into)
+        void Collect(List<VRSLDMXRealtimeLight> into)
         {
             FixtureScans++;
             into.Clear();
-            foreach (var f in FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Exclude))
+            foreach (var f in FindObjectsByType<VRSLDMXRealtimeLight>(FindObjectsInactive.Exclude))
                 if (f.enabled) into.Add(f);
         }
 
@@ -1347,8 +1347,8 @@ namespace VRSL.URP
             MarkConfigDirty();
         }
 
-        List<VRStageLighting_DMX_RealtimeLight> _found = new();
-        readonly HashSet<VRStageLighting_DMX_RealtimeLight> _foundFixtures = new();
+        List<VRSLDMXRealtimeLight> _found = new();
+        readonly HashSet<VRSLDMXRealtimeLight> _foundFixtures = new();
 
         /// <summary>Collect the fixtures again, and rebuild only when they are not the
         /// ones already held. A switch of input usually leaves the same fixtures lit, a
@@ -1407,7 +1407,7 @@ namespace VRSL.URP
             FixtureConfigBuffer.SetData(configs);
         }
 
-        VRSLFixtureConfig BuildConfig(VRStageLighting_DMX_RealtimeLight f)
+        VRSLFixtureConfig BuildConfig(VRSLDMXRealtimeLight f)
         {
             // Light origin priority:
             //  1. lensTransform — explicit per-fixture anchor (truss-clamp prefabs etc.).
@@ -1880,7 +1880,7 @@ namespace VRSL.URP
             }
 
             if (FixtureCount == 0)
-                sb.AppendLine("  Fixtures: NONE — no VRStageLighting_DMX_RealtimeLight in the "
+                sb.AppendLine("  Fixtures: NONE — no VRSLDMXRealtimeLight in the "
                             + "scene is switched on. The manager picks fixtures up as they're "
                             + "switched on, so check they're on, component and GameObject, and "
                             + "that they're DMX fixtures rather than AudioLink ones.");

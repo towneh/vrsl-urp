@@ -9,14 +9,14 @@ namespace VRSL.URP
     /// Attach this alongside a Unity Light component on each fixture that should
     /// contribute genuine scene illumination driven by AudioLink amplitude and color data.
     /// This component is the sole authoring surface on URP fixture prefabs —
-    /// no VRStageLighting_AudioLink_Static sibling participates in the URP path.
+    /// no VRSLAudioLinkStatic sibling participates in the URP path.
     ///
     /// For moving-head fixtures: assign panTransform and tiltTransform.
     /// VRSL_AudioLinkURPLightManager reads their world-space transforms every frame,
     /// so animations driving the pan/tilt hierarchy automatically drive the light direction.
     /// </summary>
     [AddComponentMenu("VRSL/AudioLink Realtime Light")]
-    public class VRStageLighting_AudioLink_RealtimeLight : MonoBehaviour, IVRSLRealtimeLight
+    public class VRSLAudioLinkRealtimeLight : MonoBehaviour, IVRSLRealtimeLight
     {
         // ── Fixture type ──────────────────────────────────────────────────────
         [Tooltip("Selects the fixture archetype this component represents. Drives "
@@ -162,7 +162,7 @@ namespace VRSL.URP
         MaterialPropertyBlock _shellProps;
 
         /// <summary>
-        /// Fires when any VRStageLighting_AudioLink_RealtimeLight is switched on or off, by
+        /// Fires when any VRSLAudioLinkRealtimeLight is switched on or off, by
         /// its component or its GameObject. The manager subscribes and collects its
         /// fixtures again once, before the next frame renders, however many switched.
         /// </summary>
@@ -282,7 +282,7 @@ namespace VRSL.URP
 
     }
 
-    /// <summary>Fixture archetype for <see cref="VRStageLighting_AudioLink_RealtimeLight"/>.
+    /// <summary>Fixture archetype for <see cref="VRSLAudioLinkRealtimeLight"/>.
     /// Drives inspector field visibility — movers expose pan/tilt, spotlights expose gobo
     /// selection, static fixtures hide both. Custom keeps every section visible for
     /// authoring novel fixtures that don't fit the four built-in shapes.</summary>
@@ -299,7 +299,7 @@ namespace VRSL.URP
         Discoball      = 5,
     }
 
-    /// <summary>Color source for <see cref="VRStageLighting_AudioLink_RealtimeLight"/>.</summary>
+    /// <summary>Color source for <see cref="VRSLAudioLinkRealtimeLight"/>.</summary>
     public enum ALRealtimeColorMode
     {
         Emission                = 0,

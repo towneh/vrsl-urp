@@ -36,7 +36,7 @@ namespace VRSL.URP.Tests
                 ball.transform.localPosition = new Vector3(100f, 5.6f, 0f);
                 // Tilted, so a ball turned about the world's up reads as the wrong axis.
                 ball.transform.localRotation = Quaternion.Euler(0f, 0f, 30f);
-                var light = ball.GetComponent<VRStageLighting_AudioLink_RealtimeLight>();
+                var light = ball.GetComponent<VRSLAudioLinkRealtimeLight>();
                 Assert.IsNotNull(light, "the AudioLink discoball prefab carries no realtime light");
                 Assert.AreEqual(AudioLinkFixtureType.Discoball, light.fixtureType, "the prefab is not a discoball");
                 var sphere = ball.transform.Find("Discoball-Sphere");

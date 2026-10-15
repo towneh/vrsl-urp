@@ -24,7 +24,7 @@ namespace VRSL.URP.Tests
             return block.GetInt("_DMXChannel");
         }
 
-        static void AssertShellsOn(VRStageLighting_DMX_RealtimeLight f, int channel, string because)
+        static void AssertShellsOn(VRSLDMXRealtimeLight f, int channel, string because)
         {
             Assert.IsNotEmpty(f.fixtureShellRenderers, "the rig's mover has no body renderers to judge");
             foreach (var r in f.fixtureShellRenderers)
@@ -86,8 +86,8 @@ namespace VRSL.URP.Tests
             try
             {
                 yield return null;                              // Start sets the first block
-                var f = go.GetComponentInChildren<VRStageLighting_DMX_Static>();
-                Assert.IsNotNull(f, "the flasher prefab has no VRStageLighting_DMX_Static");
+                var f = go.GetComponentInChildren<VRSLDMXStatic>();
+                Assert.IsNotNull(f, "the flasher prefab has no VRSLDMXStatic");
                 Assert.Greater(f.objRenderers.Length, 1, "the row wants a fixture with more than one renderer");
                 foreach (var r in f.objRenderers)
                     Assert.AreEqual(1, ShellChannel(r), "the flasher ships on channel 1");

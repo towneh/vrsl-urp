@@ -96,7 +96,7 @@ namespace VRSL.URP.EditorScripts
 
             bool dmxHasFixtures = Application.isPlaying
                 ? dmx != null && dmx.FixtureCount > 0
-                : Object.FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(
+                : Object.FindObjectsByType<VRSLDMXRealtimeLight>(
                       FindObjectsInactive.Exclude).Length > 0;
 
             report.AppendLine("Where VRSL's surface normals come from:");
@@ -511,7 +511,20 @@ namespace VRSL.URP.EditorScripts
         /// </summary>
         static bool IsPackageShader(string name) => name.Contains("VRSL-URP");
 
-        /// <summary>Renderers below a VRSL fixture in the open scene.</summary>
+        /// <summary>
+        /// The package's fixture components, by name: the AudioLink ones live in an assembly
+        /// this one can't reference.
+        /// </summary>
+        static readonly HashSet<string> FixtureTypeNames = new()
+        {
+            "VRSLDMXRealtimeLight", "VRSLDMXStatic",
+            "VRSLAudioLinkRealtimeLight", "VRSLAudioLinkStatic", "VRSLAudioLinkLaser",
+        };
+
+        /// <summary>
+        /// Renderers below a VRSL fixture in the open scene, this package's or upstream's
+        /// (<c>VRStageLighting_*</c>, not yet migrated).
+        /// </summary>
         static HashSet<Renderer> FixtureRenderers()
         {
             var found = new HashSet<Renderer>();
@@ -519,7 +532,8 @@ namespace VRSL.URP.EditorScripts
                          FindObjectsInactive.Include))
             {
                 if (fixture == null) continue;
-                if (!fixture.GetType().Name.StartsWith("VRStageLighting")) continue;
+                var name = fixture.GetType().Name;
+                if (!FixtureTypeNames.Contains(name) && !name.StartsWith("VRStageLighting")) continue;
                 foreach (var renderer in fixture.GetComponentsInChildren<Renderer>(true))
                     if (renderer != null) found.Add(renderer);
             }

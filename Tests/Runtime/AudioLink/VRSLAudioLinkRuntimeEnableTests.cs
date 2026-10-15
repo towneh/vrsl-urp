@@ -27,7 +27,7 @@ namespace VRSL.URP.Tests
             public VRSLDMXRig Rig;
             public GameObject Root;
             public VRSL_AudioLinkURPLightManager Manager;
-            public readonly List<VRStageLighting_AudioLink_RealtimeLight> Fixtures = new();
+            public readonly List<VRSLAudioLinkRealtimeLight> Fixtures = new();
 
             public void Dispose()
             {
@@ -51,7 +51,7 @@ namespace VRSL.URP.Tests
                     go.transform.SetParent(stage.Root.transform, false);
                     go.transform.localPosition = new Vector3(FirstX + i * Spacing, 5.6f, 0f);
                     go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                    stage.Fixtures.Add(go.AddComponent<VRStageLighting_AudioLink_RealtimeLight>());
+                    stage.Fixtures.Add(go.AddComponent<VRSLAudioLinkRealtimeLight>());
                 }
                 var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ManagerPrefab);
                 Assert.IsNotNull(prefab, ManagerPrefab);
@@ -149,7 +149,7 @@ namespace VRSL.URP.Tests
                     var go = new GameObject($"Room fixture ({i:000})");
                     go.transform.SetParent(holder.transform, false);
                     go.transform.localPosition = new Vector3(FirstX + i * Spacing, 5.6f, 12f);
-                    go.AddComponent<VRStageLighting_AudioLink_RealtimeLight>();
+                    go.AddComponent<VRSLAudioLinkRealtimeLight>();
                     extra.Add(go);
                 }
                 yield return s.Rig.Step(2);

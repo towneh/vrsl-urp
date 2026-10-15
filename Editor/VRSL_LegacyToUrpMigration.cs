@@ -50,10 +50,10 @@ namespace VRSL.URP.EditorScripts
         // This package's AudioLink components live in an assembly that compiles only where
         // AudioLink is installed, so they are looked up by name too; UrpType answers null
         // without AudioLink and the AudioLink fixtures are left for a later run.
-        const string URP_DMX_STATIC   = "VRSL.URP.VRStageLighting_DMX_Static";
-        const string URP_AL_STATIC    = "VRSL.URP.VRStageLighting_AudioLink_Static";
-        const string URP_AL_REALTIME  = "VRSL.URP.VRStageLighting_AudioLink_RealtimeLight";
-        const string URP_AL_LASER     = "VRSL.URP.VRStageLighting_AudioLink_Laser";
+        const string URP_DMX_STATIC   = "VRSL.URP.VRSLDMXStatic";
+        const string URP_AL_STATIC    = "VRSL.URP.VRSLAudioLinkStatic";
+        const string URP_AL_REALTIME  = "VRSL.URP.VRSLAudioLinkRealtimeLight";
+        const string URP_AL_LASER     = "VRSL.URP.VRSLAudioLinkLaser";
 
         // Upstream component FullName -> URP twin FullName, for the in-place conversion path. Both
         // twins keep the upstream field layout, so values copy across by name with no translation.
@@ -497,10 +497,10 @@ namespace VRSL.URP.EditorScripts
 
         static void CopyDmxParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset)
         {
-            var dst = target.GetComponentInChildren<VRStageLighting_DMX_RealtimeLight>(includeInactive: true);
+            var dst = target.GetComponentInChildren<VRSLDMXRealtimeLight>(includeInactive: true);
             if (dst == null)
             {
-                CopyTwinParameters(source, target, UPSTREAM_DMX_STATIC, typeof(VRStageLighting_DMX_Static));
+                CopyTwinParameters(source, target, UPSTREAM_DMX_STATIC, typeof(VRSLDMXStatic));
                 return;
             }
 
@@ -530,7 +530,7 @@ namespace VRSL.URP.EditorScripts
             CopyField(srcStatic, dst, "maxMinTilt");
 
             dst.shellEmissionTint = ScaledTint(srcStatic, sourceAsset, UPSTREAM_DMX_STATIC,
-                targetAsset.GetComponentInChildren<VRStageLighting_DMX_RealtimeLight>(true).shellEmissionTint);
+                targetAsset.GetComponentInChildren<VRSLDMXRealtimeLight>(true).shellEmissionTint);
             CopyField(srcStatic, dst, srcName: "tiltOffsetBlue",     dstName: "tiltOffset");
             CopyField(srcStatic, dst, srcName: "panOffsetBlueGreen", dstName: "panOffset");
             CopyField(srcStatic, dst, srcName: "enableAutoSpin",     dstName: "enableGoboSpin");

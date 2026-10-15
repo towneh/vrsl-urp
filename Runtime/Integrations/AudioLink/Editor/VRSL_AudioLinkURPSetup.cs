@@ -14,7 +14,7 @@ namespace VRSL.URP.EditorScripts
     ///   root → MoverLightMesh-LampFixture-Base → MoverLightMesh-LampFixture-Head
     ///
     /// For each fixture found the utility:
-    ///   • Adds VRStageLighting_AudioLink_RealtimeLight.
+    ///   • Adds VRSLAudioLinkRealtimeLight.
     ///   • Sets enablePanTilt = true, panTransform = Base, tiltTransform = Head.
     ///
     /// All operations are registered with Undo so they can be reverted in one step.
@@ -52,14 +52,14 @@ namespace VRSL.URP.EditorScripts
                 Transform headXform = headMap[root];
 
                 // Skip if already configured.
-                if (root.GetComponent<VRStageLighting_AudioLink_RealtimeLight>() != null)
+                if (root.GetComponent<VRSLAudioLinkRealtimeLight>() != null)
                 {
                     skipped++;
                     continue;
                 }
 
                 // Add per-fixture realtime light component.
-                var rtLight = Undo.AddComponent<VRStageLighting_AudioLink_RealtimeLight>(root.gameObject);
+                var rtLight = Undo.AddComponent<VRSLAudioLinkRealtimeLight>(root.gameObject);
                 Undo.RecordObject(rtLight, "Configure VRSL AudioLink Realtime Light");
                 rtLight.spotAngle     = 45f;
                 rtLight.range         = 20f;

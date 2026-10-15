@@ -221,7 +221,7 @@ namespace VRSL.URP
             {
                 if (!light.IsDiscoball) continue;
                 _discoballs.Add((light, light.GlobalIntensity));
-                _dmxDiscoballs |= light is VRStageLighting_DMX_RealtimeLight;
+                _dmxDiscoballs |= light is VRSLDMXRealtimeLight;
             }
 
             var seen = new HashSet<Material>();
@@ -598,7 +598,7 @@ namespace VRSL.URP
 
         public void OnEnable()
         {
-            logo = Resources.Load("VRStageLighting-Logo") as Texture;
+            logo = Resources.Load("VRSL-Logo") as Texture;
         }
 
         public static void DrawLogo()

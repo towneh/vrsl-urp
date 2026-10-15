@@ -86,7 +86,7 @@ namespace VRSL.URP
     internal static class VRSLLightPaths
     {
         public static readonly VRSLLightPath Dmx =
-            new("DMX", typeof(VRSL_DMXURPLightManager), typeof(VRStageLighting_DMX_RealtimeLight));
+            new("DMX", typeof(VRSL_DMXURPLightManager), typeof(VRSLDMXRealtimeLight));
 
         static readonly List<VRSLLightPath> s_All = new() { Dmx };
 

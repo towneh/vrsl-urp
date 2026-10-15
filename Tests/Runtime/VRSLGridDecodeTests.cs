@@ -259,13 +259,13 @@ namespace VRSL.URP.Tests
                     var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
                     go.transform.localPosition = new Vector3(2f + i * 1.6f, 1.5f, -6f);
                     go.transform.localRotation = facing == null ? Quaternion.identity : Quaternion.Euler(facing[i]);
-                    foreach (var s in go.GetComponentsInChildren<VRStageLighting_DMX_Static>(true))
+                    foreach (var s in go.GetComponentsInChildren<VRSLDMXStatic>(true))
                     {
                         s.useLegacySectorMode = true;
                         // Applied by the component's own Start, next frame.
                         s.sector = 2 + i + sectorOffset;
                     }
-                    foreach (var f in go.GetComponentsInChildren<VRStageLighting_DMX_RealtimeLight>(true))
+                    foreach (var f in go.GetComponentsInChildren<VRSLDMXRealtimeLight>(true))
                     {
                         f.useLegacySectorMode = true;
                         f.sector = 2 + i + sectorOffset;
@@ -1139,7 +1139,7 @@ namespace VRSL.URP.Tests
                 // Clear of the rig, turned so the side it glows from faces the camera.
                 bar.transform.localPosition = new Vector3(-10f, 1.5f, -6f);
                 bar.transform.localRotation = Quaternion.Euler(UrpIncludeFacing[1]);
-                foreach (var s in bar.GetComponentsInChildren<VRStageLighting_DMX_Static>(true))
+                foreach (var s in bar.GetComponentsInChildren<VRSLDMXStatic>(true))
                 {
                     s.useLegacySectorMode = true;
                     s.sector              = sector;

@@ -9,7 +9,7 @@ namespace VRSL.URP
     /// <summary>
     /// Singleton manager for the URP realtime light path (AudioLink data source).
     ///
-    /// Discovers every VRStageLighting_AudioLink_RealtimeLight in the scene,
+    /// Discovers every VRSLAudioLinkRealtimeLight in the scene,
     /// uploads their per-frame config (position, forward direction, AudioLink params)
     /// to a GPU StructuredBuffer, and exposes the buffers and AudioLink RTHandle
     /// that the VRSLAudioLinkLightPasses pass classes drive through the render
@@ -267,7 +267,7 @@ namespace VRSL.URP
             Vector4 a, b, c, d;
         }
 
-        List<VRStageLighting_AudioLink_RealtimeLight> _fixtures = new();
+        List<VRSLAudioLinkRealtimeLight> _fixtures = new();
         RenderTexture _cachedAudioTex;
         Texture       _cachedSamplingTex;
         // A 1×1 black RenderTexture the manager owns, used as the sampling-slot
@@ -339,7 +339,7 @@ namespace VRSL.URP
         // ── Registration with the package's tools ─────────────────────────────
 
         static readonly VRSLLightPath s_Path = new("AudioLink",
-            typeof(VRSL_AudioLinkURPLightManager), typeof(VRStageLighting_AudioLink_RealtimeLight));
+            typeof(VRSL_AudioLinkURPLightManager), typeof(VRSLAudioLinkRealtimeLight));
 
 #if UNITY_EDITOR
         /// <summary>
@@ -445,7 +445,7 @@ namespace VRSL.URP
             // refresh logic alone can race with rendering on activation frames.
             TryRefreshSamplingTextureHandle();
             SubscribeRuntimeInjection();
-            VRStageLighting_AudioLink_RealtimeLight.EnabledChanged += OnFixtureEnabledChanged;
+            VRSLAudioLinkRealtimeLight.EnabledChanged += OnFixtureEnabledChanged;
         }
 
         // A fixture switched on or off. Collected at the frame's first camera rather than
@@ -462,7 +462,7 @@ namespace VRSL.URP
             // reclaim in OnEnable able to fire at all.
             bool wasOwner = Instance == this;
             if (wasOwner) Instance = null;
-            VRStageLighting_AudioLink_RealtimeLight.EnabledChanged -= OnFixtureEnabledChanged;
+            VRSLAudioLinkRealtimeLight.EnabledChanged -= OnFixtureEnabledChanged;
             _fixtureRefreshPending = false;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
@@ -541,16 +541,16 @@ namespace VRSL.URP
 
         /// <summary>Every AudioLink realtime light whose component and GameObject are
         /// both on. A fixture with its component switched off casts no light.</summary>
-        void Collect(List<VRStageLighting_AudioLink_RealtimeLight> into)
+        void Collect(List<VRSLAudioLinkRealtimeLight> into)
         {
             FixtureScans++;
             into.Clear();
-            foreach (var f in FindObjectsByType<VRStageLighting_AudioLink_RealtimeLight>(FindObjectsInactive.Exclude))
+            foreach (var f in FindObjectsByType<VRSLAudioLinkRealtimeLight>(FindObjectsInactive.Exclude))
                 if (f.enabled) into.Add(f);
         }
 
-        List<VRStageLighting_AudioLink_RealtimeLight> _found = new();
-        readonly HashSet<VRStageLighting_AudioLink_RealtimeLight> _foundFixtures = new();
+        List<VRSLAudioLinkRealtimeLight> _found = new();
+        readonly HashSet<VRSLAudioLinkRealtimeLight> _foundFixtures = new();
 
         /// <summary>Collect the fixtures again, and rebuild only when they are not the
         /// ones already held: a fixture switched off and on again in one frame leaves
@@ -746,7 +746,7 @@ namespace VRSL.URP
         RenderTexture _goboArray;
         bool          _goboWheelComplete = true;
 
-        VRSLALFixtureConfig BuildConfig(VRStageLighting_AudioLink_RealtimeLight f)
+        VRSLALFixtureConfig BuildConfig(VRSLAudioLinkRealtimeLight f)
         {
             Vector3 pos     = f.GetWorldPosition();
             Vector3 forward = f.GetWorldForward();
@@ -943,7 +943,7 @@ namespace VRSL.URP
             }
 
             if (FixtureCount == 0)
-                sb.AppendLine("  Fixtures: NONE — no VRStageLighting_AudioLink_RealtimeLight in "
+                sb.AppendLine("  Fixtures: NONE — no VRSLAudioLinkRealtimeLight in "
                             + "the scene is switched on. The manager picks fixtures up as they're "
                             + "switched on, so check they're on, component and GameObject, and "
                             + "that they're AudioLink fixtures rather than DMX ones.");

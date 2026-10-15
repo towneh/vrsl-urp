@@ -112,7 +112,7 @@ namespace VRSL.URP.Tests
             manager.lightIntensity      = 0.8f;
             manager.volumetricIntensity = 0.6f;
 
-            var discoball = _go.AddComponent<VRStageLighting_AudioLink_RealtimeLight>();
+            var discoball = _go.AddComponent<VRSLAudioLinkRealtimeLight>();
             discoball.enabled         = false;
             discoball.fixtureType     = AudioLinkFixtureType.Discoball;
             discoball.globalIntensity = 0.5f;

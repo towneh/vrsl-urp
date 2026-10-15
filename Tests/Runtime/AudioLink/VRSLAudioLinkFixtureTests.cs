@@ -30,7 +30,7 @@ namespace VRSL.URP.Tests
         {
             _go = new GameObject("vrsl-audiolink-theme");
             _go.SetActive(false);
-            var light = _go.AddComponent<VRStageLighting_AudioLink_RealtimeLight>();
+            var light = _go.AddComponent<VRSLAudioLinkRealtimeLight>();
             var body  = _go.AddComponent<MeshRenderer>();
             light.fixtureShellRenderers = new[] { body };
 
@@ -57,7 +57,7 @@ namespace VRSL.URP.Tests
             _go = new GameObject("vrsl-audiolink-upload");
             var fixtureGo = new GameObject("fixture");
             fixtureGo.transform.SetParent(_go.transform);
-            var light = fixtureGo.AddComponent<VRStageLighting_AudioLink_RealtimeLight>();
+            var light = fixtureGo.AddComponent<VRSLAudioLinkRealtimeLight>();
             light.finalIntensity = 1f;
 
             var manager = _go.AddComponent<VRSL_AudioLinkURPLightManager>();

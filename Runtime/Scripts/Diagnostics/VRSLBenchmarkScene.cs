@@ -287,7 +287,7 @@ namespace VRSL.URP
                 // Legacy sector mode walks the flat channel space directly, so a sector
                 // is all the addressing a fixture needs — but not every sector is
                 // patchable. See SectorFor.
-                foreach (var fixture in instance.GetComponentsInChildren<VRStageLighting_DMX_RealtimeLight>())
+                foreach (var fixture in instance.GetComponentsInChildren<VRSLDMXRealtimeLight>())
                 {
                     fixture.useLegacySectorMode = true;
                     fixture.sector = SectorFor(i);

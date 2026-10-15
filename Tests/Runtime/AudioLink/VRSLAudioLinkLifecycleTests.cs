@@ -45,7 +45,7 @@ namespace VRSL.URP.Tests
                 fixture.transform.SetParent(stage.Root.transform, false);
                 fixture.transform.localPosition = new Vector3(100f, 5.6f, 0f);
                 fixture.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                fixture.AddComponent<VRStageLighting_AudioLink_RealtimeLight>();
+                fixture.AddComponent<VRSLAudioLinkRealtimeLight>();
                 var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(ManagerPrefab);
                 Assert.IsNotNull(prefab, ManagerPrefab);
                 stage.Manager = Object.Instantiate(prefab, stage.Root.transform)

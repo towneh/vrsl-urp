@@ -23,7 +23,7 @@ namespace VRSL.URP.Tests
 
         /// <summary>The prefab instance a rig fixture belongs to: what a world switches
         /// to hide the fixture.</summary>
-        static GameObject InstanceOf(VRSLDMXRig rig, VRStageLighting_DMX_RealtimeLight f)
+        static GameObject InstanceOf(VRSLDMXRig rig, VRSLDMXRealtimeLight f)
         {
             var root = rig.Floor.transform.parent;
             var t = f.transform;
@@ -274,7 +274,7 @@ namespace VRSL.URP.Tests
                     Assert.IsNotNull(prefab, $"{ShaderDriven[i]} is not in the package");
                     var go = Object.Instantiate(prefab, rig.Floor.transform.parent);
                     go.transform.localPosition = new Vector3(2f + i * 1.6f, 1.5f, -6f);
-                    foreach (var s in go.GetComponentsInChildren<VRStageLighting_DMX_Static>(true))
+                    foreach (var s in go.GetComponentsInChildren<VRSLDMXStatic>(true))
                     {
                         s.useLegacySectorMode = true;
                         s.sector = 2 + i;

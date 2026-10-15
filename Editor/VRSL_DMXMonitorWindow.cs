@@ -744,7 +744,7 @@ namespace VRSL.URP.EditorScripts
             if (_patches != null) return;
             _patches = new List<Patch>();
 
-            foreach (var f in Object.FindObjectsByType<VRStageLighting_DMX_RealtimeLight>())
+            foreach (var f in Object.FindObjectsByType<VRSLDMXRealtimeLight>())
             {
                 _patches.Add(new Patch
                 {
@@ -757,7 +757,7 @@ namespace VRSL.URP.EditorScripts
 
             // The static fixture keeps its channel arithmetic private, so it is repeated
             // here from its public fields rather than reached for. Same two expressions.
-            foreach (var f in Object.FindObjectsByType<VRStageLighting_DMX_Static>())
+            foreach (var f in Object.FindObjectsByType<VRSLDMXStatic>())
             {
                 if (!f.enableDMXChannels) continue;
                 int first = f.useLegacySectorMode

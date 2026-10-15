@@ -16,8 +16,8 @@ namespace VRSL.URP
         static Texture _logo;
 
         const string LogoPath =
-            "Packages/town.mr.vrsl-urp/Runtime/Prefabs/Media/VRStageLighting-Logo.png";
-        const string LogoLeaf = "Runtime/Prefabs/Media/VRStageLighting-Logo.png";
+            "Packages/town.mr.vrsl-urp/Runtime/Prefabs/Media/VRSL-Logo.png";
+        const string LogoLeaf = "Runtime/Prefabs/Media/VRSL-Logo.png";
 
         /// <summary>Draws the logo + version bar with trailing spacing. Use as the
         /// first call inside an inspector's OnInspectorGUI.</summary>
