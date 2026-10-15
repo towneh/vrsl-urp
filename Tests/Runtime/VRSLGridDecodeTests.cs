@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The decode in each grid layout and from a channel source, and what the fixtures
-    /// read from each. Rows G6 to G8, G10, G16 to G18 and N29 to N33 of TESTING.md.
+    /// read from each. Rows G6 to G8, G16 to G18 and N29 to N33 of TESTING.md.
     /// </summary>
     class VRSLGridDecodeTests : VRSLDMXTest
     {
@@ -182,29 +182,6 @@ namespace VRSL.URP.Tests
             "VRSL-DMX-Mover-WashLight-13CH.prefab",
             "VRSL-DMX-Static-Blinder-13CH.prefab",
             "VRSL-DMX-Static-ParLight-13CH.prefab",
-        };
-
-        /// <summary>The Legacy fixture prefabs 0.2.0-rc.6 shipped.</summary>
-        static readonly string[] LegacyPrefabs =
-        {
-            "Superseded/VRSL-DMX-Mover-Spotlight-L-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Mover-WashLight-L-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
-        };
-
-        /// <summary>The Vertical fixture prefabs 0.2.0-rc.6 shipped.</summary>
-        static readonly string[] VerticalPrefabs =
-        {
-            "Superseded/VRSL-DMX-Static-Flasher-V-1CH.prefab",
-            "Superseded/VRSL-DMX-Static-Laser-V-13CH.prefab",
-            "Superseded/VRSL-DMX-Static-LightBar-V-13CH.prefab",
-            "Superseded/VRSL-DMX-Static-MultiLightBar-V-15CH.prefab",
-            "Superseded/VRSL-DMX-Static-6x4StrobeLight-V-5CH.prefab",
-            "Superseded/VRSL-DMX-Mover-Spotlight-V-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Mover-WashLight-V-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
         };
 
         /// <summary>Each layout's decode textures are this size, so each is painted at it.</summary>
@@ -406,47 +383,6 @@ namespace VRSL.URP.Tests
             {
                 if (horizontal != null) Object.DestroyImmediate(horizontal);
                 if (other      != null) Object.DestroyImmediate(other);
-            }
-        }
-
-        /// <summary>
-        /// G10. The Legacy and Vertical fixture prefabs 0.2.0-rc.6 shipped, beside a manager
-        /// in their layout, render the same from run to run, taking the layout from the
-        /// manager's global. Strobe held. Against this machine's own previous capture, like
-        /// I1, so the first run seeds and the row after that guards against change.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator G10_the_legacy_and_vertical_prefabs_render_as_before(
-            [Values(VRSLGridLayout.Legacy, VRSLGridLayout.Vertical)] VRSLGridLayout layout)
-        {
-            var values = ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
-            var prefabs = layout == VRSLGridLayout.Legacy ? LegacyPrefabs : VerticalPrefabs;
-            Texture2D frame = null, previous = null;
-            try
-            {
-                yield return CaptureLayout(prefabs, layout, values, t => frame = t);
-                Assert.Greater(LitShare(frame), 0.01f, "the frame is nearly black, so the comparison would prove nothing");
-
-                string path = VRSLImageCompare.LocalPath(VRSLDMXRig.CaptureName($"{layout}-prefabs"));
-                previous = VRSLImageCompare.Load(path);
-                if (previous == null)
-                {
-                    VRSLImageCompare.Save(path, frame);
-                    Assert.Inconclusive($"no previous capture on this machine, so this run seeded one at {path}.");
-                }
-
-                var result = VRSLImageCompare.Compare(previous, frame);
-                Debug.Log($"[G10] {layout} prefabs against the previous capture: {result}");
-                if (result.DifferingPercent > EdgeBudget)
-                    VRSLImageCompare.WriteImages(EvidenceFolder, $"G10-{layout}", previous, frame);
-                Assert.LessOrEqual(result.DifferingPercent, EdgeBudget,
-                    $"the {layout} prefabs render differently from the previous capture ({result}). "
-                  + $"If that was intended, delete {path} to re-seed. Images in {EvidenceFolder}");
-            }
-            finally
-            {
-                if (frame    != null) Object.DestroyImmediate(frame);
-                if (previous != null) Object.DestroyImmediate(previous);
             }
         }
 

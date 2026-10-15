@@ -24,14 +24,8 @@ namespace VRSL.URP.Tests
         {
             "VRSL-DMX-Static-ParLight-13CH.prefab",
             "VRSL-DMX-Static-Blinder-13CH.prefab",
-            "Superseded/VRSL-DMX-Static-ParLight-L-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-Blinder-L-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-ParLight-V-13CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-Blinder-V-13CH-URP.prefab",
             "VRSL-DMX-Static-ParLight-5CH.prefab",
             "VRSL-DMX-Static-Blinder-5CH.prefab",
-            "Superseded/VRSL-DMX-Static-ParLight-V-5CH-URP.prefab",
-            "Superseded/VRSL-DMX-Static-Blinder-V-5CH-URP.prefab",
         };
 
         static bool IsFiveChannel(string path) => path.Contains("-5CH");
@@ -148,14 +142,14 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// J2. The Horizontal 13- and 5-channel par and blinder, turned to the
+        /// J2. The 13- and 5-channel par and blinder, turned to the
         /// camera: each body and flare is dark with the fixture's channels at 0 and lit red
         /// with its dimmer and red at full, from a video grid and from a channel source.
         /// </summary>
         [UnityTest]
         public IEnumerator J2_bodies_and_flares_are_dark_at_black_and_lit_in_the_fixtures_colour()
         {
-            string[] paths = { ParsAndBlinders[0], ParsAndBlinders[1], ParsAndBlinders[6], ParsAndBlinders[7] };
+            string[] paths = ParsAndBlinders;
             var rig    = VRSLDMXRig.Build(withSource: false, targetSize: 512);
             var source = new FixedChannels();
             var made   = new List<Object>();

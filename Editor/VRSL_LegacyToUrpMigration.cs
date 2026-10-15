@@ -136,8 +136,7 @@ namespace VRSL.URP.EditorScripts
 
             foreach (var (go, pair) in candidates)
             {
-                if (HasUrpSiblingAlready(go.transform, pair.UrpGuid)
-                    || (pair.Rc6UrpGuid != null && HasUrpSiblingAlready(go.transform, pair.Rc6UrpGuid)))
+                if (HasUrpSiblingAlready(go.transform, pair.UrpGuid))
                 {
                     skipped++;
                     continue;

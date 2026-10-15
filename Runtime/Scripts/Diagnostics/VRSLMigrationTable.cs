@@ -18,20 +18,15 @@ namespace VRSL.URP
         /// <summary>Copy the source's local scale onto the sibling. Off for a source
         /// whose root scale is a projection volume rather than the fixture.</summary>
         public readonly bool MatchScale;
-        /// <summary>The URP prefab 0.2.0-rc.6 paired with this upstream prefab, where it
-        /// differs. A sibling of it counts as already migrated, so running the tool again
-        /// over a scene migrated with rc.6 doesn't add a second fixture.</summary>
-        public readonly string Rc6UrpGuid;
 
         public VRSLMigrationPair(string upstream, string urp, string friendly, VRSLMigrationKind kind,
-            bool matchScale = true, string rc6Urp = null)
+            bool matchScale = true)
         {
             UpstreamGuid = upstream;
             UrpGuid = urp;
             FriendlyName = friendly;
             Kind = kind;
             MatchScale = matchScale;
-            Rc6UrpGuid = rc6Urp;
         }
     }
 
@@ -41,9 +36,7 @@ namespace VRSL.URP
     /// </summary>
     /// <remarks>
     /// A fixture prefab here serves every grid layout, because the layout is the manager's.
-    /// So Horizontal, Legacy and Vertical upstream fixtures pair with the same URP prefab, and
-    /// the per-layout URP prefabs earlier releases shipped (now under
-    /// <c>Prefabs/DMX/Superseded/</c>) are produced by no row.
+    /// So Horizontal, Legacy and Vertical upstream fixtures pair with the same URP prefab.
     /// Upstream shipped its Legacy fixtures twice: under <c>Prefabs/DMX/Legacy Mode/</c>,
     /// and from v2.1 to v2.3.0 also under <c>Shaders/Basic Surface Shaders/Legacy Mode/</c>
     /// with other GUIDs. Worlds built on those releases can carry either set.
@@ -80,10 +73,10 @@ namespace VRSL.URP
             new VRSLMigrationPair("e9dde3e86ccb8ca4bb4ecbe35a6fa7b1", Blinder13,   "DMX H 13CH Static Blinder",  Dmx),
             new VRSLMigrationPair("946b3c09cfa93244c90a4b0ac7764b44", ParLight13,  "DMX H 13CH Static ParLight", Dmx),
 
-            new VRSLMigrationPair("d9cab657bd2dff14ea5425c2c4c4679e", Spotlight13, "DMX L 13CH Mover Spotlight", Dmx, rc6Urp: "12eb166a9c94e2b764534fdf24bef23b"),
-            new VRSLMigrationPair("41c8453c8957aec4292212174d351a36", WashLight13, "DMX L 13CH Mover Washlight", Dmx, rc6Urp: "c9012c802489a64d6e6fcba1c829b084"),
-            new VRSLMigrationPair("9310469001d6cdf4db2145f9fddd7933", Blinder13,   "DMX L 13CH Static Blinder",  Dmx, rc6Urp: "4bd409afbd3dcc666a94dfe0de01c748"),
-            new VRSLMigrationPair("dd7cad5fc7f12624ea58efde5c3cd633", ParLight13,  "DMX L 13CH Static ParLight", Dmx, rc6Urp: "89fe5f214c335d0bb96312a00515613b"),
+            new VRSLMigrationPair("d9cab657bd2dff14ea5425c2c4c4679e", Spotlight13, "DMX L 13CH Mover Spotlight", Dmx),
+            new VRSLMigrationPair("41c8453c8957aec4292212174d351a36", WashLight13, "DMX L 13CH Mover Washlight", Dmx),
+            new VRSLMigrationPair("9310469001d6cdf4db2145f9fddd7933", Blinder13,   "DMX L 13CH Static Blinder",  Dmx),
+            new VRSLMigrationPair("dd7cad5fc7f12624ea58efde5c3cd633", ParLight13,  "DMX L 13CH Static ParLight", Dmx),
 
             // Upstream's second Legacy set (Shaders/Basic Surface Shaders/Legacy Mode/, v2.1 to v2.3.0).
             new VRSLMigrationPair("26f28624a9a01c54aa5f3fd72dd5cdfa", Spotlight13, "DMX L 13CH Mover Spotlight", Dmx),
@@ -95,15 +88,15 @@ namespace VRSL.URP
             new VRSLMigrationPair("a82e1cba136b3ff4792a5cebdd895bf6", Laser13,     "DMX L 13CH Static Laser",    Dmx),
             new VRSLMigrationPair("204242a5763407b4c8404bcaa55a99bf", LightBar13,  "DMX L 13CH Static LightBar", Dmx),
 
-            new VRSLMigrationPair("9a6d4144bda0d3c4ba95593af446b653", Spotlight13, "DMX V 13CH Mover Spotlight", Dmx, rc6Urp: "b4eb189266f0fc064ad34abf97e760db"),
-            new VRSLMigrationPair("88bee1a0ddf090d4bb0721b30240c949", WashLight13, "DMX V 13CH Mover Washlight", Dmx, rc6Urp: "9433adb565b60265dd32d0b3d29495fe"),
-            new VRSLMigrationPair("d7a8bacd5310e8e499962549ef931c57", Blinder13,   "DMX V 13CH Static Blinder",  Dmx, rc6Urp: "e9c7d3d37ed1b74a9921c9a2d3b05d95"),
-            new VRSLMigrationPair("2ff8eb277ef9d7047b12d127b2eaeb36", ParLight13,  "DMX V 13CH Static ParLight", Dmx, rc6Urp: "d762a8e3b9fd9395d8fc6d1a572d4429"),
+            new VRSLMigrationPair("9a6d4144bda0d3c4ba95593af446b653", Spotlight13, "DMX V 13CH Mover Spotlight", Dmx),
+            new VRSLMigrationPair("88bee1a0ddf090d4bb0721b30240c949", WashLight13, "DMX V 13CH Mover Washlight", Dmx),
+            new VRSLMigrationPair("d7a8bacd5310e8e499962549ef931c57", Blinder13,   "DMX V 13CH Static Blinder",  Dmx),
+            new VRSLMigrationPair("2ff8eb277ef9d7047b12d127b2eaeb36", ParLight13,  "DMX V 13CH Static ParLight", Dmx),
 
             new VRSLMigrationPair("5ae312c8e69488842994fd62a7609adc", Blinder5,  "DMX H 5CH Static Blinder",  Dmx),
             new VRSLMigrationPair("6a94fea4f85300a44b9e29ba54430110", ParLight5, "DMX H 5CH Static ParLight", Dmx),
-            new VRSLMigrationPair("94d6ff221dc5748458941750e422114f", Blinder5,  "DMX V 5CH Static Blinder",  Dmx, rc6Urp: "4138d57a3de4cdd841630c4e41cfed3d"),
-            new VRSLMigrationPair("3b7bdfab2bd7abf4295be3356f6f3617", ParLight5, "DMX V 5CH Static ParLight", Dmx, rc6Urp: "6b5a89d8241bd316dc7ff37e0135e98c"),
+            new VRSLMigrationPair("94d6ff221dc5748458941750e422114f", Blinder5,  "DMX V 5CH Static Blinder",  Dmx),
+            new VRSLMigrationPair("3b7bdfab2bd7abf4295be3356f6f3617", ParLight5, "DMX V 5CH Static ParLight", Dmx),
             new VRSLMigrationPair("fbb24c41d42d23c4296c31f5aca73942", "345a06b27d787f46fdcdf223175c83ef", "DMX H 5CH Static LightBar", Dmx),
 
             // Shader-driven fixtures: the URP prefab keeps the same Static (or Laser) component
@@ -129,12 +122,12 @@ namespace VRSL.URP
             new VRSLMigrationPair("dd68d30b9f0b34442aac2fb4540ae553", MultiBar15, "DMX L 15CH Static MultiLightBar", Dmx),
             new VRSLMigrationPair("6f5c5d0af7e69e242ad56ac13882e04e", Strobe6x4,  "DMX L 5CH Static 6x4 Strobe",     Dmx),
 
-            new VRSLMigrationPair("55058c5ef8c22d04991b48a99a10acfe", Laser13,    "DMX V 13CH Static Laser",         Dmx, rc6Urp: "97c0bfb4d24415d89174bdeec0068d50"),
+            new VRSLMigrationPair("55058c5ef8c22d04991b48a99a10acfe", Laser13,    "DMX V 13CH Static Laser",         Dmx),
             new VRSLMigrationPair("8bb1407f1f0e2cc48b9bbf35ca1951a6", Discoball,  "DMX V 1CH Discoball",             Dmx, matchScale: false),
-            new VRSLMigrationPair("1c08f57da0cd0414c85f64b373431921", Flasher1,   "DMX V 1CH Static Flasher",        Dmx, rc6Urp: "1d6e08d6803e8af6b1c636ef1fdfa3c5"),
-            new VRSLMigrationPair("b2a0b640363bc10408fb7a3803939fa0", LightBar13, "DMX V 13CH Static LightBar",      Dmx, rc6Urp: "c95416bf6eef62f2a394420e7f9eb36d"),
-            new VRSLMigrationPair("b8873da88b401dd4ab93b061c5ddf750", MultiBar15, "DMX V 15CH Static MultiLightBar", Dmx, rc6Urp: "a0940e84628bd52352bbe8a8c7825f32"),
-            new VRSLMigrationPair("51b428740444288448e19c88c64d5311", Strobe6x4,  "DMX V 5CH Static 6x4 Strobe",     Dmx, rc6Urp: "49912180c2c2cec3d31d578111f9c053"),
+            new VRSLMigrationPair("1c08f57da0cd0414c85f64b373431921", Flasher1,   "DMX V 1CH Static Flasher",        Dmx),
+            new VRSLMigrationPair("b2a0b640363bc10408fb7a3803939fa0", LightBar13, "DMX V 13CH Static LightBar",      Dmx),
+            new VRSLMigrationPair("b8873da88b401dd4ab93b061c5ddf750", MultiBar15, "DMX V 15CH Static MultiLightBar", Dmx),
+            new VRSLMigrationPair("51b428740444288448e19c88c64d5311", Strobe6x4,  "DMX V 5CH Static 6x4 Strobe",     Dmx),
             new VRSLMigrationPair("6b906c7cc969ac346a656210549c02c7", ExampleSurface5, "DMX V 5CH Example Surface", Dmx),
             new VRSLMigrationPair("8c5b2abb4f158154cad77f35b9ce2643", ExampleSurface5, "DMX H 5CH Example Surface", Dmx),
             new VRSLMigrationPair("27dc7840f76fbc1469f1e64bdbc9991a", ExampleSurface5, "DMX L 5CH Example Surface", Dmx),
@@ -148,25 +141,6 @@ namespace VRSL.URP
         {
             { "78bf4380452cfbe4aa8154e17a189b28", "DMX V 5CH Static LightBar" },
         };
-
-        const string DmxManager = "a153c72afb11a7d95718c2cfda31fd8a";
-
-        /// <summary>This package's own superseded prefabs, under <c>Prefabs/DMX/Superseded/</c>,
-        /// and the prefab that replaces each: the per-layout fixtures earlier releases shipped
-        /// (the 0.2.0-rc.6 twins the pairs remember) and the Legacy and Vertical managers.</summary>
-        public static readonly Dictionary<string, string> Superseded = BuildSuperseded();
-
-        static Dictionary<string, string> BuildSuperseded()
-        {
-            var map = new Dictionary<string, string>
-            {
-                { "ad7144dda51ade86af22a2dee3d4e8b5", DmxManager },   // Legacy manager
-                { "86bdb731b077c2575c0f809d45511918", DmxManager },   // Vertical manager
-            };
-            foreach (var pair in Pairs)
-                if (pair.Rc6UrpGuid != null) map[pair.Rc6UrpGuid] = pair.UrpGuid;
-            return map;
-        }
     }
 }
 #endif
