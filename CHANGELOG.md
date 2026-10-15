@@ -4,6 +4,10 @@
 
 ### Changed
 
+- **The light managers follow realtime fixtures switched on and off.** Switch a DMX or AudioLink realtime fixture's GameObject, or anything above it, off or on while the world runs, or spawn a fixture prefab, and its light and beam go or come back by the next frame. Previously each manager kept the fixtures it found when it was enabled until something called `RefreshFixtures()`, so a fixture switched off kept drawing and one switched on stayed dark. However many fixtures switch in one frame, each manager looks through the scene once, and not at all in a frame where none did. `RefreshFixtures()` still works and nothing needs to call it.
+
+- **A realtime fixture whose component is switched off casts no light.** It used to keep drawing as long as its GameObject was on. Its body keeps glowing with the show, so switch the GameObject off to hide the whole fixture.
+
 - **The mover body shaders have no Lighting Model or Light Probe Sampling setting.** Both lighting models now light through URP, so the two settings no longer choose anything. The body takes its smoothness from the metallic map's alpha times Smoothness, as the Legacy model did, so a material that was on GGX looks a little less glossy where its map's alpha is below 1.
 
 - **Lens flares have no "Toggle The Requirement of the depth light" setting.** It never reached the shader, and flares now always hide behind what blocks their light.
