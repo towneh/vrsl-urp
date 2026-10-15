@@ -113,28 +113,34 @@ float2 LegacyCellUV(uint channel, uint sector)
 
 // The grid cell a channel occupies, in UV: slot ((ch - 1) mod 13) + 1 of sector
 // (ch - 1) div 13, the cell the includes' getDMXCellUV gives. Integers throughout, so
-// no rounding of a division can put a channel in a neighbouring row. Channel 0,
-// unpatched, sits below the grid and samples its clamped edge.
-float2 DMXCellUV(uint ch)
+// no rounding of a division can put a channel in a neighbouring row. False for a
+// channel the grid doesn't carry, which reads as a channel at 0: channel 0 (unpatched),
+// or one past the grid's last row ((s + 1) w > 13 h, sector 50 on Legacy). The UV is
+// computed and sampled either way.
+bool DMXCell(uint ch, out float2 uv)
 {
-    uint slot   = ch == 0u ? 13u : (ch - 1u) % 13u + 1u;
-    int  sector = ch == 0u ? -1  : (int)((ch - 1u) / 13u);
-
-    if (_VRSLU_DMXGridLayout == 2u) return LegacyCellUV(slot - 1u, (uint)max(sector, 0));
+    uint slot   = (ch - 1u) % 13u + 1u;
+    uint sector = (ch - 1u) / 13u;
+    bool legacy = _VRSLU_DMXGridLayout == 2u;
 
     // The includes' IndustryRead, offsets and all.
     float resMultX = _VRSLDMXTexelSize.z / 13.0;
-    float u = (slot * resMultX * _VRSLDMXTexelSize.x) - 0.015;
-    float v = ((sector + 1) * resMultX * _VRSLDMXTexelSize.y) - 0.001915;
-    return float2(u, v);
+    uv = legacy ? LegacyCellUV(slot - 1u, sector)
+                : float2((slot * resMultX * _VRSLDMXTexelSize.x) - 0.015,
+                         ((sector + 1u) * resMultX * _VRSLDMXTexelSize.y) - 0.001915);
+    bool onGrid = legacy ? sector < 50u : (sector + 1u) * _VRSLDMXTexelSize.z <= 13.0 * _VRSLDMXTexelSize.w;
+    return ch != 0u && onGrid;
 }
 
-float GetDMXValue(uint ch, Texture2D<float4> tex)
+// absent is what a channel the grid doesn't carry reads: 0, or 1 (open) for strobe.
+float GetDMXValue(uint ch, Texture2D<float4> tex, float absent = 0.0)
 {
-    float4 c = tex.SampleLevel(sampler_point_clamp, saturate(DMXCellUV(ch)), 0);
-
+    float2 uv;
+    bool carried = DMXCell(ch, uv);
+    float4 c = tex.SampleLevel(sampler_point_clamp, saturate(uv), 0);
     // LinearRgbToLuminance — matches CGINC standard (non-NineUniverse) path
-    return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    float value = c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+    return carried ? value : absent;
 }
 
 // Channel value straight out of the byte buffer. No coordinate maths, no
@@ -175,7 +181,10 @@ float MovementChannel(uint ch)
 // Needed for the SpinnerTimer, whose red channel stores accumulated phase (not a color).
 float GetDMXValueRaw(uint ch, Texture2D<float4> tex)
 {
-    return tex.SampleLevel(sampler_point_clamp, saturate(DMXCellUV(ch)), 0).r;
+    float2 uv;
+    bool carried = DMXCell(ch, uv);
+    float value = tex.SampleLevel(sampler_point_clamp, saturate(uv), 0).r;
+    return carried ? value : 0.0;
 }
 
 // Accumulated gobo-spin phase for a channel, from whichever source is live.
@@ -199,7 +208,7 @@ float SpinPhase(uint ch)
 //   below a channel value of 0.2 the fixture is held fully on, not strobed
 float StrobeValue(uint ch)
 {
-    if (_VRSLU_DMXChannelCount == 0u) return GetDMXValue(ch, _DMXStrobeTex);
+    if (_VRSLU_DMXChannelCount == 0u) return GetDMXValue(ch, _DMXStrobeTex, 1.0);
     if (_VRSLU_StrobeDisabled > 0u)   return 1.0;
 
     float status = LoadDMXChannel(ch);

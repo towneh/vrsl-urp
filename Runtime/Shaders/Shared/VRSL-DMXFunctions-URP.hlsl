@@ -58,19 +58,23 @@ uint checkTiltInvertZ()
 }
 #endif
 
+// The cell a channel occupies, in UV; 0 for a channel the grid doesn't carry.
 float2 getDMXCellUV(uint DMXChannel)
 {
-    return vrsldmx_cell_uv(DMXChannel, _VRSLDMXTexelSize);
+    float2 uv;
+    uint component;
+    vrsldmx_cell(DMXChannel, getNineUniverseMode(), _VRSLDMXTexelSize, uv, component);
+    return uv;
 }
 
 half getValueAtCoords(uint DMXChannel, TEXTURE2D(tex))
 {
-    return vrsldmx_grid_value(DMXChannel, tex, _VRSLDMXTexelSize, getNineUniverseMode());
+    return vrsldmx_grid_value(DMXChannel, tex, _VRSLDMXTexelSize, getNineUniverseMode(), 0.0);
 }
 
 half getValueAtCoordsRaw(uint DMXChannel, TEXTURE2D(tex))
 {
-    return vrsldmx_grid_component(DMXChannel, tex, _VRSLDMXTexelSize);
+    return vrsldmx_grid_component(DMXChannel, tex, _VRSLDMXTexelSize, getNineUniverseMode());
 }
 
 // Every channel read goes through one of these four, which take the channel buffer
@@ -87,7 +91,7 @@ float DMXMovement(uint DMXChannel)
 
 float DMXSpinPhase(uint DMXChannel)
 {
-    return vrsldmx_spin_phase(DMXChannel);
+    return vrsldmx_spin_phase(DMXChannel, getNineUniverseMode());
 }
 
 // 1 open, 0 closed. Below a channel value of 0.2 the fixture is held open.

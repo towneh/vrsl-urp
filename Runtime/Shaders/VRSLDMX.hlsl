@@ -155,93 +155,88 @@ float2 vrsldmx_industry_uv(int x, int y, float4 texelSize)
     return xyUV;
 }
 
-// 0 for red, 1 for green, 2 for blue.
-int vrsldmx_target_color(uint universe)
+// A universe is 520 flat channels, 512 slots and 8 of padding, because the grid is 13
+// wide and 512 doesn't divide by 13. A nine-universe grid carries universes 1 to 3 in red,
+// 4 to 6 in green and 7 to 9 in blue, so the colour component a channel is in is its
+// group of three universes (1560 channels), and the cell is the one its channel in that
+// group has. Off nine-universe, and on Legacy, which has no colour split, it is 0.
+uint vrsldmx_component(uint channel, uint nineUniverse)
 {
-    universe -= 1;
-    return floor((int)(universe / 3));
+    return nineUniverse == 0u || _VRSLU_DMXGridLayout == 2 || channel == 0u ? 0u : (channel - 1u) / 1560u;
 }
 
-// The grid cell a channel occupies, in UV: slot ((c - 1) mod 13) + 1 of sector (c - 1) div 13.
-// Integers throughout, so no rounding of a division can put a channel in a neighbouring row.
-// Channel 0, unpatched, sits below the grid and samples its clamped edge.
-float2 vrsldmx_cell_uv(uint channel, float4 texelSize)
+// The cell a channel occupies, in UV: slot ((c - 1) mod 13) + 1 of sector (c - 1) div 13,
+// in integers so no rounding of a division can put a channel in a neighbouring row. False
+// for a channel the grid doesn't carry: channel 0 (unpatched), a channel past the grid's
+// last row, and on a nine-universe grid a channel past universe 9. The grid has
+// floor(13 h / w) rows, 50 sectors on Legacy; sector s is on it when (s + 1) w <= 13 h,
+// which is exact in floats for any grid a video carries. The UV is computed either way and
+// a caller samples it either way, so the reads stay free of branches.
+bool vrsldmx_cell(uint channel, uint nineUniverse, float4 texelSize, out float2 uv, out uint component)
 {
-    uint universe = ceil(((int) channel) / 512.0);
-    int targetColor = vrsldmx_target_color(universe);
-
-    universe -= 1;
-    channel = targetColor > 0 ? channel - (((universe - (universe % 3)) * 512)) - (targetColor * 24) : channel;
-
-    uint slot   = channel == 0 ? 13 : (channel - 1) % 13 + 1;
-    int  sector = channel == 0 ? -1 : (int)((channel - 1) / 13);
-    return _VRSLU_DMXGridLayout == 2 ? vrsldmx_legacy_uv(slot - 1, sector) : vrsldmx_industry_uv(slot, sector + 1, texelSize);
+    component   = vrsldmx_component(channel, nineUniverse);
+    uint flat   = channel - 1560u * component;
+    uint slot   = (flat - 1u) % 13u + 1u;
+    uint sector = (flat - 1u) / 13u;
+    bool legacy = _VRSLU_DMXGridLayout == 2;
+    uv = legacy ? vrsldmx_legacy_uv(slot - 1, sector) : vrsldmx_industry_uv(slot, sector + 1, texelSize);
+    bool onGrid = legacy ? sector < 50u : (sector + 1u) * texelSize.z <= 13.0 * texelSize.w;
+    return channel != 0u && component <= 2u && onGrid;
 }
 
-// A channel's value in a decoded grid: the cell's luminance, or in nine-universe mode the
-// colour component for its universe.
-half vrsldmx_grid_value(uint channel, TEXTURE2D(tex), float4 texelSize, uint nineUniverse)
+half vrsldmx_pick(half4 c, uint component)
 {
-    uint universe = ceil(((int) channel) / 512.0);
-    int targetColor = vrsldmx_target_color(universe);
-    float2 xyUV = vrsldmx_cell_uv(channel, texelSize);
-
-    half4 c = SAMPLE_TEXTURE2D_LOD(tex, vrsldmx_point_clamp_sampler, xyUV, 0);
-    half value = 0.0;
-
-    if (nineUniverse && _VRSLU_DMXGridLayout != 2)
-    {
-        value = c.r;
-        value = lerp(c.g, value, step((float) (targetColor > 0), 0.0));
-        value = lerp(c.b, value, step((float) (targetColor > 1), 0.0));
-    }
-    else
-    {
-        half3 cRGB = half3(c.r, c.g, c.b);
-        value = Luminance(cRGB);
-    }
-    return value;
+    return component == 0u ? c.r : (component == 1u ? c.g : c.b);
 }
 
-// A channel's value in a grid that stores one value per colour component (the spin timer).
-half vrsldmx_grid_component(uint channel, TEXTURE2D(tex), float4 texelSize)
+// A channel's value in a decoded grid: the cell's luminance, or on a nine-universe grid its
+// universe's colour component. A channel the grid doesn't carry reads absent.
+half vrsldmx_grid_value(uint channel, TEXTURE2D(tex), float4 texelSize, uint nineUniverse, half absent)
 {
-    uint universe = ceil(((int) channel) / 512.0);
-    int targetColor = vrsldmx_target_color(universe);
-    float2 xyUV = vrsldmx_cell_uv(channel, texelSize);
+    float2 uv;
+    uint component;
+    bool carried = vrsldmx_cell(channel, nineUniverse, texelSize, uv, component);
+    half4 c = SAMPLE_TEXTURE2D_LOD(tex, vrsldmx_point_clamp_sampler, uv, 0);
+    half value = nineUniverse != 0u && _VRSLU_DMXGridLayout != 2 ? vrsldmx_pick(c, component) : Luminance(c.rgb);
+    return carried ? value : absent;
+}
 
-    float4 c = SAMPLE_TEXTURE2D_LOD(tex, vrsldmx_point_clamp_sampler, xyUV, 0);
-    half value = c.r;
-    value = lerp(c.g, value, step((float) (targetColor > 0), 0.0));
-    value = lerp(c.b, value, step((float) (targetColor > 1), 0.0));
-    return value;
+// A channel's value in a grid that stores a value per colour component (the spin timer):
+// red, or on a nine-universe grid its universe's component. 0 where the grid has no cell.
+half vrsldmx_grid_component(uint channel, TEXTURE2D(tex), float4 texelSize, uint nineUniverse)
+{
+    float2 uv;
+    uint component;
+    bool carried = vrsldmx_cell(channel, nineUniverse, texelSize, uv, component);
+    half value = vrsldmx_pick(SAMPLE_TEXTURE2D_LOD(tex, vrsldmx_point_clamp_sampler, uv, 0), component);
+    return carried ? value : 0.0;
 }
 
 // The reads every fixture makes, taking the channel buffer while a source publishes and the
 // grid otherwise, mirroring the compute's MainChannel, MovementChannel, SpinPhase and
-// StrobeValue.
+// StrobeValue. A channel the input doesn't carry reads as a channel at 0 in all of them.
 half vrsldmx_value(uint channel, uint nineUniverse)
 {
     if (vrsldmx_channel_buffer_live()) return vrsldmx_load_channel(channel);
-    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRenderTexture, _VRSLDMXTexelSize, nineUniverse);
+    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRenderTexture, _VRSLDMXTexelSize, nineUniverse, 0.0);
 }
 
 half vrsldmx_value_raw(uint channel, uint nineUniverse)
 {
     if (vrsldmx_channel_buffer_live()) return vrsldmx_load_channel(channel);
-    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRaw, _VRSLU_DMXGridRawTexelSize, nineUniverse);
+    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRaw, _VRSLU_DMXGridRawTexelSize, nineUniverse, 0.0);
 }
 
 float vrsldmx_movement(uint channel, uint nineUniverse)
 {
     if (vrsldmx_channel_buffer_live()) return vrsldmx_load_movement(channel);
-    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRenderTextureMovement, _VRSLDMXTexelSize, nineUniverse);
+    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRenderTextureMovement, _VRSLDMXTexelSize, nineUniverse, 0.0);
 }
 
-float vrsldmx_spin_phase(uint channel)
+float vrsldmx_spin_phase(uint channel, uint nineUniverse)
 {
     if (vrsldmx_channel_buffer_live()) return vrsldmx_load_spin_phase(channel);
-    return vrsldmx_grid_component(channel, _VRSLU_DMXGridSpinTimer, _VRSLDMXTexelSize);
+    return vrsldmx_grid_component(channel, _VRSLU_DMXGridSpinTimer, _VRSLDMXTexelSize, nineUniverse);
 }
 
 // 1 open, 0 closed. Below a channel value of 0.2 the fixture is held open.
@@ -252,7 +247,7 @@ half vrsldmx_strobe(uint channel, uint nineUniverse)
     half strobe = 1.0;
     if (!vrsldmx_channel_buffer_live())
     {
-        strobe = vrsldmx_grid_value(channel, _VRSLU_DMXGridStrobeOutput, _VRSLDMXTexelSize, nineUniverse);
+        strobe = vrsldmx_grid_value(channel, _VRSLU_DMXGridStrobeOutput, _VRSLDMXTexelSize, nineUniverse, 1.0);
     }
     else if (_VRSLU_StrobeDisabled <= 0)
     {

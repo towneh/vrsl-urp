@@ -136,65 +136,69 @@ float2 IndustryRead(int x, int y)
     xyUV.x -= 0.015;
     return xyUV;
 }
-int getTargetRGBValue(uint universe)
+// A universe is 520 flat channels (512 slots and 8 of padding). On a nine-universe grid,
+// universes 1 to 3 are in red, 4 to 6 in green, 7 to 9 in blue: the component is the
+// channel's group of three universes. 0 off nine-universe and on Legacy.
+uint getDMXComponent(uint DMXChannel)
 {
-    universe -=1;
-    return floor((int)(universe / 3));
-    //returns 0 for red, 1 for green, 2, for blue
+    return getNineUniverseMode() == 0u || _VRSLU_DMXGridLayout == 2 || DMXChannel == 0u ? 0u : (DMXChannel - 1u) / 1560u;
 }
 
-// The grid cell a channel occupies, in UV: slot ((c - 1) mod 13) + 1 of sector (c - 1) div 13.
-// Integers throughout, so no rounding of a division can put a channel in a neighbouring row.
-// Channel 0, unpatched, sits below the grid and samples its clamped edge.
+// The cell a channel occupies, in UV, as VRSLDMX.hlsl's vrsldmx_cell finds it: false for a
+// channel the grid doesn't carry, channel 0, one past the last row ((s + 1) w > 13 h, or
+// sector 50 on Legacy) or past universe 9. The UV is computed and sampled either way.
+bool getDMXCell(uint DMXChannel, out float2 uv, out uint component)
+{
+    component   = getDMXComponent(DMXChannel);
+    uint flat   = DMXChannel - 1560u * component;
+    uint slot   = (flat - 1u) % 13u + 1u;
+    uint sector = (flat - 1u) / 13u;
+    bool legacy = _VRSLU_DMXGridLayout == 2;
+    uv = legacy ? LegacyRead(slot - 1, sector) : IndustryRead(slot, sector + 1);
+    bool onGrid = legacy ? sector < 50u : (sector + 1u) * _VRSLDMXTexelSize.z <= 13.0 * _VRSLDMXTexelSize.w;
+    return DMXChannel != 0u && component <= 2u && onGrid;
+}
+
 float2 getDMXCellUV(uint DMXChannel)
 {
-    uint universe = ceil(((int) DMXChannel)/512.0);
-    int targetColor = getTargetRGBValue(universe);
-
-    universe-=1;
-    DMXChannel = targetColor > 0 ? DMXChannel - (((universe - (universe % 3)) * 512)) - (targetColor * 24) : DMXChannel;
-
-    uint slot   = DMXChannel == 0 ? 13 : (DMXChannel - 1) % 13 + 1;
-    int  sector = DMXChannel == 0 ? -1 : (int)((DMXChannel - 1) / 13);
-    return _VRSLU_DMXGridLayout == 2 ? LegacyRead(slot - 1, sector) : IndustryRead(slot, sector + 1);
+    float2 uv;
+    uint component;
+    getDMXCell(DMXChannel, uv, component);
+    return uv;
 }
 
-//function for getting the value on the DMX Grid in the bottom right corner configuration
+half pickDMXComponent(half4 c, uint component)
+{
+    return component == 0u ? c.r : (component == 1u ? c.g : c.b);
+}
+
+// A channel's value on the grid: luminance, or on a nine-universe grid its universe's
+// component. A channel the grid doesn't carry reads absent.
+half getValueAtCoordsOr(uint DMXChannel, Texture2D _Tex, half absent)
+{
+    float2 uv;
+    uint component;
+    bool carried = getDMXCell(DMXChannel, uv, component);
+    half4 c = _Tex.SampleLevel(sampler_point_clamp, uv, 0);
+    half value = getNineUniverseMode() != 0u && _VRSLU_DMXGridLayout != 2 ? pickDMXComponent(c, component)
+                                                                         : LinearRgbToLuminance(c.rgb);
+    return carried ? value : absent;
+}
+
 half getValueAtCoords(uint DMXChannel, Texture2D _Tex)
 {
-    uint universe = ceil(((int) DMXChannel)/512.0);
-    int targetColor = getTargetRGBValue(universe);
-    float2 xyUV = getDMXCellUV(DMXChannel);
-
-    half4 c = _Tex.SampleLevel(sampler_point_clamp, xyUV, 0);
-    half value = 0.0;
-    
-   if(getNineUniverseMode() && _VRSLU_DMXGridLayout != 2)
-   {
-    value = c.r;
-    value = IF(targetColor > 0, c.g, value);
-    value = IF(targetColor > 1, c.b, value);
-   }
-   else
-   {
-        half3 cRGB = half3(c.r, c.g, c.b);
-        value = LinearRgbToLuminance(cRGB);
-    }
-    // value = LinearToGammaSpaceExact(value);
-    return value;
+    return getValueAtCoordsOr(DMXChannel, _Tex, 0.0);
 }
 
+// A value per colour component (the spin timer): red, or on a nine-universe grid the
+// channel's component. 0 where the grid has no cell.
 half getValueAtCoordsRaw(uint DMXChannel, Texture2D _Tex)
 {
-    uint universe = ceil(((int) DMXChannel)/512.0);
-    int targetColor = getTargetRGBValue(universe);
-    float2 xyUV = getDMXCellUV(DMXChannel);
-
-    float4 c = _Tex.SampleLevel(sampler_point_clamp, xyUV, 0);
-    half value = c.r;
-    value = IF(targetColor > 0, c.g, value);
-    value = IF(targetColor > 1, c.b, value);
-	return value;
+    float2 uv;
+    uint component;
+    bool carried = getDMXCell(DMXChannel, uv, component);
+    half value = pickDMXComponent(_Tex.SampleLevel(sampler_point_clamp, uv, 0), component);
+    return carried ? value : 0.0;
 }
 
 // Every channel read goes through one of these four, as in VRSL-DMXFunctions-URP.hlsl.
@@ -223,7 +227,7 @@ half DMXStrobe(uint DMXChannel)
     half strobe = 1.0;
     if (!channelBufferLive())
     {
-        strobe = getValueAtCoords(DMXChannel, _VRSLU_DMXGridStrobeOutput);
+        strobe = getValueAtCoordsOr(DMXChannel, _VRSLU_DMXGridStrobeOutput, 1.0);
     }
     else if (_VRSLU_StrobeDisabled <= 0)
     {
