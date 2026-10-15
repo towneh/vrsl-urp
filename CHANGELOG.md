@@ -64,6 +64,7 @@
 - **A fixture left at channel 0 no longer lights with channel 13's value.** On a grid a read of channel 0 took channel 13's cell, so a flasher or a five-channel fixture whose address was left at 0 lit with whatever channel 13 held. Channel 0 now reads as a channel at 0. A 13-channel fixture at 0 reads its colour and dimmer from channels 5 to 9 and is unchanged.
 - **Reading a DMX Static fixture's `ConeLength` or `MaxConeLength` from a script no longer crashes Unity.** Both read themselves until the stack ran out. They return the fixture's values now.
 - **The control panel and camera configurator inspectors show the VRSL logo.** They looked for it in a Resources folder the package doesn't have, so the logo area was empty.
+- **Migrated AudioLink movers keep their cone width.** The migration dropped the original fixture's Cone Width, so every migrated spot and wash mover came across at this package's spot angle. It's now converted: the original prefab's width (2.25 on the spot, 2.7 on the wash) gives this package's angle (25° and 60°), wider or narrower in the same share, never under 5°. Pars and blinders keep their angle, since the original's width never changed them. A ported script that set `ConeWidth` can call `SpotAngleForLegacyConeWidth` on the AudioLink realtime light and assign the result to its spot angle.
 
 ## [0.3.0-rc.4] — 2026-10-12
 
