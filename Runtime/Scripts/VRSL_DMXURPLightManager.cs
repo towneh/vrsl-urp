@@ -1007,6 +1007,10 @@ namespace VRSL.URP
 
         void UploadChannels()
         {
+            // A source destroyed while this manager was switched off, with no manager
+            // to hand it to, can't detach: it looks its manager up through Instance,
+            // which was empty. Held as the interface it doesn't compare null.
+            if (ChannelSource is Object source && source == null) ChannelSource = null;
             int universes = ChannelSource != null ? ChannelSource.UniverseCount : 0;
             if (_boundInput != VRSLDmxInput.StreamData)
             {

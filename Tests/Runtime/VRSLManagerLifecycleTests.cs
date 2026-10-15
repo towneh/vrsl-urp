@@ -294,5 +294,51 @@ namespace VRSL.URP.Tests
                 rig.Dispose();
             }
         }
+
+        /// <summary>
+        /// C13. A channel source destroyed while its manager was switched off, with no other
+        /// manager to hand to, is dropped when the manager comes back on.
+        ///
+        /// The manager keeps its source over a switch-off when nobody takes the singleton,
+        /// and a source that detaches through <c>Instance</c> finds nobody there to detach
+        /// from. Held as the interface, the destroyed source doesn't compare null, so the
+        /// manager would go on reading it every frame.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator C13_a_source_destroyed_while_its_manager_was_off_is_dropped()
+        {
+            Assert.IsNull(VRSL_DMXURPLightManager.Instance,
+                "something outside this row already holds the singleton");
+
+            GameObject managerGo = null, sourceGo = null;
+            try
+            {
+                managerGo = new GameObject("manager");
+                var manager = managerGo.AddComponent<VRSL_DMXURPLightManager>();
+                sourceGo = new GameObject("channel source");
+                var source = sourceGo.AddComponent<VRSL_SyntheticDMXChannelSource>();
+                Assert.IsTrue(ReferenceEquals(manager.ChannelSource, source),
+                    "the source did not attach to the manager");
+
+                manager.enabled = false;
+                Assert.IsTrue(ReferenceEquals(manager.ChannelSource, source),
+                    "the manager let go of its source on switching off, so the case this row "
+                  + "guards can't arise");
+
+                Object.DestroyImmediate(sourceGo);
+                sourceGo = null;
+                manager.enabled = true;
+                yield return null;
+                yield return null;
+
+                Assert.IsTrue(manager.ChannelSource is null,
+                    "the manager still holds the destroyed source and reads it every frame");
+            }
+            finally
+            {
+                if (sourceGo != null)  Object.DestroyImmediate(sourceGo);
+                if (managerGo != null) Object.DestroyImmediate(managerGo);
+            }
+        }
     }
 }
