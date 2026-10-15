@@ -456,9 +456,14 @@ namespace VRSL.URP
         }
         public void _UpdateInstancedProperties()
         {
+            if(objRenderers == null || objRenderers.Length == 0)
+            {
+                Debug.Log("Please add atleast one fixture renderer.");
+                return;
+            }
             if(props == null)
             {
-                if(objRenderers.Length > 0 && objRenderers[0] != null)
+                if(objRenderers[0] != null)
                 {
                     _SetProps();
                 }
@@ -551,11 +556,21 @@ namespace VRSL.URP
 
         public void _UpdateInstancedPropertiesSansAudioLink()
         {
+            if(objRenderers == null || objRenderers.Length == 0)
+            {
+                Debug.Log("Please add atleast one fixture renderer.");
+                return;
+            }
             if(props == null)
             {
-                if(objRenderers.Length > 0 && objRenderers[0] != null)
+                if(objRenderers[0] != null)
                 {
                     _SetProps();
+                }
+                else
+                {
+                    Debug.Log("Please add atleast one fixture renderer.");
+                    return;
                 }
             }
             //AudioLink Stuff

@@ -258,9 +258,14 @@ namespace VRSL.URP
         }
         public void _UpdateInstancedProperties()
         {
+            if(objRenderers == null || objRenderers.Length == 0)
+            {
+                Debug.Log("Please add atleast one fixture renderer.");
+                return;
+            }
             if(props == null)
             {
-                if(objRenderers != null && objRenderers.Length > 0 && objRenderers[0] != null)
+                if(objRenderers[0] != null)
                 {
                     _SetProps();
                 }
@@ -331,9 +336,14 @@ namespace VRSL.URP
 
         public void _UpdateInstancedPropertiesSansDMX()
         {
+            if(objRenderers == null || objRenderers.Length == 0)
+            {
+                Debug.Log("Please add atleast one fixture renderer.");
+                return;
+            }
             if(props == null)
             {
-                if(objRenderers != null && objRenderers.Length > 0 && objRenderers[0] != null)
+                if(objRenderers[0] != null)
                 {
                     _SetProps();
                 }
