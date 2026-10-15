@@ -9,7 +9,7 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The secondary-camera rows: what a mirror is lit at, what a mirror costs, and
     /// that the decode and the integrators stay once per frame however many cameras
-    /// look. Rows M5, M7, M8 and M9 of TESTING.md.
+    /// look. Rows M5, M7 to M10 of TESTING.md.
     /// </summary>
     class VRSLCameraPolicyTests : VRSLDMXTest
     {
@@ -362,5 +362,48 @@ namespace VRSL.URP.Tests
             }
             finally { rig.Dispose(); }
         }
+
+#if UNITY_EDITOR
+        // ── M10: a mirror VRSL lights nothing in ───────────────────────────
+
+        /// <summary>
+        /// M10. In a mirror under <c>Skip</c>, rendered after the rig's view with the
+        /// realtime fixtures on, the shader-driven fixtures glow with the grid as they do
+        /// in the same mirror in a scene with no realtime fixtures. The mirror gets no VRSL
+        /// lighting either way, so only the fixtures' own read of the grid differs.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator M10_shader_driven_fixtures_read_the_grid_in_a_skipped_mirror()
+        {
+            var prefabs = VRSLRuntimeEnableTests.ShaderDrivenPrefabs;
+            var glow = new Dictionary<VRSLRuntimeEnableTests.Realtime, float[]>();
+            foreach (var realtime in new[] { VRSLRuntimeEnableTests.Realtime.NeverOn,
+                                             VRSLRuntimeEnableTests.Realtime.OnThroughout })
+            {
+                float[] lit = null, dark = null;
+                yield return VRSLRuntimeEnableTests.CaptureShaderDriven(realtime, VRSLGridLayout.Horizontal, true,
+                                                                       g => lit = g, SecondaryCameraMode.Skip);
+                yield return VRSLRuntimeEnableTests.CaptureShaderDriven(realtime, VRSLGridLayout.Horizontal, false,
+                                                                       g => dark = g, SecondaryCameraMode.Skip);
+                var difference = new float[lit.Length];
+                for (int i = 0; i < lit.Length; i++) difference[i] = lit[i] - dark[i];
+                glow[realtime] = difference;
+                Debug.Log($"[M10] Skip mirror, realtime fixtures {realtime}: glow "
+                        + string.Join(", ", System.Linq.Enumerable.Select(difference, (d, i) => $"{prefabs[i]} {d:F2}")));
+            }
+
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                float none = glow[VRSLRuntimeEnableTests.Realtime.NeverOn][i];
+                float on   = glow[VRSLRuntimeEnableTests.Realtime.OnThroughout][i];
+                Assert.Greater(none, 2f,
+                    $"{prefabs[i]} doesn't glow in the mirror in a scene with no realtime fixtures, "
+                  + "so the row can't tell anything apart");
+                Assert.GreaterOrEqual(on, 0.5f * none,
+                    $"{prefabs[i]} glows {on:F2} in a skipped mirror with realtime fixtures on, against {none:F2} "
+                  + "with none: it read a black grid there");
+            }
+        }
+#endif
     }
 }

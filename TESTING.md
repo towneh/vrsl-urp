@@ -637,7 +637,7 @@ reads a zero here should first ask whether a frame was collected at all.
 
 ### Cameras
 
-`VRSLCameraPolicyTests` in the suite covers M5, M7, M8 and M9. M2 to M4 and the main-view
+`VRSLCameraPolicyTests` in the suite covers M5 and M7 to M10. M2 to M4 and the main-view
 half of M5 want a mirror and eyes; M6 is a pair of player sweeps.
 
 `secondaryCameraMode` is a policy with four values: `Match`, `Reduced` (the default),
@@ -658,6 +658,7 @@ of its own.
 | M7 | D | `VRSLCameraPolicyTests.M7`: four cameras rendering every frame (the rig's and three secondary) for ten seconds of captured time, against the same rig with one | Every spinning fixture's phase advances at the rate its channel asks for, as N8 judges it, and the frame of light data (direction, spin, colour) matches the one-camera rig's to 1e-3. **An integrator that has drifted into a per-camera pass advances four times as far** |
 | M8 | D | `VRSLCameraPolicyTests.M8`: a mirror toggled through main-only, mirror-only and both across 45 frames, under `Sweep` at a speed that moves every channel far each frame | On every frame the decoded colour equals the bytes the manager uploaded last, whichever cameras rendered, and the mirror's frame is not black on any frame it rendered. A one-frame-old colour is a decode that did not run for that frame's cameras; a black mirror is the grid textures unbound or the light path skipping it |
 | M9 | — | `VRSLCameraPolicyTests.M9`: the camera filter as a function | `Match` renders everything at the scene's level; `SurfaceOnly` the same without beams; `Skip` nothing; `Reduced` everything one level below (`High` to `Standard`, `Standard` to `Low`, `Off` and `Low` unchanged). A camera with no target keeps the scene's level under every value. `Low` draws beams at fewer steps and wider spacing than `Standard` with no contact shadows, and is not in the sweep's level list. Reflection probes, registered data readers and cameras rendering into a texture the manager consumes stay skipped |
+| M10 | D | `VRSLCameraPolicyTests.M10`: Z7's shader-driven fixtures seen from a mirror under `Skip`, rendered after the rig's view, with the rig's realtime fixtures on and with none | Each fixture's glow in the mirror with the realtime fixtures on is at least half of what it is with none. The mirror gets no VRSL lighting either way, so only the fixtures' own read of the grid differs. **A camera the manager leaves out of the grid's publishing reads the black the previous camera's graph left behind** |
 
 **The rig holds depth priming per render** (`VRSLDMXRig.Build(priming:)`, Forced unless a
 row asks otherwise, put back on dispose). The host rewrites the renderer's mode at a moment
@@ -668,7 +669,9 @@ D1_D2 passes its mode through.
 depends on the camera, so every camera in a frame reads one buffer; the DMX grid textures
 are published from inside the graph, by an attachment-less pass, because a global
 texture set outside it binds as black. M7 and M8 are the rows that catch it drifting into a
-per-camera pass.
+per-camera pass. The graph sets what that pass published back to black after each camera,
+so it runs for every camera, including those the policy skips and frames with no realtime
+fixtures; M10 and Z7 catch a camera or a frame left out.
 
 ### DMX channel buffer
 
@@ -753,7 +756,7 @@ fixtures being switched on and off while the world runs: a fixture's `OnEnable` 
 the manager, which looks through the scene once at its next once-a-frame point (the DMX manager's
 `LateUpdate`, the AudioLink manager's first camera of the frame) and rebuilds its buffers only if the
 set changed. Presence is read from the light data by position, since a rebuild reorders the slots.
-Each row runs on both paths, under the same number.
+Z1 to Z6 run on both paths, under the same number.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -763,6 +766,7 @@ Each row runs on both paths, under the same number.
 | Z4 | D, A | A manager with one fixture; the fixture switched off, then on | With it off the manager holds no fixtures, no light data and no fixture configs; with it on it is drawn again |
 | Z5 | D, A | Ten frames with nothing switched; on the DMX path, then a fixture moved to a new address with `ApplyAddress()` | No scan and no rebuild in those frames, and none for the new address |
 | Z6 | D, A | A collected fixture's component switched off on a GameObject left on, then on | As Z1: a switched-off component casts no light. Its body keeps glowing with the show, since the body reads DMX or AudioLink itself |
+| Z7 | D | A flasher, a light bar, the 15-channel bar and the 6x4 strobe in front of the rig on a bright grid and on a black one, Horizontal and Vertical: with the rig's realtime fixtures on throughout, never on, and on for four frames then all switched off for twenty | Each shader-driven fixture's glow (its mean brightness over its own pixels, bright grid less black) with every realtime fixture switched off is at least half of what it is in the scene that never had one. **Render Graph sets the grid back to black after each camera that published it, so a manager that stops publishing at zero realtime fixtures leaves them dark** |
 
 Nothing here runs in edit mode: neither realtime light nor either manager runs in the editor outside
 Play, so Unity never calls the hooks there, and placing or removing fixtures in a scene, in Prefab
