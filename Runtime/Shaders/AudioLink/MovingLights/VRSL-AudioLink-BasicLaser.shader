@@ -61,13 +61,6 @@
 
         Pass
         {
-
-            Stencil
-            {
-                Ref 142
-                Comp NotEqual
-                Pass Keep
-            }
             CGPROGRAM
             #pragma vertex vert
             #pragma fragment frag

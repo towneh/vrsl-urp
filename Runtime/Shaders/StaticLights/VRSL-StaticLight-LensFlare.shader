@@ -77,12 +77,6 @@
             {
                 "LightMode" = "UniversalForward"
             }
-            Stencil
-            {
-                Ref 142
-                Comp NotEqual
-                Pass Keep
-            }
 
             CGPROGRAM
             #pragma vertex vert
