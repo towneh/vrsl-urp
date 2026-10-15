@@ -187,14 +187,15 @@ namespace VRSL.URP.Profiling.Editor
             EnsureManagerShaders(inst.GetComponent<VRSL.URP.VRSL_DMXURPLightManager>());
         }
 
-        // Defensive: assign the volumetric and lighting shaders on the spawned
-        // manager if the prefab didn't carry refs. Profiling without the
+        // Defensive: assign the volumetric and lighting shaders on the profiling
+        // manager if it doesn't carry refs. Profiling without the
         // volumetric shader silently produces only floor lighting (no cones),
         // which gives misleading "URP looks cheap" numbers in the sweep.
         static void EnsureManagerShaders(VRSL.URP.VRSL_DMXURPLightManager mgr)
         {
             if (mgr == null) return;
 
+            Undo.RecordObject(mgr, "Assign profiling manager shaders");
             bool changed = false;
             if (mgr.lightingShader == null)
             {
@@ -219,7 +220,12 @@ namespace VRSL.URP.Profiling.Editor
                 mgr.lightCullShader = FindComputeShader("VRSLLightCull");
                 changed |= mgr.lightCullShader != null;
             }
-            if (changed) EditorUtility.SetDirty(mgr);
+            if (!changed) return;
+            // On a prefab instance, without this the assignments aren't recorded as
+            // overrides, and saving and reopening the scene loses them.
+            if (PrefabUtility.IsPartOfPrefabInstance(mgr))
+                PrefabUtility.RecordPrefabInstancePropertyModifications(mgr);
+            EditorUtility.SetDirty(mgr);
         }
 
         static ComputeShader FindComputeShader(string assetName)
