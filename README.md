@@ -13,6 +13,7 @@ The package is a standalone fork of [VR Stage Lighting](https://github.com/AcCho
 | Every inspector field, for both data paths | [Fixture Configuration Reference](https://github.com/towneh/vrsl-urp/wiki/Fixture-Configuration-Reference) |
 | DMX as bytes rather than as a video grid, from a Basis media player or over OSC from Truss | [DMX Channel Sources](https://github.com/towneh/vrsl-urp/wiki/DMX-Channel-Sources) |
 | See every channel's value live | [DMX Monitor](https://github.com/towneh/vrsl-urp/wiki/DMX-Monitor) |
+| Make a shader of your own react to the desk, through `Runtime/Shaders/VRSLDMX.hlsl` | [DMX in Your Own Shaders](https://github.com/towneh/vrsl-urp/wiki/DMX-in-Your-Own-Shaders) |
 | How it works inside, and its limits | [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) |
 | What changed, and known issues | [`CHANGELOG.md`](CHANGELOG.md) |
 | Verify a change to the package | [`TESTING.md`](TESTING.md) |
