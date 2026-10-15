@@ -1899,9 +1899,12 @@ namespace VRSL.URP
             // Every camera, lit or not, and with or without realtime fixtures: Render Graph
             // puts the grid globals back to black after each camera that published them,
             // so a camera that skipped this would show the shader-driven fixtures dark.
-            renderer.EnqueuePass(_gridTexturePass);
+            // Not a camera rendering the DMX input, which would read its own output.
+            var owned = OwnedSources();
+            if (!VRSLCameraFilter.FeedsDmx(cam, owned))
+                renderer.EnqueuePass(_gridTexturePass);
 
-            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, OwnedSources());
+            var decision = VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, owned);
             if (!decision.Render) return;
 
             // The level this camera's passes cost at. The passes are shared across

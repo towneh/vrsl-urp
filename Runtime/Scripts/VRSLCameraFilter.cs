@@ -114,6 +114,22 @@ namespace VRSL.URP
         /// them is rejected outright — a second line of defence for reader rigs
         /// assembled without <c>VRSL_CameraConfigurator</c>.
         /// </param>
+        /// <summary>Whether <paramref name="cam"/> renders VRSL's DMX input: a registered
+        /// data reader, or a camera rendering into a texture the manager consumes. Such a
+        /// camera gets neither the lighting nor the grid, so nothing it draws can feed
+        /// what VRSL decodes back into the decode.</summary>
+        public static bool FeedsDmx(Camera cam, IReadOnlyList<Texture> ownedSources)
+        {
+            if (cam == null) return false;
+            if (s_DataReaderCameras.Contains(cam)) return true;
+            var target = cam.targetTexture;
+            if (target == null || ownedSources == null) return false;
+            for (int i = 0; i < ownedSources.Count; i++)
+                if (ownedSources[i] != null && ReferenceEquals(ownedSources[i], target))
+                    return true;
+            return false;
+        }
+
         public static VRSLCameraDecision Evaluate(Camera cam, SecondaryCameraMode mode,
                                                   VRSLQuality sceneQuality,
                                                   IReadOnlyList<Texture> ownedSources)
@@ -125,20 +141,11 @@ namespace VRSL.URP
             if (cam.cameraType == CameraType.Reflection
              || cam.cameraType == CameraType.Preview) return VRSLCameraDecision.Skip;
 
-            if (s_DataReaderCameras.Contains(cam)) return VRSLCameraDecision.Skip;
-
-            var target = cam.targetTexture;
+            if (FeedsDmx(cam, ownedSources)) return VRSLCameraDecision.Skip;
 
             // No target texture means the player's view, including XR where the
             // swapchain is handled outside the camera. Always the full treatment.
-            if (target == null) return new VRSLCameraDecision(true, true, sceneQuality);
-
-            if (ownedSources != null)
-            {
-                for (int i = 0; i < ownedSources.Count; i++)
-                    if (ownedSources[i] != null && ReferenceEquals(ownedSources[i], target))
-                        return VRSLCameraDecision.Skip;
-            }
+            if (cam.targetTexture == null) return new VRSLCameraDecision(true, true, sceneQuality);
 
             if (s_MainViews.Contains(cam)) return new VRSLCameraDecision(true, true, sceneQuality);
 
