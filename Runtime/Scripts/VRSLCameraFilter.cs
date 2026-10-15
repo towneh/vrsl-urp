@@ -107,13 +107,6 @@ namespace VRSL.URP
             if (cam != null) s_MainViews.Remove(cam);
         }
 
-        /// <param name="sceneQuality">The manager's own level, which the player's
-        /// view always renders at and a secondary camera renders at or below.</param>
-        /// <param name="ownedSources">
-        /// Render textures this manager consumes. A camera rendering into one of
-        /// them is rejected outright — a second line of defence for reader rigs
-        /// assembled without <c>VRSL_CameraConfigurator</c>.
-        /// </param>
         /// <summary>Whether <paramref name="cam"/> renders VRSL's DMX input: a registered
         /// data reader, or a camera rendering into a texture the manager consumes. Such a
         /// camera gets neither the lighting nor the grid, so nothing it draws can feed
@@ -130,6 +123,13 @@ namespace VRSL.URP
             return false;
         }
 
+        /// <param name="sceneQuality">The manager's own level, which the player's
+        /// view always renders at and a secondary camera renders at or below.</param>
+        /// <param name="ownedSources">
+        /// Render textures this manager consumes. A camera rendering into one of
+        /// them is rejected outright — a second line of defence for reader rigs
+        /// assembled without <c>VRSL_CameraConfigurator</c>.
+        /// </param>
         public static VRSLCameraDecision Evaluate(Camera cam, SecondaryCameraMode mode,
                                                   VRSLQuality sceneQuality,
                                                   IReadOnlyList<Texture> ownedSources)
