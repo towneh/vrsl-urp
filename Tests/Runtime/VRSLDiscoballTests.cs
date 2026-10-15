@@ -9,7 +9,8 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The discoball as a realtime light: a point light whose dots are a cubemap
     /// looked up along the direction from the ball, turned by the ball's spin.
-    /// K1 reads the light record the compute writes for it; K2 looks at the floor.
+    /// K1 reads the light record the compute writes for it; K2 looks at the floor;
+    /// K4 and K6 are the ball itself, turning with its dots and shipped as a mirror.
     /// </summary>
     class VRSLDiscoballTests : VRSLDMXTest
     {
@@ -89,6 +90,85 @@ namespace VRSL.URP.Tests
                 if (IsDiscoball(lights[i])) { Assert.AreEqual(-1, found, "two records read as discoballs"); found = i; }
             Assert.GreaterOrEqual(found, 0, "no light record reads as a discoball");
             return lights[found];
+        }
+
+        /// <summary>K4. The ball turns with its dots: about the fixture's up, at the
+        /// authored rate and in the same sense as the light record's spin phase, without
+        /// moving. Set to Spin Speed 0 it holds where it is rather than jumping.</summary>
+        [UnityTest]
+        public IEnumerator K4_the_ball_turns_with_its_dots()
+        {
+            using var rig = VRSLDMXRig.Build(fixtures: 1);
+            rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
+            rig.Source.speed   = 0f;
+            var light = Hang(rig, spinDegPerSec: 90f);
+            // Tilted, so a ball turned about the world's up reads as the wrong axis.
+            light.transform.rotation = Quaternion.Euler(0f, 0f, 30f);
+            rig.Manager.enabled = false;
+            rig.Manager.enabled = true;
+            rig.Manager.RefreshFixtures();
+            var sphere = light.lensTransform;
+            Assert.IsNotNull(sphere, "the discoball prefab names no ball in its lensTransform");
+            Assert.AreNotSame(light.transform, sphere, "the discoball prefab's ball is the fixture itself");
+
+            yield return rig.Step(3);
+            var firstDots = FindBall(rig);
+            Quaternion first = sphere.rotation;
+            Vector3 position = sphere.position;
+
+            int frames = 12;
+            yield return rig.Step(frames);
+            var laterDots = FindBall(rig);
+
+            Vector3 up       = light.transform.up;
+            float expected   = 90f * VRSLDMXRig.FrameDelta * frames;
+            float turned     = TurnAbout(up, first, sphere.rotation);
+            float dotsTurned = Mathf.DeltaAngle(firstDots.spotParams.w * Mathf.Rad2Deg,
+                                                laterDots.spotParams.w * Mathf.Rad2Deg);
+            Debug.Log($"[K4] ball turned {turned:F2}°, dots {dotsTurned:F2}°, expected {expected:F2}° over {frames} frames");
+            Assert.AreEqual(expected, turned, expected * 0.25f, "the ball did not turn at the authored rate");
+            Assert.AreEqual(Mathf.Sign(dotsTurned), Mathf.Sign(turned), "the ball turns the other way from its dots");
+            Assert.Less(Quaternion.Angle(Quaternion.AngleAxis(turned, up) * first, sphere.rotation), 0.1f,
+                "the ball turned about some axis other than the fixture's up");
+            Assert.Less(Vector3.Distance(position, sphere.position), 1e-4f, "turning the ball moved it");
+
+            light.discoballSpinSpeed = 0f;
+            Quaternion before = sphere.rotation;
+            yield return rig.Step(6);
+            Assert.Less(Quaternion.Angle(before, sphere.rotation), 0.01f,
+                "at Spin Speed 0 the ball should hold where it was");
+        }
+
+        /// <summary>The signed angle a rotation turned about an axis, read from a
+        /// direction square to it.</summary>
+        internal static float TurnAbout(Vector3 axis, Quaternion from, Quaternion to)
+        {
+            Vector3 square = Vector3.Cross(axis, Mathf.Abs(axis.y) < 0.9f ? Vector3.up : Vector3.right).normalized;
+            Vector3 carried = to * (Quaternion.Inverse(from) * square);
+            return Vector3.SignedAngle(square, Vector3.ProjectOnPlane(carried, axis), axis);
+        }
+
+        /// <summary>K6. The shipped DMX discoball names its sphere as the ball, and the
+        /// sphere is a mirror: fully metallic and smooth, with the facet normal map.</summary>
+        [Test]
+        public void K6_the_shipped_discoball_turns_a_mirror_ball()
+        {
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefab);
+            Assert.IsNotNull(prefab, $"the discoball prefab is not at {Prefab}");
+            var sphere = prefab.transform.Find("Discoball-Sphere");
+            Assert.IsNotNull(sphere, "the discoball prefab has no Discoball-Sphere");
+            Assert.AreSame(sphere, prefab.GetComponent<VRStageLighting_DMX_RealtimeLight>().lensTransform,
+                "the discoball prefab's lensTransform is not its sphere, so nothing turns the ball");
+            AssertMirror(sphere.GetComponent<MeshRenderer>().sharedMaterial);
+        }
+
+        internal static void AssertMirror(Material m)
+        {
+            Assert.IsNotNull(m, "the ball has no material");
+            Assert.AreEqual(1f, m.GetFloat("_Metallic"), 1e-4f, $"{m.name} is not fully metallic");
+            Assert.AreEqual(1f, m.GetFloat("_Smoothness"), 1e-4f, $"{m.name} is not fully smooth, so it reflects as a grey blur");
+            Assert.IsNotNull(m.GetTexture("_BumpMap"), $"{m.name} has no facet normal map");
+            Assert.IsTrue(m.IsKeywordEnabled("_NORMALMAP"), $"{m.name} has its normal map switched off");
         }
 
         /// <summary>K2. A cubemap that is black but for one face carves the flood a
