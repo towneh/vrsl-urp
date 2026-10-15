@@ -82,15 +82,15 @@ namespace VRSL.URP.EditorScripts
             // fixtures to light, and the AudioLink manager only where it does not.
             // Resolved here with the same camera filter, and with the scene's fixtures
             // standing in for a fixture count the manager only has in play mode.
-            VRSL_URPLightManager dmx = null;
-            foreach (var m in Object.FindObjectsByType<VRSL_URPLightManager>(
+            VRSL_DMXURPLightManager dmx = null;
+            foreach (var m in Object.FindObjectsByType<VRSL_DMXURPLightManager>(
                          FindObjectsInactive.Exclude))
                 if (m != null && m.isActiveAndEnabled) { dmx = m; break; }
             // The other path (AudioLink), when its integration is installed.
             IVRSLLightManager other = null;
             Behaviour otherBehaviour = null;
             foreach (var m in VRSLLightPaths.Managers(FindObjectsInactive.Exclude))
-                if (m is not VRSL_URPLightManager && m is Behaviour b && b != null && b.isActiveAndEnabled)
+                if (m is not VRSL_DMXURPLightManager && m is Behaviour b && b != null && b.isActiveAndEnabled)
                 { other = m; otherBehaviour = b; break; }
             string otherPath = VRSLLightPaths.NameOf(other);
 

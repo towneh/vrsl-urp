@@ -60,7 +60,7 @@ namespace VRSL.URP.Tests
         /// <summary>Secondary cameras added with <see cref="AddSecondaryCamera"/>.</summary>
         public readonly List<SecondaryCamera> Secondaries = new();
 
-        public VRSL_URPLightManager             Manager { get; private set; }
+        public VRSL_DMXURPLightManager             Manager { get; private set; }
         public VRSL_SyntheticDMXChannelSource   Source  { get; private set; }
         public readonly List<VRStageLighting_DMX_RealtimeLight> Fixtures = new();
 
@@ -227,7 +227,7 @@ namespace VRSL.URP.Tests
                          FindObjectsInactive.Include))
                 if (stale != null && stale.name == RootName)
                     UnityEngine.Object.DestroyImmediate(stale);
-            Assert(VRSL_URPLightManager.Instance == null,
+            Assert(VRSL_DMXURPLightManager.Instance == null,
                 "a light manager outside the rig still holds the singleton, so the rig's own "
               + "manager would destroy itself on Awake");
 
@@ -318,7 +318,7 @@ namespace VRSL.URP.Tests
 
             var mgrGo = UnityEngine.Object.Instantiate(Load<GameObject>(ManagerPrefab), rig._root.transform);
             mgrGo.name = "Light Manager";
-            rig.Manager = mgrGo.GetComponent<VRSL_URPLightManager>();
+            rig.Manager = mgrGo.GetComponent<VRSL_DMXURPLightManager>();
             // Instantiating an active prefab runs Awake and OnEnable before this
             // returns, so the manager collected whatever existed at that moment.
             // The fixtures above already do, but a caller adding more later has
@@ -559,7 +559,7 @@ namespace VRSL.URP.Tests
         /// session sees the assets as imported instead. Clearing the live layout's
         /// five and whatever their materials sample puts both on the same footing.
         /// </summary>
-        static void ClearDmxTextures(VRSL_URPLightManager manager) => ClearGridTextures(manager.LiveTextures);
+        static void ClearDmxTextures(VRSL_DMXURPLightManager manager) => ClearGridTextures(manager.LiveTextures);
 
         /// <summary>Clear one layout's decode chain to black, and whatever its
         /// materials sample, the video grid included.</summary>
@@ -653,22 +653,22 @@ namespace VRSL.URP.Tests
         /// which is the order <c>RefreshFixtures</c> happened to collect in.
         /// <c>FindObjectsByType</c> does not promise one, and in practice it is
         /// neither the scene order nor stable between runs.</summary>
-        public VRSL_URPLightManager.VRSLLightData[] ReadRaw()
+        public VRSL_DMXURPLightManager.VRSLLightData[] ReadRaw()
         {
             var buffer = Manager.LightDataBuffer;
             Assert(buffer != null, "the manager has no light data buffer");
-            var data = new VRSL_URPLightManager.VRSLLightData[Manager.FixtureCount];
+            var data = new VRSL_DMXURPLightManager.VRSLLightData[Manager.FixtureCount];
             buffer.GetData(data);
             return data;
         }
 
         /// <summary>The same data reordered to match <see cref="Fixtures"/>, so a
         /// row can say "fixture 39" and mean the one patched at sector 39.</summary>
-        public VRSL_URPLightManager.VRSLLightData[] ReadLights()
+        public VRSL_DMXURPLightManager.VRSLLightData[] ReadLights()
         {
             Assert(_map != null, "the rig was read before Calibrate() ran");
             var raw = ReadRaw();
-            var ordered = new VRSL_URPLightManager.VRSLLightData[_map.Length];
+            var ordered = new VRSL_DMXURPLightManager.VRSLLightData[_map.Length];
             for (int i = 0; i < _map.Length; i++) ordered[i] = raw[_map[i]];
             return ordered;
         }

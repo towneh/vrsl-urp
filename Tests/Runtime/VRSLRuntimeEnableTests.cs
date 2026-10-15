@@ -38,7 +38,7 @@ namespace VRSL.URP.Tests
         {
             var m = rig.Manager;
             if (m.LightDataBuffer == null || m.FixtureCount == 0) return false;
-            var data = new VRSL_URPLightManager.VRSLLightData[m.FixtureCount];
+            var data = new VRSL_DMXURPLightManager.VRSLLightData[m.FixtureCount];
             m.LightDataBuffer.GetData(data);
             foreach (var d in data)
                 if (Mathf.Abs(d.positionAndRange.x - x) < VRSLDMXRig.Spacing * 0.25f) return true;

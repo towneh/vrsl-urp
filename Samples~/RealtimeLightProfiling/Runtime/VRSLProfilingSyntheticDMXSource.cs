@@ -71,7 +71,7 @@ namespace VRSL.URP.Profiling
         RenderTexture _mainRT, _movementRT,     _strobeRT,     _spinRT;
         VRSLGridTextures     _gridTextures;
         // The manager handed _gridTextures, so it can be taken back before it is destroyed.
-        VRSL_URPLightManager _boundManager;
+        VRSL_DMXURPLightManager _boundManager;
 
         // Match VRSL_LocalUIControlPanel's property names so the volumetric
         // mesh fixtures (which read these _VRSLU_-prefixed globals) bind correctly.
@@ -117,7 +117,7 @@ namespace VRSL.URP.Profiling
 
         /// <summary>Take this source's Grid Textures back off the manager it was given
         /// to. Returns that manager when it was still using them.</summary>
-        VRSL_URPLightManager UnbindFromManager()
+        VRSL_DMXURPLightManager UnbindFromManager()
         {
             var mgr = _boundManager;
             _boundManager = null;
@@ -126,7 +126,7 @@ namespace VRSL.URP.Profiling
             return mgr;
         }
 
-        static void BounceManager(VRSL_URPLightManager mgr)
+        static void BounceManager(VRSL_DMXURPLightManager mgr)
         {
             // Not while the scene is unloading: the manager is about to go too, and
             // allocating on a component mid-teardown is where Unity starts logging.
@@ -321,7 +321,7 @@ namespace VRSL.URP.Profiling
         // Does nothing when the scene has no DMX manager.
         void BindToManager()
         {
-            var mgr = FindAnyObjectByType<VRSL_URPLightManager>();
+            var mgr = FindAnyObjectByType<VRSL_DMXURPLightManager>();
             if (mgr == null) return;
 
             // The same set for every layout, so the manager reads the synthetic grid

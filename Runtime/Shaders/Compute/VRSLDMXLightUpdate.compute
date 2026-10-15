@@ -8,7 +8,7 @@
 #include "../Shared/VRSLLightingLibrary.hlsl"
 #include "../Shared/VRSLVolumetricNoiseBake.hlsl"
 
-// ── DMX source textures (set by VRSL_URPLightManager) ────────────────────────
+// ── DMX source textures (set by VRSL_DMXURPLightManager) ────────────────────────
 Texture2D<float4> _DMXMainTex;
 Texture2D<float4> _DMXMovementTex;
 Texture2D<float4> _DMXStrobeTex;
@@ -23,7 +23,7 @@ uint                                   _FixtureCount;
 uint                                   _VRSLGoboCount;
 
 // ── DMX channels as bytes ─────────────────────────────────────────────────────
-// Set by VRSL_URPLightManager when a channel source is publishing. Channel n
+// Set by VRSL_DMXURPLightManager when a channel source is publishing. Channel n
 // (1-based, as everywhere else in VRSL) is byte n-1. _VRSLU_DMXChannelCount is 0
 // when nothing is publishing, and the reads below fall back to the CRT textures,
 // so a scene without a source behaves exactly as it did.

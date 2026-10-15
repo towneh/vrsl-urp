@@ -32,7 +32,7 @@ namespace VRSL.URP.Tests
                            UniverseSlotValue(absChannel + 7, stride),
                            UniverseSlotValue(absChannel + 8, stride)) / 255f;
 
-        static Vector3 Rgb(VRSL_URPLightManager.VRSLLightData d)
+        static Vector3 Rgb(VRSL_DMXURPLightManager.VRSLLightData d)
             => new Vector3(d.colorAndIntensity.x, d.colorAndIntensity.y, d.colorAndIntensity.z);
 
         [UnityTest]

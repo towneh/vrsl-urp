@@ -17,7 +17,7 @@
 #define VRSL_SURFACE_DEPTH_TOLERANCE(eyeDepth) max((eyeDepth) * 0.0005, 0.0005)
 
 // ──────────────────────────────────────────────────────────────────────────────
-// GPU data layout — must exactly match the C# structs in VRSL_URPLightManager.cs
+// GPU data layout — must exactly match the C# structs in VRSL_DMXURPLightManager.cs
 // ──────────────────────────────────────────────────────────────────────────────
 
 // Per-fixture static configuration (CPU → GPU once, or on change)

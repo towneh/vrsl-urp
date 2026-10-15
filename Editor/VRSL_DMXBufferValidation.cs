@@ -31,7 +31,7 @@ namespace VRSL.URP.EditorScripts
                 return;
             }
 
-            var mgr = VRSL_URPLightManager.Instance;
+            var mgr = VRSL_DMXURPLightManager.Instance;
             if (mgr == null || mgr.ChannelBuffer == null)
             {
                 Debug.LogError("[VRSL URP] No DMX light manager with a channel buffer in the scene.");

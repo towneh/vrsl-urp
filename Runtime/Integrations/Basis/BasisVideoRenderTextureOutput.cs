@@ -231,7 +231,7 @@ namespace VRSL.URP.BasisIntegration
         {
             // Read each frame rather than told: the manager has no event for a switch,
             // and one property read is all this costs.
-            var manager = VRSL_URPLightManager.Instance;
+            var manager = VRSL_DMXURPLightManager.Instance;
             var layout  = manager != null ? manager.GridLayout : null;
             var live    = followManagerLayout && layout is { } l && manager.gridTextures != null
                         ? manager.gridTextures.For(l) : default;

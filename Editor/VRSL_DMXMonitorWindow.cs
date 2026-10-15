@@ -171,7 +171,7 @@ namespace VRSL.URP.EditorScripts
 
         void OnGUI()
         {
-            var mgr = VRSL_URPLightManager.Instance;
+            var mgr = VRSL_DMXURPLightManager.Instance;
 
             if (Event.current.type == EventType.Repaint)
             {
@@ -217,15 +217,15 @@ namespace VRSL.URP.EditorScripts
             Quiet,
         }
 
-        static Feed Classify(VRSL_URPLightManager mgr)
+        static Feed Classify(VRSL_DMXURPLightManager mgr)
         {
             if (mgr.GridLayout != null) return Feed.Grid;
             return mgr.ChannelCount > 0 ? Feed.Buffer : Feed.Quiet;
         }
 
-        static string SourceName(VRSL_URPLightManager mgr) => mgr.ChannelSource?.GetType().Name;
+        static string SourceName(VRSL_DMXURPLightManager mgr) => mgr.ChannelSource?.GetType().Name;
 
-        void DrawToolbar(VRSL_URPLightManager mgr)
+        void DrawToolbar(VRSL_DMXURPLightManager mgr)
         {
             using (new EditorGUILayout.HorizontalScope(EditorStyles.toolbar))
             {
@@ -283,7 +283,7 @@ namespace VRSL.URP.EditorScripts
             _verifyReport = null;
         }
 
-        void DrawSourceHeader(VRSL_URPLightManager mgr, Feed feed)
+        void DrawSourceHeader(VRSL_DMXURPLightManager mgr, Feed feed)
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
@@ -327,7 +327,7 @@ namespace VRSL.URP.EditorScripts
             }
         }
 
-        static string GridDescription(VRSL_URPLightManager mgr)
+        static string GridDescription(VRSL_DMXURPLightManager mgr)
         {
             var rt = mgr.LiveTextures.main;
             if (rt == null) return "none assigned — nothing to read";
@@ -338,7 +338,7 @@ namespace VRSL.URP.EditorScripts
         }
 
         // ── Sampling ──────────────────────────────────────────────────────────
-        static int UniverseCount(VRSL_URPLightManager mgr)
+        static int UniverseCount(VRSL_DMXURPLightManager mgr)
         {
             if (mgr == null) return 0;
             if (mgr.ChannelCount > 0) return mgr.UniverseCount;
@@ -358,7 +358,7 @@ namespace VRSL.URP.EditorScripts
             return Mathf.Max(0, rows * 13 / Slots);
         }
 
-        void Sample(VRSL_URPLightManager mgr)
+        void Sample(VRSL_DMXURPLightManager mgr)
         {
             int universes = UniverseCount(mgr);
             if (universes <= 0) { _slots = 0; return; }
@@ -405,7 +405,7 @@ namespace VRSL.URP.EditorScripts
             }
         }
 
-        void RequestReadback(VRSL_URPLightManager mgr, int origin, int slots, bool compare)
+        void RequestReadback(VRSL_DMXURPLightManager mgr, int origin, int slots, bool compare)
         {
             if (_readbackPending) return;
 
@@ -495,7 +495,7 @@ namespace VRSL.URP.EditorScripts
         static bool IsPadding(int index) => index % Slots >= Usable;
 
         // ── The grid ──────────────────────────────────────────────────────────
-        void DrawGrid(VRSL_URPLightManager mgr, Feed feed)
+        void DrawGrid(VRSL_DMXURPLightManager mgr, Feed feed)
         {
             int universes = UniverseCount(mgr);
             Dimensions(universes, out int cols, out int rows);
@@ -657,7 +657,7 @@ namespace VRSL.URP.EditorScripts
         }
 
         // ── Status ────────────────────────────────────────────────────────────
-        void DrawStatusBar(VRSL_URPLightManager mgr, Feed feed)
+        void DrawStatusBar(VRSL_DMXURPLightManager mgr, Feed feed)
         {
             using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
             {
@@ -670,7 +670,7 @@ namespace VRSL.URP.EditorScripts
             }
         }
 
-        string DescribeCell(VRSL_URPLightManager mgr)
+        string DescribeCell(VRSL_DMXURPLightManager mgr)
         {
             int index = _hover;
             if (_values == null || index < 0 || index >= _values.Length) return string.Empty;
@@ -712,7 +712,7 @@ namespace VRSL.URP.EditorScripts
             return extra > 0 ? $"{first} (+{extra} more here)" : first;
         }
 
-        string Summary(VRSL_URPLightManager mgr)
+        string Summary(VRSL_DMXURPLightManager mgr)
         {
             if (_values == null || _slots == 0) return "Waiting for values.";
 

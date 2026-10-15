@@ -302,10 +302,10 @@ namespace VRSL.URP
                 throw new System.InvalidOperationException($"Manager prefab not found: {ManagerPrefab}");
 
             var manager = (GameObject)PrefabUtility.InstantiatePrefab(source, root.transform);
-            manager.name = "VRSL URP Light Manager";
+            manager.name = "VRSL DMX URP Light Manager";
             // The source below is what lights the fixtures, and a manager reads one only
             // under Stream data.
-            var component = manager.GetComponent<VRSL_URPLightManager>();
+            var component = manager.GetComponent<VRSL_DMXURPLightManager>();
             component.dmxInput = VRSLDmxInput.StreamData;
             PrefabUtility.RecordPrefabInstancePropertyModifications(component);
 
@@ -524,8 +524,8 @@ namespace VRSL.URP
             for (int i = 0; i < total; i++)
                 truss.GetChild(i).gameObject.SetActive(keep.Contains(i));
 
-            if (VRSL_URPLightManager.Instance != null)
-                VRSL_URPLightManager.Instance.RefreshFixtures();
+            if (VRSL_DMXURPLightManager.Instance != null)
+                VRSL_DMXURPLightManager.Instance.RefreshFixtures();
 
             return keep.Count;
         }

@@ -138,7 +138,7 @@ namespace VRSL.URP
         public static VRSLWiringField[] FieldsFor(Object manager)
         {
             if (manager == null) return null;
-            if (manager is VRSL_URPLightManager) return Dmx;
+            if (manager is VRSL_DMXURPLightManager) return Dmx;
             return s_Registered.TryGetValue(manager.GetType(), out var fields) ? fields : null;
         }
 
@@ -259,7 +259,7 @@ namespace VRSL.URP
 
             // Before resolution, which would otherwise fill an rc.6 manager's empty Grid
             // Textures and leave it reading the Horizontal set whatever it was set up for.
-            if (manager is VRSL_URPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
+            if (manager is VRSL_DMXURPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
 
             var result = Resolve(manager);
             if (!result.ChangedAnything && result.Unresolved.Count == 0) return;

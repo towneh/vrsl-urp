@@ -81,7 +81,7 @@ namespace VRSL.URP.Tests
             return new Vector3(pattern[red - 1], pattern[red], pattern[red + 1]);
         }
 
-        static Vector3 Rgb(VRSL_URPLightManager.VRSLLightData d)
+        static Vector3 Rgb(VRSL_DMXURPLightManager.VRSLLightData d)
             => new Vector3(d.colorAndIntensity.x, d.colorAndIntensity.y, d.colorAndIntensity.z);
 
         internal static List<string> Mismatches(VRSLDMXRig rig, float[] pattern)
@@ -150,7 +150,7 @@ namespace VRSL.URP.Tests
             }
         }
 
-        static IEnumerator Sample(VRSLDMXRig rig, int count, List<VRSL_URPLightManager.VRSLLightData[]> into)
+        static IEnumerator Sample(VRSLDMXRig rig, int count, List<VRSL_DMXURPLightManager.VRSLLightData[]> into)
         {
             for (int i = 0; i < count; i++)
             {
@@ -219,7 +219,7 @@ namespace VRSL.URP.Tests
                     Debug.Log($"[G11] {layout} decoded its own grid {frames[0]} frames after the switch");
 
                     rig.Manager.disableStrobe = false;
-                    var samples = new List<VRSL_URPLightManager.VRSLLightData[]>();
+                    var samples = new List<VRSL_DMXURPLightManager.VRSLLightData[]>();
                     yield return Sample(rig, 4, samples);
                     samples.Clear();
                     yield return Sample(rig, 60, samples);
@@ -306,13 +306,13 @@ namespace VRSL.URP.Tests
                 Assert.AreEqual(0, Shader.GetGlobalInteger(s_GridLayout));
 
                 // Added switched off and then switched on: Awake destroys an enabled duplicate.
-                var standby = standbyGo.AddComponent<VRSL_URPLightManager>();
+                var standby = standbyGo.AddComponent<VRSL_DMXURPLightManager>();
                 standby.enabled = false;
                 standbyGo.SetActive(true);
                 standby.gridTextures = shipped;
                 standby.enabled = true;
                 yield return null;
-                Assert.AreSame(rig.Manager, VRSL_URPLightManager.Instance, "the standby took the singleton");
+                Assert.AreSame(rig.Manager, VRSL_DMXURPLightManager.Instance, "the standby took the singleton");
 
                 var legacyMode = shipped.legacy.main is CustomRenderTexture legacyMain ? legacyMain.updateMode
                                                                                         : CustomRenderTextureUpdateMode.OnDemand;
@@ -325,7 +325,7 @@ namespace VRSL.URP.Tests
 
                 rig.Manager.enabled = false;
                 yield return null;
-                Assert.AreSame(standby, VRSL_URPLightManager.Instance, "the standby was not handed the singleton");
+                Assert.AreSame(standby, VRSL_DMXURPLightManager.Instance, "the standby was not handed the singleton");
                 Assert.AreEqual((int)VRSLGridLayout.Legacy, Shader.GetGlobalInteger(s_GridLayout),
                     "the standby took over without reading the layout it was set to");
                 Assert.AreSame(shipped.legacy.main, standby.LiveTextures.main);

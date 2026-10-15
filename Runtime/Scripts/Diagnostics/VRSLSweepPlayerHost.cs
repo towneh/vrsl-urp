@@ -43,7 +43,7 @@ namespace VRSL.URP
         /// than the standard one.</summary>
         const string MirrorsArgument = "-vrsl-mirrors";
         /// <summary>What the manager reads, from <c>-vrsl-dmx-input &lt;0-3&gt;</c>, numbered
-        /// as <see cref="VRSL_URPLightManager.SetDmxInput"/> numbers it. Stream data, the
+        /// as <see cref="VRSL_DMXURPLightManager.SetDmxInput"/> numbers it. Stream data, the
         /// scene's synthetic source, when it is not given.</summary>
         const string DmxInputArgument = "-vrsl-dmx-input";
 

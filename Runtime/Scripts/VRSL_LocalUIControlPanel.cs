@@ -38,7 +38,7 @@ namespace VRSL.URP
         [Header("Light managers")]
         [Tooltip("The DMX light manager this panel adjusts. Leave empty to use the one in "
                + "the scene. Any other VRSL light manager in the scene is adjusted as well.")]
-        public VRSL_URPLightManager dmxManager;
+        public VRSL_DMXURPLightManager dmxManager;
 
         [Header("Quality")]
         [Tooltip("How much the beams cost. High marches them more finely, Standard suits "
@@ -178,9 +178,9 @@ namespace VRSL.URP
         public void ResolveManagers()
         {
             if (dmxManager == null)
-                dmxManager = VRSL_URPLightManager.Instance != null
-                    ? VRSL_URPLightManager.Instance
-                    : FindAnyObjectByType<VRSL_URPLightManager>();
+                dmxManager = VRSL_DMXURPLightManager.Instance != null
+                    ? VRSL_DMXURPLightManager.Instance
+                    : FindAnyObjectByType<VRSL_DMXURPLightManager>();
             _otherManagers.RemoveAll(m => !VRSLLightPaths.IsAlive(m.manager));
             foreach (var m in VRSLLightPaths.OtherManagers(ownerOnly: false))
             {
@@ -633,7 +633,7 @@ namespace VRSL.URP
 
         static string ManagerStatus(VRSL_LocalUIControlPanel panel)
         {
-            var dmx    = panel.dmxManager != null ? panel.dmxManager : Object.FindAnyObjectByType<VRSL_URPLightManager>();
+            var dmx    = panel.dmxManager != null ? panel.dmxManager : Object.FindAnyObjectByType<VRSL_DMXURPLightManager>();
             var others = VRSLLightPaths.OtherManagers(ownerOnly: false);
             if (dmx == null && others.Count == 0)
                 return "No URP light manager in this scene. The beam quality buttons and the "

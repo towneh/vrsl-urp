@@ -69,7 +69,7 @@ namespace VRSL.URP
                 yield break;
             }
 
-            var manager = VRSL_URPLightManager.Instance;
+            var manager = VRSL_DMXURPLightManager.Instance;
             if (manager == null)
             {
                 outcome.error = "No VRSL DMX light manager in the sweep scene.";
@@ -337,7 +337,7 @@ namespace VRSL.URP
         /// inspector shows.
         /// </summary>
         static IEnumerator RunMirrors(VRSLBenchmarkSettings settings, VRSLBenchmarkRun run,
-                                      GameObject root, Camera camera, VRSL_URPLightManager manager,
+                                      GameObject root, Camera camera, VRSL_DMXURPLightManager manager,
                                       VRSLQualityPreset.Session quality,
                                       VRSLBenchmark.DeterminismScope determinism,
                                       List<Camera> mirrorCameras, Action<bool> sharedFrame)

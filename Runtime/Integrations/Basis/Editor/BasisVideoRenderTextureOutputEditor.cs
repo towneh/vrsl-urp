@@ -18,7 +18,7 @@ namespace VRSL.URP.BasisIntegration
         private int dragIndex = -1;
         // The layout whose corners the drag view edits while following.
         private int editLayout;
-        private VRSL_URPLightManager sceneManager;
+        private VRSL_DMXURPLightManager sceneManager;
         private Material previewMat;
         private RenderTexture previewRT;
         private double  nextPreview;
@@ -91,8 +91,8 @@ namespace VRSL.URP.BasisIntegration
         {
             if (!cfg.followManagerLayout) return cfg.Target;
             // Found once rather than per editor tick; the preview asks every tick.
-            if (sceneManager == null) sceneManager = Object.FindAnyObjectByType<VRSL_URPLightManager>();
-            var manager = VRSL_URPLightManager.Instance != null ? VRSL_URPLightManager.Instance : sceneManager;
+            if (sceneManager == null) sceneManager = Object.FindAnyObjectByType<VRSL_DMXURPLightManager>();
+            var manager = VRSL_DMXURPLightManager.Instance != null ? VRSL_DMXURPLightManager.Instance : sceneManager;
             var raw = manager != null && manager.gridTextures != null
                 ? BasisVideoRenderTextureOutput.RawGridOf(manager.gridTextures.For((VRSLGridLayout)editLayout))
                 : null;

@@ -437,7 +437,7 @@ namespace VRSL.URP
             "VRSL Surface Properties Prepass",
             "VRSL Normals Prepass",
             "VRSL Tile Light Cull",
-            VRSL_URPLightManager.DecodeMarker,
+            VRSL_DMXURPLightManager.DecodeMarker,
             // The AudioLink manager's DecodeMarker, spelt out because that manager is in
             // an optional assembly; a row there checks the two agree.
             "VRSL AudioLink Light Compute",
@@ -463,7 +463,7 @@ namespace VRSL.URP
             readonly List<bool>      _wasEnabled = new();
 
             public int Count => _managers.Count;
-            public VRSL_URPLightManager Dmx { get; private set; }
+            public VRSL_DMXURPLightManager Dmx { get; private set; }
             /// <summary>The running manager of the other path (AudioLink), when its
             /// integration is installed and one is in the scene.</summary>
             internal IVRSLLightManager Other { get; private set; }
@@ -471,7 +471,7 @@ namespace VRSL.URP
             public static ManagerSet Find()
             {
                 var set = new ManagerSet();
-                var dmx = VRSL_URPLightManager.Instance;
+                var dmx = VRSL_DMXURPLightManager.Instance;
                 if (dmx != null) { set.Track(dmx); set.Dmx = dmx; }
 
                 var other = VRSLLightPaths.RunningOther();

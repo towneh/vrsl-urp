@@ -17,14 +17,14 @@
 // reading the exact same cell.
 SamplerState sampler_point_clamp;
 
-// Grid texel size, published by VRSL_URPLightManager as a global from the bound grid CRT's
+// Grid texel size, published by VRSL_DMXURPLightManager as a global from the bound grid CRT's
 // dimensions. Used instead of the texture's auto _TexelSize, which Unity overwrites for a
 // SetGlobalTexture-bound texture — leaving the surface decode with a wrong size and the
 // highest-patched fixtures sampling the wrong (black) cell. xyz/w = (1/w, 1/h, w, h).
 float4 _VRSLDMXTexelSize;
 
 // The DMX channel buffer and the compute's per-channel state, published by
-// VRSL_URPLightManager while a channel source is publishing. _VRSLU_DMXChannelCount is 0
+// VRSL_DMXURPLightManager while a channel source is publishing. _VRSLU_DMXChannelCount is 0
 // otherwise, and every read below then takes the grid, so the choice is the manager's
 // and the same one the compute makes. Channel n is byte n-1 of the channel buffer and
 // element n-1 of the others. Structured buffers outside compute need shader model 5:

@@ -24,7 +24,7 @@ Modifications applied during the fork: shader picker names rewritten from `VRSL/
 
 The following were authored by towneh on the `urp-volumetric-lights` development branch of the upstream fork prior to extraction, and constitute the URP realtime light path:
 
-- `VRSL_URPLightManager`, `VRSL_AudioLinkURPLightManager` (manager singletons).
+- `VRSL_DMXURPLightManager`, `VRSL_AudioLinkURPLightManager` (manager singletons).
 - `VRSLDMXLightPasses`, `VRSLAudioLinkLightPasses` (URP render pass classes).
 - `VRSLSurfacePrepass` (VRSL-owned prepass capturing MSAA-agnostic authored normals plus albedo, smoothness and metallic).
 - `VRSLTileCullPass`, `VRSLLightCull.compute` (screen-space tiled light culling).

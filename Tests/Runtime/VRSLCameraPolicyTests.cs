@@ -15,9 +15,9 @@ namespace VRSL.URP.Tests
     {
         const float Tau = 2f * Mathf.PI;
 
-        static float SpinOf(VRSL_URPLightManager.VRSLLightData d) => d.spotParams.w;
+        static float SpinOf(VRSL_DMXURPLightManager.VRSLLightData d) => d.spotParams.w;
 
-        static Vector3 Rgb(VRSL_URPLightManager.VRSLLightData d)
+        static Vector3 Rgb(VRSL_DMXURPLightManager.VRSLLightData d)
             => new Vector3(d.colorAndIntensity.x, d.colorAndIntensity.y, d.colorAndIntensity.z);
 
         /// <summary>Copied from N8. The gobo spin rate a channel implies, in rad/s;
@@ -235,8 +235,8 @@ namespace VRSL.URP.Tests
         public IEnumerator M7_four_cameras_advance_spin_and_movement_at_the_one_camera_rate()
         {
             const int span = 600;                                   // 10 s of captured time
-            VRSL_URPLightManager.VRSLLightData[] alone = null, together = null;
-            VRSL_URPLightManager.VRSLLightData[] before = null;
+            VRSL_DMXURPLightManager.VRSLLightData[] alone = null, together = null;
+            VRSL_DMXURPLightManager.VRSLLightData[] before = null;
 
             yield return Run(0, null, r => alone = r.ReadLights());
             // The baseline for the rate comes from the same run as the end reading, so

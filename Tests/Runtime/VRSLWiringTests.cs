@@ -51,7 +51,7 @@ namespace VRSL.URP.Tests
         [Test]
         public void EveryWiringFieldNameExistsOnItsManager()
         {
-            AssertFieldsExist(typeof(VRSL_URPLightManager), VRSLWiring.Dmx, "DMX");
+            AssertFieldsExist(typeof(VRSL_DMXURPLightManager), VRSLWiring.Dmx, "DMX");
         }
 
         /// <summary>
@@ -79,7 +79,7 @@ namespace VRSL.URP.Tests
             var somebodyElses = ScriptableObject.CreateInstance<VRSLGridTextures>();
             try
             {
-                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var manager = go.AddComponent<VRSL_DMXURPLightManager>();
 
                 // A deliberate override: an author's own grid textures rather than the
                 // package's, which is exactly what never filling a set field protects. Resolution that
@@ -136,7 +136,7 @@ namespace VRSL.URP.Tests
             go.SetActive(false);
             try
             {
-                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var manager = go.AddComponent<VRSL_DMXURPLightManager>();
                 Assert.IsFalse(VRSLWiring.AutoResolveSuppressed(manager));
 
                 var outer = VRSLWiring.SuppressAutoResolve(manager);
@@ -175,7 +175,7 @@ namespace VRSL.URP.Tests
             var standbyGo = new GameObject("wiring standby");
             try
             {
-                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+                var owner = ownerGo.AddComponent<VRSL_DMXURPLightManager>();
                 yield return null;
 
                 // Added while switched off, because Awake destroys an enabled duplicate
@@ -184,7 +184,7 @@ namespace VRSL.URP.Tests
                 // survives, and switching it on afterwards leaves it enabled and not the
                 // owner — which is the only state a handover has anything to hand to.
                 standbyGo.SetActive(false);
-                var standby = standbyGo.AddComponent<VRSL_URPLightManager>();
+                var standby = standbyGo.AddComponent<VRSL_DMXURPLightManager>();
                 standby.enabled = false;
                 standbyGo.SetActive(true);
                 standby.enabled = true;
@@ -220,7 +220,7 @@ namespace VRSL.URP.Tests
             go.SetActive(false);
             try
             {
-                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var manager = go.AddComponent<VRSL_DMXURPLightManager>();
                 var so = new SerializedObject(manager);
                 foreach (var field in VRSLWiring.Dmx)
                     so.FindProperty(field.Field).objectReferenceValue = null;
@@ -270,7 +270,7 @@ namespace VRSL.URP.Tests
             var somebodyElses = ScriptableObject.CreateInstance<VRSLGridTextures>();
             try
             {
-                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var manager = go.AddComponent<VRSL_DMXURPLightManager>();
 
                 // Deliberately not the package's asset, and deliberately alone in being
                 // set: everything else is empty and wants filling, which is what a repair

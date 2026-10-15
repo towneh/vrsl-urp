@@ -27,7 +27,7 @@ namespace VRSL.URP.Tests
         [UnityTest]
         public IEnumerator ASwitchedOffManagerLeavesTheSingletonAlone()
         {
-            Assert.IsNull(VRSL_URPLightManager.Instance,
+            Assert.IsNull(VRSL_DMXURPLightManager.Instance,
                 "something outside this row already holds the singleton, so the row cannot "
               + "tell who claimed it");
 
@@ -39,15 +39,15 @@ namespace VRSL.URP.Tests
                 // a component serialised into a scene switched off arrives exactly this way.
                 dormantGo = new GameObject("dormant manager");
                 dormantGo.SetActive(false);
-                dormantGo.AddComponent<VRSL_URPLightManager>().enabled = false;
+                dormantGo.AddComponent<VRSL_DMXURPLightManager>().enabled = false;
                 dormantGo.SetActive(true);
 
-                Assert.IsNull(VRSL_URPLightManager.Instance,
+                Assert.IsNull(VRSL_DMXURPLightManager.Instance,
                     "a switched-off manager claimed the singleton in Awake, and it will never "
                   + "release it: OnDisable does not run on a component that was never enabled");
 
                 ownerGo = new GameObject("running manager");
-                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+                var owner = ownerGo.AddComponent<VRSL_DMXURPLightManager>();
                 yield return null;
 
                 // Order matters here. Destroy is deferred to the end of the frame, so the
@@ -57,7 +57,7 @@ namespace VRSL.URP.Tests
                 Assert.IsTrue(owner != null,
                     "the running manager destroyed itself as a duplicate, so nothing in the "
                   + "scene drives the light path");
-                Assert.IsTrue(VRSL_URPLightManager.Instance == owner,
+                Assert.IsTrue(VRSL_DMXURPLightManager.Instance == owner,
                     "the running manager did not end up owning the singleton");
             }
             finally
@@ -66,7 +66,7 @@ namespace VRSL.URP.Tests
                 if (dormantGo != null) Object.DestroyImmediate(dormantGo);
             }
 
-            Assert.IsNull(VRSL_URPLightManager.Instance,
+            Assert.IsNull(VRSL_DMXURPLightManager.Instance,
                 "the singleton outlived both managers, so every row after this one starts "
               + "against a claim it cannot see");
         }
@@ -83,7 +83,7 @@ namespace VRSL.URP.Tests
         [UnityTest]
         public IEnumerator StandingDownHandsTheSingletonToAManagerThatIsStillRunning()
         {
-            Assert.IsNull(VRSL_URPLightManager.Instance,
+            Assert.IsNull(VRSL_DMXURPLightManager.Instance,
                 "something outside this row already holds the singleton, so the row cannot "
               + "tell who claimed it");
 
@@ -91,7 +91,7 @@ namespace VRSL.URP.Tests
             try
             {
                 ownerGo = new GameObject("running manager");
-                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+                var owner = ownerGo.AddComponent<VRSL_DMXURPLightManager>();
 
                 // Attached after the owner claims, because a source publishes to
                 // whichever manager holds the singleton when it is enabled.
@@ -105,19 +105,19 @@ namespace VRSL.URP.Tests
                 // component serialised into a scene switched off arrives.
                 spareGo = new GameObject("spare manager");
                 spareGo.SetActive(false);
-                var spare = spareGo.AddComponent<VRSL_URPLightManager>();
+                var spare = spareGo.AddComponent<VRSL_DMXURPLightManager>();
                 spare.enabled = false;
                 spareGo.SetActive(true);
 
                 spare.enabled = true;
                 yield return null;
-                Assert.IsTrue(VRSL_URPLightManager.Instance == owner,
+                Assert.IsTrue(VRSL_DMXURPLightManager.Instance == owner,
                     "the spare took the singleton from the running manager on being enabled");
 
                 owner.enabled = false;
                 yield return null;
 
-                Assert.IsTrue(VRSL_URPLightManager.Instance == spare,
+                Assert.IsTrue(VRSL_DMXURPLightManager.Instance == spare,
                     "the owner stood down and handed the singleton to nobody. The spare is "
                   + "still enabled and will not get another OnEnable, so the scene has a "
                   + "manager in it and no light path");
@@ -136,7 +136,7 @@ namespace VRSL.URP.Tests
                 if (spareGo != null)  Object.DestroyImmediate(spareGo);
             }
 
-            Assert.IsNull(VRSL_URPLightManager.Instance,
+            Assert.IsNull(VRSL_DMXURPLightManager.Instance,
                 "the singleton outlived both managers, so every row after this one starts "
               + "against a claim it cannot see");
         }
@@ -186,11 +186,11 @@ namespace VRSL.URP.Tests
                 // reaches an enabled non-owner state, and it is the state this guards.
                 spareGo = new GameObject("spare manager");
                 spareGo.SetActive(false);
-                var spare = spareGo.AddComponent<VRSL_URPLightManager>();
+                var spare = spareGo.AddComponent<VRSL_DMXURPLightManager>();
                 spare.enabled = false;
                 spareGo.SetActive(true);
                 spare.enabled = true;
-                Assert.IsTrue(VRSL_URPLightManager.Instance == rig.Manager,
+                Assert.IsTrue(VRSL_DMXURPLightManager.Instance == rig.Manager,
                     "the spare took the singleton, so this row is no longer about a spare");
 
                 yield return rig.Step(3);

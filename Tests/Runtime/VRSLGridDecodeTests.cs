@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// </summary>
     class VRSLGridDecodeTests : VRSLDMXTest
     {
-        static Vector3 Rgb(VRSL_URPLightManager.VRSLLightData d)
+        static Vector3 Rgb(VRSL_DMXURPLightManager.VRSLLightData d)
             => new Vector3(d.colorAndIntensity.x, d.colorAndIntensity.y, d.colorAndIntensity.z);
 
         /// <summary>The last channel the rig patches: its last fixture's thirteenth.</summary>
@@ -560,7 +560,7 @@ namespace VRSL.URP.Tests
         /// the probe reads.
         /// </summary>
         static Color[] ReadThrough(string probe, int count, RenderTexture grid, RenderTexture spin,
-                                   VRSL_URPLightManager manager, bool fromBuffer,
+                                   VRSL_DMXURPLightManager manager, bool fromBuffer,
                                    VRSLGridLayout layout = VRSLGridLayout.Horizontal,
                                    System.Action<Material> configure = null)
         {

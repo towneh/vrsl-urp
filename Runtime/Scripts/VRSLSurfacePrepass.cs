@@ -43,7 +43,7 @@ namespace VRSL.URP
     /// albedo or material: the drawer ignores override shaders, so they light as
     /// the neutral fallback too (<see cref="GpuResidentDrawerConfigured"/>).
     ///
-    /// Both <see cref="VRSL_URPLightManager"/> (DMX) and
+    /// Both <see cref="VRSL_DMXURPLightManager"/> (DMX) and
     /// <c>VRSL_AudioLinkURPLightManager</c> (AudioLink) instantiate this
     /// pass, but only one enqueues it per camera: the output is identical either
     /// way, so the DMX manager owns it and the AudioLink manager defers while a

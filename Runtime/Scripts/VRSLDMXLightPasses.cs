@@ -38,7 +38,7 @@ namespace VRSL.URP
     ///      raymarch in-scattering at half resolution, and bilaterally composite
     ///      the result onto the camera colour target (Hidden/VRSL-URP/VolumetricLighting).
     ///
-    /// VRSL_URPLightManager subscribes to RenderPipelineManager.beginCameraRendering
+    /// VRSL_DMXURPLightManager subscribes to RenderPipelineManager.beginCameraRendering
     /// and enqueues instances of these passes per camera. There is no
     /// ScriptableRendererFeature in this pipeline — the runtime-injection path is
     /// the only supported mode of operation, so no URP Renderer asset authoring is
@@ -78,7 +78,7 @@ namespace VRSL.URP
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
-                var mgr = VRSL_URPLightManager.Instance;
+                var mgr = VRSL_DMXURPLightManager.Instance;
                 if (mgr == null || mgr.DMXMainHandle == null) return;
 
                 using var builder = rg.AddRasterRenderPass<PassData>("VRSL DMX Grid Textures", out _);
@@ -125,7 +125,7 @@ namespace VRSL.URP
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
-                var mgr = VRSL_URPLightManager.Instance;
+                var mgr = VRSL_DMXURPLightManager.Instance;
                 if (mgr == null || mgr.FixtureCount == 0
                     || mgr.LightingMaterial == null
                     || mgr.LightDataBuffer  == null) return;
@@ -234,7 +234,7 @@ namespace VRSL.URP
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
-                var mgr   = VRSL_URPLightManager.Instance;
+                var mgr   = VRSL_DMXURPLightManager.Instance;
                 var level = VRSLQualityLevel.For(Quality);
                 if (mgr == null
                     || mgr.FixtureCount == 0

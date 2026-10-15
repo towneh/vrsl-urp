@@ -76,8 +76,8 @@ namespace VRSL.URP
 
         sealed class DmxTarget : Target
         {
-            readonly VRSL_URPLightManager _m;
-            public DmxTarget(VRSL_URPLightManager m) => _m = m;
+            readonly VRSL_DMXURPLightManager _m;
+            public DmxTarget(VRSL_DMXURPLightManager m) => _m = m;
 
             public override Behaviour   Component  => _m;
             public override VRSLQuality Quality    { get => _m.quality;       set => _m.quality = value; }
@@ -100,9 +100,9 @@ namespace VRSL.URP
         {
             readonly List<Target> _targets = new();
 
-            public static Session Begin(VRSL_URPLightManager manager) => Begin(manager, null);
+            public static Session Begin(VRSL_DMXURPLightManager manager) => Begin(manager, null);
 
-            public static Session Begin(VRSL_URPLightManager dmx, IVRSLLightManager other)
+            public static Session Begin(VRSL_DMXURPLightManager dmx, IVRSLLightManager other)
             {
                 // Apply and Restore both tolerate an empty set, so Begin has to as well —
                 // otherwise the one entry point throws while the two that follow it are

@@ -250,13 +250,13 @@ namespace VRSL.URP.Tests
                 yield return rig.Step(2);
                 AllDark(rig, "with Stream data chosen and its source switched off");
 
-                yield return rig.Step(VRSLDMXRig.Frames(VRSL_URPLightManager.StreamQuietGrace - 1f));
+                yield return rig.Step(VRSLDMXRig.Frames(VRSL_DMXURPLightManager.StreamQuietGrace - 1f));
                 Assert.AreEqual(0, quiet.Count, "the manager spoke before the grace period was up");
                 AllDark(rig, "a few seconds later");
 
                 yield return rig.Step(VRSLDMXRig.Frames(2f));
                 Assert.AreEqual(1, quiet.Count, "the manager did not say once why the lights are dark");
-                yield return rig.Step(VRSLDMXRig.Frames(VRSL_URPLightManager.StreamQuietGrace + 1f));
+                yield return rig.Step(VRSLDMXRig.Frames(VRSL_DMXURPLightManager.StreamQuietGrace + 1f));
                 Assert.AreEqual(1, quiet.Count, "the manager said it more than once");
 
                 rig.Source.enabled = true;
@@ -290,7 +290,7 @@ namespace VRSL.URP.Tests
 
                 // The menu is how an author gets this report.
                 var menu = (ContextMenu)System.Attribute.GetCustomAttribute(
-                    typeof(VRSL_URPLightManager).GetMethod(nameof(VRSL_URPLightManager.LogDiagnostics)),
+                    typeof(VRSL_DMXURPLightManager).GetMethod(nameof(VRSL_DMXURPLightManager.LogDiagnostics)),
                     typeof(ContextMenu));
                 Assert.AreEqual("VRSL Diagnostics", menu?.menuItem,
                     "the VRSL Diagnostics menu entry is not on LogDiagnostics");
@@ -361,13 +361,13 @@ namespace VRSL.URP.Tests
                 Assert.Greater(rig.Manager.ChannelCount, 0, "Stream data chosen early did not read the late source");
 
                 // A spare manager, switched on after the owner: it takes the setting only.
-                var spare = spareGo.AddComponent<VRSL_URPLightManager>();
+                var spare = spareGo.AddComponent<VRSL_DMXURPLightManager>();
                 spare.enabled = false;
                 spareGo.SetActive(true);
                 spare.gridTextures = shipped;
                 spare.enabled = true;
                 yield return null;
-                Assert.AreSame(rig.Manager, VRSL_URPLightManager.Instance, "the spare took the singleton");
+                Assert.AreSame(rig.Manager, VRSL_DMXURPLightManager.Instance, "the spare took the singleton");
                 spare.SetDmxInput((int)VRSLDmxInput.LegacyGrid);
                 spare.SetDmxInput((int)VRSLDmxInput.LegacyGrid);
                 Assert.AreEqual(VRSLDmxInput.LegacyGrid, spare.dmxInput);
@@ -378,7 +378,7 @@ namespace VRSL.URP.Tests
                 // the source on standby.
                 rig.Manager.enabled = false;
                 yield return null;
-                Assert.AreSame(spare, VRSL_URPLightManager.Instance, "the spare was not handed the singleton");
+                Assert.AreSame(spare, VRSL_DMXURPLightManager.Instance, "the spare was not handed the singleton");
                 Assert.AreEqual(VRSLDmxInput.LegacyGrid, spare.dmxInput, "the successor took the outgoing input");
                 Assert.IsTrue(ReferenceEquals(late, spare.ChannelSource), "the source did not move with the singleton");
                 yield return null;

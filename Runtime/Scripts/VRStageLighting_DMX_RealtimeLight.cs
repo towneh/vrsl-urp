@@ -6,7 +6,7 @@ namespace VRSL.URP
     /// Per-fixture config component for the VRSL DMX URP realtime light path.
     ///
     /// Attach to each fixture that should contribute scene illumination driven by DMX.
-    /// VRSL_URPLightManager collects these components, uploads their config to a GPU
+    /// VRSL_DMXURPLightManager collects these components, uploads their config to a GPU
     /// StructuredBuffer once (and again on change), then a compute shader decodes DMX
     /// channel data each frame and a fullscreen additive pass renders the lighting.
     ///

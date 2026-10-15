@@ -5,7 +5,7 @@ namespace VRSL.URP
 {
     /// <summary>
     /// A lighting desk that is not there: generates DMX channel values on the
-    /// CPU and hands them to <see cref="VRSL_URPLightManager"/> as blocks.
+    /// CPU and hands them to <see cref="VRSL_DMXURPLightManager"/> as blocks.
     ///
     /// It exists so the buffer path can be brought up and checked without a
     /// video stream, a network, or a real desk. The ramp pattern in particular
@@ -94,13 +94,13 @@ namespace VRSL.URP
         {
             PublishedFrames = 0;
             Allocate();
-            var mgr = VRSL_URPLightManager.Instance;
+            var mgr = VRSL_DMXURPLightManager.Instance;
             if (mgr != null) mgr.ChannelSource = this;
         }
 
         void OnDisable()
         {
-            var mgr = VRSL_URPLightManager.Instance;
+            var mgr = VRSL_DMXURPLightManager.Instance;
             if (mgr != null && ReferenceEquals(mgr.ChannelSource, this)) mgr.ChannelSource = null;
             if (_values.IsCreated) _values.Dispose();
             if (_blocks.IsCreated) _blocks.Dispose();

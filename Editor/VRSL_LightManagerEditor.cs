@@ -67,7 +67,7 @@ namespace VRSL.URP.EditorScripts
         void DrawInputSource(SerializedProperty input)
         {
             if (input.hasMultipleDifferentValues || serializedObject.isEditingMultipleObjects) return;
-            var manager = (VRSL_URPLightManager)target;
+            var manager = (VRSL_DMXURPLightManager)target;
             // In Play mode the source the manager actually holds; otherwise whichever the
             // scene would bind, which is the one a source finds on enable.
             var source = Application.isPlaying
@@ -114,7 +114,7 @@ namespace VRSL.URP.EditorScripts
 
             // Above quality because it decides whether anything lights at all. The DMX
             // manager only; the AudioLink one has no DMX input.
-            var input = serializedObject.FindProperty(nameof(VRSL_URPLightManager.dmxInput));
+            var input = serializedObject.FindProperty(nameof(VRSL_DMXURPLightManager.dmxInput));
             if (input != null)
             {
                 // Named here: Unity would title the field "Dmx Input".
@@ -275,7 +275,7 @@ namespace VRSL.URP.EditorScripts
                     if (prop != null) EditorGUILayout.PropertyField(prop);
                 }
 
-                var input = serializedObject.FindProperty(nameof(VRSL_URPLightManager.dmxInput));
+                var input = serializedObject.FindProperty(nameof(VRSL_DMXURPLightManager.dmxInput));
                 if (input != null && !input.hasMultipleDifferentValues)
                     EditorGUILayout.LabelField(
                         input.enumValueIndex == (int)VRSLDmxInput.StreamData
@@ -315,7 +315,7 @@ namespace VRSL.URP.EditorScripts
                 if (VRSLWiring.FieldsFor(manager) == null) continue;
                 // Also how a prefab asset still carrying an rc.6 manager is brought
                 // across, since automatic resolution never touches assets.
-                if (manager is VRSL_URPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
+                if (manager is VRSL_DMXURPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
                 // No Undo.RecordObject here: Resolve writes through SerializedObject,
                 // which registers its own undo. Recording as well would put two entries
                 // on the stack for one repair, so undoing it would take two presses.
@@ -355,9 +355,9 @@ namespace VRSL.URP.EditorScripts
             string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s.Substring(1);
     }
 
-    [CustomEditor(typeof(VRSL_URPLightManager))]
+    [CustomEditor(typeof(VRSL_DMXURPLightManager))]
     [CanEditMultipleObjects]
-    class VRSL_URPLightManagerEditor : VRSLLightManagerEditor { }
+    class VRSL_DMXURPLightManagerEditor : VRSLLightManagerEditor { }
 
     /// <summary>The repair, reachable without hunting for the component.</summary>
     static class VRSLWiringMenu

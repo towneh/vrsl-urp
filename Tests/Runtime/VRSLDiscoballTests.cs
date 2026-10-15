@@ -41,7 +41,7 @@ namespace VRSL.URP.Tests
             return ball;
         }
 
-        static bool IsDiscoball(VRSL_URPLightManager.VRSLLightData l)
+        static bool IsDiscoball(VRSL_DMXURPLightManager.VRSLLightData l)
             => Mathf.Repeat(l.directionAndType.w, 4f) > 1.5f;
 
         /// <summary>K1. The compute writes the discoball as its own light type, without
@@ -81,7 +81,7 @@ namespace VRSL.URP.Tests
                 "the ball did not turn at the authored rate between two reads");
         }
 
-        static VRSL_URPLightManager.VRSLLightData FindBall(VRSLDMXRig rig)
+        static VRSL_DMXURPLightManager.VRSLLightData FindBall(VRSLDMXRig rig)
         {
             var lights = rig.ReadRaw();
             int found = -1;

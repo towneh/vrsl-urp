@@ -217,7 +217,7 @@ namespace VRSL.URP.Tests
         /// DestroyImmediate rather than Destroy: a test advances frames itself and the
         /// deferred destruction would land after the bounce that is meant to see it.
         /// </summary>
-        static void DropMaterials(VRSL_URPLightManager manager)
+        static void DropMaterials(VRSL_DMXURPLightManager manager)
         {
             if (manager.LightingMaterial   != null) Object.DestroyImmediate(manager.LightingMaterial);
             if (manager.VolumetricMaterial != null) Object.DestroyImmediate(manager.VolumetricMaterial);

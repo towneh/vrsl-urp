@@ -4,6 +4,8 @@
 
 ### Changed
 
+- **Breaking for scripts: the DMX light manager's class is `VRSL_DMXURPLightManager`,** to match `VRSL_AudioLinkURPLightManager`. It was `VRSL_URPLightManager`. Scenes and prefabs keep their managers, because Unity finds the component by its script file's ID, which hasn't changed. A script of your own that names the old class stops compiling until it uses the new name: replace `VRSL_URPLightManager` with `VRSL_DMXURPLightManager`. The Add Component menu lists it as **VRSL → DMX URP Light Manager**, and the setup tools name the GameObject they create `VRSL DMX URP Light Manager`.
+
 - **The light managers follow realtime fixtures switched on and off.** Switch a DMX or AudioLink realtime fixture's GameObject, or anything above it, off or on while the world runs, or spawn a fixture prefab, and its light and beam go or come back by the next frame. Previously each manager kept the fixtures it found when it was enabled until something called `RefreshFixtures()`, so a fixture switched off kept drawing and one switched on stayed dark. However many fixtures switch in one frame, each manager looks through the scene once, and not at all in a frame where none did. `RefreshFixtures()` still works and nothing needs to call it.
 
 - **A realtime fixture whose component is switched off casts no light.** It used to keep drawing as long as its GameObject was on. Its body keeps glowing with the show, so switch the GameObject off to hide the whole fixture.

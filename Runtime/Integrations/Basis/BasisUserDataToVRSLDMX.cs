@@ -13,7 +13,7 @@ namespace VRSL.URP.BasisIntegration
     /// data; <see cref="BasisMediaPlayer"/> raises every such message at the
     /// moment that frame is shown, and this picks out Truss's by UUID and hands
     /// the record to <see cref="VRSLTrussRecordSource"/>, which decodes it and
-    /// feeds <see cref="VRSL_URPLightManager"/>. No pixel grid, no capture
+    /// feeds <see cref="VRSL_DMXURPLightManager"/>. No pixel grid, no capture
     /// camera, no decode chain: the bytes the desk sent are the bytes the
     /// fixtures read.
     /// </summary>

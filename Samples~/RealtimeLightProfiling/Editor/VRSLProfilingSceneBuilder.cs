@@ -46,7 +46,7 @@ namespace VRSL.URP.Profiling.Editor
         const string TrussName      = "Truss";
         const string CameraName     = "Profiling Camera";
         const string FloorName      = "Floor";
-        const string ManagerName    = "VRSL URP Light Manager";
+        const string ManagerName    = "VRSL DMX URP Light Manager";
         const string SourceName     = "Synthetic DMX Source";
 
         FixtureType   fixtureType    = FixtureType.MoverSpotlight;
@@ -173,14 +173,14 @@ namespace VRSL.URP.Profiling.Editor
             inst.name = ManagerName;
             Undo.RegisterCreatedObjectUndo(inst, "Spawn URP light manager");
 
-            EnsureManagerShaders(inst.GetComponent<VRSL.URP.VRSL_URPLightManager>());
+            EnsureManagerShaders(inst.GetComponent<VRSL.URP.VRSL_DMXURPLightManager>());
         }
 
         // Defensive: assign the volumetric and lighting shaders on the spawned
         // manager if the prefab didn't carry refs. Profiling without the
         // volumetric shader silently produces only floor lighting (no cones),
         // which gives misleading "URP looks cheap" numbers in the sweep.
-        static void EnsureManagerShaders(VRSL.URP.VRSL_URPLightManager mgr)
+        static void EnsureManagerShaders(VRSL.URP.VRSL_DMXURPLightManager mgr)
         {
             if (mgr == null) return;
 

@@ -8,7 +8,7 @@ namespace VRSL.URP
 {
     /// <summary>
     /// The light buffer a manager publishes for the shared render passes to
-    /// consume. Implemented by both <see cref="VRSL_URPLightManager"/> (DMX) and
+    /// consume. Implemented by both <see cref="VRSL_DMXURPLightManager"/> (DMX) and
     /// <c>VRSL_AudioLinkURPLightManager</c> (AudioLink) — they write the
     /// same <c>VRSLLightData</c> layout, so the culling and lighting passes work
     /// against either without knowing which is driving them.

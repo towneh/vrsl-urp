@@ -46,7 +46,7 @@ namespace VRSL.URP.Tests
             // measures a random subset of the rig. The AudioLink path strobes off the
             // audio and has no such switch, which is why the preset treats it as absent
             // rather than faking one.
-            var dmx = _go.AddComponent<VRSL_URPLightManager>();
+            var dmx = _go.AddComponent<VRSL_DMXURPLightManager>();
             dmx.volumetricShader = _shader;
             dmx.disableStrobe    = false;
 
@@ -164,7 +164,7 @@ namespace VRSL.URP.Tests
         [Test]
         public void ZeroContactShadowStrengthStopsTheTrace()
         {
-            var dmx = _go.AddComponent<VRSL_URPLightManager>();
+            var dmx = _go.AddComponent<VRSL_DMXURPLightManager>();
             dmx.quality = VRSLQuality.High;
 
             dmx.contactShadowStrength = 0f;

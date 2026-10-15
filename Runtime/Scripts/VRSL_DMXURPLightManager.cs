@@ -28,10 +28,10 @@ namespace VRSL.URP
     /// show sends: the grid layout the video carries, or Stream data. Its decode
     /// textures, compute and shaders fill themselves in.
     /// </summary>
-    [AddComponentMenu("VRSL/URP Light Manager")]
-    public class VRSL_URPLightManager : MonoBehaviour, IVRSLLightManager
+    [AddComponentMenu("VRSL/DMX URP Light Manager")]
+    public class VRSL_DMXURPLightManager : MonoBehaviour, IVRSLLightManager
     {
-        public static VRSL_URPLightManager Instance { get; private set; }
+        public static VRSL_DMXURPLightManager Instance { get; private set; }
 
         // ── Inspector ─────────────────────────────────────────────────────────
         [Tooltip("Where the lights take their DMX from. A grid reads that layout from the "
@@ -675,7 +675,7 @@ namespace VRSL.URP
             // looks the manager up through Instance, would no longer recognise itself
             // and would leave a dangling reference behind on this one.
             var source = ChannelSource;
-            foreach (var other in FindObjectsByType<VRSL_URPLightManager>(
+            foreach (var other in FindObjectsByType<VRSL_DMXURPLightManager>(
                          FindObjectsInactive.Exclude))
             {
                 if (other == null || other == this || !other.isActiveAndEnabled) continue;

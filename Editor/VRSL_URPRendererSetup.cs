@@ -11,7 +11,7 @@ namespace VRSL.URP.EditorScripts
     /// asset — those settings belong to the project. The single menu action
     /// exposed here is scene-level:
     /// <b>VRSL → URP → Add Light Manager to Active Scene</b> creates a
-    /// <see cref="VRSL_URPLightManager"/> in the active scene if missing and
+    /// <see cref="VRSL_DMXURPLightManager"/> in the active scene if missing and
     /// auto-assigns its compute, lighting, and volumetric shader references
     /// from the package. It only edits scene contents — never project assets.
     /// </summary>
@@ -32,14 +32,14 @@ namespace VRSL.URP.EditorScripts
         {
             var report = new List<string>();
 
-            var manager = Object.FindAnyObjectByType<VRSL_URPLightManager>();
+            var manager = Object.FindAnyObjectByType<VRSL_DMXURPLightManager>();
             if (manager == null)
             {
-                var go = new GameObject("VRSL URP Light Manager");
-                Undo.RegisterCreatedObjectUndo(go, "Create VRSL URP Light Manager");
-                manager = Undo.AddComponent<VRSL_URPLightManager>(go);
+                var go = new GameObject("VRSL DMX URP Light Manager");
+                Undo.RegisterCreatedObjectUndo(go, "Create VRSL DMX URP Light Manager");
+                manager = Undo.AddComponent<VRSL_DMXURPLightManager>(go);
                 EditorSceneManager.MarkSceneDirty(go.scene);
-                report.Add("Created 'VRSL URP Light Manager' in active scene.");
+                report.Add("Created 'VRSL DMX URP Light Manager' in active scene.");
             }
             else
             {

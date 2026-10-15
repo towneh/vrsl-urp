@@ -36,7 +36,7 @@ namespace VRSL.URP.Tests
             return VRSLDMXRig.RampAt(VRSLDMXRig.SmoothnessChannel(absChannel));
         }
 
-        static float SpinOf(VRSL_URPLightManager.VRSLLightData d) => d.spotParams.w;
+        static float SpinOf(VRSL_DMXURPLightManager.VRSLLightData d) => d.spotParams.w;
 
         [UnityTest]
         public IEnumerator N8_spin_advances_at_the_rate_its_channel_asks_for()

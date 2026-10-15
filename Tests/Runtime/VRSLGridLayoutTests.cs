@@ -26,17 +26,17 @@ namespace VRSL.URP.Tests
 
         /// <summary>A switched-off manager carrying an rc.6 main texture, staged the
         /// way one deserialises: through the hidden field.</summary>
-        static VRSL_URPLightManager StageRc6(GameObject go, Object oldMain)
+        static VRSL_DMXURPLightManager StageRc6(GameObject go, Object oldMain)
         {
             go.SetActive(false);
-            var manager = go.AddComponent<VRSL_URPLightManager>();
+            var manager = go.AddComponent<VRSL_DMXURPLightManager>();
             var so = new SerializedObject(manager);
             so.FindProperty(VRSLGridUpgrade.OldField).objectReferenceValue = oldMain;
             so.ApplyModifiedProperties();
             return manager;
         }
 
-        static Object OldMain(VRSL_URPLightManager manager) =>
+        static Object OldMain(VRSL_DMXURPLightManager manager) =>
             new SerializedObject(manager).FindProperty(VRSLGridUpgrade.OldField).objectReferenceValue;
 
         static RenderTexture Shipped(string guid) =>
@@ -118,12 +118,12 @@ namespace VRSL.URP.Tests
 
         /// <summary>A switched-off manager the upgrade hasn't looked at: its input, and a
         /// version of 0 or <paramref name="version"/>.</summary>
-        static VRSL_URPLightManager StageNotLookedAt(GameObject go, VRSLDmxInput input, int version = 0)
+        static VRSL_DMXURPLightManager StageNotLookedAt(GameObject go, VRSLDmxInput input, int version = 0)
         {
             go.SetActive(false);
-            var manager = go.AddComponent<VRSL_URPLightManager>();
+            var manager = go.AddComponent<VRSL_DMXURPLightManager>();
             var so = new SerializedObject(manager);
-            so.FindProperty(nameof(VRSL_URPLightManager.dmxInput)).intValue = (int)input;
+            so.FindProperty(nameof(VRSL_DMXURPLightManager.dmxInput)).intValue = (int)input;
             so.FindProperty(VRSLGridUpgrade.VersionField).intValue = version;
             so.ApplyModifiedProperties();
             return manager;
@@ -154,7 +154,7 @@ namespace VRSL.URP.Tests
                 Assert.AreEqual(expected, manager.dmxInput,
                     $"saved on {saved} {(sourceInScene ? "beside" : "without")} a source, it came up on "
                   + $"{manager.dmxInput}");
-                Assert.AreEqual(VRSL_URPLightManager.CurrentDmxInputVersion,
+                Assert.AreEqual(VRSL_DMXURPLightManager.CurrentDmxInputVersion,
                     new SerializedObject(manager).FindProperty(VRSLGridUpgrade.VersionField).intValue,
                     "the upgrade did not mark the manager as looked at");
             }
@@ -180,7 +180,7 @@ namespace VRSL.URP.Tests
             {
                 sourceGo.AddComponent<VRSL_SyntheticDMXChannelSource>();
                 var manager = StageNotLookedAt(go, VRSLDmxInput.VerticalGrid,
-                                                  VRSL_URPLightManager.CurrentDmxInputVersion);
+                                                  VRSL_DMXURPLightManager.CurrentDmxInputVersion);
                 yield return Run(manager, go, path);
                 Assert.AreEqual(VRSLDmxInput.VerticalGrid, manager.dmxInput,
                     "the upgrade chose Stream data over a manager it had already looked at");
@@ -211,7 +211,7 @@ namespace VRSL.URP.Tests
             }
         }
 
-        static IEnumerator Run(VRSL_URPLightManager manager, GameObject go, UpgradePath path)
+        static IEnumerator Run(VRSL_DMXURPLightManager manager, GameObject go, UpgradePath path)
         {
             switch (path)
             {
@@ -295,11 +295,11 @@ namespace VRSL.URP.Tests
             {
                 foreach (var crt in all) crt.updateMode = CustomRenderTextureUpdateMode.Realtime;
 
-                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var manager = go.AddComponent<VRSL_DMXURPLightManager>();
                 manager.dmxInput   = (VRSLDmxInput)layout;
                 go.SetActive(true);
                 yield return null;
-                Assert.AreSame(manager, VRSL_URPLightManager.Instance, "the row's manager does not own the singleton");
+                Assert.AreSame(manager, VRSL_DMXURPLightManager.Instance, "the row's manager does not own the singleton");
 
                 var live = Crts(asset.For(layout));
                 var wrong = new List<string>();
@@ -340,10 +340,10 @@ namespace VRSL.URP.Tests
             try
             {
                 foreach (var crt in all) crt.updateMode = CustomRenderTextureUpdateMode.Realtime;
-                var manager = go.AddComponent<VRSL_URPLightManager>();
+                var manager = go.AddComponent<VRSL_DMXURPLightManager>();
                 go.SetActive(true);
                 yield return null;
-                Assert.AreSame(manager, VRSL_URPLightManager.Instance, "the row's manager does not own the singleton");
+                Assert.AreSame(manager, VRSL_DMXURPLightManager.Instance, "the row's manager does not own the singleton");
 
                 void OnlyLive(VRSLGridLayout layout, string how)
                 {
@@ -426,18 +426,18 @@ namespace VRSL.URP.Tests
                 for (int i = 0; i < all.Count; i++) all[i].updateMode = cycle[i % cycle.Length];
                 var staged = Snapshot(all);
 
-                var owner = ownerGo.AddComponent<VRSL_URPLightManager>();
+                var owner = ownerGo.AddComponent<VRSL_DMXURPLightManager>();
                 owner.dmxInput   = VRSLDmxInput.VerticalGrid;
                 ownerGo.SetActive(true);
                 yield return null;
-                Assert.AreSame(owner, VRSL_URPLightManager.Instance, "the owner does not own the singleton");
+                Assert.AreSame(owner, VRSL_DMXURPLightManager.Instance, "the owner does not own the singleton");
                 Assert.AreEqual((int)VRSLGridLayout.Vertical, Shader.GetGlobalInteger(s_GridLayout));
 
                 // Added switched off and then switched on, the only way to an enabled
                 // manager that does not own the singleton: Awake destroys an enabled
                 // duplicate outright.
                 standbyGo.SetActive(false);
-                var standby = standbyGo.AddComponent<VRSL_URPLightManager>();
+                var standby = standbyGo.AddComponent<VRSL_DMXURPLightManager>();
                 standby.enabled = false;
                 standby.dmxInput   = VRSLDmxInput.LegacyGrid;
                 standbyGo.SetActive(true);
@@ -446,13 +446,13 @@ namespace VRSL.URP.Tests
 
                 owner.enabled = false;
                 yield return null;
-                Assert.AreSame(standby, VRSL_URPLightManager.Instance, "the standby was not handed the singleton");
+                Assert.AreSame(standby, VRSL_DMXURPLightManager.Instance, "the standby was not handed the singleton");
                 Assert.AreEqual((int)VRSLGridLayout.Legacy, Shader.GetGlobalInteger(s_GridLayout),
                     "the hand-over did not republish the layout");
 
                 standby.enabled = false;
                 yield return null;
-                Assert.IsNull(VRSL_URPLightManager.Instance, "a manager still owns the singleton");
+                Assert.IsNull(VRSL_DMXURPLightManager.Instance, "a manager still owns the singleton");
                 Assert.AreEqual((int)VRSLGridLayout.Horizontal, Shader.GetGlobalInteger(s_GridLayout),
                     "the layout global still names a layout with no manager running");
 

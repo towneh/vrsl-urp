@@ -28,7 +28,7 @@ namespace VRSL.URP.Tests
         /// What is given up is intensity coverage in N4. The colour is the decode of
         /// the channel data, which is what the handover can actually break.
         /// </summary>
-        static Vector3[] Colours(VRSL_URPLightManager.VRSLLightData[] d)
+        static Vector3[] Colours(VRSL_DMXURPLightManager.VRSLLightData[] d)
             => d.Select(x => new Vector3(x.colorAndIntensity.x,
                                          x.colorAndIntensity.y,
                                          x.colorAndIntensity.z)).ToArray();

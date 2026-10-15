@@ -13,7 +13,7 @@ namespace VRSL.URP
     /// A subclass owns the delivery and nothing else. It hands each record's
     /// bytes to <see cref="Accept"/> on the main thread; this decodes them,
     /// counts what happened, grows the universe count as blocks name higher
-    /// universes, and hands the blocks to <see cref="VRSL_URPLightManager"/>
+    /// universes, and hands the blocks to <see cref="VRSL_DMXURPLightManager"/>
     /// as an <see cref="IVRSLDMXChannelSource"/>. No pixel grid, no capture
     /// camera, no decode chain: the bytes the desk sent are the bytes the
     /// fixtures read.
@@ -65,7 +65,7 @@ namespace VRSL.URP
         int  _named;
         // One bit per Result, so each reason logs once.
         int  _logged;
-        VRSL_URPLightManager _manager;
+        VRSL_DMXURPLightManager _manager;
 
         protected virtual void OnEnable()
         {
@@ -76,7 +76,7 @@ namespace VRSL.URP
             RecordsDecoded = 0;
             RecordsDropped = 0;
             LastResult     = VRSLTrussDmx.Result.Ok;
-            Bind(VRSL_URPLightManager.Instance);
+            Bind(VRSL_DMXURPLightManager.Instance);
         }
 
         protected virtual void OnDisable()
@@ -89,14 +89,14 @@ namespace VRSL.URP
         // The manager can enable after this does or be replaced.
         protected virtual void Update()
         {
-            var mgr = VRSL_URPLightManager.Instance;
+            var mgr = VRSL_DMXURPLightManager.Instance;
             if (!ReferenceEquals(mgr, _manager)) Bind(mgr);
         }
 
         // Takes the slot on a manager once, when it becomes the current one,
         // rather than every frame: another source enabled later is entitled
         // to take it over, the same way this takes over an earlier one.
-        void Bind(VRSL_URPLightManager manager)
+        void Bind(VRSL_DMXURPLightManager manager)
         {
             if (_manager != null && ReferenceEquals(_manager.ChannelSource, this))
                 _manager.ChannelSource = null;

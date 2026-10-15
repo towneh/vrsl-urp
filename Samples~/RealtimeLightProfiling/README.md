@@ -51,7 +51,7 @@ preserved across rebuilds.
     many cones overlap per pixel.
   - **OutsideCones** — best case; only a few cones in frame.
 - To sweep what the package spends, switch `quality` on the spawned
-  `VRSL URP Light Manager` GameObject between captures. The numeric step and
+  `VRSL DMX URP Light Manager` GameObject between captures. The numeric step and
   resolution fields it replaced are gone; the levels are the sweep.
 
 ## What is NOT covered

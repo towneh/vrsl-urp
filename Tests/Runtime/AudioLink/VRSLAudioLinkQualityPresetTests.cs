@@ -69,7 +69,7 @@ namespace VRSL.URP.Tests
             // held on one manager leaves the other's volumetrics running at every level,
             // so the split between beams and surface lighting is measured against a
             // baseline that still has beams in it.
-            var dmx       = _go.AddComponent<VRSL_URPLightManager>();
+            var dmx       = _go.AddComponent<VRSL_DMXURPLightManager>();
             var audioLink = _go.AddComponent<VRSL_AudioLinkURPLightManager>();
             dmx.volumetricShader       = _shader;
             audioLink.volumetricShader = _shader;
@@ -99,7 +99,7 @@ namespace VRSL.URP.Tests
         [Test]
         public void BothManagersAgreeOnWhatALevelCosts()
         {
-            var dmx       = _go.AddComponent<VRSL_URPLightManager>();
+            var dmx       = _go.AddComponent<VRSL_DMXURPLightManager>();
             var audioLink = _go.AddComponent<VRSL_AudioLinkURPLightManager>();
             dmx.volumetricShader       = _shader;
             audioLink.volumetricShader = _shader;

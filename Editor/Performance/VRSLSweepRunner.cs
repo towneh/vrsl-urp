@@ -219,7 +219,7 @@ namespace VRSL.URP.EditorScripts
                 // with an AudioLink rig that the package was costing them nothing, on a
                 // scene full of VRSL fixtures. This has to work on any scene they have
                 // open.
-                var dmx   = VRSL_URPLightManager.Instance;
+                var dmx   = VRSL_DMXURPLightManager.Instance;
                 var other = VRSLLightPaths.RunningOther();
                 if (dmx == null && other == null)
                 {

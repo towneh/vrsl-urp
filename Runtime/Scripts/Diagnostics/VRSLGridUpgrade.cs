@@ -53,7 +53,7 @@ namespace VRSL.URP
         /// Through <see cref="SerializedObject"/>, like the wiring, so the change is undoable
         /// and lands as a prefab override where the manager is an instance.
         /// </remarks>
-        public static Outcome Upgrade(VRSL_URPLightManager manager)
+        public static Outcome Upgrade(VRSL_DMXURPLightManager manager)
         {
             if (manager == null) return Outcome.None;
 
@@ -64,7 +64,7 @@ namespace VRSL.URP
         }
 
         /// <summary>The hidden field saying whether this has looked at a manager yet.</summary>
-        public const string VersionField = nameof(VRSL_URPLightManager.dmxInputVersion);
+        public const string VersionField = nameof(VRSL_DMXURPLightManager.dmxInputVersion);
 
         /// <summary>
         /// A manager not yet looked at, saved with 0.2.0-rc.6 or added since, comes up on
@@ -72,21 +72,21 @@ namespace VRSL.URP
         /// whenever it was publishing, so a world already lit from SEI or OSC stays lit.
         /// Runs once per manager, after the rc.6 rule, which may have set its layout.
         /// </summary>
-        static void UpgradeInput(VRSL_URPLightManager manager, SerializedObject so)
+        static void UpgradeInput(VRSL_DMXURPLightManager manager, SerializedObject so)
         {
             var version = so.FindProperty(VersionField);
-            if (version == null || version.intValue >= VRSL_URPLightManager.CurrentDmxInputVersion) return;
+            if (version == null || version.intValue >= VRSL_DMXURPLightManager.CurrentDmxInputVersion) return;
 
             var source = ChannelSourceIn(manager.gameObject.scene);
             if (source != null)
             {
-                so.FindProperty(nameof(VRSL_URPLightManager.dmxInput)).intValue = (int)VRSLDmxInput.StreamData;
+                so.FindProperty(nameof(VRSL_DMXURPLightManager.dmxInput)).intValue = (int)VRSLDmxInput.StreamData;
                 Debug.Log($"[VRSL] {manager.name} reads Stream data from {source.name}, the channel "
                         + "source in its scene. Choose a grid under DMX Input to read the video instead. "
                         + "Save the scene to keep the change; until then this happens again each time it "
                         + "loads.", manager);
             }
-            version.intValue = VRSL_URPLightManager.CurrentDmxInputVersion;
+            version.intValue = VRSL_DMXURPLightManager.CurrentDmxInputVersion;
             so.ApplyModifiedProperties();
         }
 
@@ -103,7 +103,7 @@ namespace VRSL.URP
             return null;
         }
 
-        static Outcome UpgradeRc6(VRSL_URPLightManager manager, SerializedObject so)
+        static Outcome UpgradeRc6(VRSL_DMXURPLightManager manager, SerializedObject so)
         {
             var old = so.FindProperty(OldField);
             if (old == null || old.objectReferenceValue == null) return Outcome.None;
@@ -114,7 +114,7 @@ namespace VRSL.URP
             foreach (var (shipped, layout) in ShippedMain)
             {
                 if (guid != shipped) continue;
-                so.FindProperty(nameof(VRSL_URPLightManager.dmxInput)).intValue = (int)layout;
+                so.FindProperty(nameof(VRSL_DMXURPLightManager.dmxInput)).intValue = (int)layout;
                 old.objectReferenceValue = null;
                 so.ApplyModifiedProperties();
                 // The change lands on whatever copy is open: the scene or prefab in the
@@ -129,7 +129,7 @@ namespace VRSL.URP
 
             // The author's own textures. Once they have made an asset of their own and
             // pointed the manager at it, there is nothing left to say.
-            var assigned = so.FindProperty(nameof(VRSL_URPLightManager.gridTextures)).objectReferenceValue;
+            var assigned = so.FindProperty(nameof(VRSL_DMXURPLightManager.gridTextures)).objectReferenceValue;
             if (assigned != null && AssetDatabase.AssetPathToGUID(
                     AssetDatabase.GetAssetPath(assigned)) != VRSLWiring.GridTexturesGuid)
             {
@@ -160,7 +160,7 @@ namespace VRSL.URP
         public static void UpgradeScene(Scene scene)
         {
             foreach (var root in scene.GetRootGameObjects())
-            foreach (var manager in root.GetComponentsInChildren<VRSL_URPLightManager>(true))
+            foreach (var manager in root.GetComponentsInChildren<VRSL_DMXURPLightManager>(true))
             {
                 Upgrade(manager);
                 VRSLWiring.Resolve(manager);

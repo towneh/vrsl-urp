@@ -17,7 +17,7 @@ namespace VRSL.URP
     /// and enqueues those passes per camera, so no ScriptableRendererFeature is
     /// required on the URP Renderer asset.
     ///
-    /// Unlike VRSL_URPLightManager (DMX path), the config buffer is re-uploaded every
+    /// Unlike VRSL_DMXURPLightManager (DMX path), the config buffer is re-uploaded every
     /// frame because pan/tilt transforms are animated and their world-space forward
     /// direction changes continuously.
     ///
@@ -1057,7 +1057,7 @@ namespace VRSL.URP
             // When the DMX manager drives it, its prepassLayers apply and the mask
             // on this component does nothing; the tooltip says so, since the frame
             // will not.
-            var dmxManager = VRSL_URPLightManager.Instance;
+            var dmxManager = VRSL_DMXURPLightManager.Instance;
             bool dmxDrives = dmxManager != null && dmxManager.DrivesSurfacePrepass(cam);
             if (FixtureCount > 0 && !dmxDrives)
             {

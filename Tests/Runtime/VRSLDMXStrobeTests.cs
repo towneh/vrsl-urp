@@ -30,16 +30,16 @@ namespace VRSL.URP.Tests
         // active also drops to 0 when a fixture is too dim to emit at all, which
         // is a different fault from being strobed off and has to be excluded
         // before the flag means anything.
-        static bool TooDim(VRSL_URPLightManager.VRSLLightData d)
+        static bool TooDim(VRSL_DMXURPLightManager.VRSLLightData d)
             => Mathf.Max(d.colorAndIntensity.x, Mathf.Max(d.colorAndIntensity.y, d.colorAndIntensity.z))
                <= 6f / 255f;
 
-        static bool Active(VRSL_URPLightManager.VRSLLightData d) => d.colorAndIntensity.w > 0f;
+        static bool Active(VRSL_DMXURPLightManager.VRSLLightData d) => d.colorAndIntensity.w > 0f;
 
         /// <summary>Consecutive frames, so the sample rate cannot alias with the
         /// strobe rate: the fastest bucket runs at 65 rad/s, a period of about
         /// six frames.</summary>
-        static IEnumerator Sample(VRSLDMXRig rig, int count, List<VRSL_URPLightManager.VRSLLightData[]> into)
+        static IEnumerator Sample(VRSLDMXRig rig, int count, List<VRSL_DMXURPLightManager.VRSLLightData[]> into)
         {
             for (int i = 0; i < count; i++)
             {
@@ -64,7 +64,7 @@ namespace VRSL.URP.Tests
                 rig.Manager.disableStrobe = false;
                 yield return rig.Step(5);
 
-                var samples = new List<VRSL_URPLightManager.VRSLLightData[]>();
+                var samples = new List<VRSL_DMXURPLightManager.VRSLLightData[]>();
                 yield return Sample(rig, 24, samples);
 
                 var groups = Enumerable.Range(0, VRSLDMXRig.FixtureCount)
@@ -125,7 +125,7 @@ namespace VRSL.URP.Tests
                 rig.Manager.disableStrobe = true;
                 yield return rig.Step(5);
 
-                var samples = new List<VRSL_URPLightManager.VRSLLightData[]>();
+                var samples = new List<VRSL_DMXURPLightManager.VRSLLightData[]>();
                 yield return Sample(rig, 8, samples);
 
                 for (int i = 0; i < VRSLDMXRig.FixtureCount; i++)
