@@ -48,7 +48,8 @@ namespace VRSL.URP
     {
         // ── Grid textures: published for the opaque pass ──────────────────────
         /// <summary>
-        /// Makes the DMX grid CRTs visible to the fixture-body surface shaders.
+        /// Makes the DMX grid textures visible to the fixture-body surface shaders and to
+        /// any other shader reading through <c>VRSLDMX.hlsl</c>.
         /// </summary>
         /// <remarks>
         /// Published from inside the graph via <c>SetGlobalTextureAfterPass</c> rather
@@ -75,6 +76,7 @@ namespace VRSL.URP
             static readonly int s_DMXGridMovement = Shader.PropertyToID("_VRSLU_DMXGridRenderTextureMovement");
             static readonly int s_DMXGridStrobe   = Shader.PropertyToID("_VRSLU_DMXGridStrobeOutput");
             static readonly int s_DMXGridSpin     = Shader.PropertyToID("_VRSLU_DMXGridSpinTimer");
+            static readonly int s_DMXGridRaw      = Shader.PropertyToID("_VRSLU_DMXGridRaw");
 
             public override void RecordRenderGraph(RenderGraph rg, ContextContainer frame)
             {
@@ -89,6 +91,12 @@ namespace VRSL.URP
                 Publish(rg, builder, mgr.DMXMovementHandle,  s_DMXGridMovement);
                 Publish(rg, builder, mgr.DMXStrobeHandle,    s_DMXGridStrobe);
                 Publish(rg, builder, mgr.DMXSpinTimerHandle, s_DMXGridSpin);
+                if (mgr.DMXRawHandle != null)
+                {
+                    var raw = rg.ImportTexture(mgr.DMXRawHandle, mgr.DMXRawInfo);
+                    builder.UseTexture(raw, AccessFlags.Read);
+                    builder.SetGlobalTextureAfterPass(raw, s_DMXGridRaw);
+                }
 
                 builder.SetRenderFunc(static (PassData p, RasterGraphContext ctx) => { });
             }

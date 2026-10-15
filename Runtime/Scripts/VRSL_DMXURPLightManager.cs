@@ -337,6 +337,12 @@ namespace VRSL.URP
             return true;
         }
         public RTHandle        DMXMainHandle       { get; private set; }
+        /// <summary>The grid before smoothing, or the main grid when the set has none. A
+        /// handle to its colour target alone, imported with <see cref="DMXRawInfo"/>: the
+        /// shipped raw grids carry a depth buffer for the cameras that read the video into
+        /// them, and Render Graph won't import a texture with both.</summary>
+        public RTHandle        DMXRawHandle        { get; private set; }
+        public UnityEngine.Rendering.RenderGraphModule.RenderTargetInfo DMXRawInfo { get; private set; }
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
         public RTHandle        DMXSpinTimerHandle  { get; private set; }
@@ -1492,6 +1498,15 @@ namespace VRSL.URP
             ReleaseTextureHandles();
             var live = LiveTextures;
             if (live.main      != null) DMXMainHandle      = RTHandles.Alloc(live.main);
+            if (RawOrMain(live) is { } raw)
+            {
+                DMXRawHandle = RTHandles.Alloc(new RenderTargetIdentifier(raw), raw.name);
+                DMXRawInfo   = new UnityEngine.Rendering.RenderGraphModule.RenderTargetInfo
+                {
+                    width = raw.width, height = raw.height, volumeDepth = 1,
+                    msaaSamples = Mathf.Max(1, raw.antiAliasing), format = raw.graphicsFormat,
+                };
+            }
             if (live.movement  != null) DMXMovementHandle  = RTHandles.Alloc(live.movement);
             if (live.strobe    != null) DMXStrobeHandle    = RTHandles.Alloc(live.strobe);
             if (live.spinTimer != null) DMXSpinTimerHandle = RTHandles.Alloc(live.spinTimer);
@@ -1513,8 +1528,15 @@ namespace VRSL.URP
         static readonly int s_DMXGridTexelSize   = Shader.PropertyToID("_VRSLDMXTexelSize");
         static readonly int s_DMXGridLayout      = Shader.PropertyToID("_VRSLU_DMXGridLayout");
         static readonly int s_DMXGridStrobeStatus = Shader.PropertyToID("_VRSLU_DMXGridStrobeStatus");
+        static readonly int s_DMXGridRaw          = Shader.PropertyToID("_VRSLU_DMXGridRaw");
+        static readonly int s_DMXGridRawTexelSize = Shader.PropertyToID("_VRSLU_DMXGridRawTexelSize");
         static readonly int[] s_DMXGridGlobals =
-            { s_DMXGrid, s_DMXGridMovement, s_DMXGridStrobe, s_DMXGridStrobeTimer, s_DMXGridSpin, s_DMXGridStrobeStatus };
+            { s_DMXGrid, s_DMXGridMovement, s_DMXGridStrobe, s_DMXGridStrobeTimer, s_DMXGridSpin, s_DMXGridStrobeStatus,
+              s_DMXGridRaw };
+
+        // Shaders reading unsmoothed values read the raw grid; a set without one gives them
+        // the smoothed grid, so they ease rather than go dark.
+        static RenderTexture RawOrMain(in VRSLGridTextures.Set live) => live.raw != null ? live.raw : live.main;
 
         void PublishDMXGlobals()
         {
@@ -1555,6 +1577,14 @@ namespace VRSL.URP
                 Shader.SetGlobalVector(s_DMXGridTexelSize, new Vector4(
                     1f / live.main.width, 1f / live.main.height,
                     live.main.width,      live.main.height));
+
+            // Its own size, since an author's raw grid needn't have the decode textures' shape.
+            if (RawOrMain(live) is { } raw)
+            {
+                Shader.SetGlobalTexture(s_DMXGridRaw, raw);
+                Shader.SetGlobalVector(s_DMXGridRawTexelSize, new Vector4(
+                    1f / raw.width, 1f / raw.height, raw.width, raw.height));
+            }
         }
 
         // Read by the strobe output decode as well as the compute, so holding strobe
@@ -1700,6 +1730,7 @@ namespace VRSL.URP
         void ReleaseTextureHandles()
         {
             RTHandles.Release(DMXMainHandle);      DMXMainHandle      = null;
+            RTHandles.Release(DMXRawHandle);       DMXRawHandle       = null;
             RTHandles.Release(DMXMovementHandle);  DMXMovementHandle  = null;
             RTHandles.Release(DMXStrobeHandle);    DMXStrobeHandle    = null;
             RTHandles.Release(DMXSpinTimerHandle); DMXSpinTimerHandle = null;
@@ -1769,13 +1800,15 @@ namespace VRSL.URP
 
         Texture[] OwnedSources()
         {
-            _ownedSources ??= new Texture[5];
+            _ownedSources ??= new Texture[6];
             var live = LiveTextures;
             _ownedSources[0] = live.main;
             _ownedSources[1] = live.movement;
             _ownedSources[2] = live.strobe;
             _ownedSources[3] = live.strobeTimer;
             _ownedSources[4] = live.spinTimer;
+            // What a camera reading the video renders into.
+            _ownedSources[5] = live.raw;
             return _ownedSources;
         }
 

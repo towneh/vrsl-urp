@@ -32,9 +32,14 @@ TEXTURE2D(_VRSLU_DMXGridRenderTextureMovement);
 TEXTURE2D(_VRSLU_DMXGridStrobeOutput);
 TEXTURE2D(_VRSLU_DMXGridSpinTimer);
 
-// The grid's size, (1/w, 1/h, w, h). Unity's automatic _TexelSize can't be trusted for a
-// globally bound texture, so the manager publishes this itself.
+// The grid as it arrives from the video, before smoothing. The manager publishes the
+// smoothed grid here when its Grid Textures set has no raw grid.
+TEXTURE2D(_VRSLU_DMXGridRaw);
+
+// The grid's size, (1/w, 1/h, w, h), and the raw grid's. Unity's automatic _TexelSize
+// can't be trusted for a globally bound texture, so the manager publishes these itself.
 float4 _VRSLDMXTexelSize;
+float4 _VRSLU_DMXGridRawTexelSize;
 
 // The grid layout: 0 Horizontal, 1 Vertical, 2 Legacy.
 int _VRSLU_DMXGridLayout;
@@ -224,7 +229,7 @@ half vrsldmx_value(uint channel, uint nineUniverse)
 half vrsldmx_value_raw(uint channel, uint nineUniverse)
 {
     if (vrsldmx_channel_buffer_live()) return vrsldmx_load_channel(channel);
-    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRenderTexture, _VRSLDMXTexelSize, nineUniverse);
+    return vrsldmx_grid_value(channel, _VRSLU_DMXGridRaw, _VRSLU_DMXGridRawTexelSize, nineUniverse);
 }
 
 float vrsldmx_movement(uint channel, uint nineUniverse)

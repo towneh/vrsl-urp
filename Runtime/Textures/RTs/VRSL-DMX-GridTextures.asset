@@ -14,18 +14,21 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   horizontal:
     main: {fileID: 8600000, guid: 555ce9e464c9a54c9d331e0030c258ef, type: 2}
+    raw: {fileID: 8400000, guid: 296355125afa6ab0e8f8b24e0b728675, type: 2}
     movement: {fileID: 8600000, guid: 63c403376634fef0560b44d7f19aedaa, type: 2}
     strobe: {fileID: 8600000, guid: e3fa773f91559868d4104ab3ce54bf79, type: 2}
     strobeTimer: {fileID: 8600000, guid: e6641cd38ad1a21be3425ab43ecc2506, type: 2}
     spinTimer: {fileID: 8600000, guid: 5bee9c07b3305e88be89de0d01fc2f07, type: 2}
   vertical:
     main: {fileID: 8600000, guid: 78c70f9c712bd81bf5c13a40970fd79b, type: 2}
+    raw: {fileID: 8400000, guid: 07d5a671ce5e33008fe5e83e308e736a, type: 2}
     movement: {fileID: 8600000, guid: c6d6373129a6cae52b02e2b675ad7e86, type: 2}
     strobe: {fileID: 8600000, guid: 6f30f578d96c57d49dc9297f12e7fb0b, type: 2}
     strobeTimer: {fileID: 8600000, guid: 954ba27aa605bf10c6625c64c834303f, type: 2}
     spinTimer: {fileID: 8600000, guid: da695f1470322a477c370746a7a2571f, type: 2}
   legacy:
     main: {fileID: 8600000, guid: 17f83f063191dbffbaae01943cc9c235, type: 2}
+    raw: {fileID: 8400000, guid: c3f2b3d161ba6350bc80b95e71419f18, type: 2}
     movement: {fileID: 8600000, guid: 015583c6b281a3ff6b1af6d872ac4610, type: 2}
     strobe: {fileID: 8600000, guid: a928e074dadf56e05191a31cd701f480, type: 2}
     strobeTimer: {fileID: 8600000, guid: 66a7e6c0f0eebb9378d52ca3820d9ccb, type: 2}

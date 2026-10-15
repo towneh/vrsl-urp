@@ -240,7 +240,15 @@ namespace VRSL.URP.Tests
                 }
 
                 probe = VRSLDmxReadProbe.Create(rig, count + 1);
+                // Under Stream data the strobe runs on the clock, and its three rates are all
+                // open together now and then: wait for a frame where some channels are shut.
                 var computeStrobe = rig.ReadComputeReads(0, count + 1, 3);
+                for (int f = 0; stream && f < 120 && computeStrobe.Skip(1).Distinct().Count() < 2; f++)
+                {
+                    yield return null;
+                    rig.RenderFrame();
+                    computeStrobe = rig.ReadComputeReads(0, count + 1, 3);
+                }
                 Assert.IsTrue(computeStrobe.Skip(1).Distinct().Count() > 1,
                     "every channel's strobe reads alike, so the strobe half proves nothing");
 
