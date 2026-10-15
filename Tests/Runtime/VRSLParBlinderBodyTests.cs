@@ -1405,7 +1405,7 @@ namespace VRSL.URP.Tests
         /// 8-bit, and a lit body's emission is far above 1 in every channel, so there it clips
         /// to white whatever colour it is.
         /// </summary>
-        static Texture2D CaptureHdr(VRSLDMXRig rig)
+        internal static Texture2D CaptureHdr(VRSLDMXRig rig)
         {
             var camera   = rig.Camera;
             var target   = camera.targetTexture;

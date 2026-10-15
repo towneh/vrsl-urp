@@ -141,6 +141,14 @@ namespace VRSL.URP
         {
             { "78bf4380452cfbe4aa8154e17a189b28", "DMX V 5CH Static LightBar" },
         };
+
+        /// <summary>Upstream's light stencil assets: its mask prefabs, their two materials and
+        /// the two shaders, by GUID, each with the name the summary shows.</summary>
+        public static readonly Dictionary<string, string> LightStencils = new Dictionary<string, string>();
+
+        /// <summary>The summary's paragraph on the light stencils found, by name and count;
+        /// empty when there are none.</summary>
+        public static string LightStencilSummary(IReadOnlyDictionary<string, int> found) => "";
     }
 }
 #endif
