@@ -9,7 +9,7 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The secondary-camera rows: what a mirror is lit at, what a mirror costs, and
     /// that the decode and the integrators stay once per frame however many cameras
-    /// look. Rows M5, M7 to M10 of TESTING.md.
+    /// look. Rows M5, M7 to M11 of TESTING.md.
     /// </summary>
     class VRSLCameraPolicyTests : VRSLDMXTest
     {
@@ -402,6 +402,42 @@ namespace VRSL.URP.Tests
                 Assert.GreaterOrEqual(on, 0.5f * none,
                     $"{prefabs[i]} glows {on:F2} in a skipped mirror with realtime fixtures on, against {none:F2} "
                   + "with none: it read a black grid there");
+            }
+        }
+
+        /// <summary>
+        /// M11. A DMX screen reader camera, rendered after the rig's view with the
+        /// realtime fixtures on, is not handed the grid: the shader-driven fixtures in its
+        /// view stay dark, so their glow can't reach the DMX input it renders. The same
+        /// fixtures seen from a mirror under <c>Skip</c> are the control.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator M11_a_dmx_reader_camera_is_not_handed_the_grid()
+        {
+            var prefabs = VRSLRuntimeEnableTests.ShaderDrivenPrefabs;
+            const VRSLRuntimeEnableTests.Realtime on = VRSLRuntimeEnableTests.Realtime.OnThroughout;
+            var glow = new Dictionary<bool, float[]>();
+            foreach (bool reader in new[] { false, true })
+            {
+                float[] lit = null, dark = null;
+                yield return VRSLRuntimeEnableTests.CaptureShaderDriven(on, VRSLGridLayout.Horizontal, true,
+                                                                       g => lit = g, SecondaryCameraMode.Skip, reader);
+                yield return VRSLRuntimeEnableTests.CaptureShaderDriven(on, VRSLGridLayout.Horizontal, false,
+                                                                       g => dark = g, SecondaryCameraMode.Skip, reader);
+                var difference = new float[lit.Length];
+                for (int i = 0; i < lit.Length; i++) difference[i] = lit[i] - dark[i];
+                glow[reader] = difference;
+                Debug.Log($"[M11] {(reader ? "DMX reader" : "Skip mirror")}: glow "
+                        + string.Join(", ", System.Linq.Enumerable.Select(difference, (d, i) => $"{prefabs[i]} {d:F2}")));
+            }
+
+            for (int i = 0; i < prefabs.Length; i++)
+            {
+                Assert.Greater(glow[false][i], 2f,
+                    $"{prefabs[i]} doesn't glow in the mirror, so the row can't tell anything apart");
+                Assert.Less(glow[true][i], 0.1f * glow[false][i],
+                    $"{prefabs[i]} glows {glow[true][i]:F2} in a DMX reader camera, against {glow[false][i]:F2} in a "
+                  + "mirror: the reader was handed the grid, so the fixture's glow can feed the DMX input");
             }
         }
 #endif

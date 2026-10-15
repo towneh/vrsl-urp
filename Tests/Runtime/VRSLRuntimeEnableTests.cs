@@ -248,11 +248,14 @@ namespace VRSL.URP.Tests
         /// bright or black, captured from a camera in front of the shader-driven ones.
         /// <paramref name="glow"/> gets each one's mean brightness (0 to 255) over its own
         /// pixels on screen. With <paramref name="mirror"/> that camera is a mirror under
-        /// that policy, rendered after the rig's view; otherwise it is the player's view.
+        /// that policy, rendered after the rig's view; with <paramref name="dataReader"/> it
+        /// is registered as a DMX screen reader, also rendered after; otherwise it is the
+        /// player's view.
         /// </summary>
         internal static IEnumerator CaptureShaderDriven(Realtime realtime, VRSLGridLayout layout, bool bright,
                                                         System.Action<float[]> glow,
-                                                        SecondaryCameraMode? mirror = null)
+                                                        SecondaryCameraMode? mirror = null,
+                                                        bool dataReader = false)
         {
             using var rig = VRSLDMXRig.Build();
             var values = VRSLGridDecodeTests.ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
@@ -261,6 +264,7 @@ namespace VRSL.URP.Tests
             var painted = VRSLDMXRig.PaintGrid(values, layout, size.x, size.y);
             var white   = VRSLGridDecodeTests.Solid(Color.white);
             var grid    = ScriptableObject.CreateInstance<VRSLGridTextures>();
+            Camera reader = null;
             try
             {
                 var placed = new List<GameObject>();
@@ -293,7 +297,9 @@ namespace VRSL.URP.Tests
 
                 var at   = new Vector3(4.4f, 3f, -14f);
                 var view = rig.AddSecondaryCamera(targetSize: 512, eye: at, lookAt: new Vector3(at.x, 1.5f, -6f));
-                if (!mirror.HasValue) VRSLCameraFilter.RegisterMainView(view.Camera);
+                if (dataReader)           VRSLCameraFilter.RegisterDataReader(view.Camera);
+                else if (!mirror.HasValue) VRSLCameraFilter.RegisterMainView(view.Camera);
+                reader = dataReader ? view.Camera : null;
 
                 for (int i = 0; i < 4; i++)
                 {
@@ -325,6 +331,7 @@ namespace VRSL.URP.Tests
             }
             finally
             {
+                if (reader != null) VRSLCameraFilter.UnregisterDataReader(reader);
                 painted.Dispose();
                 Object.DestroyImmediate(white);
                 Object.DestroyImmediate(grid);
@@ -393,6 +400,8 @@ namespace VRSL.URP.Tests
 
             for (int i = 0; i < ShaderDriven.Length; i++)
             {
+                Assert.Greater(glow[Realtime.OnThroughout][i], 2f,
+                    $"{ShaderDriven[i]} doesn't glow on a bright {layout} grid with the realtime fixtures on");
                 Assert.Greater(glow[Realtime.NeverOn][i], 2f,
                     $"{ShaderDriven[i]} doesn't glow on a bright {layout} grid in a scene with no realtime "
                   + "fixtures, so the row can't tell anything apart");
