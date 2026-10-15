@@ -170,6 +170,7 @@ namespace VRSL.URP.Profiling.Editor
                     Undo.RecordObject(existing.gameObject, "Rename URP light manager");
                     existing.gameObject.name = ManagerName;
                 }
+                EnsureManagerShaders(existing);
                 return;
             }
 
