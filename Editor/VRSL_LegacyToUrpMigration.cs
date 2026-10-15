@@ -327,12 +327,12 @@ namespace VRSL.URP.EditorScripts
                 foreach (var r in root.GetComponentsInChildren<Renderer>(includeInactive: true))
                 {
                     if (masks.Any(m => r.transform.IsChildOf(m))) continue;
-                    var counted = new HashSet<string>();
+                    var counted = new HashSet<Material>();
                     foreach (var mat in r.sharedMaterials)
                     {
                         if (mat == null) continue;
                         string guid = LightStencilGuid(mat) ?? LightStencilGuid(mat.shader);
-                        if (guid != null && counted.Add(guid)) Count(guid, r.gameObject);
+                        if (guid != null && counted.Add(mat)) Count(guid, r.gameObject);
                     }
                 }
 
