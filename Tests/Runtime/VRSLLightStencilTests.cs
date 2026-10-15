@@ -106,13 +106,15 @@ namespace VRSL.URP.Tests
 
             // A light first drawn while its variant compiles in the background draws nothing,
             // which would read as hidden under whichever capture came first.
-            bool asyncWas = ShaderUtil.allowAsyncCompilation;
-            ShaderUtil.allowAsyncCompilation = false;
-            var rig     = VRSLDMXRig.Build(withSource: false, targetSize: 512, priming: Priming);
-            var stencil = new WorldStencil(rig.Camera);
-            var owned   = new List<Object>();
+            bool asyncWas        = ShaderUtil.allowAsyncCompilation;
+            VRSLDMXRig rig       = null;
+            WorldStencil stencil = null;
+            var owned            = new List<Object>();
             try
             {
+                ShaderUtil.allowAsyncCompilation = false;
+                rig     = VRSLDMXRig.Build(withSource: false, targetSize: 512, priming: Priming);
+                stencil = new WorldStencil(rig.Camera);
                 var renderers = new List<MeshRenderer>();
                 for (int i = 0; i < lights.Length; i++)
                 {
@@ -222,8 +224,8 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                stencil.Dispose();
-                rig.Dispose();
+                stencil?.Dispose();
+                rig?.Dispose();
                 foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
                 ShaderUtil.allowAsyncCompilation = asyncWas;
             }
@@ -240,11 +242,12 @@ namespace VRSL.URP.Tests
         [UnityTest]
         public IEnumerator O6_surface_light_and_beams_are_the_same_where_a_world_writes_stencil_142()
         {
-            var rig     = VRSLDMXRig.Build(priming: Priming);
-            var stencil = new WorldStencil(rig.Camera);
-            var frames  = new List<Texture2D>();
+            var rig              = VRSLDMXRig.Build(priming: Priming);
+            WorldStencil stencil = null;
+            var frames           = new List<Texture2D>();
             try
             {
+                stencil = new WorldStencil(rig.Camera);
                 rig.Source.pattern = VRSL_SyntheticDMXChannelSource.Pattern.Fixtures;
                 rig.Source.speed   = 0f;
                 rig.Manager.enabled = false;
@@ -308,7 +311,7 @@ namespace VRSL.URP.Tests
             }
             finally
             {
-                stencil.Dispose();
+                stencil?.Dispose();
                 rig.Dispose();
                 foreach (var t in frames) if (t != null) Object.DestroyImmediate(t);
             }
