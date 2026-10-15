@@ -160,8 +160,18 @@ namespace VRSL.URP.Profiling.Editor
 
         void EnsureManager(GameObject root)
         {
-            var existing = root.transform.Find(ManagerName)?.gameObject;
-            if (existing != null) return;
+            // By component rather than by name, so a scene built when the manager's
+            // GameObject had another name keeps its one manager.
+            var existing = root.GetComponentInChildren<VRSL.URP.VRSL_DMXURPLightManager>(true);
+            if (existing != null)
+            {
+                if (existing.gameObject.name != ManagerName)
+                {
+                    Undo.RecordObject(existing.gameObject, "Rename URP light manager");
+                    existing.gameObject.name = ManagerName;
+                }
+                return;
+            }
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(URPManager);
             if (prefab == null)
