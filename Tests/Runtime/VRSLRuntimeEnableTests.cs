@@ -174,8 +174,8 @@ namespace VRSL.URP.Tests
             finally { rig.Dispose(); }
         }
 
-        /// <summary>Row Z5. Frames in which nothing switched cost no scan, and neither
-        /// does moving a fixture to a new address.</summary>
+        /// <summary>Row Z5. Frames in which nothing switched cost no scan and no rebuild,
+        /// and neither does moving a fixture to a new address.</summary>
         [UnityTest]
         public IEnumerator Z5_quiet_frames_and_a_readdress_cost_no_scan()
         {
@@ -183,10 +183,11 @@ namespace VRSL.URP.Tests
             try
             {
                 yield return rig.Step(4);
-                int scans = rig.Manager.FixtureScans;
+                int scans = rig.Manager.FixtureScans, rebuilds = rig.Manager.FixtureRebuilds;
                 var buffer = rig.Manager.LightDataBuffer;
                 yield return rig.Step(10);
                 Assert.AreEqual(scans, rig.Manager.FixtureScans, "scans in ten frames where nothing switched");
+                Assert.AreEqual(rebuilds, rig.Manager.FixtureRebuilds, "rebuilds in ten frames where nothing switched");
                 Assert.AreSame(buffer, rig.Manager.LightDataBuffer, "the light data was rebuilt with nothing switched");
 
                 var f = rig.Fixtures[3];
@@ -194,6 +195,8 @@ namespace VRSL.URP.Tests
                 f.ApplyAddress();
                 yield return rig.Step(2);
                 Assert.AreEqual(scans, rig.Manager.FixtureScans, "scans after a fixture moved to a new address");
+                Assert.AreEqual(rebuilds, rig.Manager.FixtureRebuilds, "rebuilds after a fixture moved to a new address");
+                Assert.AreSame(buffer, rig.Manager.LightDataBuffer, "the light data was rebuilt after a fixture moved to a new address");
             }
             finally { rig.Dispose(); }
         }

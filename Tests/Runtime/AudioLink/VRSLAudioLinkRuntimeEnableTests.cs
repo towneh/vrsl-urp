@@ -206,10 +206,11 @@ namespace VRSL.URP.Tests
             try
             {
                 yield return s.Rig.Step(3);
-                int scans = s.Manager.FixtureScans;
+                int scans = s.Manager.FixtureScans, rebuilds = s.Manager.FixtureRebuilds;
                 var buffer = s.Manager.LightDataBuffer;
                 yield return s.Rig.Step(10);
                 Assert.AreEqual(scans, s.Manager.FixtureScans, "scans in ten frames where nothing switched");
+                Assert.AreEqual(rebuilds, s.Manager.FixtureRebuilds, "rebuilds in ten frames where nothing switched");
                 Assert.AreSame(buffer, s.Manager.LightDataBuffer, "the light data was rebuilt with nothing switched");
             }
             finally { s.Dispose(); }
