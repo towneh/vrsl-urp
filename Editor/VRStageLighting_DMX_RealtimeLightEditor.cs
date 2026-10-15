@@ -10,6 +10,10 @@ namespace VRSL.URP
     {
         GUIStyle _sectionLabel;
 
+        static readonly GUIContent BallLabel = new GUIContent("Ball",
+            "The ball itself. The dots come from its centre, and it turns with them at Spin "
+          + "Speed while the world runs. Leave it empty and nothing turns.");
+
         // Fixture Type
         SerializedProperty _fixtureType;
 
@@ -209,7 +213,8 @@ namespace VRSL.URP
                 EditorGUILayout.PropertyField(_emitterDepth);
             // lensTransform is a spot-cone anchor; for the omnidirectional StaticPointLight
             // archetype the origin comes from the shell-mesh centre + lightOriginOffset, so
-            // hide the lens field for it. lightOriginOffset stays available for all types.
+            // hide the lens field for it. A discoball shows it as its ball, below.
+            // lightOriginOffset stays available for all types.
             if (!isOmni)
                 EditorGUILayout.PropertyField(_lensTransform);
             EditorGUILayout.PropertyField(_lightOriginOffset);
@@ -220,6 +225,7 @@ namespace VRSL.URP
                 EditorGUILayout.Space();
                 GUILayout.Label("Discoball", _sectionLabel);
                 EditorGUILayout.PropertyField(_shellEmissionTint, new GUIContent("Colour", "The colour of the dots, on top of whatever the cubemap carries."));
+                EditorGUILayout.PropertyField(_lensTransform, BallLabel);
                 EditorGUILayout.PropertyField(_discoballSpinSpeed, new GUIContent("Spin Speed", _discoballSpinSpeed.tooltip));
                 EditorGUILayout.PropertyField(_discoballBeams, new GUIContent("Dots In The Haze", _discoballBeams.tooltip));
                 EditorGUILayout.HelpBox("The dot pattern is the light manager's Discoball Cubemap, shared by every discoball in the scene. The ball spins about this object's up axis.", MessageType.None);

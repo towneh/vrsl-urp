@@ -148,7 +148,8 @@ namespace VRSL.URP
                + "empty when the prefab origin already coincides with the lens (typical "
                + "for static par lights and blinders). Pan/tilt-driven movers should "
                + "continue to assign panTransform — that takes precedence and is read "
-               + "every frame so the cone tracks the rotating head.")]
+               + "every frame so the cone tracks the rotating head. On a discoball this is "
+               + "the ball: the dots come from its centre and it turns with them.")]
         public Transform lensTransform;
 
         // ── Fixture shell driving ─────────────────────────────────────────────

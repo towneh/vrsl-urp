@@ -126,7 +126,9 @@ namespace VRSL.URP
                + "chassis attachment point and the lens is offset deeper inside the moving "
                + "head — drop a child empty at the lens position and assign it here so the "
                + "cone visually lines up with the bulb. Leave empty when the prefab origin "
-               + "already coincides with the lens (typical for static fixtures).")]
+               + "already coincides with the lens (typical for static fixtures). On a "
+               + "discoball this is the ball: the dots come from its centre and it turns "
+               + "with them.")]
         public Transform lensTransform;
 
         [Tooltip("World-space offset added to the resolved light origin. Pushes the point "

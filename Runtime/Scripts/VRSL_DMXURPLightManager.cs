@@ -744,6 +744,7 @@ namespace VRSL.URP
                 _fixtureRefreshPending = false;
                 RefreshFixturesIfChanged();
             }
+            TurnDiscoballs();
             if (disableStrobe != _publishedStrobeDisabled) PublishStrobeDisabled();
 
             if (_configDirty)
@@ -756,6 +757,19 @@ namespace VRSL.URP
             AdvanceState();
             PublishStrobeClock();
             VolumetricStats.Tick();
+        }
+
+        /// <summary>Each discoball's ball turns with its dots. The compute's clock
+        /// advances by the frame's delta, so the ball does too.</summary>
+        void TurnDiscoballs()
+        {
+            float dt = Time.deltaTime;
+            for (int i = 0; i < _fixtures.Count; i++)
+            {
+                var f = _fixtures[i];
+                if (f is null || f.fixtureType != DMXFixtureType.Discoball || f == null) continue;
+                VRSLDiscoballBall.Turn(f.transform, f.lensTransform, f.discoballSpinSpeed, dt);
+            }
         }
 
         /// <summary>Seconds of play Stream data may go with nothing to read before the
