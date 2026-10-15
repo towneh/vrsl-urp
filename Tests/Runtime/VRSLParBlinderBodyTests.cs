@@ -20,6 +20,8 @@ namespace VRSL.URP.Tests
     {
         const string Prefabs = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/";
 
+        /// <summary>J4 takes the first entry as its 13-channel par, and J2 lines all four up
+        /// either side of its camera, so a change to the order or the count moves both.</summary>
         static readonly string[] ParsAndBlinders =
         {
             "VRSL-DMX-Static-ParLight-13CH.prefab",
