@@ -468,6 +468,13 @@ namespace VRSL.URP.EditorScripts
             WriteField(dst, "emissionColor", ScaledTint(srcStatic, sourceAsset, UPSTREAM_AL_STATIC, urpDefault));
             CopyField(srcStatic, dst, srcName: "selectGOBO",     dstName: "goboIndex");
 
+            // The light's own conversion, so a migrated scene and a converted clip agree.
+            // Pars and blinders keep their angle: upstream's width never reached their shaders.
+            float coneWidth = ReadField(srcStatic, "coneWidth", float.NaN);
+            var toSpotAngle = realtimeType.GetMethod("SpotAngleForLegacyConeWidth");
+            if (!float.IsNaN(coneWidth) && toSpotAngle != null)
+                WriteField(dst, "spotAngle", toSpotAngle.Invoke(dst, new object[] { coneWidth }));
+
             // Spin: only carry over the value when upstream's enableAutoSpin is true,
             // otherwise URP gets 0 (no spin) — matches upstream's runtime behaviour.
             bool autoSpin = ReadField(srcStatic, "enableAutoSpin", false);

@@ -280,6 +280,34 @@ namespace VRSL.URP
             return transform.forward;
         }
 
+        // Upstream's mover prefabs ship these cone widths, and this package's the matching spot angles.
+        internal const float LegacySpotlightConeWidth = 2.25f, SpotlightSpotAngle = 25f;
+        internal const float LegacyWashlightConeWidth = 2.7f,  WashlightSpotAngle = 60f;
+        internal const float NarrowestLegacySpotAngle = 5f,    WidestLegacySpotAngle = 179f;
+
+        /// <summary>
+        /// The spot angle matching a cone width from the original VRSL's AudioLink movers
+        /// (its <c>ConeWidth</c>, 0 to 5.5). Scaled so the original prefab's width gives this
+        /// prefab's angle, and kept between 5° and 179°. Fixtures whose cone width did nothing
+        /// in the original (pars, blinders, discoballs) get their current <see cref="spotAngle"/>.
+        /// Assign the result to <see cref="spotAngle"/>; it takes effect the same frame.
+        /// </summary>
+        public float SpotAngleForLegacyConeWidth(float coneWidth)
+        {
+            switch (fixtureType)
+            {
+                case AudioLinkFixtureType.MoverSpotlight:
+                    return ScaledSpotAngle(coneWidth, LegacySpotlightConeWidth, SpotlightSpotAngle);
+                case AudioLinkFixtureType.MoverWashlight:
+                    return ScaledSpotAngle(coneWidth, LegacyWashlightConeWidth, WashlightSpotAngle);
+                default:
+                    return spotAngle;
+            }
+        }
+
+        static float ScaledSpotAngle(float coneWidth, float legacyDefault, float urpDefault) =>
+            Mathf.Clamp(urpDefault * coneWidth / legacyDefault, NarrowestLegacySpotAngle, WidestLegacySpotAngle);
+
     }
 
     /// <summary>Fixture archetype for <see cref="VRSLAudioLinkRealtimeLight"/>.
