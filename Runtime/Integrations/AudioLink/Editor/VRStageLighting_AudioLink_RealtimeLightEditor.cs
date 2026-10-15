@@ -12,7 +12,8 @@ namespace VRSL.URP
 
         static readonly GUIContent BallLabel = new GUIContent("Ball",
             "The ball itself. The dots come from its centre, and it turns with them at Spin "
-          + "Speed while the world runs. Leave it empty and nothing turns.");
+          + "Speed while the world runs. Leave it empty and the ball stays still; the dots "
+          + "still turn, from this object's position.");
 
         // Fixture Type
         SerializedProperty _fixtureType;
