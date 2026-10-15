@@ -201,6 +201,10 @@ namespace VRSL.URP
         public RTHandle       SamplingTextureHandle { get; private set; }
         public RenderTexture  GoboArray           { get; private set; }
         public int  FixtureCount  { get; private set; }
+        /// <summary>How many times this manager has looked through the scene for its
+        /// fixtures, and how many of those changed its fixture buffers.</summary>
+        internal int FixtureScans    { get; private set; }
+        internal int FixtureRebuilds { get; private set; }
         public int  GoboCount     { get; private set; }
         public int  ComputeKernel { get; private set; }
         public Material LightingMaterial   { get; private set; }
@@ -441,7 +445,14 @@ namespace VRSL.URP
             // refresh logic alone can race with rendering on activation frames.
             TryRefreshSamplingTextureHandle();
             SubscribeRuntimeInjection();
+            VRStageLighting_AudioLink_RealtimeLight.EnabledChanged += OnFixtureEnabledChanged;
         }
+
+        // A fixture switched on or off. Collected at the frame's first camera rather than
+        // here, so a room of fixtures switched in one frame costs one look through the
+        // scene.
+        void OnFixtureEnabledChanged() => _fixtureRefreshPending = true;
+        bool _fixtureRefreshPending;
 
         void OnDisable()
         {
@@ -451,6 +462,8 @@ namespace VRSL.URP
             // reclaim in OnEnable able to fire at all.
             bool wasOwner = Instance == this;
             if (wasOwner) Instance = null;
+            VRStageLighting_AudioLink_RealtimeLight.EnabledChanged -= OnFixtureEnabledChanged;
+            _fixtureRefreshPending = false;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;
@@ -515,18 +528,57 @@ namespace VRSL.URP
         int _lastPerFrameFrame = -1;
 
         // ── Public ────────────────────────────────────────────────────────────
-        /// <summary>Re-scan the scene for AudioLink realtime light fixtures and rebuild GPU buffers.
-        /// Call after adding or removing fixture GameObjects at runtime.</summary>
+        /// <summary>Look through the scene for the AudioLink realtime light fixtures that
+        /// are switched on and rebuild the GPU buffers from them. The manager does this
+        /// itself whenever a fixture is switched on or off, so nothing needs to call it;
+        /// calling it anyway does no harm.</summary>
         public void RefreshFixtures()
         {
-            _fixtures.Clear();
-            _fixtures.AddRange(FindObjectsByType<VRStageLighting_AudioLink_RealtimeLight>(
-                FindObjectsInactive.Exclude));
+            Collect(_fixtures);
+            Rebuild();
+        }
 
+        /// <summary>Every AudioLink realtime light whose component and GameObject are
+        /// both on. A fixture with its component switched off casts no light.</summary>
+        void Collect(List<VRStageLighting_AudioLink_RealtimeLight> into)
+        {
+            FixtureScans++;
+            into.Clear();
+            foreach (var f in FindObjectsByType<VRStageLighting_AudioLink_RealtimeLight>(FindObjectsInactive.Exclude))
+                if (f.enabled) into.Add(f);
+        }
+
+        List<VRStageLighting_AudioLink_RealtimeLight> _found = new();
+        readonly HashSet<VRStageLighting_AudioLink_RealtimeLight> _foundFixtures = new();
+
+        /// <summary>Collect the fixtures again, and rebuild only when they are not the
+        /// ones already held: a fixture switched off and on again in one frame leaves
+        /// the same set, and the rebuild is most of what a switch costs.</summary>
+        void RefreshFixturesIfChanged()
+        {
+            Collect(_found);
+            _foundFixtures.Clear();
+            _foundFixtures.UnionWith(_found);
+            bool same = _foundFixtures.Count == _fixtures.Count;
+            for (int i = 0; same && i < _fixtures.Count; i++)
+                same = _fixtures[i] != null && _foundFixtures.Contains(_fixtures[i]);
+            _foundFixtures.Clear();
+            if (!same)
+            {
+                (_fixtures, _found) = (_found, _fixtures);
+                Rebuild();
+            }
+            _found.Clear();
+        }
+
+        /// <summary>Size the fixture buffers to the fixtures held. With none held there
+        /// are no buffers, so nothing is left that could draw.</summary>
+        void Rebuild()
+        {
             FixtureCount = _fixtures.Count;
-            if (FixtureCount == 0) return;
-
+            FixtureRebuilds++;
             ReleaseBuffers();
+            if (FixtureCount == 0) return;
 
             FixtureConfigBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
@@ -569,6 +621,13 @@ namespace VRSL.URP
             if (_lastPerFrameFrame == frame) return;
             _lastPerFrameFrame = frame;
 
+            // Here rather than in a LateUpdate, so fixtures switched anywhere earlier in
+            // the frame, another LateUpdate included, are collected before it renders.
+            if (_fixtureRefreshPending)
+            {
+                _fixtureRefreshPending = false;
+                RefreshFixturesIfChanged();
+            }
             UploadFixtureConfigs();
             TryRefreshAudioLinkHandle();
             TryRefreshSamplingTextureHandle();
@@ -639,7 +698,7 @@ namespace VRSL.URP
             // Every frame, so the array is kept rather than allocated each time.
             if (_configs == null || _configs.Length != FixtureCount)
                 _configs = new VRSLALFixtureConfig[FixtureCount];
-            // A fixture destroyed since the last RefreshFixtures() goes dark rather than
+            // A fixture destroyed since the manager last collected goes dark rather than
             // throwing, which would stop every AudioLink pass on every camera.
             for (int i = 0; i < FixtureCount; i++)
                 _configs[i] = _fixtures[i] != null ? BuildConfig(_fixtures[i]) : s_DarkConfig;
@@ -863,9 +922,10 @@ namespace VRSL.URP
             }
 
             if (FixtureCount == 0)
-                sb.AppendLine("  Fixtures: NONE FOUND — the manager collects "
-                            + "VRStageLighting_AudioLink_RealtimeLight components on enable and skips "
-                            + "inactive ones. Fixtures added since then need RefreshFixtures().");
+                sb.AppendLine("  Fixtures: NONE — no VRStageLighting_AudioLink_RealtimeLight in "
+                            + "the scene is switched on. The manager picks fixtures up as they're "
+                            + "switched on, so check they're on, component and GameObject, and "
+                            + "that they're AudioLink fixtures rather than DMX ones.");
             else
                 sb.AppendLine($"  Fixtures: {FixtureCount} collected");
             sb.AppendLine("  " + VRSLDiagnostics.ShaderStatus("Lighting shader", lightingShader));

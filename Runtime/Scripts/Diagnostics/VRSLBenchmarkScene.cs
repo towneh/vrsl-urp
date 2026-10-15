@@ -496,9 +496,9 @@ namespace VRSL.URP
         /// Activate an evenly-spaced <paramref name="count"/> of the truss and
         /// deactivate the rest, then tell the manager to re-collect.
         ///
-        /// <c>RefreshFixtures</c> is what makes the change take: the manager holds
-        /// its fixture list and its GPU buffers from when it last collected, so a
-        /// deactivated fixture keeps its slot and keeps being lit until it does.
+        /// The manager would pick the change up at its next <c>LateUpdate</c> by
+        /// itself; <c>RefreshFixtures</c> makes it take before this returns, so the
+        /// count a caller reads straight after is already the new one.
         /// </summary>
         /// <returns>The count actually activated, which is not always the count asked
         /// for. A row that silently measured fewer fixtures than its label claims is a row

@@ -160,6 +160,16 @@ namespace VRSL.URP
 
         MaterialPropertyBlock _shellProps;
 
+        /// <summary>
+        /// Fires when any VRStageLighting_AudioLink_RealtimeLight is switched on or off, by
+        /// its component or its GameObject. The manager subscribes and collects its
+        /// fixtures again once, before the next frame renders, however many switched.
+        /// </summary>
+        internal static event System.Action EnabledChanged;
+
+        void OnEnable()  => EnabledChanged?.Invoke();
+        void OnDisable() => EnabledChanged?.Invoke();
+
         void Start()
         {
             DriveFixtureShells();

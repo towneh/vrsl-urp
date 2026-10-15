@@ -221,10 +221,20 @@ namespace VRSL.URP
         /// </summary>
         public static event System.Action ConfigChanged;
 
+        /// <summary>
+        /// Fires when any VRStageLighting_DMX_RealtimeLight is switched on or off, by its
+        /// component or its GameObject. The manager subscribes and collects its fixtures
+        /// again once, before the next frame renders, however many switched.
+        /// </summary>
+        internal static event System.Action EnabledChanged;
+
         void Awake()
         {
             DriveFixtureShells();
         }
+
+        void OnEnable()  => EnabledChanged?.Invoke();
+        void OnDisable() => EnabledChanged?.Invoke();
 
         void OnValidate()
         {

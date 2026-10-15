@@ -342,6 +342,10 @@ namespace VRSL.URP
         public RTHandle        DMXSpinTimerHandle  { get; private set; }
         public RenderTexture   GoboArray           { get; private set; }
         public int  FixtureCount   { get; private set; }
+        /// <summary>How many times this manager has looked through the scene for its
+        /// fixtures, and how many of those changed its fixture buffers.</summary>
+        internal int FixtureScans    { get; private set; }
+        internal int FixtureRebuilds { get; private set; }
 
         /// <summary>
         /// Whether this manager will enqueue the surface prepass for
@@ -601,7 +605,8 @@ namespace VRSL.URP
             EnsureMovementBuffer(0);
             EnsureUniverseStepBuffer(0);
             SubscribeRuntimeInjection();
-            VRStageLighting_DMX_RealtimeLight.ConfigChanged += OnFixtureConfigChanged;
+            VRStageLighting_DMX_RealtimeLight.ConfigChanged  += OnFixtureConfigChanged;
+            VRStageLighting_DMX_RealtimeLight.EnabledChanged += OnFixtureEnabledChanged;
         }
 
         void OnDisable()
@@ -612,7 +617,8 @@ namespace VRSL.URP
             // fire, because Instance is never null for it to claim.
             bool wasOwner = Instance == this;
             if (wasOwner) Instance = null;
-            VRStageLighting_DMX_RealtimeLight.ConfigChanged -= OnFixtureConfigChanged;
+            VRStageLighting_DMX_RealtimeLight.ConfigChanged  -= OnFixtureConfigChanged;
+            VRStageLighting_DMX_RealtimeLight.EnabledChanged -= OnFixtureEnabledChanged;
             UnsubscribeRuntimeInjection();
             _tileCullPass?.Dispose();
             _tileCullPass = null;
@@ -703,6 +709,10 @@ namespace VRSL.URP
         // new field values (emitterDepth, range, spot angles, etc.).
         void OnFixtureConfigChanged() => MarkConfigDirty();
 
+        // A fixture switched on or off. Collected in LateUpdate rather than here, so a
+        // room of fixtures switched in one frame costs one look through the scene.
+        void OnFixtureEnabledChanged() => _fixtureRefreshPending = true;
+
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
@@ -720,8 +730,8 @@ namespace VRSL.URP
 
             if (_boundInput.HasValue && dmxInput != _boundInput.Value)
                 SwitchTo(dmxInput);
-            // After every Update has run, so fixtures switched on alongside the layout,
-            // in the same frame, are collected before anything renders.
+            // After every Update has run, so fixtures switched on or off this frame, or
+            // alongside a change of input, are collected before anything renders.
             if (_fixtureRefreshPending)
             {
                 _fixtureRefreshPending = false;
@@ -1152,25 +1162,43 @@ namespace VRSL.URP
         bool[]   _dataTimeSeen;
 
         // ── Public ────────────────────────────────────────────────────────────
-        /// <summary>Re-scan the scene for VRStageLighting_DMX_RealtimeLight components
-        /// and rebuild the GPU buffers. Call after adding/removing fixtures at runtime.</summary>
+        /// <summary>Look through the scene for the VRStageLighting_DMX_RealtimeLight
+        /// fixtures that are switched on and rebuild the GPU buffers from them. The
+        /// manager does this itself whenever a fixture is switched on or off, so nothing
+        /// needs to call it; calling it anyway does no harm.</summary>
         public void RefreshFixtures()
         {
-            _fixtures.Clear();
-            _fixtures.AddRange(FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(
-                FindObjectsInactive.Exclude));
+            Collect(_fixtures);
+            Rebuild();
+        }
 
+        /// <summary>Every DMX realtime light whose component and GameObject are both
+        /// on. A fixture with its component switched off casts no light.</summary>
+        void Collect(List<VRStageLighting_DMX_RealtimeLight> into)
+        {
+            FixtureScans++;
+            into.Clear();
+            foreach (var f in FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Exclude))
+                if (f.enabled) into.Add(f);
+        }
+
+        /// <summary>Size the fixture buffers to the fixtures held. With none held there
+        /// are no buffers, so nothing is left that could draw.</summary>
+        void Rebuild()
+        {
             FixtureCount = _fixtures.Count;
             if (outputDebugLogs)
             {
                 if (FixtureCount == 0)
-                    Debug.LogWarning("[VRSL URP] No VRStageLighting_DMX_RealtimeLight fixtures found in the scene.", this);
+                    Debug.Log("[VRSL URP] No DMX realtime light fixtures are switched on, so there's nothing to light.", this);
                 else
                     Debug.Log($"[VRSL URP] Collected {FixtureCount} DMX realtime light fixture(s).", this);
             }
+
+            FixtureRebuilds++;
+            ReleaseBuffers();
             if (FixtureCount == 0) return;
 
-            ReleaseBuffers();
             FixtureConfigBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
@@ -1216,7 +1244,7 @@ namespace VRSL.URP
         /// ordinary coroutine this frame are picked up whether that ran before or after
         /// this call. Fixtures switched on later in the frame than that (another
         /// <c>LateUpdate</c> that runs after this manager's, <c>WaitForEndOfFrame</c>)
-        /// need <see cref="RefreshFixtures"/> afterwards.
+        /// are picked up the frame after.
         ///
         /// Each layout's textures decode their own grid from the video, so whatever
         /// puts the video into a grid has to switch to the new layout's grid as well,
@@ -1297,22 +1325,29 @@ namespace VRSL.URP
             MarkConfigDirty();
         }
 
+        List<VRStageLighting_DMX_RealtimeLight> _found = new();
         readonly HashSet<VRStageLighting_DMX_RealtimeLight> _foundFixtures = new();
 
         /// <summary>Collect the fixtures again, and rebuild only when they are not the
-        /// ones already held. A switch usually leaves the same fixtures lit, and the
-        /// rebuild (the fixture buffers and the gobo array) is most of what a switch
+        /// ones already held. A switch of input usually leaves the same fixtures lit, a
+        /// fixture switched off and on again in one frame leaves the same set, and the
+        /// rebuild (the fixture buffers and the gobo array) is most of what either
         /// costs.</summary>
         void RefreshFixturesIfChanged()
         {
+            Collect(_found);
             _foundFixtures.Clear();
-            foreach (var f in FindObjectsByType<VRStageLighting_DMX_RealtimeLight>(FindObjectsInactive.Exclude))
-                _foundFixtures.Add(f);
+            _foundFixtures.UnionWith(_found);
             bool same = _foundFixtures.Count == _fixtures.Count;
             for (int i = 0; same && i < _fixtures.Count; i++)
                 same = _fixtures[i] != null && _foundFixtures.Contains(_fixtures[i]);
             _foundFixtures.Clear();
-            if (!same) RefreshFixtures();
+            if (!same)
+            {
+                (_fixtures, _found) = (_found, _fixtures);
+                Rebuild();
+            }
+            _found.Clear();
         }
 
         /// <summary>
@@ -1787,9 +1822,10 @@ namespace VRSL.URP
             }
 
             if (FixtureCount == 0)
-                sb.AppendLine("  Fixtures: NONE FOUND — the manager collects "
-                            + "VRStageLighting_DMX_RealtimeLight components on enable and skips "
-                            + "inactive ones. Fixtures added since then need RefreshFixtures().");
+                sb.AppendLine("  Fixtures: NONE — no VRStageLighting_DMX_RealtimeLight in the "
+                            + "scene is switched on. The manager picks fixtures up as they're "
+                            + "switched on, so check they're on, component and GameObject, and "
+                            + "that they're DMX fixtures rather than AudioLink ones.");
             else
                 sb.AppendLine($"  Fixtures: {FixtureCount} collected");
             sb.AppendLine("  " + DmxInputStatus());

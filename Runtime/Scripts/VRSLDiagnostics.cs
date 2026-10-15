@@ -272,13 +272,13 @@ namespace VRSL.URP
         /// </summary>
         public static string LightDataStatus(GraphicsBuffer lightData, int fixtureCount)
         {
+            // The count first: a manager holding no fixtures holds no buffer either.
+            if (fixtureCount == 0)
+                return "Light data: NO FIXTURES — no realtime light fixture is switched on, "
+                     + "so there is nothing to decode into. Check the fixtures are switched on";
             if (lightData == null)
                 return "Light data: NO BUFFER — the decode never allocated one, so this is "
                      + "upstream of anything to do with fixtures";
-            if (fixtureCount == 0)
-                return "Light data: NO FIXTURES — the manager collected none, so there is "
-                     + "nothing to decode into. Check the fixtures are active and that "
-                     + "RefreshFixtures has run since they were added";
 
             var summary = SummariseEmission(lightData, fixtureCount);
             int emitting = summary.Emitting;
