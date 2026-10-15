@@ -68,7 +68,7 @@ MonoBehaviour:
   panTransform: {fileID: 0}
   tiltTransform: {fileID: 0}
   targetToFollow: {fileID: 0}
-  lensTransform: {fileID: 0}
+  lensTransform: {fileID: 7461920385271935612}
   fixtureShellRenderers: []
 --- !u!1 &7461920385271935611
 GameObject:

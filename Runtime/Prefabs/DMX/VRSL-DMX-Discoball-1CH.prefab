@@ -61,6 +61,7 @@ MonoBehaviour:
   minSpotAngle: 5
   maxSpotAngle: 60
   range: 15
+  lensTransform: {fileID: 7461920385271934612}
   isPointLight: 1
   enableGobo: 0
   enableGoboSpin: 0
