@@ -598,7 +598,8 @@ namespace VRSL.URP
 
         public void OnEnable()
         {
-            logo = Resources.Load("VRSL-Logo") as Texture;
+            logo = AssetDatabase.LoadAssetAtPath<Texture>(
+                "Packages/town.mr.vrsl-urp/Runtime/Prefabs/Media/VRSL-Logo.png");
         }
 
         public static void DrawLogo()

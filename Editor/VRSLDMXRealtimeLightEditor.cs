@@ -133,7 +133,7 @@ namespace VRSL.URP
             GUILayout.Label("Fixture Type", _sectionLabel);
             EditorGUILayout.PropertyField(_fixtureType, new GUIContent("Type", _fixtureType.tooltip));
 
-            var type = (DMXFixtureType)_fixtureType.enumValueIndex;
+            var type = (DMXFixtureType)_fixtureType.intValue;
             bool isMover     = type == DMXFixtureType.MoverSpotlight
                             || type == DMXFixtureType.MoverWashlight;
             bool showMovement = isMover || type == DMXFixtureType.Custom;

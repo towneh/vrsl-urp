@@ -216,7 +216,8 @@ namespace VRSL.EditorScripts
     {
     public static void DrawLogo(Rect r, int displayHeight, int displayWidth)
     {
-        var logo = Resources.Load("VRSL-Logo") as Texture;
+        var logo = AssetDatabase.LoadAssetAtPath<Texture>(
+            "Packages/town.mr.vrsl-urp/Runtime/Prefabs/Media/VRSL-Logo.png");
         Color oldColor = GUI.backgroundColor;
         GUI.backgroundColor = Color.black;
         Vector2 contentOffset = new Vector2(0f, -2f);

@@ -62,6 +62,8 @@
 - **Shader-driven fixtures at the end of universe 3 read their own channels on a Horizontal grid.** Fixture bodies, lasers and lens flares counted universes as 512 channels where VRSL addresses them 520 apart, so universe 3's channels 497 to 512 read another fixture's cell. Realtime lights already read them right. On a grid carrying nine universes, the ends of universes 3, 6 and 9 went wrong the same way.
 - **Fixtures patched past what the grid carries are dark.** Past the grid's last channel (1560 on Horizontal, 871 on Vertical, 650 on Legacy) realtime lights read the grid's edge row and shader-driven fixtures another universe's cell, so they lit with another fixture's values. Every reader now reads those channels as channels at 0, strobe open, as under Stream data past what the source sends.
 - **A fixture left at channel 0 no longer lights with channel 13's value.** On a grid a read of channel 0 took channel 13's cell, so a flasher or a five-channel fixture whose address was left at 0 lit with whatever channel 13 held. Channel 0 now reads as a channel at 0. A 13-channel fixture at 0 reads its colour and dimmer from channels 5 to 9 and is unchanged.
+- **Reading a DMX Static fixture's `ConeLength` or `MaxConeLength` from a script no longer crashes Unity.** Both read themselves until the stack ran out. They return the fixture's values now.
+- **The control panel and camera configurator inspectors show the VRSL logo.** They looked for it in a Resources folder the package doesn't have, so the logo area was empty.
 
 ## [0.3.0-rc.4] — 2026-10-12
 

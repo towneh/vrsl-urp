@@ -137,7 +137,7 @@ namespace VRSL.URP
 
         void Init(bool withDMX)
         {
-            if(objRenderers.Length > 0 && objRenderers[0] != null)
+            if(objRenderers != null && objRenderers.Length > 0 && objRenderers[0] != null)
             {
                 _SetProps();
                 previousColorTint = lightColorTint;
@@ -260,7 +260,7 @@ namespace VRSL.URP
         {
             if(props == null)
             {
-                if(objRenderers.Length > 0 && objRenderers[0] != null)
+                if(objRenderers != null && objRenderers.Length > 0 && objRenderers[0] != null)
                 {
                     _SetProps();
                 }
@@ -333,7 +333,7 @@ namespace VRSL.URP
         {
             if(props == null)
             {
-                if(objRenderers.Length > 0 && objRenderers[0] != null)
+                if(objRenderers != null && objRenderers.Length > 0 && objRenderers[0] != null)
                 {
                     _SetProps();
                 }
@@ -420,7 +420,7 @@ namespace VRSL.URP
         {
             get
             {
-                return ConeLength;
+                return coneLength;
             }
             set
             {
@@ -433,7 +433,7 @@ namespace VRSL.URP
         {
             get
             {
-                return MaxConeLength;
+                return maxConeLength;
             }
             set
             {

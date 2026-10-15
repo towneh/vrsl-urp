@@ -110,7 +110,7 @@ namespace VRSL.URP
             GUILayout.Label("Fixture Type", _sectionLabel);
             EditorGUILayout.PropertyField(_fixtureType, new GUIContent("Type", _fixtureType.tooltip));
 
-            var type = (AudioLinkFixtureType)_fixtureType.enumValueIndex;
+            var type = (AudioLinkFixtureType)_fixtureType.intValue;
             bool isMover     = type == AudioLinkFixtureType.MoverSpotlight
                             || type == AudioLinkFixtureType.MoverWashlight;
             bool showMovement = isMover || type == AudioLinkFixtureType.Custom;
@@ -141,7 +141,7 @@ namespace VRSL.URP
             EditorGUILayout.PropertyField(_colorMode);
 
             // Show only the field relevant to the selected color mode.
-            var mode = (ALRealtimeColorMode)_colorMode.enumValueIndex;
+            var mode = (ALRealtimeColorMode)_colorMode.intValue;
             if (mode == ALRealtimeColorMode.Emission)
                 EditorGUILayout.PropertyField(_emissionColor);
             else if (mode == ALRealtimeColorMode.ColorTexture
