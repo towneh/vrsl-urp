@@ -476,8 +476,9 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// G9. No fixture shader or include can choose a layout of its own: the
         /// old material flag is gone from everything but the two CRT shaders (each layout
-        /// has its own CRT set, so for them the material is the layout), both read-function
-        /// includes choose by the manager's global, and every shader that includes the
+        /// has its own CRT set, so for them the material is the layout), the shared read core
+        /// (which the URP include goes through) and the Built-in include choose by the
+        /// manager's global, and every shader that includes the
         /// Built-in one has the global declared. Materials still carrying the old flag's saved
         /// value are not checked: nothing reads that name any more.
         /// </summary>
@@ -510,13 +511,16 @@ namespace VRSL.URP.Tests
                     wrong.Add($"{name} includes the Built-in read functions without the layout global declared");
             }
 
-            foreach (var include in new[] { "VRSL-DMXFunctions-URP.hlsl", "VRSL-DMXFunctions.cginc" })
+            foreach (var include in new[] { "VRSLDMX.hlsl", "VRSL-DMXFunctions.cginc" })
             {
                 var file = files.FirstOrDefault(f => System.IO.Path.GetFileName(f) == include);
                 Assert.IsNotNull(file, $"{include} is not in the package");
                 Assert.That(System.IO.File.ReadAllText(file), Does.Contain("_VRSLU_DMXGridLayout == 2"),
                     $"{include} does not choose its read from the manager's layout");
             }
+            var urp = files.First(f => System.IO.Path.GetFileName(f) == "VRSL-DMXFunctions-URP.hlsl");
+            Assert.That(System.IO.File.ReadAllText(urp), Does.Contain("#include \"../VRSLDMX.hlsl\""),
+                "VRSL-DMXFunctions-URP.hlsl reads the grid without the shared core");
 
             Assert.IsFalse(files.Any(f => System.IO.Path.GetFileName(f) == "VRSLDMX.cginc"),
                 "VRSLDMX.cginc, a third copy of the read functions that nothing includes, is back");

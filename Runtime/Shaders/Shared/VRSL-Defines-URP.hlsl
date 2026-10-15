@@ -12,15 +12,6 @@ half _BlindingAngleMod;
 
 #ifdef VRSL_DMX
     uint _UseRawGrid, _EnableExtraChannels;
-    uniform half4 _VRSLU_DMXGridRenderTexture_TexelSize;
-    TEXTURE2D(_VRSLU_DMXGridRenderTexture);
-    SAMPLER(sampler_VRSLU_DMXGridRenderTexture);
-    TEXTURE2D(_VRSLU_DMXGridRenderTextureMovement);
-    SAMPLER(sampler_VRSLU_DMXGridRenderTextureMovement);
-    TEXTURE2D(_VRSLU_DMXGridStrobeOutput);
-    SAMPLER(sampler_VRSLU_DMXGridStrobeOutput);
-    TEXTURE2D(_VRSLU_DMXGridSpinTimer);
-    SAMPLER(sampler_VRSLU_DMXGridSpinTimer);
     half _SpinSpeed;
 
 #ifdef FIXTURE_EMIT
@@ -132,10 +123,6 @@ half _LMStrength;
 half _RTLMStrength;
 int _TextureSampleMode;
 half _Saturation, _SaturationLength, _LensMaxBrightness, _UniversalIntensity;
-// The grid layout the DMX manager reads, published as a global: 0 Horizontal,
-// 1 Vertical, 2 Legacy (VRSLGridLayout). Unset it reads 0, so a scene with no DMX
-// manager reads the Horizontal grid.
-int _VRSLU_DMXGridLayout;
 uint _GoboBeamSplitEnable;
 
 uniform const half compatSampleYAxis = 0.019231;

@@ -45,7 +45,7 @@ Shader "Hidden/VRSL-URP/Tests/GridCells"
             {
                 // The target is one row, so only x matters, and x is never flipped.
                 uint ch = (uint)i.positionCS.x + 1u;
-                return SAMPLE_TEXTURE2D_LOD(_VRSLTestIndex, sampler_point_clamp, getDMXCellUV(ch), 0);
+                return SAMPLE_TEXTURE2D_LOD(_VRSLTestIndex, vrsldmx_point_clamp_sampler, getDMXCellUV(ch), 0);
             }
             ENDHLSL
         }
