@@ -3,6 +3,7 @@
 // read this table in any project.
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using System.Linq;
 
 namespace VRSL.URP
 {
@@ -143,12 +144,33 @@ namespace VRSL.URP
         };
 
         /// <summary>Upstream's light stencil assets: its mask prefabs, their two materials and
-        /// the two shaders, by GUID, each with the name the summary shows.</summary>
-        public static readonly Dictionary<string, string> LightStencils = new Dictionary<string, string>();
+        /// the two shaders, by GUID, each with the name the summary shows. This package has no
+        /// light stencil, so the tool names these in a scene rather than migrating them.</summary>
+        public static readonly Dictionary<string, string> LightStencils = new Dictionary<string, string>
+        {
+            { "29158ac9808b32541ba787435bdfa109", "VRSL-StencilMask-Capsule (prefab)" },
+            { "14fd9d71e91903d4eb44d5289d78eba4", "VRSL-StencilMask-Cube (prefab)" },
+            { "de5b252ed1e43b14a9f655ac98144fff", "VRSL-StencilMask-Cylinder (prefab)" },
+            { "fa0972d9c823bcf4293febe61ff79da6", "VRSL-StencilMask-Sphere (prefab)" },
+            { "92edb46363dfd9149a96fcecb5b6d192", "VRSL-LightStencil (material)" },
+            { "c813d92472af4434ca4f1a05d4703ae3", "VRSL-LightRestorationStencil (material)" },
+            { "e17c4816fe62ef5448f6c0cfbdb8e08b", "A material of your own on VRSL/Stencils/VRSL-Light Stencil" },
+            { "c61102b627802b54583713cccdc095b8", "A material of your own on VRSL/Stencils/VRSL-Light Restoration Stencil" },
+        };
 
         /// <summary>The summary's paragraph on the light stencils found, by name and count;
         /// empty when there are none.</summary>
-        public static string LightStencilSummary(IReadOnlyDictionary<string, int> found) => "";
+        public static string LightStencilSummary(IReadOnlyDictionary<string, int> found)
+        {
+            if (found == null || found.Count == 0) return "";
+            return "Light stencils from the original VRSL, left as they are. VRSL-URP has no light stencil, so "
+                 + "they no longer keep light off anything and you can delete them:\n"
+                 + string.Join("\n", found.OrderBy(f => f.Key).Select(f => $"  {f.Key}: {f.Value}"))
+                 + "\n\nTo keep fixture light off an area, aim the fixtures away from it, narrow their cone or "
+                 + "shorten their range. A fixture still lights a surface on the far side of a wall, because "
+                 + "the lights cast no shadows. Beams stop at whatever stands in front of them, and flares and "
+                 + "lasers hide behind it.";
+        }
     }
 }
 #endif

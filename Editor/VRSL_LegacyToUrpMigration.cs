@@ -175,6 +175,7 @@ namespace VRSL.URP.EditorScripts
             if (leftForAudioLink.Count > 0)
                 summary += "\n\n" + LEFT_FOR_AUDIOLINK + "\n" + string.Join("\n",
                     leftForAudioLink.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
+            summary += LightStencilParagraph(scene);
 
             Debug.Log("[VRSL Migration] " + summary.Replace("\n", "  "));
             EditorUtility.DisplayDialog("VRSL Migration", summary, "OK");
@@ -268,6 +269,7 @@ namespace VRSL.URP.EditorScripts
                 $"Materials reshaded: {changedMaterials.Count}";
             if (leftForAudioLink > 0)
                 summary += $"\n\n{LEFT_FOR_AUDIOLINK}\n  AudioLink fixtures: {leftForAudioLink}";
+            summary += LightStencilParagraph(scene);
             Debug.Log("[VRSL In-Place] " + summary.Replace("\n", "  "));
             EditorUtility.DisplayDialog("VRSL In-Place Conversion", summary, "OK");
         }
@@ -291,6 +293,61 @@ namespace VRSL.URP.EditorScripts
 
             guid = AssetDatabase.AssetPathToGUID(path);
             return !string.IsNullOrEmpty(guid);
+        }
+
+        // Upstream's light stencils in the scene, as a paragraph for the summary (empty when there
+        // are none). An instance of a mask prefab counts once and its children aren't counted
+        // again; any other renderer counts once per stencil material it uses, or per material
+        // of the world's own on a stencil shader. Each object found gets a Console line that
+        // selects it when clicked. Nothing is changed: deleting them is the author's call.
+        static string LightStencilParagraph(Scene scene)
+        {
+            var found = new Dictionary<string, int>();
+            void Count(string guid, GameObject go)
+            {
+                string name = VRSLMigrationTable.LightStencils[guid];
+                found.TryGetValue(name, out int n);
+                found[name] = n + 1;
+                Debug.Log($"[VRSL Migration] '{go.name}' is a light stencil from the original VRSL ({name}). "
+                        + "It no longer keeps light off anything.", go);
+            }
+
+            var masks = new List<Transform>();
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var t in root.GetComponentsInChildren<Transform>(includeInactive: true))
+                {
+                    if (!PrefabUtility.IsAnyPrefabInstanceRoot(t.gameObject) || masks.Any(m => t.IsChildOf(m))) continue;
+                    string guid = LightStencilGuid(PrefabUtility.GetCorrespondingObjectFromOriginalSource(t.gameObject));
+                    if (guid == null) continue;
+                    masks.Add(t);
+                    Count(guid, t.gameObject);
+                }
+
+            foreach (var root in scene.GetRootGameObjects())
+                foreach (var r in root.GetComponentsInChildren<Renderer>(includeInactive: true))
+                {
+                    if (masks.Any(m => r.transform.IsChildOf(m))) continue;
+                    var counted = new HashSet<string>();
+                    foreach (var mat in r.sharedMaterials)
+                    {
+                        if (mat == null) continue;
+                        string guid = LightStencilGuid(mat) ?? LightStencilGuid(mat.shader);
+                        if (guid != null && counted.Add(guid)) Count(guid, r.gameObject);
+                    }
+                }
+
+            string paragraph = VRSLMigrationTable.LightStencilSummary(found);
+            return paragraph.Length > 0 ? "\n\n" + paragraph : "";
+        }
+
+        // The GUID of the asset `asset` was loaded from, when it's one of upstream's light stencils.
+        static string LightStencilGuid(UnityEngine.Object asset)
+        {
+            if (asset == null) return null;
+            string path = AssetDatabase.GetAssetPath(asset);
+            if (string.IsNullOrEmpty(path)) return null;
+            string guid = AssetDatabase.AssetPathToGUID(path);
+            return VRSLMigrationTable.LightStencils.ContainsKey(guid) ? guid : null;
         }
 
         // Idempotent check: any sibling of `source` (under the same parent, or any scene root
