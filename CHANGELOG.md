@@ -23,7 +23,11 @@
 
 - **`SmoothingPanelOpener` and `VRSL_AudioLink_SmoothingPanel` are in the `VRSL.URP` namespace,** like the rest of the package. In the global namespace they could clash with a type of the same name in another package or the project. Scenes and prefabs that use them are unaffected; code that names either one needs `using VRSL.URP;`.
 
+- **The migration tool names the original VRSL's light stencils.** Both **VRSL → URP** migration menu items list any light stencil mask prefab, either of its two materials, or a material of your own on either stencil shader found in the scene, and say how to keep light off an area without one. They're left in place for you to delete, and each one's Console line selects it.
+
 ### Removed
+
+- **Lasers and lens flares no longer hide where a world writes stencil 142.** The DMX and AudioLink lasers and lens flares still carried the original VRSL's light stencil test, though nothing in the package writes 142 and the realtime light and beams never tested it, so a light stencil box hid only those four. Every light now draws the same whatever a world writes to the stencil. To keep fixture light off an area, aim the fixtures away from it, narrow their cone or shorten their range. A fixture still lights a surface on the far side of a wall, because the lights cast no shadows; beams stop at whatever stands in front of them, and flares and lasers hide behind it.
 
 - **The superseded per-layout prefabs.** The Legacy and Vertical fixture and manager prefabs under `Runtime/Prefabs/DMX/Superseded/`, every Legacy and Vertical fixture material, the two textures used only by those materials, and **VRSL → URP → Replace Superseded Prefabs in Scene** are gone. A scene still holding one of those prefabs shows a Missing Prefab in its place, and running the migration tool over it again adds a second fixture beside each one. Open such a scene with 0.3.0-rc.4 or earlier and run the replace menu first.
 
