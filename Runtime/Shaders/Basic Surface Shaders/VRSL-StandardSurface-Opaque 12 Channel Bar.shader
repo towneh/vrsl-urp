@@ -373,7 +373,4 @@
             ENDHLSL
         }
     }
-
-    
-    FallBack "Diffuse"
 }
