@@ -4,6 +4,7 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
 using System.Linq;
+using UnityEngine;
 
 namespace VRSL.URP
 {
@@ -19,15 +20,23 @@ namespace VRSL.URP
         /// <summary>Copy the source's local scale onto the sibling. Off for a source
         /// whose root scale is a projection volume rather than the fixture.</summary>
         public readonly bool MatchScale;
+        /// <summary>Where the sibling's root goes, in the source root's space: turned by
+        /// <see cref="RootTurn"/> (Euler degrees, whole quarter turns) and moved to
+        /// <see cref="RootShift"/>. Zero for a URP prefab that carries its body as the upstream
+        /// one does.</summary>
+        public readonly Vector3 RootTurn;
+        public readonly Vector3 RootShift;
 
         public VRSLMigrationPair(string upstream, string urp, string friendly, VRSLMigrationKind kind,
-            bool matchScale = true)
+            bool matchScale = true, Vector3 rootTurn = default, Vector3 rootShift = default)
         {
             UpstreamGuid = upstream;
             UrpGuid = urp;
             FriendlyName = friendly;
             Kind = kind;
             MatchScale = matchScale;
+            RootTurn = rootTurn;
+            RootShift = rootShift;
         }
     }
 
@@ -66,8 +75,12 @@ namespace VRSL.URP
         {
             new VRSLMigrationPair("2aa50be2d32099842af2903a918a56f7", "17c6ee43b8af20aead4a4ccc0c57c3cb", "AudioLink Mover Spotlight",  AudioLink),
             new VRSLMigrationPair("dd0fe316ce2ca824ead0901561087fd3", "9aa51ab9f0738edf41d2ab84a38c2784", "AudioLink Mover Washlight",  AudioLink),
-            new VRSLMigrationPair("269647a339f4d1c47951638c83aa839b", "2156195184d840df408a82f7ec31ecd9", "AudioLink Static Blinder",   AudioLink),
-            new VRSLMigrationPair("161d81f8a11b22d42ae4e81f522939d3", "3e6759ca4cb0a19bc3f20487b6c9f2e1", "AudioLink Static ParLight",  AudioLink),
+            // Upstream's AudioLink par and blinder carry their body at the root, shining down; ours
+            // carry it turned to shine along the root's forward, the blinder's also moved.
+            new VRSLMigrationPair("269647a339f4d1c47951638c83aa839b", "2156195184d840df408a82f7ec31ecd9", "AudioLink Static Blinder",   AudioLink,
+                rootTurn: new Vector3(90f, 0f, 0f), rootShift: new Vector3(0f, -0.214f, 0.214f)),
+            new VRSLMigrationPair("161d81f8a11b22d42ae4e81f522939d3", "3e6759ca4cb0a19bc3f20487b6c9f2e1", "AudioLink Static ParLight",  AudioLink,
+                rootTurn: new Vector3(90f, 0f, 0f)),
 
             new VRSLMigrationPair("f5be3cfe3f15bfb4e9477904c5af9daf", Spotlight13, "DMX H 13CH Mover Spotlight", Dmx),
             new VRSLMigrationPair("b3e8ff051cc2d684aa255ceccce9b96f", WashLight13, "DMX H 13CH Mover Washlight", Dmx),

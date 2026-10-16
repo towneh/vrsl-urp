@@ -58,7 +58,7 @@ namespace VRSL.URP.EditorScripts
         static Type UrpType(string fullName) => VRSLMigrationCopy.UrpType(fullName);
 
         // Position-equality tolerance for idempotency check (1mm).
-        const float POSITION_EPSILON_SQR = 0.001f * 0.001f;
+        const float POSITION_EPSILON = 0.001f;
 
         [MenuItem(MENU_PATH, false, 120)]
         static void Run()
@@ -110,7 +110,7 @@ namespace VRSL.URP.EditorScripts
 
             foreach (var (go, pair) in candidates)
             {
-                var existing = FindUrpSibling(go.transform, pair.UrpGuid);
+                var existing = FindUrpSibling(go.transform, pair);
                 if (existing != null)
                 {
                     skipped++;
@@ -418,10 +418,10 @@ namespace VRSL.URP.EditorScripts
         }
 
         // Idempotent check: any sibling of `source` (under the same parent, or any scene root
-        // when `source` is itself a root) that is a URP-prefab instance and sits at the same
-        // world position counts as already-migrated. The position match makes the check robust
+        // when `source` is itself a root) that is a URP-prefab instance standing where the tool
+        // places one counts as already-migrated. The position match makes the check robust
         // to manual hierarchy reordering after a previous migration run.
-        static Transform FindUrpSibling(Transform source, string urpGuid)
+        static Transform FindUrpSibling(Transform source, VRSLMigrationPair pair)
         {
             var parent = source.parent;
             if (parent != null)
@@ -430,7 +430,7 @@ namespace VRSL.URP.EditorScripts
                 {
                     var sibling = parent.GetChild(i);
                     if (sibling == source) continue;
-                    if (IsMigratedSibling(sibling, source, urpGuid)) return sibling;
+                    if (IsMigratedSibling(sibling, source, pair)) return sibling;
                 }
             }
             else
@@ -439,17 +439,17 @@ namespace VRSL.URP.EditorScripts
                 {
                     var sibling = rootGo.transform;
                     if (sibling == source) continue;
-                    if (IsMigratedSibling(sibling, source, urpGuid)) return sibling;
+                    if (IsMigratedSibling(sibling, source, pair)) return sibling;
                 }
             }
             return null;
         }
 
-        static bool IsMigratedSibling(Transform sibling, Transform source, string urpGuid)
+        static bool IsMigratedSibling(Transform sibling, Transform source, VRSLMigrationPair pair)
         {
             if (!TryGetSourceGuid(sibling.gameObject, out string siblingGuid)) return false;
-            if (siblingGuid != urpGuid) return false;
-            return (sibling.position - source.position).sqrMagnitude <= POSITION_EPSILON_SQR;
+            if (siblingGuid != pair.UrpGuid) return false;
+            return VRSLMigrationCopy.IsPlacedFor(sibling, source, pair, POSITION_EPSILON);
         }
 
         // ── Insertion ─────────────────────────────────────────────────────────────

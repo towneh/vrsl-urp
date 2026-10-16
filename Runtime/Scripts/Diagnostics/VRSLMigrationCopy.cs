@@ -76,8 +76,8 @@ namespace VRSL.URP
         // ── Insertion ─────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Places <paramref name="urpAsset"/> as the sibling immediately below <paramref name="source"/>
-        /// with the same world transform, and carries the source's settings across.
+        /// Places <paramref name="urpAsset"/> as the sibling immediately below <paramref name="source"/>,
+        /// its body where the source's is, and carries the source's settings across.
         /// <paramref name="sourceAsset"/> is the upstream prefab the source is an instance of, which
         /// holds upstream's defaults.
         /// </summary>
@@ -87,11 +87,11 @@ namespace VRSL.URP
             var instance = (GameObject)PrefabUtility.InstantiatePrefab(urpAsset, source.gameObject.scene);
             Undo.RegisterCreatedObjectUndo(instance, "VRSL: Add URP Sibling");
 
-            // Match world transform: parent under same node, copy local scale (since they
-            // share a parent the world scale will match), then explicitly write world pos+rot.
+            // Same parent, so the source's local scale gives the same world scale.
+            var turn = Quaternion.Euler(pair.RootTurn);
             instance.transform.SetParent(source.parent, worldPositionStays: false);
-            if (pair.MatchScale) instance.transform.localScale = source.localScale;
-            instance.transform.SetPositionAndRotation(source.position, source.rotation);
+            if (pair.MatchScale) instance.transform.localScale = TurnedScale(source.localScale, turn);
+            instance.transform.SetPositionAndRotation(SiblingPosition(source, pair), source.rotation * turn);
             instance.transform.SetSiblingIndex(source.GetSiblingIndex() + 1);
 
             instance.name = source.gameObject.name + " (URP)";
@@ -99,6 +99,38 @@ namespace VRSL.URP
             CopyParameters(source.gameObject, instance, sourceAsset, urpAsset, pair.Kind, types);
             MatchState(source.gameObject, instance, types);
             return instance;
+        }
+
+        /// <summary>Where <see cref="PlaceSibling"/> puts the sibling's root for this source.</summary>
+        public static Vector3 SiblingPosition(Transform source, VRSLMigrationPair pair) =>
+            source.TransformPoint(pair.RootShift);
+
+        /// <summary>
+        /// Whether a sibling of the pair's URP prefab stands where the tool placed one for this
+        /// source: where <see cref="PlaceSibling"/> puts it, or on the source's own root, where
+        /// 0.3.0-rc.4 and earlier placed every sibling. A re-run skips such a source.
+        /// </summary>
+        public static bool IsPlacedFor(Transform sibling, Transform source, VRSLMigrationPair pair, float tolerance)
+        {
+            float sq = tolerance * tolerance;
+            return (sibling.position - SiblingPosition(source, pair)).sqrMagnitude <= sq
+                || (sibling.position - source.position).sqrMagnitude <= sq;
+        }
+
+        // A quarter-turn maps each of the sibling's axes onto one of the source's; each takes the
+        // scale of the axis it lands on, so a stretched original stays stretched along its body.
+        static Vector3 TurnedScale(Vector3 scale, Quaternion turn)
+        {
+            var turned = Vector3.zero;
+            for (int i = 0; i < 3; i++)
+            {
+                var axis = Vector3.zero;
+                axis[i] = 1f;
+                axis = turn * axis;
+                int onto = Mathf.Abs(axis.x) > 0.5f ? 0 : Mathf.Abs(axis.y) > 0.5f ? 1 : 2;
+                turned[i] = scale[onto];
+            }
+            return turned;
         }
 
         // The sibling stands as its original does: on its layer and tag, its fixture component
