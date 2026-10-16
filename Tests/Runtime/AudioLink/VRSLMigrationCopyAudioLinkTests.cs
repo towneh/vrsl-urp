@@ -91,6 +91,39 @@ namespace VRSL.URP.Tests
             Assert.AreEqual(1, light.goboIndex, "the original's open gobo didn't carry over");
         }
 
+        /// <summary>
+        /// L17. A migrated AudioLink par or blinder sits where the original did and shines the same
+        /// way, whatever the original's pose and scale. The original carries its body at the root,
+        /// unrotated, shining down; this package's prefabs carry it turned to shine along the
+        /// root's forward (the blinder's also moved), so the table's offset has to undo that.
+        /// </summary>
+        [TestCase("AudioLink Static ParLight", "ParLight-Projection-FixtureMesh", 1f)]
+        [TestCase("AudioLink Static Blinder", "BlinderLight-AudioLink-FixtureMesh", 1.3221f)]
+        public void L17_an_audiolink_par_or_blinder_lands_on_its_original(string pairName, string bodyName, float bodyScale)
+        {
+            var pair = VRSLMigrationPlacement.Pair(pairName);
+            var urpAsset = VRSLMigrationPlacement.UrpAsset(pair);
+            foreach (var pose in VRSLMigrationPlacement.SourcePoses)
+            {
+                TearDown();
+                _sourceAsset = new GameObject("Upstream prefab");
+                _sourceAsset.AddComponent<UpstreamAudioLinkStatic>();
+                _source = new GameObject(pairName);
+                _source.AddComponent<UpstreamAudioLinkStatic>();
+                VRSLMigrationPlacement.Pose(_source.transform, pose);
+
+                VRSLMigrationCopy.BeginRun();
+                _sibling = VRSLMigrationCopy.PlaceSibling(_source.transform, _sourceAsset, urpAsset, pair, Types);
+                Assert.IsNotNull(_sibling, "nothing was placed");
+
+                string what = $"{pairName} from scale {pose.scale}";
+                VRSLMigrationPlacement.AssertBodyOnOriginal(_sibling, _source.transform, bodyName, bodyScale, what);
+                var light = _sibling.GetComponentInChildren<VRSLAudioLinkRealtimeLight>(true);
+                Assert.IsNotNull(light, $"{what}: no AudioLink realtime light");
+                VRSLMigrationPlacement.AssertShinesLikeOriginal(light.GetWorldForward(), _source.transform, what);
+            }
+        }
+
         [Test]
         public void L12_a_changed_audiolink_wash_keeps_its_share_and_its_behaviour()
         {

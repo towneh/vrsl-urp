@@ -121,6 +121,42 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
+        /// L17. A migrated DMX par or blinder sits where the original did and shines the same way,
+        /// whatever the original's pose and scale. The DMX prefabs carry their body as the
+        /// original's do, so these place with no offset; the AudioLink pair is the case the offset
+        /// is for.
+        /// </summary>
+        [TestCase("DMX H 13CH Static ParLight", "ParLight-Projection-FixtureMesh", 1f)]
+        [TestCase("DMX H 13CH Static Blinder", "BlinderLight-Projection-FixtureMesh", 1.3221f)]
+        [TestCase("DMX H 5CH Static ParLight", "ParLight-Projection-FixtureMesh", 1f)]
+        [TestCase("DMX H 5CH Static Blinder", "BlinderLight-Projection-FixtureMesh", 1.3221f)]
+        public void L17_a_dmx_par_or_blinder_lands_on_its_original(string pairName, string bodyName, float bodyScale)
+        {
+            var pair = VRSLMigrationPlacement.Pair(pairName);
+            var urpAsset = VRSLMigrationPlacement.UrpAsset(pair);
+            foreach (var pose in VRSLMigrationPlacement.SourcePoses)
+            {
+                TearDown();
+                _sourceAsset = new GameObject("Upstream prefab");
+                _sourceAsset.AddComponent<UpstreamDmxStatic>();
+                _source = new GameObject(pairName);
+                _source.AddComponent<UpstreamDmxStatic>();
+                VRSLMigrationPlacement.Pose(_source.transform, pose);
+
+                VRSLMigrationCopy.BeginRun();
+                _sibling = VRSLMigrationCopy.PlaceSibling(_source.transform, _sourceAsset, urpAsset, pair, Types);
+                Assert.IsNotNull(_sibling, "nothing was placed");
+
+                string what = $"{pairName} from scale {pose.scale}";
+                VRSLMigrationPlacement.AssertBodyOnOriginal(_sibling, _source.transform, bodyName, bodyScale, what);
+                var light = _sibling.GetComponentInChildren<VRSLDMXRealtimeLight>(true);
+                Assert.IsNotNull(light, $"{what}: no DMX realtime light");
+                VRSLMigrationPlacement.AssertShinesLikeOriginal(
+                    light.transform.TransformDirection(light.localLightDirection.normalized), _source.transform, what);
+            }
+        }
+
+        /// <summary>
         /// L13. Settings that decide what a show does carry over as the original had them, even
         /// where this package's prefab differs: the original's wash pans inverted, ours doesn't,
         /// and a show programmed on the original expects the inverted pan. Its intensities, which
