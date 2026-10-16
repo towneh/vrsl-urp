@@ -28,6 +28,10 @@
 
 - **The discoball's ball is a mirror.** Its material is fully smooth, as the original VRSL's was, so it reflects the room as sharp facets where it read as a dull grey. What it shows comes from the world's reflection probes, so in a world without one it reads dark.
 
+- **The migration tool says what doesn't come across and what deleting the originals would break.** A setting you changed on an original fixture that the URP fixture has no place for, such as Cone Length, is named in a Console warning for that fixture and counted in the summary. After **Migrate Scene Fixtures**, the summary counts the references from elsewhere in the scene into each original and the objects and components you added to them, and the Console lists each with where it belongs on the URP fixture; clicking a line selects it. The originals still work until you delete them, so nothing is re-pointed.
+
+- **The in-place conversion keeps references to the fixtures it converts.** Anything that pointed at an original component, such as a field or a button's call, now points at the URP component that replaces it, where the field can hold it or the URP component has the method the call uses. Before, every such reference was left empty. The ones that can't follow are named in the Console and counted in the summary.
+
 - **The migration tool names the original VRSL's light stencils.** Both **VRSL → URP** migration menu items list any light stencil mask prefab, either of its two materials, or a material of your own on either stencil shader found in the scene, and say how to keep light off an area without one. They're left in place for you to delete, and each one's Console line selects it.
 
 ### Removed
