@@ -34,17 +34,18 @@ namespace VRSL.URP.Tests
             public bool enableAutoSpin;
             public int selectGOBO = 1;
             public float coneWidth = 2.7f;
+            public Transform targetToFollow;
         }
 
         static readonly VRSLUpstreamTypes Types = new VRSLUpstreamTypes(
             typeof(UpstreamAudioLinkStatic).FullName, "none", "none", "none", "none");
 
-        GameObject _source, _sourceAsset, _sibling;
+        GameObject _source, _sourceAsset, _sibling, _holder;
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var go in new[] { _source, _sourceAsset, _sibling })
+            foreach (var go in new[] { _source, _sourceAsset, _sibling, _holder })
                 if (go != null) Object.DestroyImmediate(go);
         }
 
@@ -155,6 +156,67 @@ namespace VRSL.URP.Tests
             _sibling.transform.position = placed + new Vector3(0f, 0.01f, 0f);
             Assert.IsFalse(VRSLMigrationCopy.IsPlacedFor(_sibling.transform, _source.transform, pair, tolerance),
                 "a blinder 1 cm from where this tool places one counts as the original's sibling");
+        }
+
+        /// <summary>
+        /// L19. The original's AudioLink mover aims at its own PanTiltTarget, and so does this
+        /// package's. A migrated mover keeps its own target, moved to where the author put the
+        /// original's, so it aims at the same spot and keeps doing so once the original is
+        /// deleted. A target outside the original carries across as it was.
+        /// </summary>
+        [Test]
+        public void L19_a_migrated_mover_aims_where_the_original_did_without_it()
+        {
+            var aimedAt = new Vector3(4f, -1.5f, 7f);
+            var light = MigrateSpotlight(source =>
+            {
+                var target = new GameObject("PanTiltTarget").transform;
+                target.SetParent(source.transform, false);
+                target.position = aimedAt;
+                return target;
+            });
+
+            Assert.IsNotNull(light.targetToFollow, "the migrated mover has no target");
+            Assert.IsTrue(light.targetToFollow.IsChildOf(_sibling.transform),
+                $"the migrated mover aims at '{light.targetToFollow.name}' on '{light.targetToFollow.root.name}', "
+                + "which goes when the original is deleted");
+            Assert.Less(Vector3.Distance(aimedAt, light.targetToFollow.position), 1e-4f,
+                $"the migrated mover's target is at {light.targetToFollow.position}, the original's at {aimedAt}");
+        }
+
+        [Test]
+        public void L19_a_target_outside_the_original_carries_across()
+        {
+            Transform outside = null;
+            var light = MigrateSpotlight(source =>
+            {
+                _holder = new GameObject("Stage mark");
+                _holder.transform.position = new Vector3(-2f, 0f, 5f);
+                return outside = _holder.transform;
+            });
+
+            Assert.AreSame(outside, light.targetToFollow, "a target outside the original didn't carry across");
+            Assert.AreEqual(new Vector3(-2f, 0f, 5f), outside.position, "migrating moved a target outside the original");
+        }
+
+        VRSLAudioLinkRealtimeLight MigrateSpotlight(System.Func<GameObject, Transform> target)
+        {
+            var pair = VRSLMigrationPlacement.Pair("AudioLink Mover Spotlight");
+            _sourceAsset = new GameObject("Upstream prefab");
+            var assetFixture = _sourceAsset.AddComponent<UpstreamAudioLinkStatic>();
+            var assetTarget = new GameObject("PanTiltTarget").transform;
+            assetTarget.SetParent(_sourceAsset.transform, false);
+            assetFixture.targetToFollow = assetTarget;
+            _source = new GameObject("Spotlight");
+            _source.transform.SetPositionAndRotation(new Vector3(1f, 3f, -2f), Quaternion.Euler(10f, 40f, 0f));
+            _source.AddComponent<UpstreamAudioLinkStatic>().targetToFollow = target(_source);
+
+            VRSLMigrationCopy.BeginRun();
+            _sibling = VRSLMigrationCopy.PlaceSibling(_source.transform, _sourceAsset,
+                VRSLMigrationPlacement.UrpAsset(pair), pair, Types);
+            var light = _sibling.GetComponentInChildren<VRSLAudioLinkRealtimeLight>(true);
+            Assert.IsNotNull(light, "the spotlight prefab carries no AudioLink realtime light");
+            return light;
         }
 
         [Test]
