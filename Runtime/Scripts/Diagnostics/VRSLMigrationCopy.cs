@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
+using UnityEditorInternal;
 using UnityEngine;
 
 namespace VRSL.URP
@@ -94,7 +95,37 @@ namespace VRSL.URP
             instance.name = source.gameObject.name + " (URP)";
 
             CopyParameters(source.gameObject, instance, sourceAsset, urpAsset, pair.Kind, types);
+            MatchState(source.gameObject, instance, types);
             return instance;
+        }
+
+        // The sibling stands as its original does: on its layer and tag, its fixture component
+        // off when the original's is, and switched off with it, so a fixture the world kept dark
+        // stays dark. The prefab's objects on another layer than its root keep theirs.
+        static void MatchState(GameObject source, GameObject sibling, VRSLUpstreamTypes types)
+        {
+            int prefabLayer = sibling.layer;
+            foreach (var t in sibling.GetComponentsInChildren<Transform>(includeInactive: true))
+                if (t.gameObject.layer == prefabLayer) t.gameObject.layer = source.layer;
+            if (Array.IndexOf(InternalEditorUtility.tags, source.tag) >= 0) sibling.tag = source.tag;
+
+            var from = FixtureComponent(source, types.AudioLinkRealtime, types.AudioLinkStatic, types.AudioLinkLaser,
+                types.DmxRealtime, types.DmxStatic);
+            var to = FixtureComponent(sibling, URP_AL_REALTIME, URP_AL_STATIC, URP_AL_LASER,
+                typeof(VRSLDMXRealtimeLight).FullName, URP_DMX_STATIC);
+            if (from is Behaviour original && to is Behaviour light) light.enabled = original.enabled;
+
+            sibling.SetActive(source.activeSelf);
+        }
+
+        static Component FixtureComponent(GameObject root, params string[] fullNames)
+        {
+            foreach (var name in fullNames)
+            {
+                var c = FindComponentByTypeName(root, name);
+                if (c != null) return c;
+            }
+            return null;
         }
 
         // ── Field translation ─────────────────────────────────────────────────────
