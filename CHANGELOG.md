@@ -5,6 +5,7 @@
 ### Fixed
 
 - **The control panel's inspector shows the installed version in a project with another folder named `Assets` in its path,** such as `D:\Assets\MyWorld`. It showed 0.1.0 there.
+- **Static fixture bodies bake their housing's colour.** A par, blinder, light bar or AudioLink static body marked to contribute to baked lighting baked as a white surface, brightening whatever was around it. It now bakes the way a URP Lit surface with the same colour, metallic and smoothness does. Its glow isn't baked, since DMX or AudioLink drives it at runtime.
 
 ## [0.3.0-rc.5] — 2026-10-16
 

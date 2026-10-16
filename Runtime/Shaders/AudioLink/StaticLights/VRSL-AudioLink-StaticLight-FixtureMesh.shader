@@ -422,5 +422,29 @@
             }
             ENDHLSL
         }
+
+        // Meta Pass, for baked lighting
+        Pass
+        {
+            Name "Meta"
+            Tags
+            {
+                "LightMode" = "Meta"
+            }
+
+            Cull Off
+
+            HLSLPROGRAM
+            #pragma vertex VRSLBodyMetaVertex
+            #pragma fragment VRSLBodyMetaFragment
+            #pragma shader_feature EDITOR_VISUALIZATION
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+
+            #include "../../Shared/VRSL-Defines-URP.hlsl"
+            #include "../../Shared/VRSL-BodyMeta-URP.hlsl"
+            ENDHLSL
+        }
     }
 }

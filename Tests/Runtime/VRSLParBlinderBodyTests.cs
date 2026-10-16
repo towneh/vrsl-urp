@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
     /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J12 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J13 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1314,6 +1314,115 @@ namespace VRSL.URP.Tests
             foreach (var data in asset.rendererDataList)
                 if (data is UnityEngine.Rendering.Universal.UniversalRendererData universal) renderers.Add(universal);
             return renderers;
+        }
+
+        /// <summary>
+        /// J13. A static fixture body marked to contribute to baked lighting bakes its housing
+        /// as URP Lit bakes the same surface, and none of its glow. Each body's Meta pass, drawn
+        /// as the lightmapper draws it, returns URP Lit's albedo for the same colour, metallic
+        /// and smoothness, and black for emission. A body with no Meta pass bakes as white.
+        /// </summary>
+        [Test]
+        public void J13_static_bodies_bake_their_housing_like_urp_lit()
+        {
+            var colour = new Color(0.8f, 0.3f, 0.1f);
+            const float metallic = 0.4f, smoothness = 0.7f;
+
+            bool asyncCompilation = UnityEditor.ShaderUtil.allowAsyncCompilation;
+            UnityEditor.ShaderUtil.allowAsyncCompilation = false;
+            var reference = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "VRSL J13 reference" };
+            var quad = new Mesh { name = "VRSL J13 quad" };
+            var target = new RenderTexture(8, 8, 0, RenderTextureFormat.ARGBHalf) { name = "VRSL J13 meta" };
+            var made = new List<Object> { reference, quad, target };
+            try
+            {
+                RenderOnce(target);
+
+                quad.vertices = new[] { new Vector3(-1, -1, 0), new Vector3(1, -1, 0), new Vector3(1, 1, 0), new Vector3(-1, 1, 0) };
+                quad.uv = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up };
+                quad.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+
+                reference.SetColor("_BaseColor", colour);
+                reference.SetFloat("_Metallic", metallic);
+                reference.SetFloat("_Smoothness", smoothness);
+                Color expected = DrawMeta(reference, albedo: true, quad, target);
+                Debug.Log($"[J13] URP Lit albedo {expected}");
+                Assert.That(expected.r, Is.GreaterThan(2f * expected.b),
+                    $"URP Lit's Meta pass returned {expected} for {colour}, so the draw isn't reaching the pass the way the lightmapper does");
+
+                foreach (var name in BodyShaders)
+                {
+                    var material = new Material(Shader.Find(name)) { name = $"VRSL J13 {name}" };
+                    made.Add(material);
+                    material.SetColor("_Color", colour);
+                    material.SetFloat("_Metallic", metallic);
+                    material.SetFloat("_Glossiness", smoothness);
+                    Assert.That(material.FindPass("Meta"), Is.GreaterThanOrEqualTo(0),
+                        $"{name} has no Meta pass, so a body marked to contribute to baked lighting bakes as white");
+
+                    Color albedo = DrawMeta(material, albedo: true, quad, target);
+                    Color emission = DrawMeta(material, albedo: false, quad, target);
+                    Debug.Log($"[J13] {name}: albedo {albedo}, emission {emission}");
+                    for (int c = 0; c < 3; c++)
+                        Assert.That(albedo[c], Is.EqualTo(expected[c]).Within(0.004f),
+                            $"{name} bakes its housing as {albedo} where URP Lit bakes the same surface as {expected}");
+                    Assert.That(emission.maxColorComponent, Is.LessThan(1e-4f),
+                        $"{name} bakes emission {emission}; its glow is driven at runtime and mustn't be baked");
+                }
+            }
+            finally
+            {
+                UnityEditor.ShaderUtil.allowAsyncCompilation = asyncCompilation;
+                foreach (var o in made) Object.DestroyImmediate(o);
+            }
+        }
+
+        /// <summary>A shader picks its URP subshader only once the pipeline has rendered, so a
+        /// row that asks a material for a pass renders a camera first.</summary>
+        static void RenderOnce(RenderTexture target)
+        {
+            var camera = new GameObject("VRSL J13 camera").AddComponent<Camera>();
+            try
+            {
+                camera.targetTexture = target;
+                camera.Render();
+            }
+            finally
+            {
+                Object.DestroyImmediate(camera.gameObject);
+            }
+        }
+
+        /// <summary>Draws a material's Meta pass over the whole target with the controls the
+        /// lightmapper sets (albedo or emission, linear, no albedo boost) and reads the centre.</summary>
+        static Color DrawMeta(Material material, bool albedo, Mesh quad, RenderTexture target)
+        {
+            var cmd = new UnityEngine.Rendering.CommandBuffer { name = "VRSL J13 meta" };
+            cmd.SetRenderTarget(target);
+            cmd.ClearRenderTarget(false, true, Color.clear);
+            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
+            cmd.SetGlobalVector("unity_MetaVertexControl", Vector4.zero);
+            cmd.SetGlobalVector("unity_MetaFragmentControl", albedo ? new Vector4(1, 0, 0, 0) : new Vector4(0, 1, 0, 0));
+            cmd.SetGlobalFloat("unity_OneOverOutputBoost", 1f);
+            cmd.SetGlobalFloat("unity_MaxOutputValue", 100f);
+            cmd.SetGlobalFloat("unity_UseLinearSpace", 1f);
+            cmd.DrawMesh(quad, Matrix4x4.identity, material, 0, material.FindPass("Meta"));
+            Graphics.ExecuteCommandBuffer(cmd);
+            cmd.Release();
+
+            var read = new Texture2D(target.width, target.height, TextureFormat.RGBAHalf, false, true);
+            var previous = RenderTexture.active;
+            try
+            {
+                RenderTexture.active = target;
+                read.ReadPixels(new Rect(0, 0, target.width, target.height), 0, 0);
+                return read.GetPixel(target.width / 2, target.height / 2);
+            }
+            finally
+            {
+                RenderTexture.active = previous;
+                Object.DestroyImmediate(read);
+            }
         }
 
         static readonly string[] BodyShaders =
