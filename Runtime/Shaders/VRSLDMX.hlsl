@@ -41,8 +41,9 @@ TEXTURE2D(_VRSLU_DMXGridSpinTimer);
 // smoothed grid here when its Grid Textures set has no raw grid.
 TEXTURE2D(_VRSLU_DMXGridRaw);
 
-// The grid's size, (1/w, 1/h, w, h), and the raw grid's. Unity's automatic _TexelSize
-// can't be trusted for a globally bound texture, so the manager publishes these itself.
+// The grid's size, (1/w, 1/h, w, h), and the raw grid's, published by the manager beside
+// the textures. Movement, strobe and spin are read at the main grid's cells, so they take
+// its size too; the decode dispatch hands the compute the same value.
 float4 _VRSLDMXTexelSize;
 float4 _VRSLU_DMXGridRawTexelSize;
 
