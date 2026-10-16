@@ -1,13 +1,19 @@
 #if UNITY_EDITOR
+using System.Linq;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEditor;
+using UnityEditor.Events;
 using UnityEngine;
+using UnityEngine.Events;
+using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// Rows L11 and L13 of TESTING.md: the migration tool's sibling placement and field
-    /// translation, driven with stand-ins for the original VRSL's DMX component (its field names,
+    /// Rows L11, L13 to L16 of TESTING.md: the migration tool's sibling placement, field
+    /// translation and reference handling, driven with stand-ins for the original VRSL's DMX component (its field names,
     /// and its wash mover prefab's values as literals, since no test project has the original
     /// package). The tool's scene walk is L4/L5's.
     /// </summary>
@@ -35,17 +41,33 @@ namespace VRSL.URP.Tests
             public float panOffsetBlueGreen;
             public float maxMinPan = 180f;
             public float maxMinTilt = -180f;
+            public bool legacyGoboRange;
+            public float coneLength = 8.5f;
+            public bool foldout;
+
+            public void ApplyAddress() { }
+            public void UpstreamOnly() { }
+        }
+
+        // A world script holding references into a fixture.
+        public class RefHolder : MonoBehaviour
+        {
+            public Behaviour anyFixture;
+            public UpstreamDmxStatic typedFixture;
+            public GameObject anyObject;
+            public Transform anyTransform;
+            public UnityEvent onPress = new UnityEvent();
         }
 
         static readonly VRSLUpstreamTypes Types = new VRSLUpstreamTypes(
             "none", "none", "none", typeof(UpstreamDmxStatic).FullName, "none");
 
-        GameObject _source, _sourceAsset, _sibling;
+        GameObject _source, _sourceAsset, _sibling, _holder;
 
         [TearDown]
         public void TearDown()
         {
-            foreach (var go in new[] { _source, _sourceAsset, _sibling })
+            foreach (var go in new[] { _source, _sourceAsset, _sibling, _holder })
                 if (go != null) Object.DestroyImmediate(go);
         }
 
@@ -120,6 +142,139 @@ namespace VRSL.URP.Tests
             Assert.AreEqual(new Vector3(ourTint.r, ourTint.g, ourTint.b), new Vector3(tint.r, tint.g, tint.b),
                 "the tint isn't ours");
         }
+
+        /// <summary>
+        /// L14. A setting the author changed on the original that the URP fixture has no place for
+        /// is named, so it doesn't vanish without a word; one left at the original prefab's value
+        /// isn't, and nor is the inspector's fold state.
+        /// </summary>
+        [Test]
+        public void L14_a_changed_setting_with_no_place_is_named()
+        {
+            LogAssert.Expect(LogType.Warning,
+                new Regex(@"'Wash' has settings the URP fixture has no place for.*Cone Length \(8\.5 on the original prefab, 55 here\)"));
+            Place((go, fixture) =>
+            {
+                fixture.coneLength = 55f;
+                fixture.foldout = true;
+            });
+
+            CollectionAssert.AreEquivalent(new[] { "coneLength" }, VRSLMigrationCopy.NotCarried.Keys,
+                "the changed settings named aren't just the cone length");
+            Assert.AreEqual(1, VRSLMigrationCopy.NotCarried["coneLength"]);
+        }
+
+        [Test]
+        public void L14_an_untouched_original_names_nothing()
+        {
+            Place();
+            Assert.IsEmpty(VRSLMigrationCopy.NotCarried, "settings named on a fixture nobody changed");
+        }
+
+        /// <summary>
+        /// L15. When the in-place pass replaces an original component with the URP one, references to
+        /// it follow where they can: a field that takes any component, and a button's call to a
+        /// method the URP component has. A field typed to the original's class and a call to a
+        /// method ours lacks are handed back, untouched, for the tool to name.
+        /// </summary>
+        [Test]
+        public void L15_references_to_a_replaced_component_follow_it_where_they_can()
+        {
+            _source = new GameObject("Custom fixture");
+            _source.SetActive(false);   // nothing of ours wakes up on a bare object
+            var original = _source.AddComponent<UpstreamDmxStatic>();
+            var urp = _source.AddComponent<VRSLDMXStatic>();
+
+            _holder = new GameObject("Lights button");
+            var holder = _holder.AddComponent<RefHolder>();
+            holder.anyFixture = original;
+            holder.typedFixture = original;
+            UnityEventTools.AddVoidPersistentListener(holder.onPress, original.ApplyAddress);
+            UnityEventTools.AddVoidPersistentListener(holder.onPress, original.UpstreamOnly);
+
+            var index = new VRSLMigrationCopy.ReferenceIndex(SceneManager.GetActiveScene());
+            var left = VRSLMigrationCopy.Repoint(original, urp, index, out int moved);
+
+            Assert.AreSame(urp, holder.anyFixture, "a field that takes any component didn't follow");
+            Assert.AreSame(urp, holder.onPress.GetPersistentTarget(0), "the call to ApplyAddress didn't follow");
+            Assert.AreEqual("ApplyAddress", holder.onPress.GetPersistentMethodName(0));
+            Assert.AreSame(original, holder.typedFixture, "a field typed to the original's class was changed");
+            Assert.AreSame(original, holder.onPress.GetPersistentTarget(1), "a call ours can't take was changed");
+            Assert.AreEqual(2, moved);
+            CollectionAssert.AreEquivalent(
+                new[] { "typedFixture", "onPress.m_PersistentCalls.m_Calls.Array.data[1].m_Target" },
+                left.Select(l => l.path), "the references handed back aren't the two that can't follow");
+        }
+
+        /// <summary>
+        /// L16. Before the author deletes an original, the sibling pass can say what goes with it:
+        /// references from elsewhere into the original, each with what it should point at on the URP
+        /// fixture (the original's fixture component maps to the URP fixture's, though their types
+        /// differ), and what the author added under it. A reference from inside the original goes with
+        /// it and isn't listed.
+        /// </summary>
+        [Test]
+        public void L16_deleting_an_original_lists_the_references_into_it()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(Wash);
+            Assert.IsNotNull(asset, Wash);
+            _sibling = (GameObject)PrefabUtility.InstantiatePrefab(asset);
+            var siblingChild = UniqueChild(_sibling);
+
+            // The original as the original package builds it: its own fixture component, a child of
+            // the same name as one of ours.
+            _source = new GameObject("Wash");
+            var fixture = _source.AddComponent<UpstreamDmxStatic>();
+            var child = new GameObject(siblingChild.name).transform;
+            child.SetParent(_source.transform, false);
+            child.gameObject.AddComponent<RefHolder>().anyObject = _source;   // inside the original
+
+            _holder = new GameObject("Lights button");
+            var holder = _holder.AddComponent<RefHolder>();
+            holder.anyObject = _source;
+            holder.anyTransform = child;
+            holder.anyFixture = fixture;
+
+            var index = new VRSLMigrationCopy.ReferenceIndex(SceneManager.GetActiveScene());
+            var losses = VRSLMigrationCopy.WhatDeletingTakes(_source, _sibling,
+                VRSLMigrationCopy.OriginalFixture(_source, Types), VRSLMigrationCopy.SiblingFixture(_sibling), index);
+
+            var references = losses.Where(l => l.Path != null).ToDictionary(l => l.Path, l => l.Counterpart);
+            CollectionAssert.AreEquivalent(new[] { "anyObject", "anyTransform", "anyFixture" }, references.Keys,
+                "the references listed aren't the outside holder's three");
+            Assert.AreSame(_sibling, references["anyObject"], "the root's counterpart isn't the URP fixture");
+            Assert.AreSame(siblingChild, references["anyTransform"], "the child's counterpart isn't the same-named one");
+            Assert.AreSame(_sibling.GetComponent<VRSLDMXRealtimeLight>(), references["anyFixture"],
+                "the original's fixture component doesn't map to the URP fixture's");
+        }
+
+        [Test]
+        public void L16_deleting_an_original_lists_what_was_added_to_it()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(Wash);
+            Assert.IsNotNull(asset, Wash);
+            _source = (GameObject)PrefabUtility.InstantiatePrefab(asset);
+            _sibling = (GameObject)PrefabUtility.InstantiatePrefab(asset);
+            var child = UniqueChild(_source);
+            var added = new GameObject("Haze machine");
+            added.transform.SetParent(child, false);
+
+            var index = new VRSLMigrationCopy.ReferenceIndex(SceneManager.GetActiveScene());
+            var losses = VRSLMigrationCopy.WhatDeletingTakes(_source, _sibling,
+                _source.GetComponent<VRSLDMXRealtimeLight>(), _sibling.GetComponent<VRSLDMXRealtimeLight>(), index);
+
+            var addedLosses = losses.Where(l => l.Path == null).ToList();
+            Assert.AreEqual(1, addedLosses.Count, "the added object isn't listed once");
+            Assert.AreSame(added, addedLosses[0].Thing);
+            Assert.AreSame(UniqueChild(_sibling), addedLosses[0].Counterpart,
+                "the added object's place on the URP fixture isn't its parent's counterpart");
+        }
+
+        // The first object under a fixture whose name nothing else in it shares.
+        static Transform UniqueChild(GameObject root) =>
+            root.GetComponentsInChildren<Transform>(true)
+                .Where(t => t != root.transform)
+                .GroupBy(t => t.name).Where(g => g.Count() == 1).Select(g => g.Single()).First();
     }
 }
 #endif

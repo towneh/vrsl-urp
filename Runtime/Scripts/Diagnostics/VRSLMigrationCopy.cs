@@ -8,6 +8,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace VRSL.URP
 {
@@ -109,10 +110,8 @@ namespace VRSL.URP
                 if (t.gameObject.layer == prefabLayer) t.gameObject.layer = source.layer;
             if (Array.IndexOf(InternalEditorUtility.tags, source.tag) >= 0) sibling.tag = source.tag;
 
-            var from = FixtureComponent(source, types.AudioLinkRealtime, types.AudioLinkStatic, types.AudioLinkLaser,
-                types.DmxRealtime, types.DmxStatic);
-            var to = FixtureComponent(sibling, URP_AL_REALTIME, URP_AL_STATIC, URP_AL_LASER,
-                typeof(VRSLDMXRealtimeLight).FullName, URP_DMX_STATIC);
+            var from = OriginalFixture(source, types);
+            var to = SiblingFixture(sibling);
             if (from is Behaviour original && to is Behaviour light) light.enabled = original.enabled;
 
             sibling.SetActive(source.activeSelf);
@@ -140,6 +139,23 @@ namespace VRSL.URP
             }
         }
 
+        // The upstream static's fields each realtime path reads. The rest are named when an author
+        // changed them, since the realtime light has nowhere to keep them.
+        static readonly string[] AL_STATIC_READ =
+        {
+            "enableAudioLink", "band", "delay", "bandMultiplier", "globalIntensity", "finalIntensity",
+            "textureSamplingCoordinates", "targetToFollow", "lightColorTint", "selectGOBO", "coneWidth",
+            "enableAutoSpin", "spinSpeed", "enableThemeColorSampling", "enableColorChord",
+            "enableColorTextureSampling", "traditionalColorTextureSampling", "themeColorTarget",
+        };
+
+        static readonly string[] DMX_STATIC_READ =
+        {
+            "enableDMXChannels", "enableFineChannels", "dmxChannel", "dmxUniverse", "useLegacySectorMode", "sector",
+            "globalIntensity", "finalIntensity", "invertPan", "invertTilt", "enableStrobe", "maxMinPan", "maxMinTilt",
+            "lightColorTint", "tiltOffsetBlue", "panOffsetBlueGreen", "enableAutoSpin",
+        };
+
         static void CopyAudioLinkParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset,
             VRSLUpstreamTypes types)
         {
@@ -160,7 +176,9 @@ namespace VRSL.URP
             var srcModern = FindComponentByTypeName(source, types.AudioLinkRealtime);
             if (srcModern != null)
             {
-                CopyAllNamedFields(srcModern, dst, source, Defaults(sourceAsset, types.AudioLinkRealtime), dstDefault);
+                var srcModernDefault = Defaults(sourceAsset, types.AudioLinkRealtime);
+                var carried = CopyAllNamedFields(srcModern, dst, source, srcModernDefault, dstDefault);
+                ReportNotCarried(source, srcModern, srcModernDefault, carried);
                 EditorUtility.SetDirty(dst);
                 return;
             }
@@ -215,6 +233,7 @@ namespace VRSL.URP
             var modeField = realtimeType.GetField("colorMode");
             modeField.SetValue(dst, Enum.Parse(modeField.FieldType, mode));
 
+            ReportNotCarried(source, srcStatic, srcDefault, AL_STATIC_READ);
             EditorUtility.SetDirty(dst);
         }
 
@@ -232,7 +251,9 @@ namespace VRSL.URP
             var srcModern = FindComponentByTypeName(source, types.DmxRealtime);
             if (srcModern != null)
             {
-                CopyAllNamedFields(srcModern, dst, source, Defaults(sourceAsset, types.DmxRealtime), dstDefault);
+                var srcModernDefault = Defaults(sourceAsset, types.DmxRealtime);
+                var carried = CopyAllNamedFields(srcModern, dst, source, srcModernDefault, dstDefault);
+                ReportNotCarried(source, srcModern, srcModernDefault, carried);
                 EditorUtility.SetDirty(dst);
                 return;
             }
@@ -260,6 +281,7 @@ namespace VRSL.URP
             CopyField(srcStatic, dst, srcName: "panOffsetBlueGreen", dstName: "panOffset");
             CopyField(srcStatic, dst, srcName: "enableAutoSpin",     dstName: "enableGoboSpin");
 
+            ReportNotCarried(source, srcStatic, srcDefault, DMX_STATIC_READ);
             EditorUtility.SetDirty(dst);
         }
 
@@ -275,11 +297,253 @@ namespace VRSL.URP
             if (src == null) return false;
             var dst = target.GetComponentInChildren(urpType, includeInactive: true);
             if (dst == null) return false;
-            CopyAllNamedFields(src, dst, source, Defaults(sourceAsset, upstreamTypeName),
+            var srcDefault = Defaults(sourceAsset, upstreamTypeName);
+            var carried = CopyAllNamedFields(src, dst, source, srcDefault,
                 targetAsset != null ? targetAsset.GetComponentInChildren(urpType, true) : null);
+            ReportNotCarried(source, src, srcDefault, carried);
             EditorUtility.SetDirty(dst);
             return true;
         }
+
+        // ── Settings that didn't come across ──────────────────────────────────────
+
+        // Upstream fields an author changed that the new fixture has nowhere to keep, counted by
+        // field over the run for the summary.
+        static readonly Dictionary<string, int> s_NotCarried = new Dictionary<string, int>();
+
+        /// <summary>This run's changed settings that didn't come across, by field name.</summary>
+        public static IReadOnlyDictionary<string, int> NotCarried => s_NotCarried;
+
+        // Each serialised setting on the original that the copy didn't read and the author moved
+        // off the upstream prefab's value, named in one warning per fixture. Only plain values:
+        // a reference into the original goes with it, and the inspector's fold state is no setting.
+        static void ReportNotCarried(GameObject source, Component src, Component srcDefault, ICollection<string> read)
+        {
+            if (srcDefault == null) return;
+            const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            var changed = new List<string>();
+            foreach (var f in src.GetType().GetFields(FLAGS))
+            {
+                bool serialised = f.IsPublic ? !f.IsNotSerialized : f.IsDefined(typeof(SerializeField), true);
+                if (!serialised || read.Contains(f.Name) || f.Name == "foldout" || !IsPlainValue(f.FieldType)) continue;
+                object value = f.GetValue(src), upstream = f.GetValue(srcDefault);
+                if (Equals(value, upstream)) continue;
+
+                s_NotCarried.TryGetValue(f.Name, out int n);
+                s_NotCarried[f.Name] = n + 1;
+                changed.Add(FormattableString.Invariant(
+                    $"{ObjectNames.NicifyVariableName(f.Name)} ({upstream} on the original prefab, {value} here)"));
+            }
+            if (changed.Count > 0)
+                Debug.LogWarning($"[VRSL Migration] '{source.name}' has settings the URP fixture has no place for, so they "
+                               + $"didn't come across: {string.Join(", ", changed)}. Check the URP fixture by hand.", source);
+        }
+
+        static bool IsPlainValue(Type t) =>
+            t.IsPrimitive || t.IsEnum || t == typeof(string) || t == typeof(Color)
+            || t == typeof(Vector2) || t == typeof(Vector3) || t == typeof(Vector4);
+
+        // ── References ────────────────────────────────────────────────────────────
+
+        /// <summary>Every object reference a scene's components hold, by what it points at.</summary>
+        public sealed class ReferenceIndex
+        {
+            readonly Dictionary<UnityEngine.Object, List<(Component holder, string path)>> _byTarget =
+                new Dictionary<UnityEngine.Object, List<(Component, string)>>();
+
+            public ReferenceIndex(Scene scene)
+            {
+                foreach (var root in scene.GetRootGameObjects())
+                foreach (var component in root.GetComponentsInChildren<Component>(includeInactive: true))
+                {
+                    if (component == null || component is Transform) continue;
+                    var property = new SerializedObject(component).GetIterator();
+                    while (property.Next(true))
+                    {
+                        if (property.propertyType != SerializedPropertyType.ObjectReference || property.name == "m_GameObject") continue;
+                        var target = property.objectReferenceValue;
+                        if (target == null) continue;
+                        if (!_byTarget.TryGetValue(target, out var list))
+                            _byTarget[target] = list = new List<(Component, string)>();
+                        list.Add((component, property.propertyPath));
+                    }
+                }
+            }
+
+            /// <summary>The slots that held <paramref name="target"/> when the index was built.</summary>
+            public IReadOnlyList<(Component holder, string path)> To(UnityEngine.Object target) =>
+                _byTarget.TryGetValue(target, out var list) ? list : (IReadOnlyList<(Component, string)>)Array.Empty<(Component, string)>();
+        }
+
+        /// <summary>
+        /// Points every reference to <paramref name="from"/> at <paramref name="to"/> where the slot can
+        /// hold it: a field whose type takes the new component, or a UnityEvent call to a method the
+        /// new component has. Returns the slots that can't, which are left as they are, and counts the
+        /// ones it moved in <paramref name="moved"/>.
+        /// </summary>
+        public static List<(Component holder, string path)> Repoint(Component from, Component to, ReferenceIndex index,
+            out int moved)
+        {
+            moved = 0;
+            var left = new List<(Component, string)>();
+            foreach (var (holder, path) in index.To(from))
+            {
+                if (holder == null || holder == from || holder == to) continue;
+                var so = new SerializedObject(holder);
+                var slot = so.FindProperty(path);
+                if (slot == null || slot.objectReferenceValue != from) continue;
+
+                const string TARGET = "m_Target";
+                bool eventCall = path.Contains("m_PersistentCalls.m_Calls") && path.EndsWith("." + TARGET);
+                if (eventCall)
+                {
+                    string call = path.Substring(0, path.Length - TARGET.Length);
+                    string method = so.FindProperty(call + "m_MethodName")?.stringValue;
+                    if (string.IsNullOrEmpty(method) || !HasPublicMethod(to.GetType(), method))
+                    {
+                        left.Add((holder, path));
+                        continue;
+                    }
+                    var typeName = so.FindProperty(call + "m_TargetAssemblyTypeName");
+                    if (typeName != null) typeName.stringValue = to.GetType().FullName + ", " + to.GetType().Assembly.GetName().Name;
+                }
+
+                // Unity refuses a value the field's type can't hold, so read it back.
+                slot.objectReferenceValue = to;
+                if (slot.objectReferenceValue != to)
+                {
+                    left.Add((holder, path));
+                    continue;
+                }
+                so.ApplyModifiedProperties();
+                moved++;
+            }
+            return left;
+        }
+
+        /// <summary>A holder's field, named as the Inspector shows it.</summary>
+        public static string FieldName(string path)
+        {
+            int dot = path.IndexOf('.');
+            return ObjectNames.NicifyVariableName(dot < 0 ? path : path.Substring(0, dot));
+        }
+
+        static bool HasPublicMethod(Type type, string name)
+        {
+            foreach (var m in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                if (m.Name == name) return true;
+            return false;
+        }
+
+        /// <summary>Something deleting an original fixture would take with it: a reference into it
+        /// from elsewhere, or an object or component the author added under it.</summary>
+        public readonly struct Loss
+        {
+            /// <summary>The component holding the reference, or what the author added.</summary>
+            public readonly UnityEngine.Object Thing;
+            /// <summary>The holder's property path; null for something added.</summary>
+            public readonly string Path;
+            /// <summary>What the reference points at; null for something added.</summary>
+            public readonly UnityEngine.Object Target;
+            /// <summary>Where it belongs on the URP fixture: what the reference should point at, or the
+            /// object an added one should move under. Null when nothing there matches.</summary>
+            public readonly UnityEngine.Object Counterpart;
+
+            public Loss(UnityEngine.Object thing, string path, UnityEngine.Object target, UnityEngine.Object counterpart)
+            {
+                Thing = thing;
+                Path = path;
+                Target = target;
+                Counterpart = counterpart;
+            }
+        }
+
+        /// <summary>
+        /// What deleting <paramref name="original"/> would take with it, each with its counterpart on
+        /// <paramref name="sibling"/>: references to any object or component of it held from outside
+        /// it, and what the author added under it.
+        /// </summary>
+        public static List<Loss> WhatDeletingTakes(GameObject original, GameObject sibling, Component originalFixture,
+            Component siblingFixture, ReferenceIndex index)
+        {
+            var losses = new List<Loss>();
+            foreach (var t in original.GetComponentsInChildren<Transform>(includeInactive: true))
+            {
+                var targets = new List<UnityEngine.Object> { t.gameObject };
+                foreach (var c in t.GetComponents<Component>())
+                    if (c != null) targets.Add(c);
+                foreach (var target in targets)
+                foreach (var (holder, path) in index.To(target))
+                {
+                    if (holder == null || holder.transform.IsChildOf(original.transform)) continue;
+                    losses.Add(new Loss(holder, path, target,
+                        Counterpart(target, original, sibling, originalFixture, siblingFixture)));
+                }
+            }
+
+            if (PrefabUtility.IsAnyPrefabInstanceRoot(original))
+            {
+                foreach (var added in PrefabUtility.GetAddedGameObjects(original))
+                {
+                    var go = added.instanceGameObject;
+                    var parent = go.transform.parent;
+                    losses.Add(new Loss(go, null, null, parent != null ? MapTransform(parent, original, sibling) : null));
+                }
+                foreach (var added in PrefabUtility.GetAddedComponents(original))
+                {
+                    var c = added.instanceComponent;
+                    losses.Add(new Loss(c, null, null, MapTransform(c.transform, original, sibling)));
+                }
+            }
+            return losses;
+        }
+
+        // The sibling's counterpart of something in the original: the fixture component for the
+        // fixture component, the root for the root, a child of the same name when there's exactly
+        // one, and its component of the same type. A renderer on the root with no match there
+        // maps to the sibling's only renderer of that type.
+        static UnityEngine.Object Counterpart(UnityEngine.Object target, GameObject original, GameObject sibling,
+            Component originalFixture, Component siblingFixture)
+        {
+            if (originalFixture != null && target == originalFixture) return siblingFixture;
+            var t = target is GameObject g ? g.transform : ((Component)target).transform;
+            var mapped = MapTransform(t, original, sibling);
+            if (target is GameObject) return mapped != null ? mapped.gameObject : null;
+            if (target is Transform) return mapped;
+
+            var type = target.GetType();
+            var match = mapped != null ? mapped.GetComponent(type) : null;
+            if (match != null) return match;
+            if (t == original.transform && target is Renderer)
+            {
+                var all = sibling.GetComponentsInChildren(type, includeInactive: true);
+                if (all.Length == 1) return all[0];
+            }
+            return null;
+        }
+
+        static Transform MapTransform(Transform t, GameObject original, GameObject sibling)
+        {
+            if (t == original.transform) return sibling.transform;
+            Transform found = null;
+            foreach (var candidate in sibling.GetComponentsInChildren<Transform>(includeInactive: true))
+            {
+                if (candidate == sibling.transform || candidate.name != t.name) continue;
+                if (found != null) return null;
+                found = candidate;
+            }
+            return found;
+        }
+
+        /// <summary>The fixture component the copy reads on an original, by the upstream names.</summary>
+        public static Component OriginalFixture(GameObject original, VRSLUpstreamTypes types) =>
+            FixtureComponent(original, types.AudioLinkRealtime, types.AudioLinkStatic, types.AudioLinkLaser,
+                types.DmxRealtime, types.DmxStatic);
+
+        /// <summary>A placed sibling's fixture component.</summary>
+        public static Component SiblingFixture(GameObject sibling) =>
+            FixtureComponent(sibling, URP_AL_REALTIME, URP_AL_STATIC, URP_AL_LASER,
+                typeof(VRSLDMXRealtimeLight).FullName, URP_DMX_STATIC);
 
         // ── Reflection helpers ────────────────────────────────────────────────────
 
@@ -351,7 +615,11 @@ namespace VRSL.URP
         static readonly HashSet<string> s_WarnedFields = new HashSet<string>();
 
         /// <summary>Starts a run: each field not carried is warned about once again.</summary>
-        public static void BeginRun() => s_WarnedFields.Clear();
+        public static void BeginRun()
+        {
+            s_WarnedFields.Clear();
+            s_NotCarried.Clear();
+        }
 
         static void WarnNotCarried(object dst, string field, string reason)
         {
@@ -404,9 +672,10 @@ namespace VRSL.URP
         // those whose values point to objects inside the source prefab (panTransform etc.).
         // Preserves the URP prefab's own internal wiring while migrating user-set scalars,
         // colours, enums, and external Transform references like targetToFollow.
-        static void CopyAllNamedFields(object src, object dst, GameObject sourceRoot, object srcDefault, object dstDefault)
+        static HashSet<string> CopyAllNamedFields(object src, object dst, GameObject sourceRoot, object srcDefault, object dstDefault)
         {
             const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            var carried = new HashSet<string>(INTERNAL_REF_FIELDS);
             foreach (var df in dst.GetType().GetFields(FLAGS))
             {
                 if (df.IsNotSerialized) continue;
@@ -414,6 +683,7 @@ namespace VRSL.URP
 
                 var sf = src.GetType().GetField(df.Name, FLAGS);
                 if (sf == null) continue;
+                carried.Add(df.Name);
 
                 object value = sf.GetValue(src);
 
@@ -426,6 +696,7 @@ namespace VRSL.URP
                 if (CALIBRATION_FIELDS.Contains(df.Name)) CopyCalibrated(src, srcDefault, dst, dstDefault, df.Name);
                 else CopyField(src, dst, df.Name);
             }
+            return carried;
         }
 
         // In-place twin copy: every serialized field by name, INCLUDING references into the

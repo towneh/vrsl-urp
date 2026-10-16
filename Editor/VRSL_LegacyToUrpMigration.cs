@@ -102,6 +102,7 @@ namespace VRSL.URP.EditorScripts
 
             int created = 0, skipped = 0, errors = 0;
             var perKind = new Dictionary<string, int>();
+            var siblings = new List<(GameObject original, GameObject sibling)>();
 
             Undo.IncrementCurrentGroup();
             Undo.SetCurrentGroupName("VRSL: Add URP Siblings");
@@ -109,9 +110,11 @@ namespace VRSL.URP.EditorScripts
 
             foreach (var (go, pair) in candidates)
             {
-                if (HasUrpSiblingAlready(go.transform, pair.UrpGuid))
+                var existing = FindUrpSibling(go.transform, pair.UrpGuid);
+                if (existing != null)
                 {
                     skipped++;
+                    siblings.Add((go, existing.gameObject));
                     continue;
                 }
                 try
@@ -120,6 +123,7 @@ namespace VRSL.URP.EditorScripts
                     if (newGo != null)
                     {
                         created++;
+                        siblings.Add((go, newGo));
                         perKind.TryGetValue(pair.FriendlyName, out int n);
                         perKind[pair.FriendlyName] = n + 1;
                     }
@@ -139,6 +143,8 @@ namespace VRSL.URP.EditorScripts
             EditorSceneManager.MarkSceneDirty(scene);
 
             string summary = $"Created: {created}\nSkipped (already migrated): {skipped}\nErrors: {errors}";
+            summary += NotCarriedParagraph();
+            summary += DeletingParagraph(scene, siblings);
             if (perKind.Count > 0)
                 summary += "\n\nBy fixture:\n" + string.Join("\n",
                     perKind.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
@@ -208,9 +214,11 @@ namespace VRSL.URP.EditorScripts
             Undo.SetCurrentGroupName("VRSL: Convert Custom Fixtures In-Place");
             int undoGroup = Undo.GetCurrentGroup();
 
+            // Every URP component first, so a fixture that references another converted one has its
+            // copy in place before references move; then the references; then the originals go.
+            var replaced = new List<(Component upstream, Component urp)>();
             foreach (var (go, upstream, urpType) in candidates)
             {
-                if (upstream == null) continue;               // already destroyed this run
                 if (go.GetComponent(urpType) != null)
                 {
                     skipped++;
@@ -221,14 +229,33 @@ namespace VRSL.URP.EditorScripts
                     var urp = Undo.AddComponent(go, urpType);
                     VRSLMigrationCopy.CopyAllFieldsByName(upstream, urp);
                     SwapFixtureMaterials(go, seenMaterials, changedMaterials);
-                    Undo.DestroyObjectImmediate(upstream);
-                    converted++;
+                    replaced.Add((upstream, urp));
                 }
                 catch (Exception ex)
                 {
                     Debug.LogError($"[VRSL In-Place] Failed on '{go.name}': {ex}");
                     errors++;
                 }
+            }
+
+            int referencesMoved = 0, referencesLeft = 0;
+            var index = new VRSLMigrationCopy.ReferenceIndex(scene);
+            foreach (var (upstream, urp) in replaced)
+            {
+                var left = VRSLMigrationCopy.Repoint(upstream, urp, index, out int moved);
+                referencesMoved += moved;
+                referencesLeft += left.Count;
+                foreach (var (holder, path) in left)
+                    Debug.LogWarning($"[VRSL In-Place] {holder.GetType().Name} on '{holder.name}' "
+                                   + $"({VRSLMigrationCopy.FieldName(path)}) pointed at the original VRSL component on "
+                                   + $"'{upstream.name}', which this removes, and can't hold the URP one, so it's left "
+                                   + "empty. Point it at the URP fixture by hand.", holder);
+            }
+
+            foreach (var (upstream, _) in replaced)
+            {
+                Undo.DestroyObjectImmediate(upstream);
+                converted++;
             }
 
             if (changedMaterials.Count > 0)
@@ -240,6 +267,12 @@ namespace VRSL.URP.EditorScripts
             string summary =
                 $"Converted: {converted}\nSkipped (already URP): {skipped}\nErrors: {errors}\n" +
                 $"Materials reshaded: {changedMaterials.Count}";
+            if (referencesMoved + referencesLeft > 0)
+                summary += $"\n\nReferences to the original components moved to the URP ones: {referencesMoved}"
+                         + (referencesLeft > 0
+                            ? $"\nLeft empty, because they can't hold the URP component: {referencesLeft}. "
+                              + "Each is listed in the Console; clicking a line selects it."
+                            : "");
             if (leftForAudioLink > 0)
                 summary += $"\n\n{LEFT_FOR_AUDIOLINK}\n  AudioLink fixtures: {leftForAudioLink}";
             summary += LightStencilParagraph(scene);
@@ -313,6 +346,67 @@ namespace VRSL.URP.EditorScripts
             return paragraph.Length > 0 ? "\n\n" + paragraph : "";
         }
 
+        // Settings authors changed on the originals that the URP fixtures have no place for, by
+        // setting, as a paragraph for the summary (empty when there are none).
+        static string NotCarriedParagraph()
+        {
+            var notCarried = VRSLMigrationCopy.NotCarried;
+            if (notCarried.Count == 0) return "";
+            return "\n\nSettings you changed on the originals that the URP fixtures have no place for, so they didn't "
+                 + "come across (each fixture is listed in the Console):\n"
+                 + string.Join("\n", notCarried.OrderBy(k => k.Key)
+                       .Select(k => $"  {ObjectNames.NicifyVariableName(k.Key)}: {k.Value}"));
+        }
+
+        // What deleting the originals would take with it, each listed in the Console with where it
+        // belongs on the URP fixture, as a paragraph for the summary (empty when there's nothing).
+        static string DeletingParagraph(Scene scene, List<(GameObject original, GameObject sibling)> siblings)
+        {
+            var index = new VRSLMigrationCopy.ReferenceIndex(scene);
+            int references = 0, added = 0;
+            foreach (var (original, sibling) in siblings)
+            {
+                if (original == null || sibling == null) continue;
+                var losses = VRSLMigrationCopy.WhatDeletingTakes(original, sibling,
+                    VRSLMigrationCopy.OriginalFixture(original, UPSTREAM), VRSLMigrationCopy.SiblingFixture(sibling), index);
+                foreach (var loss in losses)
+                {
+                    if (loss.Path != null)
+                    {
+                        references++;
+                        var holder = (Component)loss.Thing;
+                        Debug.Log($"[VRSL Migration] {holder.GetType().Name} on '{holder.name}' "
+                                + $"({VRSLMigrationCopy.FieldName(loss.Path)}) points at {Describe(loss.Target)} on the "
+                                + $"original fixture '{original.name}', so deleting the original breaks it. "
+                                + (loss.Counterpart != null
+                                    ? $"Point it at {Describe(loss.Counterpart)} on '{sibling.name}' first."
+                                    : $"Nothing on '{sibling.name}' matches; decide what it should point at."), holder);
+                    }
+                    else
+                    {
+                        added++;
+                        Debug.Log($"[VRSL Migration] {Describe(loss.Thing)} was added to the original fixture "
+                                + $"'{original.name}' and goes with it if you delete it. "
+                                + (loss.Counterpart != null
+                                    ? $"Move it to '{loss.Counterpart.name}' on '{sibling.name}' first."
+                                    : $"Move it to '{sibling.name}' first."), loss.Thing);
+                    }
+                }
+            }
+            if (references + added == 0) return "";
+            return "\n\nBefore deleting the original fixtures:\n"
+                 + $"  References to them from elsewhere in the scene: {references}\n"
+                 + $"  Objects and components added to them: {added}\n"
+                 + "Each is listed in the Console with where it belongs on the URP fixture; clicking a line selects it.";
+        }
+
+        static string Describe(UnityEngine.Object o) => o switch
+        {
+            GameObject g => $"'{g.name}'",
+            Component c  => $"its {c.GetType().Name} on '{c.name}'",
+            _            => $"'{o.name}'",
+        };
+
         // The GUID of the asset `asset` was loaded from, when it's one of upstream's light stencils.
         static string LightStencilGuid(UnityEngine.Object asset)
         {
@@ -327,7 +421,7 @@ namespace VRSL.URP.EditorScripts
         // when `source` is itself a root) that is a URP-prefab instance and sits at the same
         // world position counts as already-migrated. The position match makes the check robust
         // to manual hierarchy reordering after a previous migration run.
-        static bool HasUrpSiblingAlready(Transform source, string urpGuid)
+        static Transform FindUrpSibling(Transform source, string urpGuid)
         {
             var parent = source.parent;
             if (parent != null)
@@ -336,7 +430,7 @@ namespace VRSL.URP.EditorScripts
                 {
                     var sibling = parent.GetChild(i);
                     if (sibling == source) continue;
-                    if (IsMigratedSibling(sibling, source, urpGuid)) return true;
+                    if (IsMigratedSibling(sibling, source, urpGuid)) return sibling;
                 }
             }
             else
@@ -345,10 +439,10 @@ namespace VRSL.URP.EditorScripts
                 {
                     var sibling = rootGo.transform;
                     if (sibling == source) continue;
-                    if (IsMigratedSibling(sibling, source, urpGuid)) return true;
+                    if (IsMigratedSibling(sibling, source, urpGuid)) return sibling;
                 }
             }
-            return false;
+            return null;
         }
 
         static bool IsMigratedSibling(Transform sibling, Transform source, string urpGuid)
