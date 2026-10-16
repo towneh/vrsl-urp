@@ -26,7 +26,7 @@ notes += (
     "In the Package Manager, **Add package from git URL**:\n\n"
     f"```\nhttps://github.com/towneh/vrsl-urp.git#{tag}\n```\n\n"
     "Or download the tarball below and use **Add package from tarball**. "
-    "AudioLink must be in the project first; see the "
+    "AudioLink is needed only to drive fixtures from music; see the "
     "[wiki](https://github.com/towneh/vrsl-urp/wiki/Getting-Started)."
 )
 print(notes)
