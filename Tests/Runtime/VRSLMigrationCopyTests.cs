@@ -46,6 +46,7 @@ namespace VRSL.URP.Tests
             public bool foldout;
 
             public void ApplyAddress() { }
+            public void ApplyAddress(int universe) { }
             public void UpstreamOnly() { }
         }
 
@@ -57,6 +58,8 @@ namespace VRSL.URP.Tests
             public GameObject anyObject;
             public Transform anyTransform;
             public UnityEvent onPress = new UnityEvent();
+            public UnityEvent<bool> onToggle = new UnityEvent<bool>();
+            public UnityEvent<int> onPick = new UnityEvent<int>();
         }
 
         static readonly VRSLUpstreamTypes Types = new VRSLUpstreamTypes(
@@ -173,9 +176,11 @@ namespace VRSL.URP.Tests
 
         /// <summary>
         /// L15. When the in-place pass replaces an original component with the URP one, references to
-        /// it follow where they can: a field that takes any component, and a button's call to a
-        /// method the URP component has. A field typed to the original's class and a call to a
-        /// method ours lacks are handed back, untouched, for the tool to name.
+        /// it follow where they can: a field that takes any component, and a call the URP component
+        /// can take, by method name and arguments, whether the call carries its argument or the event
+        /// supplies it. A field typed to the original's class, a call to a method ours lacks, and calls
+        /// to a method ours has under the same name with other arguments are handed back, untouched,
+        /// for the tool to name.
         /// </summary>
         [Test]
         public void L15_references_to_a_replaced_component_follow_it_where_they_can()
@@ -191,6 +196,11 @@ namespace VRSL.URP.Tests
             holder.typedFixture = original;
             UnityEventTools.AddVoidPersistentListener(holder.onPress, original.ApplyAddress);
             UnityEventTools.AddVoidPersistentListener(holder.onPress, original.UpstreamOnly);
+            var setEnabled = (UnityAction<bool>)System.Delegate.CreateDelegate(typeof(UnityAction<bool>), original, "set_enabled");
+            UnityEventTools.AddBoolPersistentListener(holder.onPress, setEnabled, false);
+            UnityEventTools.AddIntPersistentListener(holder.onPress, original.ApplyAddress, 3);
+            UnityEventTools.AddPersistentListener(holder.onToggle, setEnabled);
+            UnityEventTools.AddPersistentListener(holder.onPick, (UnityAction<int>)original.ApplyAddress);
 
             var index = new VRSLMigrationCopy.ReferenceIndex(SceneManager.GetActiveScene());
             var left = VRSLMigrationCopy.Repoint(original, urp, index, out int moved);
@@ -200,10 +210,22 @@ namespace VRSL.URP.Tests
             Assert.AreEqual("ApplyAddress", holder.onPress.GetPersistentMethodName(0));
             Assert.AreSame(original, holder.typedFixture, "a field typed to the original's class was changed");
             Assert.AreSame(original, holder.onPress.GetPersistentTarget(1), "a call ours can't take was changed");
-            Assert.AreEqual(2, moved);
+            Assert.AreSame(urp, holder.onPress.GetPersistentTarget(2), "a call carrying a bool to set_enabled didn't follow");
+            Assert.AreSame(original, holder.onPress.GetPersistentTarget(3),
+                "a call carrying an int to ApplyAddress was moved, though ours takes no argument");
+            Assert.AreSame(urp, holder.onToggle.GetPersistentTarget(0), "a bool event's call to set_enabled didn't follow");
+            Assert.AreSame(original, holder.onPick.GetPersistentTarget(0),
+                "an int event's call to ApplyAddress was moved, though ours takes no argument");
+            Assert.AreEqual(4, moved);
             CollectionAssert.AreEquivalent(
-                new[] { "typedFixture", "onPress.m_PersistentCalls.m_Calls.Array.data[1].m_Target" },
-                left.Select(l => l.path), "the references handed back aren't the two that can't follow");
+                new[]
+                {
+                    "typedFixture",
+                    "onPress.m_PersistentCalls.m_Calls.Array.data[1].m_Target",
+                    "onPress.m_PersistentCalls.m_Calls.Array.data[3].m_Target",
+                    "onPick.m_PersistentCalls.m_Calls.Array.data[0].m_Target",
+                },
+                left.Select(l => l.path), "the references handed back aren't the four that can't follow");
         }
 
         /// <summary>

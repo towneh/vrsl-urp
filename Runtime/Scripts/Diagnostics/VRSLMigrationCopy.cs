@@ -8,6 +8,7 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.SceneManagement;
 
 namespace VRSL.URP
@@ -377,8 +378,8 @@ namespace VRSL.URP
 
         /// <summary>
         /// Points every reference to <paramref name="from"/> at <paramref name="to"/> where the slot can
-        /// hold it: a field whose type takes the new component, or a UnityEvent call to a method the
-        /// new component has. Returns the slots that can't, which are left as they are, and counts the
+        /// hold it: a field whose type takes the new component, or a UnityEvent call the new component
+        /// can take (a method of the call's name and arguments, as Unity binds it). Returns the slots that can't, which are left as they are, and counts the
         /// ones it moved in <paramref name="moved"/>.
         /// </summary>
         public static List<(Component holder, string path)> Repoint(Component from, Component to, ReferenceIndex index,
@@ -399,7 +400,9 @@ namespace VRSL.URP
                 {
                     string call = path.Substring(0, path.Length - TARGET.Length);
                     string method = so.FindProperty(call + "m_MethodName")?.stringValue;
-                    if (string.IsNullOrEmpty(method) || !HasPublicMethod(to.GetType(), method))
+                    var arguments = CallArguments(holder, so, path, call);
+                    if (string.IsNullOrEmpty(method) || arguments == null
+                        || UnityEventBase.GetValidMethodInfo(to.GetType(), method, arguments) == null)
                     {
                         left.Add((holder, path));
                         continue;
@@ -428,11 +431,53 @@ namespace VRSL.URP
             return ObjectNames.NicifyVariableName(dot < 0 ? path : path.Substring(0, dot));
         }
 
-        static bool HasPublicMethod(Type type, string name)
+        // The argument types a persistent call binds with, from its mode (PersistentListenerMode's
+        // values), or from the event's own type when the event supplies them. Null when they can't
+        // be told, so the call is handed back rather than moved.
+        static Type[] CallArguments(Component holder, SerializedObject so, string path, string call)
         {
-            foreach (var m in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
-                if (m.Name == name) return true;
-            return false;
+            var mode = so.FindProperty(call + "m_Mode");
+            if (mode == null) return null;
+            switch (mode.intValue)
+            {
+                case 0: return EventArguments(holder, path.Substring(0, path.IndexOf(".m_PersistentCalls", StringComparison.Ordinal)));
+                case 1: return Type.EmptyTypes;
+                case 2:
+                    string name = so.FindProperty(call + "m_Arguments.m_ObjectArgumentAssemblyTypeName")?.stringValue;
+                    var type = string.IsNullOrEmpty(name) ? null : Type.GetType(name, false);
+                    return new[] { type ?? typeof(UnityEngine.Object) };
+                case 3: return new[] { typeof(int) };
+                case 4: return new[] { typeof(float) };
+                case 5: return new[] { typeof(string) };
+                case 6: return new[] { typeof(bool) };
+                default: return null;
+            }
+        }
+
+        // A UnityEvent<T…>'s argument types, the event found on the holder by its property path.
+        static Type[] EventArguments(Component holder, string eventPath)
+        {
+            const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            object node = holder;
+            var parts = eventPath.Split('.');
+            for (int i = 0; i < parts.Length && node != null; i++)
+            {
+                if (parts[i] == "Array" && i + 1 < parts.Length && parts[i + 1].StartsWith("data["))
+                {
+                    int index = int.Parse(parts[++i].Substring(5).TrimEnd(']'));
+                    node = node is System.Collections.IList list && index < list.Count ? list[index] : null;
+                    continue;
+                }
+                FieldInfo field = null;
+                for (var type = node.GetType(); type != null && field == null; type = type.BaseType)
+                    field = type.GetField(parts[i], FLAGS);
+                node = field?.GetValue(node);
+            }
+            if (!(node is UnityEventBase)) return null;
+            for (var type = node.GetType(); type != null; type = type.BaseType)
+                if (type.IsGenericType && type.Namespace == "UnityEngine.Events" && type.Name.StartsWith("UnityEvent`"))
+                    return type.GetGenericArguments();
+            return Type.EmptyTypes;
         }
 
         /// <summary>Something deleting an original fixture would take with it: a reference into it
