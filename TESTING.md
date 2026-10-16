@@ -235,7 +235,7 @@ tile grid for this reason; a figure quoted without them is a figure of an unknow
 
 `VRSLQualityPresetTests` in the suite covers Q3 and Q4, and `VRSLAudioLinkQualityPresetTests`
 (the AudioLink test assembly) Q5. Q1 and Q2 want a frame capture,
-and Q6 is judged by looking at the inspector.
+and Q6 is judged by looking at the inspector. `VRSLControlPanelVersionTests` covers Q10.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -248,6 +248,7 @@ and Q6 is judged by looking at the inspector.
 | Q7 | — | The control panel prefab dropped into a scene with a manager at `High`, enter play | Nothing changes: the beams march at `High`, the High button reads as selected, every slider sits at full and the light and beams are at what the scene was authored to. The panel is an overlay for the local user, not a second owner of the scene's settings |
 | Q8 | — | Same, press Standard then Off, then drag the light and beams sliders | The manager's `quality` follows the buttons (both managers where the scene has both). The beams slider scales `volumetricIntensity` and the light slider scales `lightIntensity`, both as a share of the authored value, so a scene authored at 2 reaches 1 at half. Removing the panel from the scene changes nothing |
 | Q9 | — | `lightIntensity` at 0.5 on the manager, no panel | Every fixture casts half the light and the beams dim with it; the fixture bodies glow as before, since the body glow is the material's and not the manager's |
+| Q10 | — | The control panel's inspector, wherever the package is installed and wherever the project lives | The version line under the logo names the installed version, the one in `package.json`. Where the version can't be read it shows `?.?.?`, never a version number |
 
 ### Wiring
 

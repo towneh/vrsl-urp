@@ -579,16 +579,15 @@ namespace VRSL.URP
     {
         public static Texture logo;
 
-        static string GetVersion()
+        internal static string GetVersion()
         {
-            // Version ships in Runtime/VERSION.txt; fall back gracefully when it can't be
-            // read (e.g. a package-cache install where the dataPath-relative path misses)
-            // so a missing file never aborts the inspector before the fields draw.
-            string versionNum = "0.1.0";
+            // Unity maps a Packages/ path through Path.GetFullPath to wherever the package
+            // really lives (package cache, a file: link, embedded). A missing file keeps the
+            // placeholder rather than aborting the inspector before the fields draw.
+            string versionNum = "?.?.?";
             try
             {
-                string path = Application.dataPath.Replace("Assets", "")
-                            + "Packages/town.mr.vrsl-urp/Runtime/VERSION.txt";
+                string path = Path.GetFullPath("Packages/town.mr.vrsl-urp/Runtime/VERSION.txt");
                 if (File.Exists(path))
                     versionNum = File.ReadAllText(path).Trim();
             }
