@@ -3,9 +3,8 @@
     Properties
     {
          [Toggle] _EnableDMX ("Enable Stream DMX/DMX Control", Int) = 0
-        _DMXChannel ("DMX Fixture Number/Sector (Per 13 Channels)", Int) = 0 
+        _DMXChannel ("Starting DMX Channel", Int) = 0
         [HideInInspector][Toggle] _NineUniverseMode ("Extended Universe Mode", Int) = 0
-        [Toggle] _UseRawGrid("Use Raw Grid For Light Intensity", Int) = 0
 		//[NoScaleOffset] _VRSLU_DMXGridRenderTexture("DMX Grid Render Texture (RAW Unsmoothed)", 2D) = "white" {}
 		//[NoScaleOffset] _VRSLU_DMXGridRenderTextureMovement("DMX Grid Render Texture (To Control Lights)", 2D) = "white" {}
 		//[NoScaleOffset] _VRSLU_DMXGridStrobeTimer("DMX Grid Render Texture (For Strobe Timings", 2D) = "white" {}
@@ -58,7 +57,7 @@
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
-            // The DMX channel buffer is a structured buffer, which needs shader model 5.
+            // The DMX channel buffers need shader model 5.
             #pragma target 4.5
 
             #define VRSL_DMX
@@ -133,7 +132,6 @@
                 half4 metallicSmoothness = SAMPLE_TEXTURE2D(_MetallicSmoothness, sampler_MetallicSmoothness, input.uv);
                 half4 color = baseMap * _Color;
 
-                // Calculate tangent space to world space matrix
                 float3 normalTS = UnpackNormal(SAMPLE_TEXTURE2D(_NormalMap, sampler_NormalMap, input.uv));
 
                 // Unnormalised basis, as in URP Lit: a mesh without tangents falls back to
@@ -161,7 +159,7 @@
                 surfaceData.metallic = metallicSmoothness.r * _Metallic;
                 surfaceData.smoothness = metallicSmoothness.a * _Glossiness;
 
-                // Albedo comes from a texture tinted by color
+                // Emission from DMX, masked by the emission mask
                 float2 emUV = TRANSFORM_TEX(input.uv, _EmissionMask);
                 #if _1CH_MODE
                     surfaceData.emission = GetDMXEmission1CH(emUV) * _CurveMod;

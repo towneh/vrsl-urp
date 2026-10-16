@@ -15,9 +15,8 @@
         _ScaleFactor ("Scale Factor", Range(0,0.01)) = 1
         _ReferenceDistance("Reference Distance", Float) = 2
         _UVScale ("UV Scale Test", Range(0.001,2)) = 1
-        _DMXChannel ("DMX Fixture Number/Sector (Per 13 Channels)", Int) = 0
+        _DMXChannel ("Starting DMX Channel", Int) = 0
         _FixtureMaxIntensity ("Maximum Light Intensity",Range (0,15)) = 1
-        [Toggle] _UseRawGrid("Use Raw Grid For Light Intensity", Int) = 0
 		// [NoScaleOffset] _VRSLU_DMXGridRenderTexture("DMX Grid Render Texture (RAW Unsmoothed)", 2D) = "white" {}
 		// [NoScaleOffset] _VRSLU_DMXGridRenderTextureMovement("DMX Grid Render Texture (To Control Lights)", 2D) = "white" {}
 		// [NoScaleOffset] _VRSLU_DMXGridStrobeTimer("DMX Grid Render Texture (For Strobe Timings", 2D) = "white" {}
@@ -26,7 +25,6 @@
 		 [Toggle] _EnableStrobe ("Enable Strobe", Int) = 0
 		 [HideInInspector]_StrobeFreq("Strobe Frequency", Range(0,25)) = 1
 
-        [Toggle] _EnableDMX ("Enable Stream DMX/DMX Control", Int) = 0
         _FixutreIntensityMultiplier ("Intensity Multipler (For Bloom Scaling)", Range(1,150)) = 1
 
         _RemoveTextureArtifact("RemoveTextureArtifact", Range(0,0.1)) = 0
@@ -326,7 +324,6 @@
                 // if(_ShouldDoFlicker)
                 // {
                 //     float flickerMul = 0;
-                //     //TODO: expose more control to noise? (send me an issue in GitHub, if anyone need this)
                 //     flickerMul += saturate(sin(_Time.y * _FlickerAnimSpeed * 1.0000)) * (1-_FlickResultIntensityLowestPoint) + _FlickResultIntensityLowestPoint;
                 //     flickerMul += saturate(sin(_Time.y * _FlickerAnimSpeed * 0.6437)) * (1-_FlickResultIntensityLowestPoint) + _FlickResultIntensityLowestPoint;   
                 //     visibilityResult01 *= saturate(flickerMul/2);
@@ -395,7 +392,7 @@
             }
             ENDCG
         }
-        // Used for handling Depth Buffer (DBuffer) and Depth Priming
+        // URP Lit's depth passes, for the depth prepass and depth priming.
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }

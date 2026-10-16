@@ -10,7 +10,7 @@ sampler2D _MainTex;
 #endif
 
 #ifdef VRSL_DMX
-    uint _UseRawGrid, _EnableExtraChannels;
+    uint _EnableExtraChannels;
     Texture2D _VRSLU_DMXGridRenderTexture, _VRSLU_DMXGridRenderTextureMovement, _VRSLU_DMXGridStrobeOutput, _VRSLU_DMXGridSpinTimer;
     half _SpinSpeed;
 
@@ -110,7 +110,7 @@ half _TriplanarFalloff;
 half _LMStrength;
 half _RTLMStrength;
 int _TextureSampleMode;
-half _Saturation, _SaturationLength, _LensMaxBrightness, _UniversalIntensity;
+half _Saturation, _LensMaxBrightness, _UniversalIntensity;
 // The grid layout the DMX manager reads, published as a global: 0 Horizontal,
 // 1 Vertical, 2 Legacy (VRSLGridLayout). Unset it reads 0, so a scene with no DMX
 // manager reads the Horizontal grid.
@@ -145,7 +145,7 @@ half _ProjectionUVMod, _UseWorldNorm, _ProjectionRotation, _ProjectionUVMod2, _P
 float4 _ProjectionMainTex_ST;
 half _ModX;
 half _ModY;
-half  _ConeSync, _ProjectionShadowHarshness, _BlindingStrength;
+half  _ProjectionShadowHarshness, _BlindingStrength;
 //half _StrobeFreq;
 
 half _PulseSpeed, _BlendSrc, _BlendDst, _BlendOp;

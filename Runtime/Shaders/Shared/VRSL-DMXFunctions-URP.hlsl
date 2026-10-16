@@ -58,7 +58,7 @@ uint checkTiltInvertZ()
 }
 #endif
 
-// The cell a channel occupies, in UV; 0 for a channel the grid doesn't carry.
+// The cell a channel occupies, in UV, computed whether or not the grid carries the channel.
 float2 getDMXCellUV(uint DMXChannel)
 {
     float2 uv;

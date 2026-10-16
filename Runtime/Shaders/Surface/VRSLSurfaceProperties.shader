@@ -234,7 +234,8 @@ Shader "Hidden/VRSL-URP/SurfaceProperties"
             // decision this pass can't see, so the depth test in
             // ClipToCameraDepth makes it. A double-sided material keeps its
             // back face; a face its own shader culled finds nothing in the
-            // camera depth and is clipped.
+            // camera depth and is clipped. Without a camera depth texture the
+            // gate is off and both faces are captured.
             Cull   Off
 
             HLSLPROGRAM

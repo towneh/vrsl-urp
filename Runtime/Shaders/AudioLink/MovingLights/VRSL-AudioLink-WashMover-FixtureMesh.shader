@@ -34,11 +34,9 @@
 		_UniversalIntensity ("Universal Intensity", Range (0,1)) = 1
 		[HDR]_Emission("Light Color Tint", Color) = (1,1,1,1)
 		_Saturation("Final Saturation", Range(0,1)) = 1
-		_SaturationLength("Final Saturation Length", Range(0,0.2)) = 0.1
 		_LensMaxBrightness("Lens Max Brightness", Range(0.0, 20)) = 5
 		_ConeWidth("Cone Width", Range(0,5.5)) = 0
 		_ConeLength("Cone Length", Range(1,10)) = 1
-		_ConeSync ("Cone Scale Sync", Range(0,1)) = 0.2
 		_FixutreIntensityMultiplier ("Intensity Multipler (For Bloom Scaling)", Range(1,10)) = 1
 
 		//Color Texture Sampling Properties

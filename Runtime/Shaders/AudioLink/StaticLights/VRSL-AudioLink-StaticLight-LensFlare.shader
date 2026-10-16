@@ -301,7 +301,6 @@
                         // if(_ShouldDoFlicker)
                         // {
                         //     float flickerMul = 0;
-                        //     //TODO: expose more control to noise? (send me an issue in GitHub, if anyone need this)
                         //     flickerMul += saturate(sin(_Time.y * _FlickerAnimSpeed * 1.0000)) * (1-_FlickResultIntensityLowestPoint) + _FlickResultIntensityLowestPoint;
                         //     flickerMul += saturate(sin(_Time.y * _FlickerAnimSpeed * 0.6437)) * (1-_FlickResultIntensityLowestPoint) + _FlickResultIntensityLowestPoint;   
                         //     visibilityResult01 *= saturate(flickerMul/2);
@@ -367,7 +366,7 @@
             }
             ENDCG
         }
-        // Used for handling Depth Buffer (DBuffer) and Depth Priming
+        // URP Lit's depth passes, for the depth prepass and depth priming.
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }

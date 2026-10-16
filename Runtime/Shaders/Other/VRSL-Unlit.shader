@@ -58,7 +58,7 @@ Shader "VRSL-URP/Other/Unlit"
             ENDCG
         }
 
-        // Used for handling Depth Buffer (DBuffer) and Depth Priming
+        // URP Lit's depth passes, for the depth prepass and depth priming.
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }

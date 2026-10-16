@@ -35,7 +35,6 @@
         [IntRange] _LaserCount ("Laser Beam Count", Range(4, 68)) = 1
         _LaserThickness ("Laser Beam Thickenss", Range(0.003, 0.25)) = 1
         _EndFade ("End Fade", Range(0,3)) = 2.2
-        _FadeStrength ("Cone Edge Fade", Range(1,2)) = 0
         _LaserSoftening ("Laser Softness", Range(0.05,5)) = 5
         _InternalShine ("Internal Shine Strength", Range(0,5)) = 1
         _InternalShineLength ("Internal Shine Length", Range(0.001,500)) = 12.1
@@ -92,7 +91,7 @@
             sampler2D _MainTex, _SamplingTexture;
             float4 _MainTex_ST;
             half _XConeFlatness, _ZRotation, _UniversalIntensity;
-            half _EndFade, _FadeStrength, _InternalShine, _LaserSoftening, _InternalShineLength, _Multiplier;
+            half _EndFade, _InternalShine, _LaserSoftening, _InternalShineLength, _Multiplier;
             uniform const float compatSampleYAxis = 0.019231;
             uniform const float standardSampleYAxis = 0.00762;
             #include "../Shared/VRSL-AudioLink-Data.hlsl"
@@ -463,7 +462,7 @@
             }
             ENDCG
         }
-        // Used for handling Depth Buffer (DBuffer) and Depth Priming
+        // URP Lit's depth passes, for the depth prepass and depth priming.
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }

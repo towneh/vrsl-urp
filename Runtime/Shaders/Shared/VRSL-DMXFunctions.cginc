@@ -1,12 +1,12 @@
 #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
 
-// Point/clamp sampling and the manager's grid texel size, as in VRSL-DMXFunctions-URP.hlsl,
-// so every reader takes a channel from its own cell whatever the grid texture's filter.
+// Point/clamp sampling and the manager's grid texel size, as in VRSLDMX.hlsl, so every
+// reader takes a channel from its own cell whatever the grid texture's filter.
 SamplerState sampler_point_clamp;
 float4 _VRSLDMXTexelSize;
 
-// The DMX channel buffer and the compute's per-channel state, as in
-// VRSL-DMXFunctions-URP.hlsl, which says how they are published and read.
+// The DMX channel buffer and the compute's per-channel state, as in VRSLDMX.hlsl,
+// which says how they are published and read.
 uint   _VRSLU_DMXChannelCount;
 uint   _VRSLU_StrobeStatic;
 float4 _VRSLU_StrobeFreqs;

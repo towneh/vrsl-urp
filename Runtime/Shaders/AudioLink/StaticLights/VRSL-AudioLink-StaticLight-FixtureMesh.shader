@@ -19,7 +19,6 @@
 		 _TextureColorSampleY ("Y coordinate to sample the texture from", Range(0,1)) = 0.5
         _RenderTextureMultiplier("Render Texture Multiplier", Range(1,10)) = 1
 
-        [Toggle] _EnableOSC ("Enable Stream OSC/DMX Control", Int) = 0
         _FixutreIntensityMultiplier ("Intensity Multipler (For Bloom Scaling)", Range(1,15)) = 1
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Albedo (RGB)", 2D) = "white" {}
@@ -43,10 +42,6 @@
         _CurveMod ("Light Intensity Curve Modifier", Range (-3,8)) = 5.0
         _EmissionMask ("Emission Mask", 2D) = "white" {}
         _FixtureMaxIntensity ("Maximum Light Intensity",Range (0,15)) = 1
-        [Toggle] _UseRawGrid("Use Raw Grid For Light Intensity", Int) = 0
-		[NoScaleOffset] _OSCGridRenderTextureRAW("OSC Grid Render Texture (RAW Unsmoothed)", 2D) = "white" {}
-		[NoScaleOffset] _OSCGridRenderTexture("OSC Grid Render Texture (To Control Lights)", 2D) = "white" {}
-		[NoScaleOffset] _OSCGridStrobeTimer ("OSC Grid Render Texture (For Strobe Timings", 2D) = "white" {}
 		//[NoScaleOffset] _SceneAlbedo ("Scene Albedo Render Texture", 2D) = "white" {}+
         		[Toggle] _EnableThemeColorSampling ("Enable Theme Color Sampling", Int) = 0
 		 _ThemeColorTarget ("Choose Theme Color", Int) = 0

@@ -362,10 +362,11 @@ float3 VRSL_DiscoballMask(VRSLLightData light, float3 posWS)
 struct VRSLALFixtureConfig
 {
     float4 positionAndRange;  // xyz = world pos (updated per-frame), w = range
-    float4 forwardAndType;    // xyz = world forward (from tiltTransform or light, per-frame),
-                              // w = light type (0=spot, 1=point)
-    float4 intensityParams;   // x = maxIntensity, y = finalIntensity,
-                              // z = AudioLink active (1=sample AL, 0=static full intensity), w = unused
+    float4 forwardAndType;    // xyz = world forward (from tiltTransform or light, per-frame;
+                              //       a discoball's up axis), w = light type (0=spot, 1=point, 2=discoball)
+    float4 intensityParams;   // x = maxIntensity, y = finalIntensity × globalIntensity,
+                              // z = AudioLink active (1=sample AL, 0=static full intensity),
+                              // w = discoball beams (1 = the raymarch draws its dots)
     float4 spotAngles;        // x = inner-to-outer ratio (0..1), y = outer half-angle (deg),
                               // z = emitterDepth (m), w = unused
     float4 alParams;          // x = band (0–3), y = delay (0–127), z = bandMultiplier,
@@ -375,6 +376,7 @@ struct VRSLALFixtureConfig
     float4 emissionColor;     // xyz = linear RGB (used when colorMode == 0), w = unused
     float4 reserved;          // x = gobo slot index (-1 = no gobo, 0+ = slice in _VRSLGobos),
                               // y = gobo spin speed (bipolar: 0 = no spin, negative = CCW, positive = CW),
+                              //     or a discoball's spin (deg/s),
                               // zw = textureSamplingCoordinates UV (used when colorMode == 6 or 7)
 };
 

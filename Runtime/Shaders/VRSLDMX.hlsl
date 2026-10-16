@@ -1,10 +1,10 @@
 #ifndef VRSLDMX_INCLUDED
 #define VRSLDMX_INCLUDED
 
-// Live DMX for a URP shader of your own: a screen that takes its colour from a fixture, a
-// logo that strobes with the rig. It reads what the DMX manager reads, the video grid it is
-// set to or the channels a stream sends, so a shader using it stays in step with the
-// package's fixtures.
+// Reads live DMX in a URP shader of your own, such as a screen that takes its colour from
+// a fixture or a logo that strobes with the rig. It reads what the DMX manager reads, the
+// video grid it is set to or the channels a stream sends, so a shader using it stays in
+// step with the package's fixtures.
 //
 //     #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/VRSLDMX.hlsl"
 //
@@ -13,10 +13,15 @@
 // own UnityPerMaterial and stays SRP Batcher compatible.
 //
 // Channels are absolute, as a fixture component writes _DMXChannel: pass that straight
-// through. Every read is a texel load, so all of them work in the vertex stage too.
+// through. A universe is 520 channels, so universe u's channel c is (u - 1) * 520 + c.
+// Channel 0, and a channel the grid or the stream doesn't carry, reads as a channel at 0,
+// so value 0 and strobe open. Nine-universe grids aren't followed. Every read samples
+// mip 0 or loads from a buffer, so all of them work in the vertex stage too. Stream data
+// needs #pragma target 4.5; below it the reads see only the grid, black under Stream data.
 //
 //     half  VRSLDMX_Channel(uint channel)     the channel's value, 0..1, smoothed on a grid
 //     half  VRSLDMX_ChannelRaw(uint channel)  the value as it arrived, before smoothing
+//                                             (smoothed if the Grid Textures set has no Raw)
 //     half  VRSLDMX_Strobe(uint channel)      1 open, 0 closed, for that strobe channel
 //     half4 VRSLDMX_Color(uint channel)       a 13-channel fixture's colour times its dimmer
 //
@@ -47,7 +52,7 @@ int _VRSLU_DMXGridLayout;
 // The channel buffer and the compute's per-channel state, published while a channel source
 // is publishing (Stream data). _VRSLU_DMXChannelCount is 0 otherwise and every read takes
 // the grid, the same choice the compute makes. Channel n is byte n-1 of the channel buffer
-// and element n-1 of the others. Structured buffers outside compute need shader model 5:
+// and element n-1 of the others. Buffers outside compute need shader model 5:
 // below target 4.5 a shader reads the grid only.
 uint   _VRSLU_DMXChannelCount;
 uint   _VRSLU_StrobeStatic;
@@ -157,9 +162,9 @@ float2 vrsldmx_industry_uv(int x, int y, float4 texelSize)
 
 // A universe is 520 flat channels, 512 slots and 8 of padding, because the grid is 13
 // wide and 512 doesn't divide by 13. A nine-universe grid carries universes 1 to 3 in red,
-// 4 to 6 in green and 7 to 9 in blue, so the colour component a channel is in is its
-// group of three universes (1560 channels), and the cell is the one its channel in that
-// group has. Off nine-universe, and on Legacy, which has no colour split, it is 0.
+// 4 to 6 in green and 7 to 9 in blue. A channel's component is its group of three
+// universes (1560 channels), and its cell is the one its position within that group would
+// have. Off nine-universe, and on Legacy, which has no colour split, the component is 0.
 uint vrsldmx_component(uint channel, uint nineUniverse)
 {
     return nineUniverse == 0u || _VRSLU_DMXGridLayout == 2 || channel == 0u ? 0u : (channel - 1u) / 1560u;
@@ -240,8 +245,8 @@ float vrsldmx_spin_phase(uint channel, uint nineUniverse)
 }
 
 // 1 open, 0 closed. Below a channel value of 0.2 the fixture is held open.
-// One exit: with two early returns, fxc splits the grid and buffer paths into two ifs on
-// the same flag and warns that the result is potentially uninitialized.
+// A single exit, because with two early returns fxc splits the grid and buffer paths into
+// two ifs on the same flag and warns that the result is potentially uninitialized.
 half vrsldmx_strobe(uint channel, uint nineUniverse)
 {
     half strobe = 1.0;

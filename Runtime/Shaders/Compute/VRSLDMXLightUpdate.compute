@@ -14,7 +14,7 @@ Texture2D<float4> _DMXMainTex;
 Texture2D<float4> _DMXMovementTex;
 Texture2D<float4> _DMXStrobeTex;
 Texture2D<float4> _DMXSpinTimerTex;  // SpinnerTimer CRT — accumulates phase as t += dt·rate
-// All three textures share the same resolution in VRSL's CRT pipeline
+// All four share the grid's resolution in VRSL's CRT pipeline
 float4 _VRSLDMXTexelSize;   // x=1/w, y=1/h, z=width, w=height
 
 // ── Buffers ───────────────────────────────────────────────────────────────────
@@ -26,8 +26,7 @@ uint                                   _VRSLGoboCount;
 // ── DMX channels as bytes ─────────────────────────────────────────────────────
 // Set by VRSL_DMXURPLightManager when a channel source is publishing. Channel n
 // (1-based, as everywhere else in VRSL) is byte n-1. _VRSLU_DMXChannelCount is 0
-// when nothing is publishing, and the reads below fall back to the CRT textures,
-// so a scene without a source behaves exactly as it did.
+// when nothing is publishing, and the reads below then take the CRT textures.
 ByteAddressBuffer _VRSLU_DMXChannels;
 uint              _VRSLU_DMXChannelCount;
 
@@ -87,7 +86,7 @@ uint                      _VRSLU_UniverseCount;
 // the wrong stride picks another universe's step for every channel past the first.
 uint _VRSLU_SlotsPerUniverse;
 
-// Point-clamp inline sampler — matches tex2Dlod used in VRSL shader fixtures
+// Point-clamp inline sampler, as the fixtures' includes read the grid
 SamplerState sampler_point_clamp;
 
 // ── DMX texture sampling ──────────────────────────────────────────────────────
@@ -480,8 +479,7 @@ void AdvanceMovement(uint3 id : SV_DispatchThreadID)
     float dmxS   = LoadDMXChannel(((ch - 1u) / 13u + 1u) * 13u);
 
     // This universe's own elapsed show time, which is zero on a frame where nothing
-    // arrived for it. The frame delta stands in when no source published a step,
-    // which keeps a scene reading the CRT chain behaving as it did.
+    // arrived for it. The frame delta stands in when no source published a step.
     // Named for its unit, and not `step`, which is an HLSL intrinsic.
     uint  universe    = index / max(_VRSLU_SlotsPerUniverse, 1u);
     float stepSeconds = (universe < _VRSLU_UniverseCount) ? _VRSLU_UniverseStep[universe]

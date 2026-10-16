@@ -11,7 +11,7 @@ float4 _MainTex_ST;
 half _BlindingAngleMod;
 
 #ifdef VRSL_DMX
-    uint _UseRawGrid, _EnableExtraChannels;
+    uint _EnableExtraChannels;
     half _SpinSpeed;
 
 #ifdef FIXTURE_EMIT
@@ -122,7 +122,7 @@ half _TriplanarFalloff;
 half _LMStrength;
 half _RTLMStrength;
 int _TextureSampleMode;
-half _Saturation, _SaturationLength, _LensMaxBrightness, _UniversalIntensity;
+half _Saturation, _LensMaxBrightness, _UniversalIntensity;
 uint _GoboBeamSplitEnable;
 
 uniform const half compatSampleYAxis = 0.019231;
@@ -151,7 +151,7 @@ half _ProjectionUVMod, _UseWorldNorm, _ProjectionRotation, _ProjectionUVMod2, _P
      _ProjectionUVMod5, _ProjectionUVMod6, _ProjectionUVMod7, _ProjectionUVMod8;
 half _ModX;
 half _ModY;
-half _ConeSync, _ProjectionShadowHarshness, _BlindingStrength;
+half _ProjectionShadowHarshness, _BlindingStrength;
 
 half _PulseSpeed, _BlendSrc, _BlendDst, _BlendOp;
 half _FadeStrength, _FadeAmt, _DistFade, _ProjectionMaxIntensity, _IntensityCutoff;

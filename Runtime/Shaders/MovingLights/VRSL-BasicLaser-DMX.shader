@@ -4,7 +4,7 @@
     {
         [Toggle] _EnableDMX ("Enable Stream DMX/DMX Control", Int) = 0
         [Toggle] _EnableFineChannels ("Enable Fine Channels (For Pan/Tilt)", Int) = 0
-        _DMXChannel ("DMX Channel Number)", Int) = 0
+        _DMXChannel ("Starting DMX Channel", Int) = 0
         [HideInInspector][Toggle] _NineUniverseMode ("Extended Universe Mode", Int) = 0
         _UniversalIntensity ("Universal Intensity", Range (0,1)) = 1
         _FinalIntensity("Final Intensity", Range(0,1)) = 1
@@ -359,7 +359,7 @@
             }
             ENDCG
         }
-        // Used for handling Depth Buffer (DBuffer) and Depth Priming
+        // URP Lit's depth passes, for the depth prepass and depth priming.
         UsePass "Universal Render Pipeline/Lit/DepthOnly"
         UsePass "Universal Render Pipeline/Lit/DepthNormals"
     }

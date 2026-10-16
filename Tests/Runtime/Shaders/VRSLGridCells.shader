@@ -21,10 +21,7 @@ Shader "Hidden/VRSL-URP/Tests/GridCells"
             HLSLPROGRAM
             #pragma vertex   Vert
             #pragma fragment Frag
-            // Color.hlsl for Luminance, which the include uses and the fixture shaders
-            // bring in themselves.
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
-            #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Color.hlsl"
             #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-DMXFunctions-URP.hlsl"
 
             TEXTURE2D(_VRSLTestIndex);

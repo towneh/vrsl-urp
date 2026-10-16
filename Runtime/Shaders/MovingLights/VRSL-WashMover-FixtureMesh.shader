@@ -21,14 +21,11 @@
 		_UniversalIntensity ("Universal Intensity", Range (0,1)) = 1
 		[HDR]_Emission("Light Color Tint", Color) = (1,1,1,1)
 		_Saturation("Final Saturation", Range(0,1)) = 1
-		_SaturationLength("Final Saturation Length", Range(0,0.2)) = 0.1
 		_LensMaxBrightness("Lens Max Brightness", Range(0.00, 200)) = 5
 		_ConeWidth("Cone Width", Range(0,5.5)) = 0
 		_ConeLength("Cone Length", Range(1,10)) = 1
-		_ConeSync ("Cone Scale Sync", Range(0,1)) = 0.2
 		_FixutreIntensityMultiplier ("Intensity Multipler (For Bloom Scaling)", Range(1,100)) = 1
 		_FixtureRotationOrigin("Fixture Pivot Origin", Float) = (0, 0.014709, -1.02868, 0)
-		[Toggle] _UseRawGrid("Use Raw Grid For Light Intensity And Color", Int) = 0
 		_MaxMinPanAngle("Max/Min Pan Angle (-x, x)", Float) = 180
 		_MaxMinTiltAngle("Max/Min Tilt Angle (-y, y)", Float) = 180
 		_FixtureMaxIntensity ("Maximum Cone Intensity",Range (0,0.5)) = 0.5
