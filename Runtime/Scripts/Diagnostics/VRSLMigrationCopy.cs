@@ -149,36 +149,38 @@ namespace VRSL.URP
             var dst = target.GetComponentInChildren(realtimeType, includeInactive: true);
             if (dst == null)
             {
-                if (!CopyTwinParameters(source, target, types.AudioLinkStatic, UrpType(URP_AL_STATIC)))
-                    CopyTwinParameters(source, target, types.AudioLinkLaser, UrpType(URP_AL_LASER));
+                if (!CopyTwinParameters(source, target, sourceAsset, targetAsset, types.AudioLinkStatic, UrpType(URP_AL_STATIC)))
+                    CopyTwinParameters(source, target, sourceAsset, targetAsset, types.AudioLinkLaser, UrpType(URP_AL_LASER));
                 return;
             }
+
+            var dstDefault = targetAsset.GetComponentInChildren(realtimeType, true);
 
             // Prefer modern upstream RealtimeLight if it's also present (effectively identical layout).
             var srcModern = FindComponentByTypeName(source, types.AudioLinkRealtime);
             if (srcModern != null)
             {
-                CopyAllNamedFields(srcModern, dst, source);
+                CopyAllNamedFields(srcModern, dst, source, Defaults(sourceAsset, types.AudioLinkRealtime), dstDefault);
                 EditorUtility.SetDirty(dst);
                 return;
             }
 
             var srcStatic = FindComponentByTypeName(source, types.AudioLinkStatic);
             if (srcStatic == null) return;
+            var srcDefault = Defaults(sourceAsset, types.AudioLinkStatic);
 
             // Direct copies (same name, compatible type — enums round-trip via int)
             CopyField(srcStatic, dst, "enableAudioLink");
             CopyField(srcStatic, dst, "band");
             CopyField(srcStatic, dst, "delay");
-            CopyField(srcStatic, dst, "bandMultiplier");
-            CopyField(srcStatic, dst, "globalIntensity");
-            CopyField(srcStatic, dst, "finalIntensity");
+            CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "bandMultiplier");
+            CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "globalIntensity");
+            CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "finalIntensity");
             CopyField(srcStatic, dst, "textureSamplingCoordinates");
             CopyField(srcStatic, dst, "targetToFollow");
 
             // Renames
-            var urpDefault = ReadField(targetAsset.GetComponentInChildren(realtimeType, true),
-                "emissionColor", Color.white);
+            var urpDefault = ReadField(dstDefault, "emissionColor", Color.white);
             WriteField(dst, "emissionColor", ScaledTint(srcStatic, sourceAsset, types.AudioLinkStatic, urpDefault));
             CopyField(srcStatic, dst, srcName: "selectGOBO",     dstName: "goboIndex");
 
@@ -222,20 +224,22 @@ namespace VRSL.URP
             var dst = target.GetComponentInChildren<VRSLDMXRealtimeLight>(includeInactive: true);
             if (dst == null)
             {
-                CopyTwinParameters(source, target, types.DmxStatic, typeof(VRSLDMXStatic));
+                CopyTwinParameters(source, target, sourceAsset, targetAsset, types.DmxStatic, typeof(VRSLDMXStatic));
                 return;
             }
 
+            var dstDefault = targetAsset.GetComponentInChildren<VRSLDMXRealtimeLight>(true);
             var srcModern = FindComponentByTypeName(source, types.DmxRealtime);
             if (srcModern != null)
             {
-                CopyAllNamedFields(srcModern, dst, source);
+                CopyAllNamedFields(srcModern, dst, source, Defaults(sourceAsset, types.DmxRealtime), dstDefault);
                 EditorUtility.SetDirty(dst);
                 return;
             }
 
             var srcStatic = FindComponentByTypeName(source, types.DmxStatic);
             if (srcStatic == null) return;
+            var srcDefault = Defaults(sourceAsset, types.DmxStatic);
 
             CopyField(srcStatic, dst, "enableDMXChannels");
             CopyField(srcStatic, dst, "enableFineChannels");
@@ -243,16 +247,15 @@ namespace VRSL.URP
             CopyField(srcStatic, dst, "dmxUniverse");
             CopyField(srcStatic, dst, "useLegacySectorMode");
             CopyField(srcStatic, dst, "sector");
-            CopyField(srcStatic, dst, "globalIntensity");
-            CopyField(srcStatic, dst, "finalIntensity");
+            CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "globalIntensity");
+            CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "finalIntensity");
             CopyField(srcStatic, dst, "invertPan");
             CopyField(srcStatic, dst, "invertTilt");
             CopyField(srcStatic, dst, "enableStrobe");
             CopyField(srcStatic, dst, "maxMinPan");
             CopyField(srcStatic, dst, "maxMinTilt");
 
-            dst.shellEmissionTint = ScaledTint(srcStatic, sourceAsset, types.DmxStatic,
-                targetAsset.GetComponentInChildren<VRSLDMXRealtimeLight>(true).shellEmissionTint);
+            dst.shellEmissionTint = ScaledTint(srcStatic, sourceAsset, types.DmxStatic, dstDefault.shellEmissionTint);
             CopyField(srcStatic, dst, srcName: "tiltOffsetBlue",     dstName: "tiltOffset");
             CopyField(srcStatic, dst, srcName: "panOffsetBlueGreen", dstName: "panOffset");
             CopyField(srcStatic, dst, srcName: "enableAutoSpin",     dstName: "enableGoboSpin");
@@ -264,14 +267,16 @@ namespace VRSL.URP
         // flasher, light bar) carrying the same component type as upstream. Every same-named
         // field copies across; references into the source's own hierarchy are skipped so the URP
         // prefab keeps its own renderers.
-        static bool CopyTwinParameters(GameObject source, GameObject target, string upstreamTypeName, Type urpType)
+        static bool CopyTwinParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset,
+            string upstreamTypeName, Type urpType)
         {
             if (urpType == null) return false;
             var src = FindComponentByTypeName(source, upstreamTypeName);
             if (src == null) return false;
             var dst = target.GetComponentInChildren(urpType, includeInactive: true);
             if (dst == null) return false;
-            CopyAllNamedFields(src, dst, source);
+            CopyAllNamedFields(src, dst, source, Defaults(sourceAsset, upstreamTypeName),
+                targetAsset != null ? targetAsset.GetComponentInChildren(urpType, true) : null);
             EditorUtility.SetDirty(dst);
             return true;
         }
@@ -371,11 +376,35 @@ namespace VRSL.URP
             return new Color(tint.r * k, tint.g * k, tint.b * k, tint.a);
         }
 
+        // Values this package tuned for its own lighting. They arrive scaled by the two prefabs'
+        // defaults, as the tint does, so a fixture left at upstream's default lands on ours and a
+        // changed one keeps its share. Every other field carries as the original had it: an
+        // address, an inverted pan or AudioLink switched off is what the show was built on.
+        static readonly HashSet<string> CALIBRATION_FIELDS = new HashSet<string>
+        {
+            "globalIntensity", "finalIntensity", "bandMultiplier",
+        };
+
+        static void CopyCalibrated(object src, object srcDefault, object dst, object dstDefault, string name)
+        {
+            float value    = ReadField(src, name, float.NaN);
+            float upstream = srcDefault != null ? ReadField(srcDefault, name, float.NaN) : float.NaN;
+            float ours     = dstDefault != null ? ReadField(dstDefault, name, float.NaN) : float.NaN;
+            if (float.IsNaN(value) || float.IsNaN(upstream) || float.IsNaN(ours) || upstream == 0f)
+                CopyField(src, dst, name);
+            else
+                WriteField(dst, name, value * ours / upstream);
+        }
+
+        // The upstream prefab's component of a type, which holds upstream's defaults.
+        static Component Defaults(GameObject sourceAsset, string upstreamTypeName) =>
+            sourceAsset != null ? FindComponentByTypeName(sourceAsset, upstreamTypeName) : null;
+
         // For modern-RT-light → URP-RT-light migrations: copy every same-named field except
         // those whose values point to objects inside the source prefab (panTransform etc.).
         // Preserves the URP prefab's own internal wiring while migrating user-set scalars,
         // colours, enums, and external Transform references like targetToFollow.
-        static void CopyAllNamedFields(object src, object dst, GameObject sourceRoot)
+        static void CopyAllNamedFields(object src, object dst, GameObject sourceRoot, object srcDefault, object dstDefault)
         {
             const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
             foreach (var df in dst.GetType().GetFields(FLAGS))
@@ -394,7 +423,8 @@ namespace VRSL.URP
                 if (value is UnityEngine.Object uo && uo != null && IsInsideSourceHierarchy(uo, sourceRoot))
                     continue;
 
-                CopyField(src, dst, df.Name);
+                if (CALIBRATION_FIELDS.Contains(df.Name)) CopyCalibrated(src, srcDefault, dst, dstDefault, df.Name);
+                else CopyField(src, dst, df.Name);
             }
         }
 
