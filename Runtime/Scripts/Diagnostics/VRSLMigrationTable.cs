@@ -181,7 +181,7 @@ namespace VRSL.URP
                  + string.Join("\n", found.OrderBy(f => f.Key).Select(f => $"  {f.Key}: {f.Value}"))
                  + "\n\nTo keep fixture light off an area, aim the fixtures away from it, narrow their cone or "
                  + "shorten their range. A fixture still lights a surface on the far side of a wall, because "
-                 + "the lights cast no shadows. Beams stop at whatever stands in front of them, and flares and "
+                 + "the lights have no shadow maps. Beams stop at whatever stands in front of them, and flares and "
                  + "lasers hide behind it.";
         }
     }

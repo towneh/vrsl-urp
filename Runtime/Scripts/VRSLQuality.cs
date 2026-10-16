@@ -139,9 +139,7 @@ namespace VRSL.URP
                         contactDistance: 2.5f, contactThickness: 0.35f);
 
                 default:
-                    // Standard reproduces what the package shipped as its defaults, so a
-                    // scene that never touched the old fields renders and costs what it
-                    // did before.
+                    // Standard, the level a manager starts at.
                     return new VRSLQualityLevel(
                         volumetrics: true, maxSteps: 24, spacing: 0.35f, noise: true,
                         contactShadows: true, contactSteps: 8,

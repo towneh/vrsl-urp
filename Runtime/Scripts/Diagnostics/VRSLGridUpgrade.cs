@@ -8,22 +8,23 @@ using UnityEngine.SceneManagement;
 namespace VRSL.URP
 {
     /// <summary>
-    /// Brings a DMX manager saved with 0.2.0-rc.6 across to <see cref="VRSLGridTextures"/>,
-    /// and decides once what a manager not yet looked at reads.
+    /// Moves a DMX manager saved with the five separate grid texture fields onto a
+    /// <see cref="VRSLGridTextures"/> asset, and decides once what a manager not yet
+    /// looked at reads.
     /// </summary>
     /// <remarks>
-    /// rc.6 managers named their five decode textures one by one, and the layout was
-    /// whichever set those happened to be. The main texture survives as a hidden field,
-    /// and is enough to tell which of the package's three layouts a manager was set up
-    /// for. Without this a Vertical or Legacy world would come up reading the Horizontal
-    /// grid and light the wrong fixtures, with no error anywhere. For one release only.
+    /// Such a manager named its decode textures one by one, and the layout was whichever
+    /// set those happened to be. The main texture survives as a hidden field, and is
+    /// enough to tell which of the package's three layouts the manager was set up for.
+    /// Without this a Vertical or Legacy world would come up reading the Horizontal grid
+    /// and light the wrong fixtures, with no error anywhere.
     ///
-    /// 0.2.0-rc.6 read a channel source whenever one was sending, so a manager not yet
-    /// looked at whose scene holds one is brought up on Stream data.
+    /// A saved manager not yet looked at whose scene holds a channel source is brought up
+    /// on Stream data, since that is what it read.
     /// </remarks>
     static class VRSLGridUpgrade
     {
-        /// <summary>The hidden field the rc.6 main texture deserialises into.</summary>
+        /// <summary>The hidden field the old main texture deserialises into.</summary>
         public const string OldField = "rc6MainTexture";
 
         /// <summary>Each layout's main decode texture as the package ships it.</summary>
@@ -36,7 +37,7 @@ namespace VRSL.URP
 
         public enum Outcome
         {
-            /// <summary>Nothing from rc.6 on this manager.</summary>
+            /// <summary>No old main texture on this manager.</summary>
             None,
             /// <summary>Set to the layout its old textures were, and the old field cleared.</summary>
             Upgraded,
@@ -46,8 +47,8 @@ namespace VRSL.URP
         }
 
         /// <summary>
-        /// Upgrade one manager if it still carries an rc.6 main texture or hasn't been
-        /// looked at, and say what happened to the rc.6 texture.
+        /// Upgrade one manager if it still carries the old main texture or hasn't been
+        /// looked at, and say what happened to that texture.
         /// </summary>
         /// <remarks>
         /// Through <see cref="SerializedObject"/>, like the wiring, so the change is undoable
@@ -67,10 +68,9 @@ namespace VRSL.URP
         public const string VersionField = nameof(VRSL_DMXURPLightManager.dmxInputVersion);
 
         /// <summary>
-        /// A manager not yet looked at, saved with 0.2.0-rc.6 or added since, comes up on
-        /// Stream data when its scene holds a channel source: 0.2.0-rc.6 read such a source
-        /// whenever it was publishing, so a world already lit from SEI or OSC stays lit.
-        /// Runs once per manager, after the rc.6 rule, which may have set its layout.
+        /// A manager not yet looked at comes up on Stream data when its scene holds a
+        /// channel source, so a saved world already lit from SEI or OSC stays lit. Runs
+        /// once per manager, after the main-texture rule, which may have set its layout.
         /// </summary>
         static void UpgradeInput(VRSL_DMXURPLightManager manager, SerializedObject so)
         {
@@ -149,11 +149,11 @@ namespace VRSL.URP
 
         /// <summary>
         /// Upgrade and wire every DMX manager in a scene. For the built copy of a scene,
-        /// which nobody may have opened since rc.6: nothing else runs on it before the
-        /// player loads it.
+        /// which nobody may have opened in the editor since it was saved: nothing else runs
+        /// on it before the player loads it.
         /// </summary>
         /// <remarks>
-        /// Wiring as well as the upgrade, because an rc.6 scene's manager has no Grid
+        /// Wiring as well as the upgrade, because an old scene's manager has no Grid
         /// Textures at all until something fills it, and a player never resolves anything
         /// itself.
         /// </remarks>

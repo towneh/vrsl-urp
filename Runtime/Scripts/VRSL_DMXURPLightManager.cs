@@ -6,16 +6,10 @@ using UnityEngine.Rendering.Universal;
 
 namespace VRSL.URP
 {
-    /// <summary>Render resolution for the VRSL volumetric raymarch pass.
-    /// Half is the default — half-resolution raymarch with bilateral upsample,
-    /// suited to live VR. Full runs the raymarch at the camera target resolution
-    /// and additively blends the result; ~4× per-pixel cost but no upsample
-    /// artefacts, suited to cinematic capture and high-perf desktop targets.
-    /// </summary>
     /// <summary>
     /// Singleton manager for the URP realtime light path (DMX data source).
     ///
-    /// Collects every VRSLDMXRealtimeLight in the scene, uploads
+    /// Collects every VRSLDMXRealtimeLight in the scene that is switched on, uploads
     /// their static configuration to a GPU StructuredBuffer once (and again
     /// whenever a fixture's settings change), and exposes the persistent
     /// GraphicsBuffers and DMX texture RTHandles that the VRSLDMXLightPasses
@@ -54,8 +48,8 @@ namespace VRSL.URP
                + "to decode through textures you made.")]
         public VRSLGridTextures gridTextures;
 
-        // A manager saved with 0.2.0-rc.6 named its main decode texture directly. Kept,
-        // hidden, for one release so the editor can tell which layout it was set up for
+        // The main texture of a manager saved with the five separate grid texture fields.
+        // Kept, hidden, so the editor can tell which layout it was set up for
         // (VRSLGridUpgrade).
 #pragma warning disable 0169, 0649
         [SerializeField, HideInInspector, UnityEngine.Serialization.FormerlySerializedAs("dmxMainTexture")]
@@ -177,15 +171,17 @@ namespace VRSL.URP
                + "shadows. Beams stay in the mirror at a lower price.\n"
                + "SurfaceOnly keeps surface lighting and drops the beams, the more expensive "
                + "of the two.\n"
-               + "Skip runs nothing, and a mirror pointed at the rig shows it.\n\n"
+               + "Skip lights nothing there and draws no beams. Fixture bodies still glow, and "
+               + "a mirror pointed at the rig shows the missing light.\n\n"
                + "Cameras feeding VRSL's own DMX readers are always skipped regardless of "
                + "this setting.")]
         public SecondaryCameraMode secondaryCameraMode = SecondaryCameraMode.Reduced;
 
         [Header("Troubleshooting")]
-        [Tooltip("Log fixture collection and DMX global / CRT publishing to the Console on enable. "
-               + "Use to confirm the manager found your fixtures and is feeding the _VRSLU_* globals "
-               + "from the right CRTs.")]
+        [Tooltip("Log to the Console how many fixtures the manager collects (on enable and "
+               + "whenever one is switched on or off), which decode textures it publishes, and "
+               + "any channel-source block it drops or cuts short. Use it to check the manager "
+               + "found your fixtures and reads the right textures.")]
         public bool outputDebugLogs = false;
 
         [Tooltip("Draw VRSL's own normals prepass even where URP's could be read instead. "
@@ -404,12 +400,12 @@ namespace VRSL.URP
         public bool VolumetricUseNoise => Quality.VolumetricNoise;
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
-        // 8 × float4 = 128 bytes
+        // 9 × float4 = 144 bytes
         [StructLayout(LayoutKind.Sequential)]
         internal struct VRSLFixtureConfig
         {
             public Vector4 positionAndRange;    // xyz=pos,     w=range
-            public Vector4 forwardAndType;      // xyz=forward, w=lightType(0=spot,1=point)
+            public Vector4 forwardAndType;      // xyz=forward, w=lightType(0=spot,1=point,2=discoball)
             public Vector4 rightAndMaxIntensity;// xyz=local +X in world space (tilt axis), w=maxIntensity
             public Vector4 spotAngles;          // x=innerRatio(0..1), y=maxOuterHalf(deg),
                                                //   z=finalIntensity,    w=minOuterHalf(deg)
@@ -1227,7 +1223,7 @@ namespace VRSL.URP
             FixtureConfigBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
-                Marshal.SizeOf<VRSLFixtureConfig>());   // 128 bytes
+                Marshal.SizeOf<VRSLFixtureConfig>());   // 144 bytes
 
             LightDataBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
@@ -1580,13 +1576,10 @@ namespace VRSL.URP
             // rendered. Under a name the graph never sets, so it survives.
             if (live.main != null) Shader.SetGlobalTexture(s_DMXGridStrobeStatus, live.main);
 
-            // The surface decode (IndustryRead in VRSL-DMXFunctions-URP.hlsl) maps a channel to a
-            // grid texel from a texel size. Publish it as our own global _VRSLDMXTexelSize — the
-            // same name and value VRSLDMXLightPasses feeds the compute — rather than relying on the
-            // texture's auto _TexelSize, which Unity manages/overwrites for a SetGlobalTexture-bound
-            // texture (often with a wrong size). Without a correct texel size the surface's row UV
-            // drifts with the texture aspect, worsening down the grid, so the highest-patched bars
-            // decode the wrong (often black) cell while the render-pass light stays correct.
+            // The fixture shaders' decode (vrsldmx_cell in VRSLDMX.hlsl) maps a channel to a grid
+            // texel from this size, the same one the decode dispatch hands the compute. A wrong
+            // size drifts the row UV further down the grid, so the highest-patched fixtures read
+            // the wrong (often black) cell while their realtime light stays correct.
             if (live.main != null)
                 Shader.SetGlobalVector(s_DMXGridTexelSize, new Vector4(
                     1f / live.main.width, 1f / live.main.height,

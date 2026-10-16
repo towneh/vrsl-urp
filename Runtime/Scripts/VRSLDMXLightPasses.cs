@@ -52,21 +52,15 @@ namespace VRSL.URP
         /// any other shader reading through <c>VRSLDMX.hlsl</c>.
         /// </summary>
         /// <remarks>
-        /// Published from inside the graph via <c>SetGlobalTextureAfterPass</c> rather
-        /// than by <c>Shader.SetGlobalTexture</c> on the manager: a global texture set
-        /// outside Render Graph binds to scene shaders as a 1x1 black fallback, so the
-        /// surface decoded a black grid (every bar dark) while the compute, which bound
-        /// the texture itself, read the real data. Global vectors such as
-        /// <c>_VRSLDMXTexelSize</c> do not suffer the same fallback.
-        ///
-        /// A pass with no attachments and nothing to draw, kept for the globals it
-        /// sets, which is how URP publishes its own. It writes nothing the graph can
-        /// see consumed, so it opts out of pass culling.
+        /// Published from inside the graph via <c>SetGlobalTextureAfterPass</c>, the way
+        /// URP publishes its own: a pass with no attachments and nothing to draw, kept for
+        /// the globals it sets. It writes nothing the graph can see consumed, so it opts
+        /// out of pass culling.
         ///
         /// Render Graph sets every global it published back to black once a camera has
-        /// rendered, so the manager enqueues this for every camera, including those it
-        /// lights nothing in and frames with no realtime fixtures: the shader-driven
-        /// fixtures read the grid in all of them.
+        /// rendered, so the manager enqueues this for every camera except those rendering
+        /// the DMX input, including cameras it lights nothing in and frames with no
+        /// realtime fixtures: the shader-driven fixtures read the grid in all of them.
         /// </remarks>
         public class GridTexturePass : ScriptableRenderPass
         {

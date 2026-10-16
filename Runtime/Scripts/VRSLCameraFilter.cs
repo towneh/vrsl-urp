@@ -21,7 +21,7 @@ namespace VRSL.URP
         /// by far the more expensive of the two.</summary>
         SurfaceOnly = 1,
 
-        /// <summary>No VRSL passes at all. Cheapest, and visibly wrong in a mirror
+        /// <summary>No VRSL lighting or beams. Cheapest, and visibly wrong in a mirror
         /// pointed at the rig.</summary>
         Skip = 2,
     }
@@ -29,7 +29,7 @@ namespace VRSL.URP
     /// <summary>What VRSL should do for a given camera, and at what level.</summary>
     public readonly struct VRSLCameraDecision
     {
-        /// <summary>Whether any VRSL pass runs on the camera.</summary>
+        /// <summary>Whether VRSL lights the camera.</summary>
         public readonly bool        Render;
         /// <summary>Whether the volumetric pass runs, where the level draws beams.</summary>
         public readonly bool        Volumetrics;
@@ -109,8 +109,8 @@ namespace VRSL.URP
 
         /// <summary>Whether <paramref name="cam"/> renders VRSL's DMX input: a registered
         /// data reader, or a camera rendering into a texture the manager consumes. Such a
-        /// camera gets neither the lighting nor the grid, so nothing it draws can feed
-        /// what VRSL decodes back into the decode.</summary>
+        /// camera gets neither the lighting nor the grid, so nothing VRSL draws can find
+        /// its way back into the DMX it decodes.</summary>
         public static bool FeedsDmx(Camera cam, IReadOnlyList<Texture> ownedSources)
         {
             if (cam == null) return false;

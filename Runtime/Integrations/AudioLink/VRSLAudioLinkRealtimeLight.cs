@@ -6,8 +6,8 @@ namespace VRSL.URP
     /// <summary>
     /// Per-fixture config component for the AudioLink URP realtime light path.
     ///
-    /// Attach this alongside a Unity Light component on each fixture that should
-    /// contribute genuine scene illumination driven by AudioLink amplitude and color data.
+    /// Attach this to each fixture that should light the scene from AudioLink's
+    /// amplitude and colour data.
     /// This component is the sole authoring surface on URP fixture prefabs —
     /// no VRSLAudioLinkStatic sibling participates in the URP path.
     ///
@@ -27,7 +27,8 @@ namespace VRSL.URP
         public AudioLinkFixtureType fixtureType = AudioLinkFixtureType.MoverSpotlight;
 
         // ── AudioLink ─────────────────────────────────────────────────────────
-        [Tooltip("Enable or disable AudioLink reaction for this fixture. When disabled the light contributes zero intensity to the scene.")]
+        [Tooltip("React to AudioLink. Off, the light ignores the music and shines steadily at "
+               + "its full intensity.")]
         public bool enableAudioLink = true;
 
         [Tooltip("Frequency band to react to.")]
@@ -66,7 +67,7 @@ namespace VRSL.URP
         public Vector2 textureSamplingCoordinates = new Vector2(0f, 0.5f);
 
         // ── Light ─────────────────────────────────────────────────────────────
-        [Tooltip("Peak light intensity (lux) at AudioLink full amplitude (1.0). Tune per scene scale.")]
+        [Tooltip("Peak light intensity at full AudioLink amplitude (1.0). Tune per scene scale.")]
         public float maxIntensity = 10f;
 
         [Tooltip("Spot angle in degrees for the light cone.")]

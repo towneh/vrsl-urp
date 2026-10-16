@@ -64,10 +64,9 @@ namespace VRSL.URP
             return null;
         }
 
-        // Fields on the modern upstream RealtimeLight components we should NOT copy via name-match
-        // because their values are Transform/Renderer references that point inside the source
-        // prefab's hierarchy — copying them would have the new URP instance referencing upstream
-        // children instead of its own. The URP prefab's own internal wiring is left intact.
+        // Fields on upstream's fixture components that hold references inside the source prefab's
+        // own hierarchy. Copied by name they would point the URP fixture at the original's
+        // children, so they're skipped and the URP prefab keeps its own wiring.
         static readonly HashSet<string> INTERNAL_REF_FIELDS = new HashSet<string>
         {
             "panTransform", "tiltTransform", "lensTransform", "fixtureShellRenderers", "objRenderers",
@@ -107,8 +106,8 @@ namespace VRSL.URP
 
         /// <summary>
         /// Whether a sibling of the pair's URP prefab stands where the tool placed one for this
-        /// source: where <see cref="PlaceSibling"/> puts it, or on the source's own root, where
-        /// 0.3.0-rc.4 and earlier placed every sibling. A re-run skips such a source.
+        /// source: where <see cref="PlaceSibling"/> puts it, or on the source's own root. A re-run
+        /// skips such a source.
         /// </summary>
         public static bool IsPlacedFor(Transform sibling, Transform source, VRSLMigrationPair pair, float tolerance)
         {
@@ -221,7 +220,8 @@ namespace VRSL.URP
             if (srcStatic == null) return;
             var srcDefault = Defaults(sourceAsset, types.AudioLinkStatic);
 
-            // Direct copies (same name, compatible type — enums round-trip via int)
+            // Same name. The calibration values are scaled by the two prefabs' defaults; enums
+            // round-trip via int.
             CopyField(srcStatic, dst, "enableAudioLink");
             CopyField(srcStatic, dst, "band");
             CopyField(srcStatic, dst, "delay");
@@ -236,8 +236,8 @@ namespace VRSL.URP
             WriteField(dst, "emissionColor", ScaledTint(srcStatic, sourceAsset, types.AudioLinkStatic, urpDefault));
             CopyField(srcStatic, dst, srcName: "selectGOBO",     dstName: "goboIndex");
 
-            // The light's own conversion, so a migrated scene and a converted clip agree.
-            // Pars and blinders keep their angle: upstream's width never reached their shaders.
+            // The light's own conversion, which a script can call too. Pars and blinders keep
+            // their angle: upstream's width never reached their shaders.
             float coneWidth = ReadField(srcStatic, "coneWidth", float.NaN);
             var toSpotAngle = realtimeType.GetMethod("SpotAngleForLegacyConeWidth");
             if (!float.IsNaN(coneWidth) && toSpotAngle != null)
@@ -319,8 +319,8 @@ namespace VRSL.URP
             EditorUtility.SetDirty(dst);
         }
 
-        // A URP prefab with no RealtimeLight is a shader-driven fixture (laser, discoball,
-        // flasher, light bar) carrying the same component type as upstream. Every same-named
+        // A URP prefab with no RealtimeLight is a shader-driven fixture (laser, flasher, light
+        // bar, strobe) carrying the same component type as upstream. Every same-named
         // field copies across; references into the source's own hierarchy are skipped so the URP
         // prefab keeps its own renderers.
         static bool CopyTwinParameters(GameObject source, GameObject target, GameObject sourceAsset, GameObject targetAsset,
@@ -412,8 +412,9 @@ namespace VRSL.URP
         /// <summary>
         /// Points every reference to <paramref name="from"/> at <paramref name="to"/> where the slot can
         /// hold it: a field whose type takes the new component, or a UnityEvent call the new component
-        /// can take (a method of the call's name and arguments, as Unity binds it). Returns the slots that can't, which are left as they are, and counts the
-        /// ones it moved in <paramref name="moved"/>.
+        /// can take (a method of the call's name and arguments, as Unity binds it). Returns the
+        /// slots that can't, which are left as they are, and counts the ones it moved in
+        /// <paramref name="moved"/>.
         /// </summary>
         public static List<(Component holder, string path)> Repoint(Component from, Component to, ReferenceIndex index,
             out int moved)
@@ -748,10 +749,9 @@ namespace VRSL.URP
         static Component Defaults(GameObject sourceAsset, string upstreamTypeName) =>
             sourceAsset != null ? FindComponentByTypeName(sourceAsset, upstreamTypeName) : null;
 
-        // For modern-RT-light → URP-RT-light migrations: copy every same-named field except
-        // those whose values point to objects inside the source prefab (panTransform etc.).
-        // Preserves the URP prefab's own internal wiring while migrating user-set scalars,
-        // colours, enums, and external Transform references like targetToFollow.
+        // Every same-named field except references into the source prefab (panTransform and the
+        // like), so the URP prefab keeps its own wiring and gets the author's values and outside
+        // references such as targetToFollow.
         static HashSet<string> CopyAllNamedFields(object src, object dst, GameObject sourceRoot, object srcDefault, object dstDefault)
         {
             const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
@@ -779,9 +779,9 @@ namespace VRSL.URP
             return carried;
         }
 
-        // In-place twin copy: every serialized field by name, INCLUDING references into the
-        // fixture's own hierarchy (objRenderers, transforms). Unlike CopyAllNamedFields nothing is
-        // filtered — the URP twin lives on the same GameObject, so those references stay valid.
+        // In-place twin copy: every serialised field by name, references into the fixture's own
+        // hierarchy (objRenderers, transforms) included. The URP twin lives on the same GameObject,
+        // so those references stay valid.
         // Arrays are cloned so the two components don't share one backing array before the upstream
         // component is removed.
         public static void CopyAllFieldsByName(Component src, Component dst)

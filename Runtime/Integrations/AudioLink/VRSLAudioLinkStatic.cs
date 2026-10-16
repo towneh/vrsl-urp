@@ -200,7 +200,7 @@ namespace VRSL.URP
 
         [Header("Mesh Settings")]
         ////
-        [Tooltip ("The meshes used to make up the light. You need atleast 1 mesh in this group for the script to work properly.")]
+        [Tooltip ("The meshes that make up the fixture. It needs at least one, or it shows nothing.")]
         public MeshRenderer[] objRenderers;
 
 
@@ -614,7 +614,7 @@ namespace VRSL.URP
         {   
             if(objRenderers == null || objRenderers.Length == 0)
             {
-                Debug.Log("Please add atleast one fixture renderer.");
+                Debug.LogWarning($"[VRSL] {name} shows nothing because its Obj Renderers list is empty or its first slot is. Add the fixture's meshes to Obj Renderers.", this);
                 return;
             }
             if(props == null)
@@ -625,7 +625,7 @@ namespace VRSL.URP
                 }
                 else
                 {
-                    Debug.Log("Please add atleast one fixture renderer.");
+                    Debug.LogWarning($"[VRSL] {name} shows nothing because its Obj Renderers list is empty or its first slot is. Add the fixture's meshes to Obj Renderers.", this);
                     return;
                 }
             }
@@ -673,7 +673,7 @@ namespace VRSL.URP
         {   
             if(objRenderers == null || objRenderers.Length == 0)
             {
-                Debug.Log("Please add atleast one fixture renderer.");
+                Debug.LogWarning($"[VRSL] {name} shows nothing because its Obj Renderers list is empty or its first slot is. Add the fixture's meshes to Obj Renderers.", this);
                 return;
             }
             if(props == null)
@@ -684,7 +684,7 @@ namespace VRSL.URP
                 }
                 else
                 {
-                    Debug.Log("Please add atleast one fixture renderer.");
+                    Debug.LogWarning($"[VRSL] {name} shows nothing because its Obj Renderers list is empty or its first slot is. Add the fixture's meshes to Obj Renderers.", this);
                     return;
                 }
             }
@@ -759,7 +759,7 @@ namespace VRSL.URP
             }
             else
             {
-                Debug.Log("Please add atleast one fixture renderer.");
+                Debug.LogWarning($"[VRSL] {name} shows nothing because its Obj Renderers list is empty or its first slot is. Add the fixture's meshes to Obj Renderers.", this);
                 //enableInstancing = false;
             }
         }

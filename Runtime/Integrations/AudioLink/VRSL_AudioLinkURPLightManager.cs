@@ -9,7 +9,7 @@ namespace VRSL.URP
     /// <summary>
     /// Singleton manager for the URP realtime light path (AudioLink data source).
     ///
-    /// Discovers every VRSLAudioLinkRealtimeLight in the scene,
+    /// Collects every VRSLAudioLinkRealtimeLight in the scene that is switched on,
     /// uploads their per-frame config (position, forward direction, AudioLink params)
     /// to a GPU StructuredBuffer, and exposes the buffers and AudioLink RTHandle
     /// that the VRSLAudioLinkLightPasses pass classes drive through the render
@@ -250,13 +250,16 @@ namespace VRSL.URP
         internal struct VRSLALFixtureConfig
         {
             public Vector4 positionAndRange;  // xyz=world pos (per-frame), w=range
-            public Vector4 forwardAndType;    // xyz=world forward (per-frame), w=light type
-            public Vector4 intensityParams;   // x=maxIntensity, y=finalIntensity, zw=unused
+            public Vector4 forwardAndType;    // xyz=world forward (per-frame; a discoball's up
+                                              //   axis), w=light type (0=spot, 1=point, 2=discoball)
+            public Vector4 intensityParams;   // x=maxIntensity, y=finalIntensity × globalIntensity,
+                                              //   z=AudioLink active, w=discoball beams
             public Vector4 spotAngles;        // x=innerRatio(0..1), y=outerHalf(deg),
                                               //   z=emitterDepth(m), w=unused
             public Vector4 alParams;          // x=band, y=delay, z=bandMultiplier, w=colorMode
             public Vector4 emissionColor;     // xyz=linear RGB, w=unused
-            public Vector4 reserved;
+            public Vector4 reserved;          // x=gobo slot, y=gobo or discoball spin speed,
+                                              //   zw=texture sampling UV
         }
 
         // VRSLLightData stride mirror — 4 × float4 = 64 bytes.
@@ -791,9 +794,9 @@ namespace VRSL.URP
                 emissionColor    = new Vector4(linearEmission.r, linearEmission.g, linearEmission.b, 0f),
                 // reserved.x = gobo array index (0+ = slot); the inspector field is 1-based to
                 // match the established AudioLink Static convention (1 = open beam).
-                // reserved.y = gobo spin speed.
+                // reserved.y = gobo spin speed, or a discoball's spin speed.
                 // reserved.zw = textureSamplingCoordinates UV — sampled by the compute shader
-                //               only when colorMode == ColorTexture (6).
+                //               only when colorMode is ColorTexture (6) or ColorTextureTraditional (7).
                 reserved         = new Vector4(
                     f.goboIndex - 1f,
                     discoball ? f.discoballSpinSpeed : f.goboSpinSpeed,

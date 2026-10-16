@@ -257,7 +257,7 @@ namespace VRSL.URP
         {
             if (AutoResolveSuppressed(manager)) return;
 
-            // Before resolution, which would otherwise fill an rc.6 manager's empty Grid
+            // Before resolution, which would otherwise fill an old manager's empty Grid
             // Textures and leave it reading the Horizontal set whatever it was set up for.
             if (manager is VRSL_DMXURPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
 

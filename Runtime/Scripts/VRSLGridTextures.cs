@@ -26,8 +26,8 @@ namespace VRSL.URP
             public RenderTexture main;
 
             [Tooltip("The channels as they arrive from the video, before smoothing. Shaders "
-                   + "that read unsmoothed values read this; left empty, they get the smoothed "
-                   + "values above.")]
+                   + "that read unsmoothed values read this; left empty, they read Main, which "
+                   + "is smoothed.")]
             public RenderTexture raw;
 
             [Tooltip("Pan and tilt, smoothed. Without it moving heads stay where they are.")]
