@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.6] — 2026-10-16
+
 ### Fixed
 
 - **The control panel's inspector shows the installed version in a project with another folder named `Assets` in its path,** such as `D:\Assets\MyWorld`. It showed 0.1.0 there.
