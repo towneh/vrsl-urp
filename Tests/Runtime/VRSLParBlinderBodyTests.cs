@@ -1338,14 +1338,28 @@ namespace VRSL.URP.Tests
             {
                 RenderOnce(target);
 
-                quad.vertices = new[] { new Vector3(-1, -1, 0), new Vector3(1, -1, 0), new Vector3(1, 1, 0), new Vector3(-1, 1, 0) };
-                quad.uv = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up };
+                // The lightmapper rasterises from the lightmap UVs, which cover the target. The
+                // positions sit off it and the texture UVs cover one corner, so a Meta pass that
+                // rasterises from either leaves the centre black.
+                var corners = new[] { Vector2.zero, Vector2.right, Vector2.one, Vector2.up };
+                quad.vertices = corners.Select(c => new Vector3(10f + c.x, 10f + c.y, 0f)).ToArray();
+                quad.uv = corners.Select(c => c * 0.25f).ToArray();
+                quad.uv2 = corners;
                 quad.triangles = new[] { 0, 1, 2, 0, 2, 3 };
+                var holder = new GameObject("VRSL J13 quad");
+                made.Add(holder);
+                holder.AddComponent<MeshFilter>().sharedMesh = quad;
+                var quadRenderer = holder.AddComponent<MeshRenderer>();
+                // The bake sets the lightmap scale and offset; outside one it reaches the
+                // shader as zero and every vertex lands on one point.
+                var lightmapST = new MaterialPropertyBlock();
+                lightmapST.SetVector("unity_LightmapST", new Vector4(1, 1, 0, 0));
+                quadRenderer.SetPropertyBlock(lightmapST);
 
                 reference.SetColor("_BaseColor", colour);
                 reference.SetFloat("_Metallic", metallic);
                 reference.SetFloat("_Smoothness", smoothness);
-                Color expected = DrawMeta(reference, albedo: true, quad, target);
+                Color expected = DrawMeta(reference, albedo: true, quadRenderer, target);
                 Debug.Log($"[J13] URP Lit albedo {expected}");
                 Assert.That(expected.r, Is.GreaterThan(2f * expected.b),
                     $"URP Lit's Meta pass returned {expected} for {colour}, so the draw isn't reaching the pass the way the lightmapper does");
@@ -1357,11 +1371,12 @@ namespace VRSL.URP.Tests
                     material.SetColor("_Color", colour);
                     material.SetFloat("_Metallic", metallic);
                     material.SetFloat("_Glossiness", smoothness);
+                    material.SetColor("_Emission", new Color(2f, 1f, 0.5f));
                     Assert.That(material.FindPass("Meta"), Is.GreaterThanOrEqualTo(0),
                         $"{name} has no Meta pass, so a body marked to contribute to baked lighting bakes as white");
 
-                    Color albedo = DrawMeta(material, albedo: true, quad, target);
-                    Color emission = DrawMeta(material, albedo: false, quad, target);
+                    Color albedo = DrawMeta(material, albedo: true, quadRenderer, target);
+                    Color emission = DrawMeta(material, albedo: false, quadRenderer, target);
                     Debug.Log($"[J13] {name}: albedo {albedo}, emission {emission}");
                     for (int c = 0; c < 3; c++)
                         Assert.That(albedo[c], Is.EqualTo(expected[c]).Within(0.004f),
@@ -1393,20 +1408,21 @@ namespace VRSL.URP.Tests
             }
         }
 
-        /// <summary>Draws a material's Meta pass over the whole target with the controls the
-        /// lightmapper sets (albedo or emission, linear, no albedo boost) and reads the centre.</summary>
-        static Color DrawMeta(Material material, bool albedo, Mesh quad, RenderTexture target)
+        /// <summary>Draws a material's Meta pass with the controls the lightmapper sets
+        /// (rasterised from the lightmap UVs, lightmap space onto the target, albedo or emission,
+        /// linear, no albedo boost) and reads the centre.</summary>
+        static Color DrawMeta(Material material, bool albedo, Renderer quad, RenderTexture target)
         {
             var cmd = new UnityEngine.Rendering.CommandBuffer { name = "VRSL J13 meta" };
             cmd.SetRenderTarget(target);
             cmd.ClearRenderTarget(false, true, Color.clear);
-            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.identity);
-            cmd.SetGlobalVector("unity_MetaVertexControl", Vector4.zero);
+            cmd.SetViewProjectionMatrices(Matrix4x4.identity, Matrix4x4.Ortho(0f, 1f, 0f, 1f, -1f, 1f));
+            cmd.SetGlobalVector("unity_MetaVertexControl", new Vector4(1, 0, 0, 0));
             cmd.SetGlobalVector("unity_MetaFragmentControl", albedo ? new Vector4(1, 0, 0, 0) : new Vector4(0, 1, 0, 0));
             cmd.SetGlobalFloat("unity_OneOverOutputBoost", 1f);
             cmd.SetGlobalFloat("unity_MaxOutputValue", 100f);
             cmd.SetGlobalFloat("unity_UseLinearSpace", 1f);
-            cmd.DrawMesh(quad, Matrix4x4.identity, material, 0, material.FindPass("Meta"));
+            cmd.DrawRenderer(quad, material, 0, material.FindPass("Meta"));
             Graphics.ExecuteCommandBuffer(cmd);
             cmd.Release();
 
