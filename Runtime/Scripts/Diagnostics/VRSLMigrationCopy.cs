@@ -211,6 +211,7 @@ namespace VRSL.URP
             {
                 var srcModernDefault = Defaults(sourceAsset, types.AudioLinkRealtime);
                 var carried = CopyAllNamedFields(srcModern, dst, source, srcModernDefault, dstDefault);
+                CopyFollowTarget(srcModern, dst, source);
                 ReportNotCarried(source, srcModern, srcModernDefault, carried);
                 EditorUtility.SetDirty(dst);
                 return;
@@ -228,7 +229,7 @@ namespace VRSL.URP
             CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "globalIntensity");
             CopyCalibrated(srcStatic, srcDefault, dst, dstDefault, "finalIntensity");
             CopyField(srcStatic, dst, "textureSamplingCoordinates");
-            CopyField(srcStatic, dst, "targetToFollow");
+            CopyFollowTarget(srcStatic, dst, source);
 
             // Renames
             var urpDefault = ReadField(dstDefault, "emissionColor", Color.white);
@@ -804,6 +805,28 @@ namespace VRSL.URP
                 }
             }
             EditorUtility.SetDirty(dst);
+        }
+
+        // An AudioLink mover aims at its own PanTiltTarget, upstream's and ours. A target inside the
+        // original stays ours, moved to where the original's stands, so the aim survives deleting the
+        // original; a target outside it carries across as it is.
+        static void CopyFollowTarget(Component src, Component dst, GameObject sourceRoot)
+        {
+            const BindingFlags FLAGS = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            var srcField = src.GetType().GetField("targetToFollow", FLAGS);
+            var dstField = dst.GetType().GetField("targetToFollow", FLAGS);
+            if (srcField == null || dstField == null) return;
+
+            var target = srcField.GetValue(src) as Transform;
+            if (target == null || !IsInsideSourceHierarchy(target, sourceRoot))
+            {
+                dstField.SetValue(dst, target);
+                return;
+            }
+            var own = dstField.GetValue(dst) as Transform;
+            if (own == null) return;
+            own.position = target.position;
+            PrefabUtility.RecordPrefabInstancePropertyModifications(own);
         }
 
         static bool IsInsideSourceHierarchy(UnityEngine.Object value, GameObject sourceRoot)
