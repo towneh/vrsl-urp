@@ -440,7 +440,9 @@ namespace VRSL.URP
             if (mode == null) return null;
             switch (mode.intValue)
             {
-                case 0: return EventArguments(holder, path.Substring(0, path.IndexOf(".m_PersistentCalls", StringComparison.Ordinal)));
+                case 0:
+                    int at = path.IndexOf(".m_PersistentCalls", StringComparison.Ordinal);
+                    return at < 0 ? null : EventArguments(holder, path.Substring(0, at));
                 case 1: return Type.EmptyTypes;
                 case 2:
                     string name = so.FindProperty(call + "m_Arguments.m_ObjectArgumentAssemblyTypeName")?.stringValue;
@@ -464,7 +466,7 @@ namespace VRSL.URP
             {
                 if (parts[i] == "Array" && i + 1 < parts.Length && parts[i + 1].StartsWith("data["))
                 {
-                    int index = int.Parse(parts[++i].Substring(5).TrimEnd(']'));
+                    if (!int.TryParse(parts[++i].Substring(5).TrimEnd(']'), out int index) || index < 0) return null;
                     node = node is System.Collections.IList list && index < list.Count ? list[index] : null;
                     continue;
                 }
