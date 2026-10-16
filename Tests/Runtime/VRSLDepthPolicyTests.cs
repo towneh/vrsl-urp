@@ -96,8 +96,8 @@ namespace VRSL.URP.Tests
         ///
         /// <b>What this row cannot tell you</b> is whether URP honoured a priming change
         /// made mid-session. It asserts the field read back, and that neither frame went
-        /// dark — a fixture culled by a mismatched depth pass would take the frame with
-        /// it — but the authoritative check is still D1 and D2 by hand on a renderer
+        /// dark (a fixture culled by a mismatched depth pass would take the frame with
+        /// it), but the authoritative check is still D1 and D2 by hand on a renderer
         /// configured before play. Treat this as the row that catches a regression, not
         /// as the one that proved it worked the first time.
         /// </summary>
@@ -189,7 +189,7 @@ namespace VRSL.URP.Tests
                 // depth pass disagrees with its forward pass loses its whole body: a
                 // contiguous region, thousands of pixels, going to background. So the
                 // bar is the lit fraction and a budget on how much may differ, which is
-                // the requirement's own language — "renders correctly" — rather than a
+                // the requirement's own language ("renders correctly") rather than a
                 // pixel-exactness the requirement never asked for.
                 float litDisabled = LitFraction(disabled);
                 float litForced   = LitFraction(forced);

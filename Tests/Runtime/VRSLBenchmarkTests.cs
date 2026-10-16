@@ -138,8 +138,8 @@ namespace VRSL.URP.Tests
             while (capture.MoveNext()) yield return capture.Current;
 
             // Assert before indexing. Reversed, an empty list throws
-            // ArgumentOutOfRangeException on the line above and the authored message —
-            // the entire reason these guards exist — never reaches the log.
+            // ArgumentOutOfRangeException on the line above and the authored message, the
+            // reason these guards exist, never reaches the log.
             Assert.That(run.rows, Is.Not.Empty, $"capture '{label}' produced no rows");
             var measured = run.rows[0];
 
@@ -184,7 +184,7 @@ namespace VRSL.URP.Tests
         /// reports, which may only be the machine.
         /// </summary>
         [UnityTest]
-        public IEnumerator A_M0_1_NullRunReportsEverythingUnchanged()
+        public IEnumerator H1_NullRunReportsEverythingUnchanged()
         {
             yield return WarmUpProcess();
 
@@ -226,30 +226,16 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// H2. The harness has to be able to say "regressed" at all.
         ///
-        /// <b>Judged on the comparison rather than on a seeded workload</b>, and the
-        /// history is why. This row used to make the build genuinely worse and look for
-        /// the verdict, which needed a lever big enough to clear the noise floor — and
-        /// in this scene nothing shippable is. Both candidates were measured and
-        /// rejected: clearing the cull cost 0.0015 ms while the counters showed it
-        /// rejecting nine tenths of the per-light work, and quality Standard to High
-        /// cost 0.089 ms against a 0.097 ms floor. With volumetrics off the package
-        /// still costs 2.55 ms, so any lever that only scales volumetrics is scaling a
-        /// twentieth of the total. The row therefore ran on an absurd step count, which
-        /// went with every other numeric cost field when quality became one setting.
+        /// Judged on the comparison rather than on a seeded workload: no shippable change
+        /// in this scene moves the package's cost past the noise floor, and the verdict
+        /// logic is pure arithmetic over two documents, testable exactly on any clock
+        /// without a GPU or a workload.
         ///
-        /// Keeping it would have meant a way to set a step count that exists solely for
-        /// this row: a second path to cost, in a design whose whole point is that
-        /// there is one. What the row is actually for is the verdict logic, and that is
-        /// pure arithmetic over two documents: testable exactly, on any clock, without a
-        /// GPU or a workload. It runs on every headless suite now rather than only when
-        /// somebody opens the editor, which is a stronger guarantee than it had.
-        ///
-        /// What is not covered here is a real workload change flowing end to end into a
-        /// verdict. H14 is that row: it rebuilds with a changed constant and reads
-        /// the sweep, and editing the quality table is still its lever.
+        /// A real workload change flowing end to end into a verdict is H14's: it rebuilds
+        /// with a changed constant in the quality table and reads the sweep.
         /// </summary>
         [Test]
-        public void A_M0_2_AGenuineSlowdownIsReportedAsRegressed()
+        public void H2_AGenuineSlowdownIsReportedAsRegressed()
         {
             const double floor = 0.100;
 
@@ -389,20 +375,12 @@ namespace VRSL.URP.Tests
                 "the Standard capture reports no volumetric steps, so this row is "
               + "comparing two scenes with volumetrics already off");
             Assert.AreEqual(0, off.counters.stepsPerLight,
-                "quality Off left the volumetric pass being enqueued. Clearing "
-              + "volumetricShader alone does not do it — the manager builds its material "
-              + "once and keeps it — so the preset has to drop the material itself");
+                "quality Off left the volumetric pass being enqueued, so the manager still "
+              + "marches beams at Off");
 
-            // The whole timing half needs a GPU clock, direction included.
-            //
-            // Direction looked safe on one favourable reading — a 0.069 ms gap against a
-            // stated 0.021 — and was asserted on that basis. It then measured Off at
-            // 0.207 ms against Standard at 0.171, dearer by 0.036, while the counters
-            // still said Off was not enqueueing the pass at all. H3 explains it:
-            // run-to-run spread on the CPU clock here is around 0.055 ms, which is wider
-            // than the gap, so the sign flips as often as not. On a CPU clock, removing
-            // a fullscreen pass gives back only its issue cost and that is simply too
-            // small to see from batch mode.
+            // The whole timing half needs a GPU clock, direction included. On a CPU clock,
+            // removing a fullscreen pass gives back only its issue cost, which sits inside
+            // the run-to-run spread H3 measures, so the sign of the gap flips as often as not.
             if (!standard.timings.HasGpu || !off.timings.HasGpu)
                 Assert.Inconclusive(
                     "H5's timing half needs GPU attribution and this run has none. The "
@@ -418,27 +396,16 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// M3's opening question: what is the existing tile cull actually worth?
+        /// H18. What the tile cull saves: the rig captured with the cull and again with
+        /// <c>lightCullShader</c> cleared, the saving logged against the noise floor.
         ///
-        /// Not an acceptance row: it asserts almost nothing, on purpose. A tighter cull is premised
-        /// on <c>lightsInTile x steps x work</c> dominating, and proposes attacking the
-        /// first term by culling cones instead of bounding spheres. Before building that,
-        /// this measures what the cull already saves, so that work starts from a
-        /// number rather than from the premise.
-        ///
-        /// It was measured once before at 0.0015 ms and the figure was withdrawn: the rig
-        /// had no floor then, so its beams landed on nothing and it rendered a frame with
-        /// 0.09% of pixels lit. A scene with nothing to light cannot say what culling
-        /// saves. With a floor it renders 62.8% lit, which is why the question is worth
-        /// putting again.
-        ///
-        /// What it does assert is that the comparison was valid — the cull engaged on one
-        /// side and not the other, and it rejected something. The saving itself is logged
-        /// rather than bounded, because nobody yet knows what it should be, and a row
-        /// asserting a number here would encode the guess this exists to replace.
+        /// It asserts only that the comparison was valid: the cull engaged on one side and
+        /// not the other, and it rejected something. The saving itself is logged rather
+        /// than bounded, since there is no figure it should meet, and is inconclusive
+        /// without a GPU clock.
         /// </summary>
         [UnityTest]
-        public IEnumerator M3_HowMuchDoesTheTileCullActuallySave()
+        public IEnumerator H18_HowMuchDoesTheTileCullActuallySave()
         {
             yield return WarmUpProcess();
 
@@ -458,13 +425,13 @@ namespace VRSL.URP.Tests
             double floor  = Math.Max(on.timings.Noise, off.timings.Noise);
             double saving = off.timings.CostMs - on.timings.CostMs;
 
-            Debug.Log($"[M3] cull on  {on.timings.CostMs:F4} ms, "
+            Debug.Log($"[H18] cull on  {on.timings.CostMs:F4} ms, "
                     + $"{on.counters.lightsPerTileAverage:F1} lights/tile avg, "
                     + $"{on.counters.lightsPerTileMax} max, "
                     + $"{on.counters.emptyTilePercent:F0}% empty tiles");
-            Debug.Log($"[M3] cull off {off.timings.CostMs:F4} ms, iterating all "
+            Debug.Log($"[H18] cull off {off.timings.CostMs:F4} ms, iterating all "
                     + $"{off.counters.fixtures} fixtures per pixel");
-            Debug.Log($"[M3] saving {saving:F4} ms ({on.timings.CostBasis}) against a floor "
+            Debug.Log($"[H18] saving {saving:F4} ms ({on.timings.CostBasis}) against a floor "
                     + $"of {floor:F4} ms. "
                     + (saving > floor
                        ? "A real saving, so a tighter cull has something to improve on."
@@ -485,11 +452,11 @@ namespace VRSL.URP.Tests
             // The saving is a GPU question and a CPU clock answers it backwards: the cull
             // costs CPU time to dispatch and saves GPU time per pixel, so on the CPU it
             // reliably measures as a small loss however well it is working. Batch mode has
-            // no GPU clock, so the number it produces here is not the one M3 needs.
+            // no GPU clock, so the number it produces here is not the one that matters.
             if (!on.timings.HasGpu || !off.timings.HasGpu)
                 Assert.Inconclusive(
-                    $"the cull rejected well — {on.counters.lightsPerTileAverage:F1} of "
-                  + $"{on.counters.fixtures} fixtures per tile on average — but what that is "
+                    $"the cull rejected well ({on.counters.lightsPerTileAverage:F1} of "
+                  + $"{on.counters.fixtures} fixtures per tile on average), but what that is "
                   + "worth is a GPU question and this run has no GPU clock. On the CPU the "
                   + "sign is inverted by construction, since dispatching the cull costs CPU "
                   + $"and saves GPU. Observed: {saving:F4} ms CPU. Run it from the editor.");
@@ -548,13 +515,11 @@ namespace VRSL.URP.Tests
         /// real spread and checks it against this.
         ///
         /// <b>It is a smoke test for a broken harness, not a precision certificate.</b>
-        /// Batch mode on the CPU clock reproduces poorly and inconsistently: measured
-        /// 2026-08-24 at 48 frames a side, three captures of an unchanged scene spread
-        /// 5.9% of the measured cost on one run and 33.9% on the next. Tightening this
-        /// until those pass would be fitting a constant to noise; loosening it until
-        /// nothing ever fails would be worse. What it has to catch is a harness that
-        /// has stopped working, which produces spreads of a different order — all
-        /// zeroes, or hundreds of percent — not one having a noisy afternoon.
+        /// Batch mode on the CPU clock reproduces poorly: three captures of an unchanged
+        /// scene can spread a few percent of the measured cost on one run and a third of
+        /// it on the next. What this has to catch is a harness that has stopped working,
+        /// which produces spreads of a different order (all zeroes, or hundreds of
+        /// percent), not one having a noisy afternoon.
         ///
         /// The practical consequence is worth stating plainly: <b>a headless run cannot
         /// see a small regression at all.</b> An editor or player run on the GPU clock
@@ -578,7 +543,7 @@ namespace VRSL.URP.Tests
         /// harness exists to avoid.
         /// </summary>
         [UnityTest]
-        public IEnumerator A_M0_3_ThreeRunsAgreeWithinTheDeclaredTolerance()
+        public IEnumerator H3_ThreeRunsAgreeWithinTheDeclaredTolerance()
         {
             yield return WarmUpProcess();
 

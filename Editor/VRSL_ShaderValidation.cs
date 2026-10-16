@@ -17,8 +17,8 @@ namespace VRSL.URP.EditorScripts
     ///
     /// <b>What it does not cover.</b> Editor shader compilation is lazy: Unity
     /// compiles the variants the importer asks for, not the full keyword matrix.
-    /// Errors confined to a variant only a particular scene requests — a specific
-    /// stereo mode, a keyword combination — can still get through. This catches
+    /// Errors confined to a variant only a particular scene requests (a specific
+    /// stereo mode, a keyword combination) can still get through. This catches
     /// base-variant failures, which is the common case and includes anything
     /// structural like an unrollable loop or an undefined identifier.
     /// </summary>

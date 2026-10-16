@@ -13,8 +13,8 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The wiring table against the project it describes.
     ///
-    /// Both rows here guard the same failure and it is the one M7 exists to remove: a
-    /// table that has quietly stopped matching resolves nothing, and a manager that
+    /// The first two rows guard the failure self-wiring exists to remove: a table that
+    /// has quietly stopped matching resolves nothing, and a manager that
     /// resolves nothing looks exactly like a manager nobody wired. Neither produces an
     /// error, so without these the first symptom is a dark rig in somebody's scene.
     /// </summary>
@@ -327,8 +327,8 @@ namespace VRSL.URP.Tests
         ///
         /// The requirement is about coexisting with <c>com.acchosen.vr-stage-lighting</c>,
         /// which ships its decode textures under exactly this package's names. Rather than gate
-        /// this on that package being installed — it is not, here, so the row would
-        /// compile out and prove nothing — it stages the fault itself: a decoy asset with
+        /// this on that package being installed (it is not, here, so the row would
+        /// compile out and prove nothing), it stages the fault itself: a decoy asset with
         /// the same name, which makes a name search genuinely ambiguous. That is the
         /// mechanism under test, and staging it is more controlled than installing a
         /// package and hoping it collides.
@@ -402,10 +402,9 @@ namespace VRSL.URP.Tests
 
         /// <summary>
         /// W13. Every slot of the shipped Grid Textures holds its own layout's texture.
-        /// The strobe timers are the ones worth a row: 0.2.0-rc.6's Vertical and Legacy
-        /// managers both pointed at the Horizontal timer, so their strobes took their
-        /// phase from a grid nothing wrote to, and a slip of the same kind here would look
-        /// exactly as healthy.
+        /// The strobe timers are the ones worth a row: a Vertical or Legacy slot holding the
+        /// Horizontal timer would take its strobe phase from a grid nothing writes to, and
+        /// would look exactly as healthy.
         /// </summary>
         [Test]
         public void TheShippedGridTexturesHoldEachLayoutsOwnTextures()

@@ -12,10 +12,10 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// Rows L11, L13 to L16 of TESTING.md: the migration tool's sibling placement, field
-    /// translation and reference handling, driven with stand-ins for the original VRSL's DMX component (its field names,
-    /// and its wash mover prefab's values as literals, since no test project has the original
-    /// package). The tool's scene walk is L4/L5's.
+    /// Rows L11 and L13 to L17 of TESTING.md: the migration tool's sibling placement, field
+    /// translation and reference handling, driven with stand-ins for the original VRSL's DMX
+    /// component (its field names, and its prefabs' values as literals, since no test project
+    /// has the original package). The tool's scene walk is L4/L5's.
     /// </summary>
     public class VRSLMigrationCopyTests
     {

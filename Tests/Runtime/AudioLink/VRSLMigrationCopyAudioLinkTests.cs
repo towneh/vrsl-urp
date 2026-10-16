@@ -6,10 +6,10 @@ using UnityEngine;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// Row L12 of TESTING.md: an AudioLink fixture's settings through the migration tool's field
-    /// translation, driven with a stand-in for the original VRSL's AudioLink component (its field
-    /// names, and its wash mover prefab's values as literals, since no test project has the
-    /// original package).
+    /// Rows L12 and L17 to L19 of TESTING.md: an AudioLink fixture's settings, placement and aim
+    /// target through the migration tool, driven with stand-ins for the original VRSL's AudioLink
+    /// components (their field names, and the original prefabs' values as literals, since no test
+    /// project has the original package).
     /// </summary>
     class VRSLMigrationCopyAudioLinkTests
     {
@@ -136,9 +136,9 @@ namespace VRSL.URP.Tests
 
         /// <summary>
         /// L18. Running the tool again skips an original whose sibling it already placed, whether
-        /// this version placed it (the blinder's root moved off the original's) or 0.3.0-rc.4 and
-        /// earlier did (on the original's root). A fixture of the same prefab elsewhere is not
-        /// that original's sibling.
+        /// the sibling stands at the table's offset (the blinder's root moved off the original's)
+        /// or on the original's own root. A fixture of the same prefab elsewhere is not that
+        /// original's sibling.
         /// </summary>
         [Test]
         public void L18_a_rerun_recognises_a_blinder_it_placed()
@@ -161,7 +161,7 @@ namespace VRSL.URP.Tests
             var placed = _sibling.transform.position;
             _sibling.transform.position = _source.transform.position;
             Assert.IsTrue(VRSLMigrationCopy.IsPlacedFor(_sibling.transform, _source.transform, pair, tolerance),
-                "a blinder placed on the original's root, as 0.3.0-rc.4 did, isn't recognised");
+                "a blinder placed on the original's root isn't recognised");
             _sibling.transform.position = placed + new Vector3(0f, 0.01f, 0f);
             Assert.IsFalse(VRSLMigrationCopy.IsPlacedFor(_sibling.transform, _source.transform, pair, tolerance),
                 "a blinder 1 cm from where this tool places one counts as the original's sibling");

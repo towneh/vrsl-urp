@@ -6,10 +6,11 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// Who ends up owning the manager singleton when more than one manager loads.
+    /// Rows C6 to C8 and C11 to C13 of TESTING.md: who owns the manager singleton when more
+    /// than one manager loads, and what a manager lets go of when it is switched off.
     ///
-    /// Everything that reaches a manager goes through <c>Instance</c> — the render
-    /// passes, and any channel source registering itself — so a scene where the wrong
+    /// Everything that reaches a manager goes through <c>Instance</c> (the render
+    /// passes, and any channel source registering itself), so a scene where the wrong
     /// component holds it renders nothing at all and logs nothing to say why. That is
     /// the failure worth a row: it looks like a scene with the lighting turned off
     /// rather than like a fault.
@@ -17,7 +18,7 @@ namespace VRSL.URP.Tests
     class VRSLManagerLifecycleTests : VRSLDMXTest
     {
         /// <summary>
-        /// A manager that starts switched off must leave the singleton alone.
+        /// C6. A manager that starts switched off must leave the singleton alone.
         ///
         /// Awake runs on a disabled component whose GameObject is active, while OnEnable
         /// and OnDisable never do. A claim made in Awake by such a component is therefore
@@ -72,7 +73,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// The owner standing down hands the singleton to a manager that is still running.
+        /// C7. The owner standing down hands the singleton to a manager that is still running.
         ///
         /// A manager enabled while something else owns the singleton stands down, and
         /// nothing re-runs OnEnable on a component that is already enabled. Without a
@@ -142,7 +143,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// A manager left switched on beside the owner must not touch the shader globals.
+        /// C8. A manager left switched on beside the owner must not touch the shader globals.
         ///
         /// Per-frame work is the owner's alone, and nothing inside it checks that.
         /// <c>UploadChannels</c> on a manager with no source of its own reaches
@@ -153,8 +154,8 @@ namespace VRSL.URP.Tests
         ///
         /// <b>What this row pins is one write, not a rendered consequence.</b> It reads
         /// the channel-count global because that is cheap and unambiguous to observe.
-        /// Nothing in the package reads that global today — the compute is bound per
-        /// dispatch and the render pass sets the count on its own command buffer — so a
+        /// Nothing in the package reads that global (the compute is bound per dispatch
+        /// and the render pass sets the count on its own command buffer), so a
         /// spare left running is a manager writing shared state it does not own, rather
         /// than a demonstrated dark rig. The compute-asset half is the part that could
         /// bite, and it has no row.

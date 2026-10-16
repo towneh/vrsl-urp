@@ -8,8 +8,8 @@ namespace VRSL.URP.Tests
     ///
     /// The managers are built on an inactive GameObject on purpose. Nothing here needs
     /// them to run: it needs their fields. Inactive means `Awake` and `OnEnable` never
-    /// fire, `VolumetricMaterial` stays null, and the preset's `Bounce` — which toggles
-    /// `enabled` — is inert, so a row cannot start a light manager as a side effect of
+    /// fire, `VolumetricMaterial` stays null, and the preset's `Bounce`, which toggles
+    /// `enabled`, is inert, so a row cannot start a light manager as a side effect of
     /// asking what a preset writes.
     ///
     /// Row H8 of TESTING.md.

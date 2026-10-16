@@ -10,8 +10,8 @@ namespace VRSL.URP.EditorScripts
     /// verdict.
     ///
     /// It compares rather than captures, and that is deliberate. Batch mode has no
-    /// GPU clock — <c>FrameTimingManager</c> returns a real CPU frame time there and
-    /// a GPU time of exactly zero — so a headless capture produces CPU-basis figures
+    /// GPU clock (<c>FrameTimingManager</c> returns a real CPU frame time there and
+    /// a GPU time of exactly zero), so a headless capture produces CPU-basis figures
     /// that are not the ones a results table quotes. What headless can do perfectly well
     /// is adjudicate: the verdict comes from <see cref="VRSLBaseline.Compare"/>,
     /// which is the same code the editor window calls, so the two cannot disagree.

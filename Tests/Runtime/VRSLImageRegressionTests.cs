@@ -72,7 +72,7 @@ namespace VRSL.URP.Tests
         /// The cull is an acceleration: it decides which lights a tile iterates, never
         /// what they contribute. Any visual change at all means it is dropping a light
         /// that reaches the tile, and the frametime win is being paid for in wrong
-        /// pixels. This is the row that made the cull trustworthy enough to build M3 on.
+        /// pixels.
         /// </summary>
         [UnityTest]
         public IEnumerator P1_ClearingTheCullShaderChangesNoPixels()
@@ -116,21 +116,21 @@ namespace VRSL.URP.Tests
         /// I5. A manager with every wiring field cleared repairs itself and renders
         /// the same image as one wired by the prefab.
         ///
-        /// This is the row M7 lives or dies on, and it is the only one that can make the
-        /// claim. Comparing GUIDs proves resolution picked the assets the table names;
-        /// it cannot prove the table names the right ones. Rendering proves it, because
-        /// a wrong asset in any of the ten shows up — the wrong compute lights nothing,
+        /// This is the only row that can make the claim. Comparing GUIDs proves
+        /// resolution picked the assets the table names; it cannot prove the table
+        /// names the right ones. Rendering proves it, because a wrong asset in any of
+        /// the ten shows up: the wrong compute lights nothing,
         /// the wrong lighting shader puts nothing on surfaces, the wrong prepass makes
         /// every surface flat grey.
         ///
         /// Bounced twice on purpose. Clearing takes effect only after a bounce, since
-        /// the cull resolves its shader in its constructor and the manager builds its
-        /// volumetric material once and keeps it; and the resolved values need a second
+        /// the cull resolves its shader in its constructor and the manager makes its
+        /// materials when it is switched on; and the resolved values need a second
         /// bounce for the same reason. Without the first, the row would compare two
         /// correctly wired managers and pass whatever resolution did.
         /// </summary>
         [UnityTest]
-        public IEnumerator A_M7_1_AClearedManagerRepairsItselfAndRendersIdentically()
+        public IEnumerator I5_AClearedManagerRepairsItselfAndRendersIdentically()
         {
             Texture2D wired = null, repaired = null;
             yield return CaptureFrame(null, t => wired = t);
@@ -147,8 +147,8 @@ namespace VRSL.URP.Tests
                 rig.Manager.enabled = true;
 
                 // The enable path fills what must never be empty, and nothing else. The
-                // four that document a meaning when empty — no tile culling, no surface
-                // prepass, no beams, no strobe timing — are a choice an author is allowed
+                // four that document a meaning when empty (no tile culling, no surface
+                // prepass, no beams, no strobe timing) are a choice an author is allowed
                 // to make, so they are offered rather than forced.
                 var afterEnable = VRSLWiring.Empty(rig.Manager);
                 Assert.IsEmpty(afterEnable.Where(f => !f.Optional).Select(f => f.Field),
@@ -211,7 +211,7 @@ namespace VRSL.URP.Tests
         /// shipped code or a variant to compile.
         /// </summary>
         [UnityTest]
-        public IEnumerator A_M0_4_TheComparisonCatchesAOnePixelOffset()
+        public IEnumerator I3_TheComparisonCatchesAOnePixelOffset()
         {
             Texture2D frame = null;
             yield return CaptureFrame(null, t => frame = t);
@@ -247,12 +247,12 @@ namespace VRSL.URP.Tests
         ///
         /// Without this the sensitivity row above is satisfied by a comparator that
         /// calls everything different, which is exactly as useless as one that calls
-        /// everything the same. Two renders are not bit-identical — the GPU may
-        /// reorder floating-point work between draws — so the row is what says the
+        /// everything the same. Two renders are not bit-identical (the GPU may
+        /// reorder floating-point work between draws), so the row is what says the
         /// threshold is set somewhere defensible.
         /// </summary>
         [UnityTest]
-        public IEnumerator A_M0_4_TwoCapturesOfAnUnchangedSceneAreIdentical()
+        public IEnumerator I4_TwoCapturesOfAnUnchangedSceneAreIdentical()
         {
             Texture2D first = null, second = null;
             yield return CaptureFrame(null, t => first = t);

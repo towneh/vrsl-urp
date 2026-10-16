@@ -183,8 +183,8 @@ namespace VRSL.URP.Tests
               + "under any timestep. Raise the smoothing or sample earlier");
 
             // Two orders of magnitude below what any of the candidate faults
-            // produces — each of those leaves a fixture somewhere else entirely on
-            // its sweep — and above the float noise the most sensitive fixture
+            // produces (each of those leaves a fixture somewhere else entirely on
+            // its sweep), and above the float noise the most sensitive fixture
             // accumulates over 900 frames of damping.
             const float Same = 0.01f;
             float worstAge = 0f, worstRotation = 0f;

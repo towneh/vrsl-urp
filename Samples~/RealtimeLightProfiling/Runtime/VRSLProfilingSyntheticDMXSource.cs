@@ -73,8 +73,7 @@ namespace VRSL.URP.Profiling
         // The manager handed _gridTextures, so it can be taken back before it is destroyed.
         VRSL_DMXURPLightManager _boundManager;
 
-        // Match VRSL_LocalUIControlPanel's property names so the volumetric
-        // mesh fixtures (which read these _VRSLU_-prefixed globals) bind correctly.
+        // The globals the DMX manager publishes and the shader-driven fixtures read.
         static readonly int IDMain          = Shader.PropertyToID("_VRSLU_DMXGridRenderTexture");
         static readonly int IDMovement      = Shader.PropertyToID("_VRSLU_DMXGridRenderTextureMovement");
         static readonly int IDStrobeTimer   = Shader.PropertyToID("_VRSLU_DMXGridStrobeTimer");

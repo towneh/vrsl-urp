@@ -8,12 +8,13 @@ namespace VRSL.URP.EditorScripts
     /// <summary>
     /// Editor utilities for the VRSL URP realtime light path. The package
     /// never reads, recommends, or mutates the URP asset or the URP renderer
-    /// asset — those settings belong to the project. The single menu action
+    /// asset; those settings belong to the project. The single menu action
     /// exposed here is scene-level:
     /// <b>VRSL → URP → Add Light Manager to Active Scene</b> creates a
     /// <see cref="VRSL_DMXURPLightManager"/> in the active scene if missing and
-    /// auto-assigns its compute, lighting, and volumetric shader references
-    /// from the package. It only edits scene contents — never project assets.
+    /// assigns any of its compute, lighting, volumetric, surface properties and
+    /// light cull shaders left empty from the package. It only edits scene contents,
+    /// never project assets.
     /// </summary>
     public static class VRSL_URPRendererSetup
     {
@@ -112,8 +113,8 @@ namespace VRSL.URP.EditorScripts
 
             EditorUtility.DisplayDialog("VRSL URP Setup",
                 "Done.\n\n• " + string.Join("\n• ", report) +
-                "\n\nReminder: assign the four DMX RenderTextures on the manager " +
-                "(scene-specific — not auto-discoverable).", "OK");
+                "\n\nNext: set DMX Input on the manager to the grid layout your video uses, " +
+                "or to Stream data if a channel source feeds the scene.", "OK");
 
             Selection.activeObject = manager.gameObject;
         }

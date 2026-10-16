@@ -11,8 +11,9 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The DMX manager's DMX Input and Grid Textures, and how a manager saved with
-    /// 0.2.0-rc.6 comes across to them.
+    /// Rows G1, G2, G4, G5, G9 and E6 of TESTING.md: the DMX manager's DMX Input and Grid
+    /// Textures, and how a manager saved with its five grid textures in separate fields
+    /// comes across to them.
     /// </summary>
     class VRSLGridLayoutTests : VRSLDMXTest
     {
@@ -24,8 +25,8 @@ namespace VRSL.URP.Tests
         static string GuidOf(Object asset) =>
             asset == null ? "(empty)" : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(asset));
 
-        /// <summary>A switched-off manager carrying an rc.6 main texture, staged the
-        /// way one deserialises: through the hidden field.</summary>
+        /// <summary>A switched-off manager carrying a main texture in the separate field,
+        /// staged the way one deserialises: through the hidden field.</summary>
         static VRSL_DMXURPLightManager StageRc6(GameObject go, Object oldMain)
         {
             go.SetActive(false);
@@ -45,9 +46,9 @@ namespace VRSL.URP.Tests
         public enum UpgradePath { Enable, Validate, BuildStep }
 
         /// <summary>
-        /// G1. An rc.6 manager comes up in the layout its decode textures were, through
-        /// each path the upgrade runs on, and reads that layout's set from the shipped
-        /// asset afterwards.
+        /// G1. A manager saved with separate texture fields comes up in the layout its
+        /// decode textures were, through each path the upgrade runs on, and reads that
+        /// layout's set from the shipped asset afterwards.
         /// </summary>
         [UnityTest]
         public IEnumerator AnRc6ManagerComesUpInItsOwnLayout(
@@ -62,17 +63,17 @@ namespace VRSL.URP.Tests
                 _                       => HorizontalMain,
             };
 
-            var go = new GameObject("rc6 manager");
+            var go = new GameObject("manager with separate textures");
             try
             {
                 var manager = StageRc6(go, Shipped(main));
-                Assert.IsNotNull(OldMain(manager), "the rc.6 main texture did not stage");
+                Assert.IsNotNull(OldMain(manager), "the separate main texture did not stage");
 
                 yield return Run(manager, go, path);
 
                 Assert.AreEqual(layout, manager.GridLayout,
-                    $"an rc.6 {layout} manager came up in the wrong layout");
-                Assert.IsNull(OldMain(manager), "the upgrade left the rc.6 texture behind");
+                    $"a {layout} manager saved with separate texture fields came up in the wrong layout");
+                Assert.IsNull(OldMain(manager), "the upgrade left the separate texture behind");
                 Assert.AreEqual(main, GuidOf(manager.LiveTextures.main),
                     "the manager is not reading its layout's main texture");
             }
@@ -87,7 +88,7 @@ namespace VRSL.URP.Tests
         [UnityTest]
         public IEnumerator AnRc6ManagerOnItsOwnTexturesWarnsAndKeepsThem([Values] UpgradePath path)
         {
-            var go  = new GameObject("rc6 manager, own textures");
+            var go  = new GameObject("manager with separate textures, own textures");
             var own = new CustomRenderTexture(4, 4) { name = "an author's own grid" };
             var ownAsset = ScriptableObject.CreateInstance<VRSLGridTextures>();
             try
@@ -106,7 +107,7 @@ namespace VRSL.URP.Tests
                 manager.gridTextures = ownAsset;
                 Assert.AreEqual(VRSLGridUpgrade.Outcome.Upgraded, VRSLGridUpgrade.Upgrade(manager));
                 Assert.IsNull(OldMain(manager),
-                    "the old textures were kept after the author assigned an asset of their own");
+                    "the separate textures were kept after the author assigned an asset of their own");
             }
             finally
             {
@@ -130,7 +131,7 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// E6. A manager the upgrade hasn't looked at (saved with 0.2.0-rc.6, or added since)
+        /// E6. A manager the upgrade hasn't looked at (its version marker not yet set)
         /// keeps its grid input, or comes up on Stream data when its scene holds an enabled
         /// channel source, on each path the upgrade runs on, and is marked as looked at.
         /// </summary>
@@ -167,14 +168,14 @@ namespace VRSL.URP.Tests
 
         /// <summary>
         /// E6's other half. A manager the upgrade has looked at, or whose input a call
-        /// chose, keeps its grid beside a source; and an rc.6 manager beside one takes its
-        /// layout first and then Stream data.
+        /// chose, keeps its grid beside a source; and a manager saved with separate texture
+        /// fields beside one takes its layout first and then Stream data.
         /// </summary>
         [UnityTest]
         public IEnumerator E6_a_manager_already_looked_at_keeps_its_grid_beside_a_source([Values] UpgradePath path)
         {
             var go       = new GameObject("manager after DMX Input");
-            var rc6Go    = new GameObject("rc6 manager");
+            var rc6Go    = new GameObject("manager with separate textures");
             var sourceGo = new GameObject("channel source");
             try
             {
@@ -200,8 +201,8 @@ namespace VRSL.URP.Tests
                 go.SetActive(false);
                 yield return Run(rc6, rc6Go, path);
                 Assert.AreEqual(VRSLDmxInput.StreamData, rc6.dmxInput,
-                    "an rc.6 manager beside a source did not come up on Stream data");
-                Assert.IsNull(OldMain(rc6), "the rc.6 rule did not run first");
+                    "a manager saved with separate texture fields beside a source did not come up on Stream data");
+                Assert.IsNull(OldMain(rc6), "the separate-texture upgrade did not run first");
             }
             finally
             {
@@ -474,13 +475,13 @@ namespace VRSL.URP.Tests
         // ── The fixtures take the layout from the manager ─────────────────────
 
         /// <summary>
-        /// G9. No fixture shader or include can choose a layout of its own: the
-        /// old material flag is gone from everything but the two CRT shaders (each layout
+        /// G9. No fixture shader or include can choose a layout of its own:
+        /// <c>_EnableCompatibilityMode</c> appears only in the two CRT shaders (each layout
         /// has its own CRT set, so for them the material is the layout), the shared read core
         /// (which the URP include goes through) and the Built-in include choose by the
-        /// manager's global, and every shader that includes the
-        /// Built-in one has the global declared. Materials still carrying the old flag's saved
-        /// value are not checked: nothing reads that name any more.
+        /// manager's global, and every shader that includes the Built-in one has the global
+        /// declared. Materials carrying a saved value for that property are not checked:
+        /// no fixture shader reads it.
         /// </summary>
         [Test]
         public void NoFixtureShaderChoosesALayoutOfItsOwn()

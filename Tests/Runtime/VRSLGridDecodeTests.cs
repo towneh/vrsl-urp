@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The decode in each grid layout and from a channel source, and what the fixtures
-    /// read from each. Rows G6 to G8, G16 to G18 and N29 to N33 of TESTING.md.
+    /// read from each. Rows G6 to G8, G16 to G20 and N29 to N33 of TESTING.md.
     /// </summary>
     class VRSLGridDecodeTests : VRSLDMXTest
     {
@@ -170,7 +170,7 @@ namespace VRSL.URP.Tests
 
         const string Prefabs = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/";
 
-        /// <summary>One of each Horizontal fixture whose body or beam reads the grid.</summary>
+        /// <summary>One of each fixture prefab whose body or beam reads the grid.</summary>
         static readonly string[] HorizontalPrefabs =
         {
             "VRSL-DMX-Static-Flasher-1CH.prefab",
@@ -343,13 +343,10 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// G8, without the switch. Every Horizontal fixture prefab renders the
-        /// same on a Legacy or a Vertical grid as on a Horizontal one carrying the same
-        /// channel values, once the manager is set to that layout: shader-driven bodies
-        /// and beams through both includes, realtime bodies, and the realtime light.
-        /// The Vertical case is there for the Built-in include, which takes its texel
-        /// size from Unity's automatic value for the grid texture rather than from the
-        /// manager.
+        /// G8, without the switch. Every fixture prefab whose body or beam reads the grid
+        /// renders the same on a Legacy or a Vertical grid as on a Horizontal one carrying
+        /// the same channel values, once the manager is set to that layout: shader-driven
+        /// bodies and beams through both includes, realtime bodies, and the realtime light.
         /// </summary>
         [UnityTest]
         public IEnumerator G8_a_horizontal_prefab_lights_the_same_on_every_layout()
@@ -387,12 +384,11 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// G16. Every Horizontal fixture prefab renders the same patched at sectors 106 to
-        /// 115, near the end of the grid's third universe, as at sectors 2 to 11, with the
-        /// same values painted at both. The lasers and lens flares read through the
-        /// Built-in include, which sizes the grid from Unity's automatic texel size for the
-        /// grid texture rather than from the manager; a wrong size moves the read further
-        /// from its cell the further down the grid a fixture sits.
+        /// G16. G8's nine prefabs render the same patched at sectors 106 to 114, near the
+        /// end of the Horizontal grid's third universe, as at sectors 2 to 10, with the
+        /// same values painted at both. Both includes size the grid from the manager's
+        /// <c>_VRSLDMXTexelSize</c>; a wrong size moves the read further from its cell the
+        /// further down the grid a fixture sits.
         /// </summary>
         [UnityTest]
         public IEnumerator G16_a_prefab_lights_the_same_at_the_end_of_the_grid()
@@ -445,7 +441,7 @@ namespace VRSL.URP.Tests
 
         // ── The fixtures follow a channel source ──────────────────────────────
 
-        /// <summary>The Horizontal prefabs whose bodies read the grid through the URP include.</summary>
+        /// <summary>The prefabs whose bodies read the grid through the URP include.</summary>
         internal static readonly string[] UrpIncludePrefabs =
         {
             "VRSL-DMX-Static-Flasher-1CH.prefab",
@@ -467,7 +463,7 @@ namespace VRSL.URP.Tests
             new(90f, 0f, 0f), new(90f, 0f, 0f), new(0f, 180f, 0f), new(90f, 0f, 0f), Vector3.zero, Vector3.zero,
         };
 
-        /// <summary>The Horizontal prefabs that move: the laser, whose beams read the grid
+        /// <summary>The prefabs that move: the laser, whose beams read the grid
         /// through the Built-in include, and both realtime movers, whose heads read it through
         /// the URP one.</summary>
         internal static readonly string[] MovingPrefabs =

@@ -12,14 +12,14 @@ namespace VRSL.URP.EditorScripts
     /// quits.
     ///
     /// The numbers a results table quotes should come from a player. The
-    /// editor can produce a GPU-basis matrix and batch mode cannot — FrameTimingManager
-    /// returns a GPU time of exactly zero there — so without this the only quotable run
+    /// editor can produce a GPU-basis matrix and batch mode cannot (FrameTimingManager
+    /// returns a GPU time of exactly zero there), so without this the only quotable run
     /// is one somebody sat through in the editor window.
     ///
     /// <b>It changes nothing in the host project.</b> The only thing it writes is a
     /// scratch scene under Assets/, deleted on the way out and again on the way in, so a
     /// build killed part-way through leaves no settings behind to notice later. What it
-    /// needs and cannot set — frame timing stats — it refuses on rather than turning on,
+    /// needs and cannot set (frame timing stats) it refuses on rather than turning on,
     /// because turning a project setting on for somebody is how it stays on.
     /// </summary>
     static class VRSLBenchBuild

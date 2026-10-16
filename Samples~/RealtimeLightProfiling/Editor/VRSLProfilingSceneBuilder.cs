@@ -271,7 +271,7 @@ namespace VRSL.URP.Profiling.Editor
             float startX  = -trussWidth * 0.5f;
             // Pitch the fixture so its cone fires downward. The mover head's
             // resting orientation aims along +Z, so a +X rotation tilts the
-            // cone down toward the floor.
+            // cone down towards the floor.
             var rot = Quaternion.Euler(fixtureTilt, 0f, 0f);
 
             for (int i = 0; i < fixtureCount; i++)

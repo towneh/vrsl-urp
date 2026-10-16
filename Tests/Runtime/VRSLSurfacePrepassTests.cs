@@ -15,7 +15,7 @@ using UnityEngine.TestTools;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The surface prepass rows, S10 to S20: what it draws, for whom, where its
+    /// The surface prepass rows, S10 to S21: what it draws, for whom, where its
     /// normals may come from instead, and whether what it captured reaches the
     /// lighting pass.
     ///

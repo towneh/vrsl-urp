@@ -35,7 +35,7 @@ namespace VRSL.URP.Tests
             Assert.AreEqual(light.spotAngle, light.SpotAngleForLegacyConeWidth(legacyDefault), 1e-4f,
                 "a mover left at the original prefab's width should arrive at this prefab's angle");
 
-            // The widths the Orion mover controller animates, either side of the default.
+            // A width either side of the default.
             Assert.AreEqual(light.spotAngle * 4f / legacyDefault, light.SpotAngleForLegacyConeWidth(4f), 1e-3f,
                 "a wider original cone should scale the angle by the same share");
             Assert.AreEqual(VRSLAudioLinkRealtimeLight.NarrowestLegacySpotAngle,

@@ -10,7 +10,8 @@ using UnityEngine;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The scripts the shipped prefabs and scenes carry, read from the asset files.
+    /// Rows L6 and L8 of TESTING.md: the scripts the shipped prefabs and scenes carry, read
+    /// from the asset files, and the namespaces of the package's public types.
     ///
     /// A component whose script isn't in the project arrives in every scene that places the
     /// prefab as a missing script. Scripts from VRChat's SDK are the usual case, and so are

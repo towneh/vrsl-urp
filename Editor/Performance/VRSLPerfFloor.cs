@@ -67,8 +67,8 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>Forget this machine's floor, so the next measurement establishes it
-        /// from scratch. For a machine that has genuinely changed — different drivers,
-        /// something noisy uninstalled — rather than for a run that came out flattering.</summary>
+        /// from scratch. For a machine that has genuinely changed (different drivers,
+        /// something noisy uninstalled), rather than for a run that came out flattering.</summary>
         public static void Clear(string gpu, string context) =>
             EditorPrefs.DeleteKey(Key(gpu, context));
 

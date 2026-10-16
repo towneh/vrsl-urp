@@ -169,7 +169,7 @@ namespace VRSL.URP
                 EditorGUILayout.PropertyField(_lensTransform, BallLabel);
                 EditorGUILayout.PropertyField(_discoballSpinSpeed, new GUIContent("Spin Speed", _discoballSpinSpeed.tooltip));
                 EditorGUILayout.PropertyField(_discoballBeams, new GUIContent("Dots In The Haze", _discoballBeams.tooltip));
-                EditorGUILayout.HelpBox("The dot pattern is the light manager's Discoball Cubemap, shared by every discoball in the scene. The ball spins about this object's up axis.", MessageType.None);
+                EditorGUILayout.HelpBox("The dot pattern is the light manager's Discoball Cubemap, shared by every discoball in the scene. The dots turn about this object's up axis, and so does the Ball when one is set.", MessageType.None);
             }
 
             EditorGUILayout.Space();

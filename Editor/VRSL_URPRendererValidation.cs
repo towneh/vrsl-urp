@@ -205,8 +205,8 @@ namespace VRSL.URP.EditorScripts
         /// <summary>
         /// Which renderer each camera in the scene actually renders through.
         ///
-        /// A pipeline asset can carry several renderers with different settings — Basis
-        /// ships priming Forced on its desktop renderer and Disabled on its camera one —
+        /// A pipeline asset can carry several renderers with different settings (Basis
+        /// ships priming Forced on its desktop renderer and Disabled on its camera one),
         /// and a camera picks exactly one. Listing the renderers without saying which
         /// applies leaves an author to guess, and a camera that overrides nothing takes
         /// the asset's default silently, so the answer is not visible on the camera
@@ -502,9 +502,9 @@ namespace VRSL.URP.EditorScripts
         /// <summary>
         /// Whether this package ships the shader, by name.
         ///
-        /// The shipped names are not all one shape — <c>VRSL-URP/...</c> for the fixture
+        /// The shipped names are not all one shape: <c>VRSL-URP/...</c> for the fixture
         /// and projection shaders, <c>Hidden/VRSL-URP/...</c> for the passes, and one
-        /// <c>AudioLink/VRSL-URP Linear Interpolator</c> — so the distinctive part is the
+        /// <c>AudioLink/VRSL-URP Linear Interpolator</c>. So the distinctive part is the
         /// token rather than any prefix. Erring wide is the safe direction here: a false
         /// match only means a shader gets checked and its finding labelled ours, while a
         /// false miss skips one of our own shaders that is not on a fixture.

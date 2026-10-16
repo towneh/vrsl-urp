@@ -455,8 +455,8 @@ namespace VRSL.URP.EditorScripts
             if (generation != _generation) return;     // window closed, or the buffer resized
             _readbackPending = false;
             if (request.hasError || _values == null) return;
-            // Paging cannot bump the generation — that would release the buffer this
-            // request is resolving against — so the origin is what says whether the answer
+            // Paging cannot bump the generation (that would release the buffer this
+            // request is resolving against), so the origin is what says whether the answer
             // still belongs to the page on screen.
             if (origin != _origin) return;
 

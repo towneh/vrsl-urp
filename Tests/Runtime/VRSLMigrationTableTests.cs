@@ -7,7 +7,8 @@ using UnityEditor;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// The migration tool's table against the package it points into.
+    /// Rows L1 and L9 of TESTING.md: the migration tool's table against the package it
+    /// points into.
     ///
     /// The tool itself compiles only beside the legacy package, which no test project has,
     /// so a table that has stopped matching the package would only show up in an author's

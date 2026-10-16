@@ -75,7 +75,8 @@ namespace VRSL.URP.Tests
             _rigMaskWas = _rigCamera.cullingMask;
             _rigCamera.cullingMask &= ~(1 << layer);
             // A camera into a texture is a mirror to the manager. Skip gives it no VRSL
-            // lighting or beams, which would land on the probe's texels, and still the grid.
+            // lighting or beams, which would land on the probe's texels, but still hands it
+            // the grid.
             rig.Manager.secondaryCameraMode = SecondaryCameraMode.Skip;
         }
 

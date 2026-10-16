@@ -18,18 +18,17 @@ namespace VRSL.URP.EditorScripts
     /// <summary>
     /// Editor utility that walks the active scene, finds every prefab instance of an
     /// upstream com.acchosen.vr-stage-lighting fixture, and inserts the matching
-    /// VRSL-URP fixture as a sibling immediately below it with the same world transform.
-    /// Source instances are left in place — the URP siblings light the scene under URP
-    /// while the upstream instances continue to render under the legacy pipeline. The
-    /// author can delete the upstream instances once happy with the result.
+    /// VRSL-URP fixture as a sibling immediately below it, its body where the original's
+    /// is. Source instances are left in place for the author to delete once happy with
+    /// the result.
     ///
     /// Match is by source-prefab GUID (PrefabUtility.GetCorrespondingObjectFromOriginalSource
     /// → AssetPath → AssetPathToGUID), so prefab renames in either package don't break it.
     /// Component fields are copied via reflection so this assembly never has to link the
-    /// upstream package — the migration is a no-op if upstream isn't installed.
+    /// upstream package.
     ///
     /// Idempotent: re-running skips any source that already has a matching URP-prefab
-    /// instance under the same parent at the same world position.
+    /// instance beside it, standing where the tool places one or on the source's own root.
     /// </summary>
     public static class VRSL_LegacyToUrpMigration
     {
@@ -149,7 +148,7 @@ namespace VRSL.URP.EditorScripts
                 summary += "\n\nBy fixture:\n" + string.Join("\n",
                     perKind.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
             if (unported.Count > 0)
-                summary += "\n\nLeft as they are, no URP prefab exists for them yet:\n" + string.Join("\n",
+                summary += "\n\nLeft as they are, since no URP prefab exists for them:\n" + string.Join("\n",
                     unported.OrderBy(k => k.Key).Select(k => $"  {k.Key}: {k.Value}"));
             if (leftForAudioLink.Count > 0)
                 summary += "\n\n" + LEFT_FOR_AUDIOLINK + "\n" + string.Join("\n",
@@ -163,13 +162,14 @@ namespace VRSL.URP.EditorScripts
         // ── In-place conversion (custom fixtures) ───────────────────────────────────
 
         /// <summary>
-        /// Converts fixtures that carry an upstream VRSL component directly — e.g. a custom mesh
-        /// (an imported lighting rig) with VRStageLighting_DMX_Static added onto it — rather than
-        /// instances of a standard VRSL fixture prefab. The prefab-swap migration above can't help
-        /// those: there's no source-prefab GUID in its table and no URP prefab carrying the custom
-        /// geometry. This path keeps the geometry and retargets the driver: it adds the URP twin
-        /// component (same field layout), copies every field across, swaps the fixture's VRSL
-        /// materials to the matching URP shader, and removes the upstream component. Matching is by
+        /// Converts fixtures that carry an upstream VRSL component directly, such as a custom mesh
+        /// (an imported lighting rig) with upstream's VRStageLighting_DMX_Static added onto it,
+        /// rather than instances of a standard VRSL fixture prefab. The prefab-swap migration above
+        /// can't help those: there's no source-prefab GUID in its table and no URP prefab carrying
+        /// the custom geometry. This path keeps the geometry and retargets the driver: it adds the
+        /// URP twin component (same field layout), copies every field across, swaps the fixture's
+        /// VRSL materials to the matching URP shader, moves references from the upstream component
+        /// to the URP one where they can follow, and removes the upstream component. Matching is by
         /// component, so nesting, unpacking, and prefab GUIDs are all irrelevant.
         ///
         /// Idempotent: a fixture that already has the URP twin is skipped, and material swaps key
@@ -248,8 +248,8 @@ namespace VRSL.URP.EditorScripts
                 foreach (var (holder, path) in left)
                     Debug.LogWarning($"[VRSL In-Place] {holder.GetType().Name} on '{holder.name}' "
                                    + $"({VRSLMigrationCopy.FieldName(path)}) pointed at the original VRSL component on "
-                                   + $"'{upstream.name}', which this removes, and can't hold the URP one, so it's left "
-                                   + "empty. Point it at the URP fixture by hand.", holder);
+                                   + $"'{upstream.name}', which the conversion removes. It can't hold the URP one, so "
+                                   + "it's left empty. Point it at the URP fixture by hand.", holder);
             }
 
             foreach (var (upstream, _) in replaced)
@@ -266,7 +266,7 @@ namespace VRSL.URP.EditorScripts
 
             string summary =
                 $"Converted: {converted}\nSkipped (already URP): {skipped}\nErrors: {errors}\n" +
-                $"Materials reshaded: {changedMaterials.Count}";
+                $"Materials moved to URP shaders: {changedMaterials.Count}";
             if (referencesMoved + referencesLeft > 0)
                 summary += $"\n\nReferences to the original components moved to the URP ones: {referencesMoved}"
                          + (referencesLeft > 0
@@ -419,8 +419,8 @@ namespace VRSL.URP.EditorScripts
 
         // Idempotent check: any sibling of `source` (under the same parent, or any scene root
         // when `source` is itself a root) that is a URP-prefab instance standing where the tool
-        // places one counts as already-migrated. The position match makes the check robust
-        // to manual hierarchy reordering after a previous migration run.
+        // places one, or on the source's own root, counts as already migrated. Matching by
+        // position finds the sibling even after the hierarchy has been reordered by hand.
         static Transform FindUrpSibling(Transform source, VRSLMigrationPair pair)
         {
             var parent = source.parent;

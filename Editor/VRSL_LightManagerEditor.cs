@@ -187,8 +187,8 @@ namespace VRSL.URP.EditorScripts
             // warning that never goes away is one nobody reads by the third time.
             if (faults.Count == 0)
             {
-                // The consequences are whole clauses — "strobe does nothing", "no beams
-                // in the air" — so they read as a list of what is currently true, not as
+                // The consequences are whole clauses ("strobe does nothing", "no beams
+                // in the air"), so they read as a list of what is currently true, not as
                 // a phrase to hang off "set up, with".
                 EditorGUILayout.LabelField(
                     "Set up. Currently switched off, which is a choice you can make: "
@@ -228,8 +228,8 @@ namespace VRSL.URP.EditorScripts
         }
 
         /// <summary>
-        /// An rc.6 DMX manager that was on decode textures of its author's own, until the
-        /// author gives it a Grid Textures asset. The upgrade warns in the Console on every
+        /// A DMX manager saved with separate grid texture fields holding textures of its
+        /// author's own, until the author gives it a Grid Textures asset. The upgrade warns in the Console on every
         /// enable as well; this is where the author is looking when they come to fix it.
         /// </summary>
         void DrawUpgradeNotice()
@@ -313,8 +313,8 @@ namespace VRSL.URP.EditorScripts
             foreach (var manager in managers)
             {
                 if (VRSLWiring.FieldsFor(manager) == null) continue;
-                // Also how a prefab asset still carrying an rc.6 manager is brought
-                // across, since automatic resolution never touches assets.
+                // Also how a prefab asset whose manager still has separate grid texture
+                // fields is brought across, since automatic resolution never touches assets.
                 if (manager is VRSL_DMXURPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
                 // No Undo.RecordObject here: Resolve writes through SerializedObject,
                 // which registers its own undo. Recording as well would put two entries
