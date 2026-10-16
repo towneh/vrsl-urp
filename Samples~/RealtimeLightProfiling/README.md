@@ -5,12 +5,11 @@ light path under matched conditions.
 
 ## What this sample provides
 
-- **`VRSL → Profiling → Build Profiling Scene`** — opens the *Profiling Scene
-  Builder* editor window. The window builds (or rebuilds) a deterministic
-  profiling scene with N matched fixtures on a horizontal truss, a flat floor,
-  a fixed-pose camera, and the synthetic DMX source wired up. Switching fixture
-  count or camera variant rebuilds the truss in place — no need to re-author
-  scenes by hand for every cell of the sweep table.
+- **`VRSL → Profiling → Build Profiling Scene`** opens the *Profiling Scene
+  Builder*, which builds a deterministic scene: N matched fixtures on a
+  horizontal truss, a flat floor, a fixed-pose camera and the synthetic DMX
+  source. Changing the fixture count or camera variant rebuilds the truss in
+  place, so no scene needs authoring by hand for each cell of a sweep.
 - **`VRSLProfilingSyntheticDMXSource`** — a runtime `MonoBehaviour` that
   bypasses VRSL's CRT decode chain. It writes a small CPU-authored pixel buffer
   matching the format that fixture shaders consume after CRT decode and
@@ -26,7 +25,7 @@ light path under matched conditions.
 ## Quick start
 
 1. Run `VRSL → Profiling → Import Profiling Sample` (or, if
-   you prefer the long way: Package Manager → VRSL URP → Samples →
+   you prefer the long way: Package Manager → VR Stage Lighting URP → Samples →
    **Import** next to *Realtime Light Profiling*).
 2. Create or open an empty scene to use as your profiling scene.
 3. Open `VRSL → Profiling → Build Profiling Scene`.
@@ -51,8 +50,7 @@ preserved across rebuilds.
     many cones overlap per pixel.
   - **OutsideCones** — best case; only a few cones in frame.
 - To sweep what the package spends, switch `quality` on the spawned
-  `VRSL DMX URP Light Manager` GameObject between captures. The numeric step and
-  resolution fields it replaced are gone; the levels are the sweep.
+  `VRSL DMX URP Light Manager` GameObject between captures.
 
 ## What is NOT covered
 
