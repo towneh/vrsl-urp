@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.5] — 2026-10-16
+
 ### Added
 
 - **`Runtime/Shaders/VRSLDMX.hlsl`, a supported way for your own shaders to read DMX.** Include it in a URP shader and call `VRSLDMX_Channel`, `VRSLDMX_ChannelRaw`, `VRSLDMX_Strobe` or `VRSLDMX_Color` with a channel number, the `_DMXChannel` a `VRSLDMXStatic` writes. They read what the DMX manager reads, on any grid layout or Stream data, in the vertex or fragment stage. The include declares no material properties, so a shader using it stays SRP Batcher compatible and compiles beside URP's Lit inputs and depth texture. It's the package's public shader API, and changes to it will be listed here. The wiki's [DMX in Your Own Shaders](https://github.com/towneh/vrsl-urp/wiki/DMX-in-Your-Own-Shaders) page covers it and porting from VR Stage Lighting's `VRSLDMX.cginc`.
