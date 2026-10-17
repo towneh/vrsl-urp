@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
     /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J13 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J15 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1390,6 +1390,84 @@ namespace VRSL.URP.Tests
                 UnityEditor.ShaderUtil.allowAsyncCompilation = asyncCompilation;
                 foreach (var o in made) Object.DestroyImmediate(o);
             }
+        }
+
+        static readonly System.Text.RegularExpressions.Regex ProbeVolumePragma = new(
+            @"^\s*#pragma\s+multi_compile(?:_vertex|_fragment)?\s.*\bPROBE_VOLUMES_L1\b.*\bPROBE_VOLUMES_L2\b",
+            System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        /// <summary>
+        /// J14. Every fixture body takes its baked light from Adaptive Probe Volumes where the
+        /// project uses them, as URP Lit does: its forward pass declares URP's two probe volume
+        /// keywords, and its fragment compiled with either one binds the volumes' index. A body
+        /// without them gets only the ambient probe in a world baked with probe volumes, while
+        /// URP Lit beside it takes the bounce light. Compiled for Windows, nothing rendered.
+        /// </summary>
+        [Test]
+        public void J14_fixture_bodies_sample_adaptive_probe_volumes()
+        {
+            var lightMode = new UnityEngine.Rendering.ShaderTagId("LightMode");
+            var failures = new List<string>();
+            int compiled = 0;
+            foreach (var name in BodyShaders.Concat(MoverShaders))
+            {
+                var shader = Shader.Find(name);
+                Assert.IsNotNull(shader, $"{name} is not in this project");
+                var data = UnityEditor.ShaderUtil.GetShaderData(shader);
+                var forward = Enumerable.Range(0, data.SubshaderCount)
+                                        .Select(data.GetSubshader)
+                                        .SelectMany(s => Enumerable.Range(0, s.PassCount).Select(s.GetPass))
+                                        .Where(p => p.FindTagValue(lightMode).name == "UniversalForward")
+                                        .ToList();
+                if (forward.Count == 0) failures.Add($"{name} has no UniversalForward pass");
+                foreach (var pass in forward)
+                {
+                    if (!ProbeVolumePragma.IsMatch(pass.SourceCode ?? ""))
+                        failures.Add($"{name} '{pass.Name}' doesn't declare PROBE_VOLUMES_L1 and PROBE_VOLUMES_L2, so URP never builds its probe volume variant");
+                    foreach (var keyword in new[] { "PROBE_VOLUMES_L1", "PROBE_VOLUMES_L2" })
+                    {
+                        var info = pass.CompileVariant(UnityEditor.Rendering.ShaderType.Fragment, new[] { keyword },
+                                                       UnityEditor.Rendering.ShaderCompilerPlatform.D3D,
+                                                       UnityEditor.BuildTarget.StandaloneWindows64);
+                        compiled++;
+                        if (!info.Success)
+                            failures.Add($"{name} '{pass.Name}' [{keyword}] doesn't compile: "
+                                       + string.Join("; ", info.Messages.Select(m => m.message)));
+                        else if (!info.ResourceBindings.Any(b => b.Name == "_APVResIndex"))
+                            failures.Add($"{name} '{pass.Name}' [{keyword}] doesn't sample the probe volumes; its baked light is the ambient probe alone");
+                    }
+                }
+            }
+            Debug.Log($"[J14] {compiled} forward fragments compiled, {failures.Count} failure(s)");
+            Assert.IsEmpty(failures, string.Join("\n", failures));
+        }
+
+        /// <summary>
+        /// J15. Every renderer on a package prefab drawn with a fixture body shader blends light
+        /// probes. With Light Probes off, URP gives the renderer the ambient probe alone,
+        /// probe volumes included, whatever its shader samples.
+        /// </summary>
+        [Test]
+        public void J15_fixture_body_renderers_blend_light_probes()
+        {
+            var bodies = new HashSet<string>(BodyShaders.Concat(MoverShaders));
+            var failures = new List<string>();
+            int checkedRenderers = 0;
+            foreach (var guid in UnityEditor.AssetDatabase.FindAssets("t:Prefab", new[] { "Packages/town.mr.vrsl-urp/Runtime/Prefabs" }))
+            {
+                string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
+                var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (!renderer.sharedMaterials.Any(m => m != null && bodies.Contains(m.shader.name))) continue;
+                    checkedRenderers++;
+                    if (renderer.lightProbeUsage != UnityEngine.Rendering.LightProbeUsage.BlendProbes)
+                        failures.Add($"{path}: '{renderer.name}' has Light Probes {renderer.lightProbeUsage}, so its body takes no baked light beyond the ambient probe");
+                }
+            }
+            Debug.Log($"[J15] {checkedRenderers} body renderers, {failures.Count} not blending probes");
+            Assert.Greater(checkedRenderers, 0, "no prefab renderer uses a fixture body shader, so the row checked nothing");
+            Assert.IsEmpty(failures, string.Join("\n", failures));
         }
 
         /// <summary>A shader picks its URP subshader only once the pipeline has rendered, so a

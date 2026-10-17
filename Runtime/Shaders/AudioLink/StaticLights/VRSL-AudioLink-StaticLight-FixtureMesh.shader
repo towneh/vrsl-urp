@@ -75,6 +75,7 @@
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ LIGHTMAP_SHADOW_MIXING
             #pragma multi_compile _ SHADOWS_SHADOWMASK
+            #pragma multi_compile _ PROBE_VOLUMES_L1 PROBE_VOLUMES_L2
             #pragma multi_compile_fog
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
@@ -190,7 +191,12 @@
                 inputData.shadowCoord = shadowCoord;
                 inputData.fogCoord = input.fogFactorAndVertexLight.x;
                 inputData.vertexLighting = input.fogFactorAndVertexLight.yzw;
-                inputData.bakedGI = SampleSH(normalWS);
+                #if defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2)
+                    inputData.bakedGI = SampleProbeVolumePixel(half3(0, 0, 0), GetAbsolutePositionWS(input.positionWS),
+                                                               normalWS, inputData.viewDirectionWS, input.positionCS.xy);
+                #else
+                    inputData.bakedGI = SampleSH(normalWS);
+                #endif
 
                 // Emission calculation
                 half4 e = getEmissionColor();

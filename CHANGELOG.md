@@ -2,7 +2,10 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **Fixture bodies take bounce light from Adaptive Probe Volumes.** In a project whose URP asset uses Probe Volumes for its light probes, the par, blinder, flasher, light bar and AudioLink static bodies got only the ambient probe, while URP Lit surfaces beside them picked up the baked bounce light. They now sample the volumes the way URP Lit does, as the mover bodies already did. Projects that don't use Probe Volumes build no extra shader variants.
+- **Every fixture body prefab blends light probes.** The par, point bar and flasher bodies (DMX and AudioLink) and the AudioLink mover bodies shipped with Light Probes off, so they got only the ambient probe whatever their shader sampled. They're now set to Blend Probes like the other bodies. A scene instance that changed the setting keeps its own value.
 
 ## [0.3.0-rc.6] — 2026-10-16
 

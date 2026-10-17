@@ -66,6 +66,7 @@
             #pragma multi_compile _ _ADDITIONAL_LIGHTS_VERTEX _ADDITIONAL_LIGHTS
             #pragma multi_compile_fragment _ _ADDITIONAL_LIGHT_SHADOWS
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
+            #pragma multi_compile _ PROBE_VOLUMES_L1 PROBE_VOLUMES_L2
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
@@ -149,7 +150,12 @@
                 lightingInput.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionHCS);
                 lightingInput.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
                 lightingInput.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
-                lightingInput.bakedGI = SampleSH(normalWS);
+                #if defined(PROBE_VOLUMES_L1) || defined(PROBE_VOLUMES_L2)
+                    lightingInput.bakedGI = SampleProbeVolumePixel(half3(0, 0, 0), GetAbsolutePositionWS(input.positionWS),
+                                                                   normalWS, lightingInput.viewDirectionWS, input.positionHCS.xy);
+                #else
+                    lightingInput.bakedGI = SampleSH(normalWS);
+                #endif
                 lightingInput.vertexLighting = input.vertexLight;
 
                 SurfaceData surfaceData = (SurfaceData)0;
