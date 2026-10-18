@@ -139,7 +139,9 @@ namespace VRSL.URP.Tests
 
         /// <summary>The decode chain holds its first seconds back for data to arrive
         /// (the colour stage waits three, the strobe timer one), counted on the game
-        /// clock since the scene loaded (`_Time.y`), which the runner restarts per test.</summary>
+        /// clock since the scene loaded (`_Time.y`), which the runner restarts per test.
+        /// Installs <see cref="ChainClock"/> on the manager first, so the chain keeps its
+        /// clock for the rest of the row.</summary>
         internal static IEnumerator PastTheChainsStartUp(VRSLDMXRig rig)
         {
             if (rig.Manager.GetComponent<ChainClock>() == null) rig.Manager.gameObject.AddComponent<ChainClock>();
