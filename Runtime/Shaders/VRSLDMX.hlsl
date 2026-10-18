@@ -149,6 +149,14 @@ float2 vrsldmx_legacy_uv(int slot, int sector)
     return float2(x, y);
 }
 
+// Most Legacy positions sit exactly on a texel edge of the grid they read, where a GPU can
+// take either neighbour. A read takes the texel below and to the left of its position, at
+// that texel's centre, so every GPU reads the same one.
+float2 vrsldmx_legacy_texel(float2 uv, float4 texelSize)
+{
+    return (floor(uv * texelSize.zw - 0.25) + 0.5) * texelSize.xy;
+}
+
 float2 vrsldmx_industry_uv(int x, int y, float4 texelSize)
 {
     float resMultiplierX = (texelSize.z / 13);
@@ -185,7 +193,8 @@ bool vrsldmx_cell(uint channel, uint nineUniverse, float4 texelSize, out float2 
     uint slot   = (flat - 1u) % 13u + 1u;
     uint sector = (flat - 1u) / 13u;
     bool legacy = _VRSLU_DMXGridLayout == 2;
-    uv = legacy ? vrsldmx_legacy_uv(slot - 1, sector) : vrsldmx_industry_uv(slot, sector + 1, texelSize);
+    uv = legacy ? vrsldmx_legacy_texel(vrsldmx_legacy_uv(slot - 1, sector), texelSize)
+                : vrsldmx_industry_uv(slot, sector + 1, texelSize);
     bool onGrid = legacy ? sector < 50u : (sector + 1u) * texelSize.z <= 13.0 * texelSize.w;
     return channel != 0u && component <= 2u && onGrid;
 }

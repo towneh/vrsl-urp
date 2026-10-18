@@ -36,6 +36,7 @@ Shader "VRSL-URP/DMX CRTs/Interpolation"
             half _SmoothValue, _MinimumSmoothnessDMX, _MaximumSmoothnessDMX, _SignalDetectionSensativity;
             sampler2D   _Tex;
             sampler2D _DMXTexture;
+            float4 _DMXTexture_TexelSize;
             SamplerState sampler_point_repeat;
             int _IsEven, _DMXChannel, _EnableDMX, _EnableLegacyGlobalMovementSpeedChannel;
             uint _EnableCompatibilityMode, _NineUniverseMode;
@@ -78,6 +79,13 @@ Shader "VRSL-URP/DMX CRTs/Interpolation"
                 half2 (x, y), 
                 half2(originalx, originaly));
 
+            }
+
+            // A texel's centre here lands on an edge between video grid texels, where a GPU
+            // can take either one: read the one below and to the left, at its centre.
+            float2 VideoTexel(float2 uv)
+            {
+                return (floor(uv * _DMXTexture_TexelSize.zw - 0.25) + 0.5) * _DMXTexture_TexelSize.xy;
             }
 
             half getValueAtCoords(half x, half y, uint sector)
@@ -225,7 +233,7 @@ Shader "VRSL-URP/DMX CRTs/Interpolation"
                 if (_Time.y > 3.0)
                 {
                     half4 previousFrame = tex2D(_SelfTexture2D, IN.localTexcoord.xy);
-                    half4 currentFrame = tex2D(_DMXTexture, IN.localTexcoord.xy);
+                    half4 currentFrame = tex2D(_DMXTexture, VideoTexel(IN.localTexcoord.xy));
 
                     #if _SIGNAL_DETECTION
                         half2 textureSize = half2(_CustomRenderTextureWidth, _CustomRenderTextureHeight);
@@ -296,7 +304,7 @@ Shader "VRSL-URP/DMX CRTs/Interpolation"
                 }
                 else
                 {
-                    return tex2D(_DMXTexture, IN.localTexcoord.xy);
+                    return tex2D(_DMXTexture, VideoTexel(IN.localTexcoord.xy));
                 }
             }
             ENDCG

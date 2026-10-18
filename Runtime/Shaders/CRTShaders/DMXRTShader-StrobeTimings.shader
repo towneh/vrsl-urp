@@ -42,6 +42,12 @@
 
             #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
 
+            // A texel's centre here lands on an edge between video grid texels, where a GPU
+            // can take either one: read the one below and to the left, at its centre.
+            float2 VideoTexel(float2 uv)
+            {
+                return (floor(uv * _DMXTexture_TexelSize.zw - 0.25) + 0.5) * _DMXTexture_TexelSize.xy;
+            }
 
 
             // float calculateStrobe(float2 coords)
@@ -72,7 +78,7 @@
                 if (_Time.y > 1.0)
                 {
                     float4 previousFrame = tex2D(_SelfTexture2D, IN.localTexcoord.xy);
-                    float4 currentFrame = _DMXTexture.SampleLevel(sampler_point_repeat, IN.localTexcoord.xy, 0);
+                    float4 currentFrame = _DMXTexture.SampleLevel(sampler_point_repeat, VideoTexel(IN.localTexcoord.xy), 0);
 
                     float dt = clamp(unity_DeltaTime.x, 0.0, 2.0);
                     //T = CURRENT PHASE
@@ -151,7 +157,7 @@
 
                 else
                 {
-                    return _DMXTexture.SampleLevel(sampler_point_repeat, IN.localTexcoord.xy, 0);
+                    return _DMXTexture.SampleLevel(sampler_point_repeat, VideoTexel(IN.localTexcoord.xy), 0);
                 }
             }
             ENDCG

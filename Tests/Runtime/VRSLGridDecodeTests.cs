@@ -40,13 +40,8 @@ namespace VRSL.URP.Tests
         ///
         /// The texels come from the fixtures' include, found on the GPU, so the row
         /// compares the compute's Legacy read with theirs rather than with a second
-        /// derivation. Some channels share a texel: a Legacy row holds two sectors, and
-        /// on the 50 by 50 decode textures the first sector's 13th channel (u 0.50) and
-        /// the second's 1st (u 0.52) are a texel apart on texel edges, which this GPU
-        /// settles onto the same texel. That is the layout and the hardware, not the
-        /// decode, and another GPU may settle it differently, so the row names no shared
-        /// set: for a shared channel the claim is only that the compute reads what the
-        /// fixtures read.
+        /// derivation. Every channel has a texel of its own (G22); should any two share
+        /// one, the claim for them is only that the compute reads what the fixtures read.
         /// </summary>
         [UnityTest]
         public IEnumerator G6_a_legacy_grid_decodes_what_the_channel_buffer_does()

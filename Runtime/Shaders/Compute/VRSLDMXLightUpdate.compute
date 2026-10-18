@@ -100,14 +100,16 @@ SamplerState sampler_point_clamp;
 // every other input here.
 uint _VRSLU_DMXGridLayout;
 
-// LegacyRead() from the includes, taking the slot and sector as integers as they do.
+// LegacyRead() from the includes, taking the slot and sector as integers as they do, then
+// the texel below and to the left of that position at its centre, as the includes take it:
+// most Legacy positions sit on a texel edge, where a GPU can take either neighbour.
 float2 LegacyCellUV(uint channel, uint sector)
 {
     float x = 0.02 + (sector & 1u) * 0.50 + channel * 0.04;
     float y = 0.02 + (sector >> 1u) * 0.04;
     y -= sector >= 23u ? 0.025 : 0.0;
     x -= sector >= 40u ? 0.01  : 0.0;
-    return float2(x, y);
+    return (floor(float2(x, y) * _VRSLDMXTexelSize.zw - 0.25) + 0.5) * _VRSLDMXTexelSize.xy;
 }
 
 // The grid cell a channel occupies, in UV: slot ((ch - 1) mod 13) + 1 of sector

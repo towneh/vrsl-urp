@@ -28,12 +28,19 @@
             sampler2D   _Tex;
             Texture2D _DMXTexture;
          //   half _MaxSpinSpeed;
-            uniform half4 _DMXTexture_TexelSize;
+            uniform float4 _DMXTexture_TexelSize;
             SamplerState sampler_point_repeat;
             uint _NineUniverseMode;
            // half _MaxStrobeFreq;
             #define PI 3.14159265
             #define IF(a, b, c) lerp(b, c, step((fixed) (a), 0));
+
+            // A texel's centre here lands on an edge between video grid texels, where a GPU
+            // can take either one: read the one below and to the left, at its centre.
+            float2 VideoTexel(float2 uv)
+            {
+                return (floor(uv * _DMXTexture_TexelSize.zw - 0.25) + 0.5) * _DMXTexture_TexelSize.xy;
+            }
 
             half GetDMXValue(half4 c)
             {
@@ -50,7 +57,7 @@
                 if (_Time.y > 1.0)
                 {
                     float4 previousFrame = tex2D(_SelfTexture2D, IN.localTexcoord.xy);
-                    float4 currentFrame = _DMXTexture.SampleLevel(sampler_point_repeat, IN.localTexcoord.xy, 0);
+                    float4 currentFrame = _DMXTexture.SampleLevel(sampler_point_repeat, VideoTexel(IN.localTexcoord.xy), 0);
 
                     float dt = unity_DeltaTime.x;
                     if(_NineUniverseMode)
@@ -85,7 +92,7 @@
 
                 else
                 {
-                    return _DMXTexture.SampleLevel(sampler_point_repeat, IN.localTexcoord.xy, 0);
+                    return _DMXTexture.SampleLevel(sampler_point_repeat, VideoTexel(IN.localTexcoord.xy), 0);
                 }
             }
             ENDCG

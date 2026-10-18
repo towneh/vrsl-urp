@@ -125,6 +125,13 @@ float2 LegacyRead(int channel, int sector)
 
 }
 
+// As VRSLDMX.hlsl's vrsldmx_legacy_texel: the texel below and to the left of a Legacy
+// position, which mostly sits on a texel edge, at its centre.
+float2 LegacyTexel(float2 uv)
+{
+    return (floor(uv * _VRSLDMXTexelSize.zw - 0.25) + 0.5) * _VRSLDMXTexelSize.xy;
+}
+
 float2 IndustryRead(int x, int y)
 {
     float resMultiplierX = (_VRSLDMXTexelSize.z / 13);
@@ -154,7 +161,7 @@ bool getDMXCell(uint DMXChannel, out float2 uv, out uint component)
     uint slot   = (flat - 1u) % 13u + 1u;
     uint sector = (flat - 1u) / 13u;
     bool legacy = _VRSLU_DMXGridLayout == 2;
-    uv = legacy ? LegacyRead(slot - 1, sector) : IndustryRead(slot, sector + 1);
+    uv = legacy ? LegacyTexel(LegacyRead(slot - 1, sector)) : IndustryRead(slot, sector + 1);
     bool onGrid = legacy ? sector < 50u : (sector + 1u) * _VRSLDMXTexelSize.z <= 13.0 * _VRSLDMXTexelSize.w;
     return DMXChannel != 0u && component <= 2u && onGrid;
 }
