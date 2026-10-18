@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The decode in each grid layout and from a channel source, and what the fixtures
-    /// read from each. Rows G6 to G8, G16 to G22 and N29 to N33 of TESTING.md.
+    /// read from each. Rows G6 to G8, G16 to G23 and N29 to N33 of TESTING.md.
     /// </summary>
     class VRSLGridDecodeTests : VRSLDMXTest
     {
@@ -1243,17 +1243,12 @@ namespace VRSL.URP.Tests
         /// rounds a position on a texel edge. A 50 by 50 grid, each texel a grey naming its
         /// place in a 4 by 4 tile, read through the compute's value and strobe reads and both
         /// includes' value, movement, spin and strobe reads: every channel takes the texel
-        /// below and to the left of its read position (<see cref="LegacyTexelOf"/>). And the
-        /// shipped Legacy chain fed a video grid lit only at even columns of even rows: every
-        /// texel of the colour, movement, strobe-timer and spin-timer textures reads the video
-        /// texel below and to the left of its centre, so all of them light.
+        /// below and to the left of its read position (<see cref="LegacyTexelOf"/>).
         /// </summary>
         [UnityTest]
         public IEnumerator G22_legacy_reads_take_the_texel_the_layout_names()
         {
             const int count = 50 * 13;
-            var asset = VRSLGridSwitchTests.Shipped();
-            var modes = VRSLGridSwitchTests.Snapshot(asset);
             var rig = VRSLDMXRig.Build(withSource: false);
             RenderTexture tile = null;
             VRSLGridTextures grid = null;
@@ -1303,28 +1298,6 @@ namespace VRSL.URP.Tests
                                 + string.Join(", ", off.Take(12)));
                 }
 
-                // The chain's own reads of the video grid.
-                rig.Manager.enabled      = false;
-                rig.Manager.gridTextures = asset;
-                rig.Manager.enabled      = true;
-                VRSLDMXRig.ClearGridTextures(asset.legacy);
-                yield return VRSLGridSwitchTests.PastTheChainsStartUp(rig);
-                var video = (RenderTexture)((CustomRenderTexture)asset.legacy.main).material.GetTexture("_DMXTexture");
-                var lit = new Color[video.width * video.height];
-                for (int y = 0; y < video.height; y += 2)
-                    for (int x = 0; x < video.width; x += 2)
-                        lit[y * video.width + x] = Color.white;
-                Blit(lit, video);
-                yield return rig.Step(30);
-                foreach (var (name, rt) in new[] { ("colour", asset.legacy.main), ("movement", asset.legacy.movement),
-                                                   ("strobe timer", asset.legacy.strobeTimer), ("spin timer", asset.legacy.spinTimer) })
-                {
-                    // An unlit read holds 0 exactly; a lit one climbs towards 1 or, in the
-                    // timers, gathers phase, which can wrap close to 0 but not onto it.
-                    int dark = Texels(rt).Count(c => c.r <= 0f);
-                    if (dark > 0) wrong.Add($"{name} ({rt.width}x{rt.height}): {dark} texels read an unlit video texel");
-                }
-
                 Debug.Log("[G22] " + (wrong.Count == 0 ? "every Legacy read took the texel the layout names"
                                                         : string.Join("; ", wrong)));
                 Assert.IsEmpty(wrong, string.Join("; ", wrong));
@@ -1332,10 +1305,72 @@ namespace VRSL.URP.Tests
             finally
             {
                 rig.Dispose();
-                VRSLDMXRig.ClearGridTextures(asset.legacy);
-                VRSLGridSwitchTests.Restore(modes);
                 if (tile != null) { tile.Release(); Object.DestroyImmediate(tile); }
                 if (grid != null) Object.DestroyImmediate(grid);
+            }
+        }
+
+        /// <summary>
+        /// G23. The decode textures read the video grid texel by texel, each from the video
+        /// texel below and to the left of its own centre, which in every shipped layout sits on
+        /// a corner of four video texels. The layout's shipped chain is fed a video grid lit
+        /// only at those texels; every texel of its colour, movement, strobe-timer and
+        /// spin-timer textures lights.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G23_the_decode_chain_reads_the_video_texel_below_and_left_of_each_texel(
+            [Values(VRSLGridLayout.Horizontal, VRSLGridLayout.Vertical, VRSLGridLayout.Legacy)] VRSLGridLayout layout)
+        {
+            var asset = VRSLGridSwitchTests.Shipped();
+            var modes = VRSLGridSwitchTests.Snapshot(asset);
+            var set   = asset.For(layout);
+            var rig   = VRSLDMXRig.Build(withSource: false);
+            try
+            {
+                VRSLDMXRig.ClearGridTextures(set);
+                rig.Manager.SetDmxInput((int)layout);
+                yield return VRSLGridSwitchTests.PastTheChainsStartUp(rig);
+                Assert.AreEqual((VRSLGridLayout?)layout, rig.Manager.GridLayout);
+
+                var main  = set.main;
+                var video = (RenderTexture)((CustomRenderTexture)main).material.GetTexture("_DMXTexture");
+                int sx = video.width / main.width, sy = video.height / main.height;
+                int lx = Mathf.FloorToInt(0.5f * sx - 0.25f), ly = Mathf.FloorToInt(0.5f * sy - 0.25f);
+                var lit = new Color[video.width * video.height];
+                for (int y = ly; y < video.height; y += sy)
+                    for (int x = lx; x < video.width; x += sx)
+                        lit[y * video.width + x] = Color.white;
+                Blit(lit, video);
+                yield return rig.Step(30);
+
+                // At fixed strobe rates the timer holds the clock times the rate its read picks:
+                // the low rate for an unlit read, the high one for a lit one.
+                var timer = ((CustomRenderTexture)set.strobeTimer).material;
+                float timerUnlit = timer.IsKeywordEnabled("_VRSL_STATICFREQUENCIES")
+                    ? Shader.GetGlobalVector("_Time").y * 0.5f * (timer.GetFloat("_LowFrequency") + timer.GetFloat("_HighFrequency"))
+                    : 0f;
+                var wrong = new List<string>();
+                foreach (var (name, rt) in new[] { ("colour", set.main), ("movement", set.movement),
+                                                   ("strobe timer", set.strobeTimer), ("spin timer", set.spinTimer) })
+                {
+                    Assert.IsTrue(video.width == rt.width * sx && video.height == rt.height * sy,
+                        $"{layout} {name} is {rt.width}x{rt.height}, not the colour texture's size");
+                    // An unlit read holds 0 exactly; a lit one climbs towards 1 or, in the
+                    // timers, gathers phase, which can wrap close to 0 but not onto it.
+                    float unlit = rt == set.strobeTimer ? timerUnlit : 0f;
+                    int dark = Texels(rt).Count(c => c.r <= unlit);
+                    if (dark > 0) wrong.Add($"{name}: {dark} of {rt.width * rt.height} texels read an unlit video texel");
+                }
+                Debug.Log($"[G23] {layout} ({video.width}x{video.height} video, {main.width}x{main.height} decode): "
+                        + (wrong.Count == 0 ? "every decode texel read the video texel below and to its left"
+                                            : string.Join("; ", wrong)));
+                Assert.IsEmpty(wrong, $"{layout}: " + string.Join("; ", wrong));
+            }
+            finally
+            {
+                rig.Dispose();
+                VRSLDMXRig.ClearGridTextures(set);
+                VRSLGridSwitchTests.Restore(modes);
             }
         }
 
