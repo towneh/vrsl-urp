@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
 {
     /// <summary>
     /// The decode in each grid layout and from a channel source, and what the fixtures
-    /// read from each. Rows G6 to G8, G16 to G20 and N29 to N33 of TESTING.md.
+    /// read from each. Rows G6 to G8, G16 to G22 and N29 to N33 of TESTING.md.
     /// </summary>
     class VRSLGridDecodeTests : VRSLDMXTest
     {
@@ -1109,6 +1109,257 @@ namespace VRSL.URP.Tests
                 painted?.Dispose();
                 if (white != null) { white.Release(); Object.DestroyImmediate(white); }
                 if (grid != null) Object.DestroyImmediate(grid);
+            }
+        }
+
+        /// <summary>
+        /// Paint a Legacy video grid the way a show's video carries it: 26 cells across, an
+        /// even sector's 13 channels in cells 0 to 12 and the odd sector's in 13 to 25, and a
+        /// row of two sectors per cell height from the bottom, also 26 to the grid. Cell c
+        /// covers [c, c + 1) of 26, so a texel belongs to the cell its centre falls in.
+        /// </summary>
+        static void PaintLegacyVideo(VRSLGridTextures.Set set, float[] values)
+        {
+            var main  = (CustomRenderTexture)set.main;
+            var video = (RenderTexture)main.material.GetTexture("_DMXTexture");
+            var pixels = new Color[video.width * video.height];
+            for (int y = 0; y < video.height; y++)
+                for (int x = 0; x < video.width; x++)
+                {
+                    int column = Mathf.FloorToInt((x + 0.5f) * 26f / video.width);
+                    int row    = Mathf.FloorToInt((y + 0.5f) * 26f / video.height);
+                    int ch     = (2 * row + column / 13) * 13 + column % 13;
+                    float v    = ch < values.Length ? values[ch] : 0f;
+                    pixels[y * video.width + x] = new Color(v, v, v, 1f);
+                }
+            Blit(pixels, video);
+        }
+
+        static void Blit(Color[] pixels, RenderTexture target)
+        {
+            var source = new Texture2D(target.width, target.height, TextureFormat.RGBAFloat, false, true)
+                         { filterMode = FilterMode.Point, wrapMode = TextureWrapMode.Clamp };
+            try
+            {
+                source.SetPixels(pixels);
+                source.Apply(false);
+                Graphics.Blit(source, target);
+            }
+            finally { Object.DestroyImmediate(source); }
+        }
+
+        /// <summary>
+        /// G21. A Legacy video grid in the video's own layout (<see cref="PaintLegacyVideo"/>),
+        /// decoded by the shipped Legacy chain, every sector's dimmer (slot 5) full and its
+        /// strobe channel (slot 6) full on every third sector and at zero on the rest: through
+        /// the compute and both includes, every third sector strobes and every other sector's
+        /// strobe stays open on every frame. A strobe stage reading a neighbouring cell takes
+        /// its status from the dimmer and closes a held fixture; one reading another row
+        /// strobes the wrong sectors.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G21_each_legacy_sector_strobes_from_its_own_strobe_channel()
+        {
+            const int sectors = 50;
+            bool Strobes(int sector) => sector % 3 == 0;
+            var asset = VRSLGridSwitchTests.Shipped();
+            var modes = VRSLGridSwitchTests.Snapshot(asset);
+            var rig = VRSLDMXRig.Build(withSource: false);
+            try
+            {
+                VRSLDMXRig.ClearGridTextures(asset.legacy);
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.LegacyGrid);
+                yield return VRSLGridSwitchTests.PastTheChainsStartUp(rig);
+                Assert.AreEqual((VRSLGridLayout?)VRSLGridLayout.Legacy, rig.Manager.GridLayout);
+
+                var values = new float[sectors * 13];
+                for (int s = 0; s < sectors; s++)
+                {
+                    values[s * 13 + 4] = 1f;
+                    values[s * 13 + 5] = Strobes(s) ? 1f : 0f;
+                }
+                PaintLegacyVideo(asset.legacy, values);
+                yield return rig.Step(30);
+
+                var live = rig.Manager.LiveTextures;
+                var open = new Dictionary<string, int[]>();   // reader -> frames open, per sector
+                const int frames = 60;
+                for (int f = 0; f < frames; f++)
+                {
+                    yield return null;
+                    rig.RenderFrame();
+                    var reads = new Dictionary<string, float[]>
+                    {
+                        ["compute"] = rig.ReadComputeReads(1, sectors * 13, 3),
+                    };
+                    foreach (var probe in new[] { "Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads" })
+                        reads[probe.Contains("Urp") ? "URP include" : "Built-in include"] =
+                            ReadThrough(probe, sectors * 13, live.main, live.spinTimer, rig.Manager, fromBuffer: false,
+                                        VRSLGridLayout.Legacy, strobe: live.strobe).Select(c => c.a).ToArray();
+                    foreach (var pair in reads)
+                    {
+                        if (!open.TryGetValue(pair.Key, out var counts)) open[pair.Key] = counts = new int[sectors];
+                        for (int s = 0; s < sectors; s++)
+                            if (pair.Value[s * 13 + 5] > 0.5f) counts[s]++;
+                    }
+                }
+
+                var wrong = new List<string>();
+                foreach (var pair in open)
+                {
+                    var still = Enumerable.Range(0, sectors).Where(s => Strobes(s) && (pair.Value[s] == 0 || pair.Value[s] == frames));
+                    var dark  = Enumerable.Range(0, sectors).Where(s => !Strobes(s) && pair.Value[s] < frames);
+                    if (still.Any())
+                        wrong.Add($"{pair.Key}: strobing sectors that never changed state: {string.Join(", ", still)}");
+                    if (dark.Any())
+                        wrong.Add($"{pair.Key}: held sectors that closed (frames open of {frames}): "
+                                + string.Join(", ", dark.Select(s => $"{s} ({pair.Value[s]})")));
+                }
+                Debug.Log("[G21] " + (wrong.Count == 0
+                    ? $"every reader strobed the {Enumerable.Range(0, sectors).Count(Strobes)} strobing sectors "
+                    + "and held the rest open on every frame"
+                    : string.Join("; ", wrong)));
+                Assert.IsEmpty(wrong, string.Join("; ", wrong));
+            }
+            finally
+            {
+                rig.Dispose();
+                VRSLDMXRig.ClearGridTextures(asset.legacy);
+                VRSLGridSwitchTests.Restore(modes);
+            }
+        }
+
+        /// <summary>The texel of the 50 by 50 Legacy decode textures a reader takes channel
+        /// <paramref name="ch"/> from: the texel below and to the left of the Legacy read's
+        /// position, which sits on a texel corner everywhere but the shifted rows (sector 23
+        /// on) and columns (sector 40 on), where it sits inside the texel named here.</summary>
+        static Vector2Int LegacyTexelOf(int ch)
+        {
+            int sector = (ch - 1) / 13, slot = (ch - 1) % 13, row = sector / 2;
+            return new Vector2Int(2 * slot + 25 * (sector & 1), sector >= 23 ? 2 * row - 1 : 2 * row);
+        }
+
+        /// <summary>A texel's place in a 4 by 4 tile, as a grey that survives a half: a
+        /// texel one over in either direction reads another.</summary>
+        static float TileGrey(int x, int y) => ((x & 3) + 4 * (y & 3) + 1) / 17f;
+
+        /// <summary>
+        /// G22. Every Legacy read lands on a texel chosen by the layout, not by how a GPU
+        /// rounds a position on a texel edge. A 50 by 50 grid, each texel a grey naming its
+        /// place in a 4 by 4 tile, read through the compute's value and strobe reads and both
+        /// includes' value, movement, spin and strobe reads: every channel takes the texel
+        /// below and to the left of its read position (<see cref="LegacyTexelOf"/>). And the
+        /// shipped Legacy chain fed a video grid lit only at even columns of even rows: every
+        /// texel of the colour, movement, strobe-timer and spin-timer textures reads the video
+        /// texel below and to the left of its centre, so all of them light.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator G22_legacy_reads_take_the_texel_the_layout_names()
+        {
+            const int count = 50 * 13;
+            var asset = VRSLGridSwitchTests.Shipped();
+            var modes = VRSLGridSwitchTests.Snapshot(asset);
+            var rig = VRSLDMXRig.Build(withSource: false);
+            RenderTexture tile = null;
+            VRSLGridTextures grid = null;
+            try
+            {
+                yield return rig.Step(2);
+                var pixels = new Color[50 * 50];
+                for (int y = 0; y < 50; y++)
+                    for (int x = 0; x < 50; x++)
+                        pixels[y * 50 + x] = new Color(TileGrey(x, y), TileGrey(x, y), TileGrey(x, y), 1f);
+                tile = Painted(pixels, new Vector2Int(50, 50), "Legacy tile grid");
+                grid = ScriptableObject.CreateInstance<VRSLGridTextures>();
+                grid.legacy = new VRSLGridTextures.Set { main = tile, movement = tile, strobe = tile, spinTimer = tile };
+                rig.Manager.enabled      = false;
+                rig.Manager.gridTextures = grid;
+                rig.Manager.dmxInput     = VRSLDmxInput.LegacyGrid;
+                rig.Manager.enabled      = true;
+                yield return rig.Step(3);
+                Assert.AreEqual(0, rig.Manager.ChannelCount, "the manager is still reading the channel buffer");
+                Assert.AreEqual((VRSLGridLayout?)VRSLGridLayout.Legacy, rig.Manager.GridLayout);
+
+                var reads = new Dictionary<string, float[]>
+                {
+                    ["compute value"]  = rig.ReadComputeReads(1, count, 0),
+                    ["compute strobe"] = rig.ReadComputeReads(1, count, 3),
+                };
+                foreach (var probe in new[] { "Hidden/VRSL-URP/Tests/UrpReads", "Hidden/VRSL-URP/Tests/BuiltInReads" })
+                {
+                    var probed = ReadThrough(probe, count, tile, tile, rig.Manager, fromBuffer: false,
+                                             VRSLGridLayout.Legacy, strobe: tile);
+                    string name = probe.Contains("Urp") ? "URP include" : "Built-in include";
+                    reads[name + " value"]    = probed.Select(c => c.r).ToArray();
+                    reads[name + " movement"] = probed.Select(c => c.g).ToArray();
+                    reads[name + " spin"]     = probed.Select(c => c.b).ToArray();
+                    reads[name + " strobe"]   = probed.Select(c => c.a).ToArray();
+                }
+                var wrong = new List<string>();
+                foreach (var pair in reads)
+                {
+                    var off = Enumerable.Range(1, count).Where(ch =>
+                    {
+                        var t = LegacyTexelOf(ch);
+                        return Mathf.Abs(pair.Value[ch - 1] - TileGrey(t.x, t.y)) > 0.25f / 17f;
+                    }).ToList();
+                    if (off.Count > 0)
+                        wrong.Add($"{pair.Key} took another texel for {off.Count} channels, first "
+                                + string.Join(", ", off.Take(12)));
+                }
+
+                // The chain's own reads of the video grid.
+                rig.Manager.enabled      = false;
+                rig.Manager.gridTextures = asset;
+                rig.Manager.enabled      = true;
+                VRSLDMXRig.ClearGridTextures(asset.legacy);
+                yield return VRSLGridSwitchTests.PastTheChainsStartUp(rig);
+                var video = (RenderTexture)((CustomRenderTexture)asset.legacy.main).material.GetTexture("_DMXTexture");
+                var lit = new Color[video.width * video.height];
+                for (int y = 0; y < video.height; y += 2)
+                    for (int x = 0; x < video.width; x += 2)
+                        lit[y * video.width + x] = Color.white;
+                Blit(lit, video);
+                yield return rig.Step(30);
+                foreach (var (name, rt) in new[] { ("colour", asset.legacy.main), ("movement", asset.legacy.movement),
+                                                   ("strobe timer", asset.legacy.strobeTimer), ("spin timer", asset.legacy.spinTimer) })
+                {
+                    // An unlit read holds 0 exactly; a lit one climbs towards 1 or, in the
+                    // timers, gathers phase, which can wrap close to 0 but not onto it.
+                    int dark = Texels(rt).Count(c => c.r <= 0f);
+                    if (dark > 0) wrong.Add($"{name} ({rt.width}x{rt.height}): {dark} texels read an unlit video texel");
+                }
+
+                Debug.Log("[G22] " + (wrong.Count == 0 ? "every Legacy read took the texel the layout names"
+                                                        : string.Join("; ", wrong)));
+                Assert.IsEmpty(wrong, string.Join("; ", wrong));
+            }
+            finally
+            {
+                rig.Dispose();
+                VRSLDMXRig.ClearGridTextures(asset.legacy);
+                VRSLGridSwitchTests.Restore(modes);
+                if (tile != null) { tile.Release(); Object.DestroyImmediate(tile); }
+                if (grid != null) Object.DestroyImmediate(grid);
+            }
+        }
+
+        /// <summary>Every texel of a texture, read back as floats.</summary>
+        static Color[] Texels(RenderTexture rt)
+        {
+            var shot = new Texture2D(rt.width, rt.height, TextureFormat.RGBAFloat, false, true);
+            var was  = RenderTexture.active;
+            try
+            {
+                RenderTexture.active = rt;
+                shot.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0, false);
+                shot.Apply(false);
+                return shot.GetPixels();
+            }
+            finally
+            {
+                RenderTexture.active = was;
+                Object.DestroyImmediate(shot);
             }
         }
 
