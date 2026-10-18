@@ -1393,7 +1393,7 @@ namespace VRSL.URP.Tests
         }
 
         static readonly System.Text.RegularExpressions.Regex ProbeVolumePragma = new(
-            @"^[ \t]*#pragma[ \t]+multi_compile(?:_vertex|_fragment)?[ \t](?=[^\n]*\bPROBE_VOLUMES_L1\b)(?=[^\n]*\bPROBE_VOLUMES_L2\b)",
+            @"^[ \t]*#pragma[ \t]+multi_compile(?:_vertex|_fragment)?[ \t](?=[^\n/]*\bPROBE_VOLUMES_L1\b)(?=[^\n/]*\bPROBE_VOLUMES_L2\b)",
             System.Text.RegularExpressions.RegexOptions.Multiline);
 
         /// <summary>
