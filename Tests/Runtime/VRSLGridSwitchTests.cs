@@ -233,21 +233,6 @@ namespace VRSL.URP.Tests
                         if (!Strobes(i) && !on.All(x => x))
                             dark.Add(i.ToString());
                     }
-                    int strobing = Enumerable.Range(0, VRSLDMXRig.FixtureCount).Count(Strobes);
-                    if (layout == VRSLGridLayout.Legacy)
-                    {
-                        // The Legacy strobe textures are 25 by 25 against a 50 by 50 grid, as
-                        // upstream ships them, so one strobe texel serves four cells and which
-                        // fixtures strobe depends on the neighbour it samples. What the row can
-                        // judge is that the strobe runs from Legacy's own timing: a timing
-                        // texture left over from another layout holds every fixture still.
-                        Debug.Log($"[G11] Legacy: {strobing - still.Count} of {strobing} strobing fixtures "
-                                + $"changed state; {dark.Count} held fixtures strobed from a neighbouring cell");
-                        Assert.Less(still.Count, strobing,
-                            $"on Legacy no fixture changed state across {samples.Count} frames, so nothing "
-                          + "strobes from Legacy's timing");
-                        continue;
-                    }
                     Assert.IsEmpty(still, $"on {layout}, {still.Count} fixtures never changed state across "
                         + $"{samples.Count} frames, so they are not strobing from {layout}'s timing: "
                         + string.Join(", ", still));
