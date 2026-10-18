@@ -2,11 +2,14 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.7] — 2026-10-18
+
 ### Fixed
 
 - **Legacy fixtures strobe from their own strobe channel.** On a Legacy grid, right-hand fixtures (odd sectors) took their strobe from the channel beside it, usually the dimmer, so they strobed whenever they were lit. From sector 23 on, every fixture took its strobe from the sector two before it. The Legacy strobe timer and output textures are now 50 by 50, like the rest of the Legacy decode textures; they were 25 by 25.
 - **Legacy reads no longer depend on how the GPU rounds.** Most Legacy grid positions fall exactly on the edge between two texels, and which one a read took was up to the GPU. Every Legacy read, in the fixtures, the realtime lights and the decode textures' reads of the video, now takes the texel below and to the left, which is what desktop D3D11 took, so a framing set up on Windows reads the same on other GPUs. The one exception is an even sector's 13th channel on Legacy, which read the next sector's 1st channel and now reads its own. The decode textures of the Horizontal and Vertical grids read the video the same way, taking the same texels they took on D3D11.
-
 - **Fixture bodies take bounce light from Adaptive Probe Volumes.** In a project whose URP asset uses Probe Volumes for its light probes, the par, blinder, flasher, light bar and AudioLink static bodies got only the ambient probe, while URP Lit surfaces beside them picked up the baked bounce light. They now sample the volumes the way URP Lit does, as the mover bodies already did. Projects that don't use Probe Volumes build no extra shader variants.
 - **Every fixture body prefab blends light probes.** The par, point bar and flasher bodies (DMX and AudioLink) and the AudioLink mover bodies shipped with Light Probes off, so they got only the ambient probe whatever their shader sampled. They're now set to Blend Probes like the other bodies. A scene instance that changed the setting keeps its own value.
 
