@@ -1,4 +1,6 @@
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -9,7 +11,7 @@ namespace VRSL.URP.Tests
     /// The rows that judge what arrives in the channel buffer and what a fixture
     /// decodes out of it. None of them depend on elapsed time.
     ///
-    /// Rows N1, N5, N6, N7 and N13 of TESTING.md.
+    /// Rows N1, N5, N6, N7, N13 and N35 of TESTING.md.
     /// </summary>
     class VRSLDMXBufferTests : VRSLDMXTest
     {
@@ -211,5 +213,106 @@ namespace VRSL.URP.Tests
             }
             finally { rig.Dispose(); }
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// The pixels inside <paramref name="r"/>'s screen bounds that aren't the camera's
+        /// clear colour: what the renderer drew there.
+        /// </summary>
+        static int Drawn(Camera camera, Texture2D frame, Renderer r, Color clear)
+        {
+            var b = r.bounds;
+            Vector2 lo = new Vector2(float.MaxValue, float.MaxValue), hi = new Vector2(float.MinValue, float.MinValue);
+            for (int i = 0; i < 8; i++)
+            {
+                var corner = b.center + Vector3.Scale(b.extents,
+                    new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                var s = camera.WorldToScreenPoint(corner);
+                lo = Vector2.Min(lo, s);
+                hi = Vector2.Max(hi, s);
+            }
+            int x0 = Mathf.Clamp((int)lo.x, 0, frame.width - 1),  x1 = Mathf.Clamp((int)hi.x, 0, frame.width - 1);
+            int y0 = Mathf.Clamp((int)lo.y, 0, frame.height - 1), y1 = Mathf.Clamp((int)hi.y, 0, frame.height - 1);
+            var pixels = frame.GetPixels();
+            int n = 0;
+            for (int y = y0; y <= y1; y++)
+                for (int x = x0; x <= x1; x++)
+                {
+                    var p = pixels[y * frame.width + x];
+                    if (Mathf.Abs(p.r - clear.r) + Mathf.Abs(p.g - clear.g) + Mathf.Abs(p.b - clear.b) > 0.1f) n++;
+                }
+            return n;
+        }
+
+        /// <summary>
+        /// N35. The bodies that read the DMX buffers still draw once the manager is switched
+        /// off. They're J6's cubes for the Opaque surface (in its 13-channel mode, where it
+        /// reads DMX), the multi-channel bar and both DMX movers, unlit over a magenta clear,
+        /// so a drawn body reads dark against it and a skipped one reads magenta. D3D12 and
+        /// Vulkan skip a draw whose shader declares a buffer that isn't bound; D3D11 doesn't,
+        /// so the row only bites on those two.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator N35_dmx_bodies_still_draw_with_the_manager_switched_off()
+        {
+            var rig = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var owned = new List<Object>();
+            try
+            {
+                var (cubes, _) = VRSLParBlinderBodyTests.BodyCubes(rig, "N35", owned);
+                var readers = new[]
+                {
+                    "VRSL-URP/Standard Static/Surface Shaders/Opaque",
+                    "VRSL-URP/Standard Static/Surface Shaders/Opaque Multi-Channel Bar",
+                    "VRSL-URP/Standard Mover/Fixture",
+                    "VRSL-URP/Wash Mover/Fixture",
+                };
+                var bodies = cubes.Where(c => readers.Contains(c.shader)).ToList();
+                Assert.AreEqual(readers.Length, bodies.Count, "J6's cubes don't carry every body that reads the DMX buffers");
+                var opaque = bodies[0].renderer.sharedMaterial;
+                opaque.SetFloat("_ChannelMode", 3f);
+                opaque.EnableKeyword("_13CH_MODE");
+
+                var clear = Color.magenta;
+                rig.Camera.backgroundColor = clear;
+                rig.Camera.transform.SetPositionAndRotation(new Vector3(200f, 1.7f, -6f), Quaternion.identity);
+                yield return rig.Step(2);
+
+                int[] Capture(string what)
+                {
+                    var frame = VRSLParBlinderBodyTests.CaptureHdr(rig);
+                    try
+                    {
+                        var drawn = bodies.Select(b => Drawn(rig.Camera, frame, b.renderer, clear)).ToArray();
+                        for (int i = 0; i < bodies.Count; i++) Debug.Log($"[N35] {what}: {bodies[i].shader} drew {drawn[i]} px");
+                        return drawn;
+                    }
+                    finally { Object.DestroyImmediate(frame); }
+                }
+
+                var on = Capture($"manager on, {SystemInfo.graphicsDeviceType}");
+                for (int i = 0; i < bodies.Count; i++)
+                    Assert.Greater(on[i], 200, $"{bodies[i].shader} draws only {on[i]} px with the manager running, "
+                                             + "so the frame doesn't frame it and the row has nothing to judge");
+
+                rig.Manager.enabled = false;
+                yield return null;
+                var off = Capture($"manager off, {SystemInfo.graphicsDeviceType}");
+
+                var failures = new List<string>();
+                for (int i = 0; i < bodies.Count; i++)
+                    if (off[i] < on[i] / 2)
+                        failures.Add($"{bodies[i].shader} draws {off[i]} px with the manager off against {on[i]} with it on. "
+                                   + "On D3D12 and Vulkan a draw whose shader declares a DMX buffer that isn't bound is "
+                                   + "skipped, and switching the manager off released the ones it bound");
+                if (failures.Count > 0) Assert.Fail(string.Join("\n", failures));
+            }
+            finally
+            {
+                rig.Dispose();
+                foreach (var o in owned) if (o != null) Object.DestroyImmediate(o);
+            }
+        }
+#endif
     }
 }
