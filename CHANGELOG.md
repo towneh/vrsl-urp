@@ -2,7 +2,13 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Fixture bodies can take light from LTCGI screens.** The par, blinder, flasher and light bar bodies and the spot and wash mover bodies have a **Lit by LTCGI Screens** toggle, off by default. With it on and [LTCGI](https://github.com/PiMaker/ltcgi) installed, a video wall lights the housings the way it lights the room around them. To turn it on without changing the package's materials, make a Material Variant of a fixture's body material in your own project, tick the toggle on the variant and assign it to your fixtures. LTCGI's controller picks up the renderers it's ticked on. The package doesn't depend on LTCGI: with the toggle off nothing about the shaders changes, and a project without LTCGI builds as before.
+
+### Fixed
+
+- **DMX fixtures no longer wipe what other components put on their renderers.** A fixture replaced its body renderers' property block whenever it set itself up or was re-addressed, so anything another component had stored there was lost. Fixtures now add their values to the block that's already there, which the LTCGI toggle above relies on: LTCGI keeps each lit renderer's screen data in that block.
 
 ## [0.3.0-rc.7] — 2026-10-18
 
