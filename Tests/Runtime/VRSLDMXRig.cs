@@ -77,6 +77,9 @@ namespace VRSL.URP.Tests
         UnityEngine.Rendering.Universal.DepthPrimingMode? _priming;
         readonly Dictionary<UnityEngine.Rendering.Universal.UniversalRendererData,
                             UnityEngine.Rendering.Universal.DepthPrimingMode> _primingWas = new();
+        UnityEngine.Rendering.Universal.CopyDepthMode? _copyDepth;
+        readonly Dictionary<UnityEngine.Rendering.Universal.UniversalRendererData,
+                            UnityEngine.Rendering.Universal.CopyDepthMode> _copyDepthWas = new();
         float         _captureWas;
         bool          _forceLoadWas;
         List<Light>   _lightsWereOn;
@@ -138,6 +141,14 @@ namespace VRSL.URP.Tests
         public const UnityEngine.Rendering.Universal.DepthPrimingMode DefaultPriming =
             UnityEngine.Rendering.Universal.DepthPrimingMode.Forced;
 
+        /// <summary>When every Universal Renderer copies the depth texture while the rig
+        /// stands, unless <see cref="Build"/> was told to hold none. After Opaques is the
+        /// host's desktop renderer; a renderer copying after transparents leaves the
+        /// lens flares' occlusion test reading depth not yet written in a camera VRSL
+        /// skips (row M12), so rows read the same in any project.</summary>
+        public const UnityEngine.Rendering.Universal.CopyDepthMode DefaultCopyDepth =
+            UnityEngine.Rendering.Universal.CopyDepthMode.AfterOpaques;
+
         /// <summary>The GPU Resident Drawer mode the pipeline asset is held at while
         /// the rig stands, unless <see cref="Build"/> was told to hold none. Disabled,
         /// so the floor's own material reaches the surface prepass: a mesh the drawer
@@ -156,6 +167,9 @@ namespace VRSL.URP.Tests
         /// whatever the host left: two captures meant to differ in priming came back
         /// bit-identical, and the frame a stored capture was seeded from stopped
         /// reproducing on the same code.</param>
+        /// <param name="copyDepth">When the depth texture is copied, held on every
+        /// Universal Renderer at every render and put back on dispose; null holds
+        /// nothing.</param>
         /// <param name="drawer">GPU Resident Drawer mode, held on the pipeline asset at
         /// every render and put back on dispose; null holds nothing. Setting the
         /// asset's mode recreates the pipeline, so it is written only when it
@@ -166,6 +180,7 @@ namespace VRSL.URP.Tests
         public static VRSLDMXRig Build(int fixtures = FixtureCount, bool withSource = true,
                                        int targetSize = TargetSize, int msaa = 1,
                                        UnityEngine.Rendering.Universal.DepthPrimingMode? priming = DefaultPriming,
+                                       UnityEngine.Rendering.Universal.CopyDepthMode? copyDepth = DefaultCopyDepth,
                                        GPUResidentDrawerMode? drawer = DefaultDrawer,
                                        float? renderScale = null)
         {
@@ -184,6 +199,15 @@ namespace VRSL.URP.Tests
                         rig._primingWas[universal] = universal.depthPrimingMode;
             }
             rig.HoldPriming();
+            rig._copyDepth = copyDepth;
+            if (copyDepth.HasValue && GraphicsSettings.currentRenderPipeline
+                    is UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset copyAsset)
+            {
+                foreach (var data in copyAsset.rendererDataList)
+                    if (data is UnityEngine.Rendering.Universal.UniversalRendererData universal)
+                        rig._copyDepthWas[universal] = universal.copyDepthMode;
+            }
+            rig.HoldCopyDepth();
 
             // Every mip of every texture, for the rig's lifetime. The host streams
             // mips, and the rig's camera is disabled, so nothing ever tells the
@@ -440,6 +464,7 @@ namespace VRSL.URP.Tests
             if (_asset != null && _msaa > 1 && _asset.msaaSampleCount != _msaa)
                 _asset.msaaSampleCount = _msaa;
             HoldPriming();
+            HoldCopyDepth();
             HoldDrawer();
             HoldRenderScale();
             camera.Render();
@@ -471,6 +496,14 @@ namespace VRSL.URP.Tests
             foreach (var renderer in _primingWas.Keys)
                 if (renderer != null && renderer.depthPrimingMode != _priming.Value)
                     renderer.depthPrimingMode = _priming.Value;
+        }
+
+        void HoldCopyDepth()
+        {
+            if (!_copyDepth.HasValue) return;
+            foreach (var renderer in _copyDepthWas.Keys)
+                if (renderer != null && renderer.copyDepthMode != _copyDepth.Value)
+                    renderer.copyDepthMode = _copyDepth.Value;
         }
 
         /// <summary>Advance exactly <paramref name="frames"/> frames, which is
@@ -1001,6 +1034,10 @@ namespace VRSL.URP.Tests
                 if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
             _primingWas.Clear();
             _priming = null;
+            foreach (var pair in _copyDepthWas)
+                if (pair.Key != null) pair.Key.copyDepthMode = pair.Value;
+            _copyDepthWas.Clear();
+            _copyDepth = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
             _target = null;
             foreach (var secondary in Secondaries)

@@ -255,9 +255,11 @@ namespace VRSL.URP.Tests
         internal static IEnumerator CaptureShaderDriven(Realtime realtime, VRSLGridLayout layout, bool bright,
                                                         System.Action<float[]> glow,
                                                         SecondaryCameraMode? mirror = null,
-                                                        bool dataReader = false)
+                                                        bool dataReader = false,
+                                                        UnityEngine.Rendering.Universal.CopyDepthMode copyDepth =
+                                                            VRSLDMXRig.DefaultCopyDepth)
         {
-            using var rig = VRSLDMXRig.Build();
+            using var rig = VRSLDMXRig.Build(copyDepth: copyDepth);
             var values = VRSLGridDecodeTests.ImageValues(VRSLDMXRig.ChannelOf(VRSLDMXRig.FixtureCount - 1) + 25);
             if (!bright) values = new float[values.Length];
             var size    = VRSLGridDecodeTests.SizeOf(layout);

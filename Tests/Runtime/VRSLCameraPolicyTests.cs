@@ -9,7 +9,7 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// The secondary-camera rows: what a mirror is lit at, what a mirror costs, and
     /// that the decode and the integrators stay once per frame however many cameras
-    /// look. Rows M5, M7 to M11 of TESTING.md.
+    /// look. Rows M5, M7 to M12 of TESTING.md.
     /// </summary>
     class VRSLCameraPolicyTests : VRSLDMXTest
     {
@@ -439,6 +439,50 @@ namespace VRSL.URP.Tests
                     $"{prefabs[i]} glows {glow[true][i]:F2} in a DMX reader camera, against {glow[false][i]:F2} in a "
                   + "mirror: the reader was handed the grid, so the fixture's glow can feed the DMX input");
             }
+        }
+
+        /// <summary>
+        /// M12. A lens flare tests its occlusion against the camera's depth texture from the
+        /// transparent pass. In a camera the policy skips, nothing asks URP for that depth
+        /// any earlier, so on a renderer that copies it after transparents the flare reads
+        /// depth not yet written this frame and fades out. The flasher, the one of Z7's
+        /// fixtures with a flare, seen from a mirror under <c>Skip</c> with the renderers
+        /// copying depth after opaques, then after transparents, then after transparents
+        /// with the mirror under <c>Match</c>, whose VRSL passes ask for depth first.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator M12_flares_in_a_skipped_mirror_need_depth_copied_after_opaques()
+        {
+            var prefabs = VRSLRuntimeEnableTests.ShaderDrivenPrefabs;
+            int flasher = System.Array.FindIndex(prefabs, p => p.Contains("Flasher"));
+            Assert.GreaterOrEqual(flasher, 0, "Z7's fixtures carry no flasher");
+            const VRSLRuntimeEnableTests.Realtime none = VRSLRuntimeEnableTests.Realtime.NeverOn;
+            var cases = new[]
+            {
+                ("Skip, after opaques",       SecondaryCameraMode.Skip,  UnityEngine.Rendering.Universal.CopyDepthMode.AfterOpaques),
+                ("Skip, after transparents",  SecondaryCameraMode.Skip,  UnityEngine.Rendering.Universal.CopyDepthMode.AfterTransparents),
+                ("Match, after transparents", SecondaryCameraMode.Match, UnityEngine.Rendering.Universal.CopyDepthMode.AfterTransparents),
+            };
+            var glow = new float[cases.Length];
+            for (int c = 0; c < cases.Length; c++)
+            {
+                var (what, mode, copy) = cases[c];
+                float[] lit = null, dark = null;
+                yield return VRSLRuntimeEnableTests.CaptureShaderDriven(none, VRSLGridLayout.Horizontal, true,
+                                                                       g => lit = g, mode, copyDepth: copy);
+                yield return VRSLRuntimeEnableTests.CaptureShaderDriven(none, VRSLGridLayout.Horizontal, false,
+                                                                       g => dark = g, mode, copyDepth: copy);
+                glow[c] = lit[flasher] - dark[flasher];
+                Debug.Log($"[M12] {what}: {prefabs[flasher]} glow {glow[c]:F2}");
+            }
+
+            Assert.Greater(glow[0], 1.5f * glow[1],
+                $"{prefabs[flasher]} glows {glow[0]:F2} in a skipped mirror with depth copied after opaques and "
+              + $"{glow[1]:F2} after transparents. If they match, a flare in a skipped camera now sees this frame's "
+              + "depth on either renderer setting, and the limitation the wiki and TESTING describe is gone");
+            Assert.Greater(glow[2], 1.5f * glow[1],
+                $"{prefabs[flasher]} glows {glow[2]:F2} in a mirror under Match with depth copied after transparents, "
+              + $"against {glow[1]:F2} under Skip: VRSL's passes on the camera no longer bring the depth copy forward");
         }
 #endif
     }
