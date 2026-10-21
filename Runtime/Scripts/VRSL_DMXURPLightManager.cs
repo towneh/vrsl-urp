@@ -639,15 +639,12 @@ namespace VRSL.URP
             // never be two managers with resources allocated at once.
             // ReleaseChannelBuffers frees the channel buffer and leaves the globals
             // describing it, so without this the count goes on saying there are channels
-            // to read. A successor replaces both; with nobody to hand to, the count is
-            // what gets put back.
+            // to read. A successor replaces both; with nobody to hand to, the count goes
+            // back to zero and the bindings to VRSLDMXFallbackBuffers. The fixture
+            // shaders read the channel and timing buffers only while the count is above
+            // zero, the contract the compute keeps as well, but D3D12 and Vulkan skip a
+            // draw whose declared buffers aren't bound whether it reads them or not.
             //
-            // The count is the guard, and the bindings are deliberately left alone. There
-            // is no way to unbind a global buffer that does not mean holding a live one
-            // past teardown, and a buffer nothing releases is a warning at every domain
-            // reload. The fixture shaders read the channel and timing buffers only while
-            // the count is above zero, the contract the compute keeps as well, so a count
-            // of zero is enough.
             // Before the hand-over, so a successor notes the assets as they really are
             // rather than as this manager left them.
             RestoreUpdateModes();
@@ -659,6 +656,7 @@ namespace VRSL.URP
                 Shader.SetGlobalInteger(s_DMXChannelCount, 0);
                 Shader.SetGlobalInteger(s_DMXGridLayout, 0);
                 Shader.SetGlobalInteger(s_StrobeDisabled, 0);
+                VRSLDMXFallbackBuffers.Bind();
             }
         }
         /// <summary>
