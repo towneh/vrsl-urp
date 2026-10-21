@@ -21,10 +21,14 @@ namespace VRSL.URP
         static readonly int s_StrobePhase = Shader.PropertyToID("_VRSLU_DMXStrobePhase");
 
         static GraphicsBuffer s_channels, s_movement, s_spinPhase, s_strobePhase;
+        // Set by the quit and reload hooks: a manager switching off after them must not
+        // allocate buffers that nothing is left to release.
+        static bool s_shutDown;
 
         /// <summary>Bind the fallback buffers in place of a manager's.</summary>
         internal static void Bind()
         {
+            if (s_shutDown) return;
             // A headless server or a -nographics run draws nothing to skip.
             if (SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null) return;
             if (s_channels == null || !s_channels.IsValid())
@@ -48,6 +52,12 @@ namespace VRSL.URP
             return buffer;
         }
 
+        static void ShutDown()
+        {
+            s_shutDown = true;
+            Release();
+        }
+
         static void Release()
         {
             s_channels?.Release();    s_channels    = null;
@@ -66,15 +76,17 @@ namespace VRSL.URP
 #endif
         static void OnLoad()
         {
+            // Statics survive entering Play with domain reload off.
+            s_shutDown = false;
             Bind();
 #if UNITY_EDITOR
-            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= Release;
-            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += Release;
-            UnityEditor.EditorApplication.quitting -= Release;
-            UnityEditor.EditorApplication.quitting += Release;
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= ShutDown;
+            UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ShutDown;
+            UnityEditor.EditorApplication.quitting -= ShutDown;
+            UnityEditor.EditorApplication.quitting += ShutDown;
 #else
-            Application.quitting -= Release;
-            Application.quitting += Release;
+            Application.quitting -= ShutDown;
+            Application.quitting += ShutDown;
 #endif
         }
     }
