@@ -812,6 +812,23 @@ script, so a check that opens the example scenes opens copies of them.
 | Y7 | — | The Y1 project with AcChosen's package and an upstream AudioLink mover beside a DMX one; **VRSL → URP → Migrate Scene Fixtures**, then AudioLink added and the tool run again. AcChosen's package depends on AudioLink itself and needs UdonSharp to compile, so the row takes that dependency out of its `package.json` and adds stand-ins for UdonSharp and the VRChat SDK, as L4 does | The DMX fixture migrates; the AudioLink one stays where it is and the summary lists it under "AudioLink fixtures left as they are, because AudioLink isn't installed. Install AudioLink, then run this again". With AudioLink added, both migrate |
 | Y8 | A | **Hand row.** Analyse This Scene over the AudioLink example scene, in a project with AudioLink | Reports the AudioLink path, its fixtures and its cost |
 
+### LTCGI (optional)
+
+The Opaque surface body and the spot and wash mover bodies take LTCGI's area light when
+their material's **Lit by LTCGI Screens** toggle (`_VRSL_LTCGI`) is on. The package doesn't
+depend on LTCGI (`at.pimaker.ltcgi`): only the toggle's variants include it, and none of the
+package's materials turn it on. `VRSLLTCGIBodyTests` in the suite; U2 and U4 need LTCGI
+installed and are skipped without it, so run them in a project that has it as well as in one
+that doesn't.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| U1 | — | Shader validation, T1 and T2 in a project without LTCGI | Every shader compiles and no message names LTCGI |
+| U2 | — | `VRSLLTCGIBodyTests.U2`, with LTCGI installed: the three bodies' forward passes compiled with and without `_VRSL_LTCGI`, vertex and fragment, for Windows on D3D (plain and stereo instanced), desktop Linux on Vulkan, and Android on Vulkan (plain, and instanced with multiview) | All compile. With the toggle on, the D3D fragment binds LTCGI's lookup table, so LTCGI's code is in it; with it off, it binds nothing of LTCGI's. Unity reports no fragment bindings on Vulkan, so the binding is judged on D3D only |
+| U3 | — | `VRSLLTCGIBodyTests.U3`: each of the three bodies, read for its subshader tag `LTCGI` and the property it names | The tag names `_VRSL_LTCGI`, a float the shader declares with a `Toggle(_VRSL_LTCGI)` drawer, off by default. LTCGI's controller lights a renderer when that float is non-zero, so the inspector toggle switches the keyword and the controller's choice together |
+| U4 | — | `VRSLLTCGIBodyTests.U4`, with LTCGI installed: J6's body cubes, a cube on LTCGI's own Lit and one on URP Lit, under LTCGI's own controller and one white screen behind the camera, the rig's lights and ambient off; captured with the screen off (LTCGI's global enable), on, and on with the three bodies' toggle off | With the toggle on, each of the three bodies gains at least half what LTCGI's own Lit gains; with it off, nothing; the bodies without the toggle gain nothing; URP Lit doesn't change. Inconclusive if LTCGI's own Lit doesn't light |
+| U5 | — | **By hand.** A scene with LTCGI's controller, a white screen, and two rows of the DMX par, blinder, flasher and spot and wash movers: one on the package materials, the other on material variants of them made in the project's own `Assets/`, the toggle their only override, ticked in the inspector | Each variant reports the keyword on after a reimport and the toggle as its only override; LTCGI's controller lights the variant row and not the package row; the variant row's housings take the screen's light and the package row's stay dark |
+
 ### VR (single-pass instanced)
 
 | # | Path | Scenario | Expected |

@@ -23,6 +23,12 @@
     "defineConstraints": [
         "UNITY_INCLUDE_TESTS"
     ],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "at.pimaker.ltcgi",
+            "expression": "",
+            "define": "VRSL_LTCGI_PRESENT"
+        }
+    ],
     "noEngineReferences": false
 }

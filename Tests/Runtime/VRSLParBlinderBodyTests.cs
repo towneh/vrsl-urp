@@ -1541,7 +1541,7 @@ namespace VRSL.URP.Tests
         /// carry black vertex colours, which the movers draw in place. Everything the row
         /// must destroy goes in <paramref name="owned"/>.
         /// </summary>
-        static (List<(string shader, MeshRenderer renderer)> bodies, MeshRenderer reference) BodyCubes(
+        internal static (List<(string shader, MeshRenderer renderer)> bodies, MeshRenderer reference) BodyCubes(
             VRSLDMXRig rig, string row, List<Object> owned)
         {
             Mesh moverMesh = null;
@@ -1650,7 +1650,7 @@ namespace VRSL.URP.Tests
         /// its bounds say nothing about where it lands; it is measured over a square at its
         /// centre.
         /// </summary>
-        static (Vector3 mean, float peak) Measure(Camera camera, Texture2D frame, Renderer r)
+        internal static (Vector3 mean, float peak) Measure(Camera camera, Texture2D frame, Renderer r)
         {
             var b = r.name.Contains("Flare") ? new Bounds(r.bounds.center, new Vector3(0.5f, 0.5f, 0.5f)) : r.bounds;
             Vector2 lo = new Vector2(float.MaxValue, float.MaxValue), hi = new Vector2(float.MinValue, float.MinValue);
