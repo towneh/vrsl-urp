@@ -610,7 +610,7 @@ zero there first means no frame was collected yet.
 
 ### Cameras
 
-`VRSLCameraPolicyTests` in the suite covers M5 and M7 to M11. M2 to M4 and the main-view
+`VRSLCameraPolicyTests` in the suite covers M5 and M7 to M12. M2 to M4 and the main-view
 half of M5 want a mirror and eyes; M6 is a pair of player sweeps.
 
 `secondaryCameraMode` is a policy with four values: `Match`, `Reduced` (the default),
@@ -618,7 +618,9 @@ half of M5 want a mirror and eyes; M6 is a pair of player sweeps.
 the policy whatever it is for, which includes the test rig's own camera and the sweep's:
 both register theirs as the player's view (`VRSLCameraFilter.RegisterMainView`), so every
 row measures the level it is labelled with, and a row about the policy adds mirror cameras
-of its own.
+of its own. The rig holds the pipeline's Depth Texture on and every renderer copying depth
+after opaques, the host's desktop configuration, since a skipped camera's lens flares
+depend on both (M12).
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -633,6 +635,7 @@ of its own.
 | M9 | — | `VRSLCameraPolicyTests.M9`: the camera filter as a function | `Match` renders everything at the scene's level; `SurfaceOnly` the same without beams; `Skip` nothing; `Reduced` everything one level below (`High` to `Standard`, `Standard` to `Low`, `Off` and `Low` unchanged). A camera with no target keeps the scene's level under every value. `Low` draws beams at fewer steps and wider spacing than `Standard` with no contact shadows, and is not in the sweep's level list. Reflection probes, registered data readers and cameras rendering into a texture the manager consumes stay skipped |
 | M10 | D | `VRSLCameraPolicyTests.M10`: Z7's shader-driven fixtures seen from a mirror under `Skip`, rendered after the rig's view, with the rig's realtime fixtures on and with none | Each fixture's glow in the mirror with the realtime fixtures on is at least half of what it is with none. The mirror gets no VRSL lighting either way, so only the fixtures' own read of the grid differs. **A camera the manager leaves out of the grid's publishing reads the black the previous camera's graph left behind** |
 | M11 | D | `VRSLCameraPolicyTests.M11`: the same fixtures seen from a registered DMX screen reader camera, rendered after the rig's view with the realtime fixtures on, against a mirror under `Skip` | Each fixture's glow in the reader is under a tenth of its glow in the mirror, which is clearly lit. **A reader handed the grid renders the fixtures' glow into the DMX input it feeds; a camera rendering into a texture the manager consumes is excluded the same way** |
+| M12 | D | `VRSLCameraPolicyTests.M12`: the flasher, the one of Z7's fixtures with a lens flare, seen from a mirror under `Skip` with the pipeline's Depth Texture on and the renderers copying depth after opaques, then after transparents, then after transparents with the mirror under `Match` | The flasher glows at least half as much again after opaques as after transparents, and under `Match` after transparents as under `Skip`. A flare tests its occlusion against the depth texture from the transparent pass, and in a camera VRSL skips nothing asks for that depth earlier, so copied after transparents the flare reads depth not yet written and fades out; VRSL's passes on a `Match` camera ask for it first. The wiki's mirrors page tells authors which settings show flares under `Skip`. If the two `Skip` cases match, the limitation is gone and the page is out of date |
 
 **The rig holds depth priming per render** (`VRSLDMXRig.Build(priming:)`, Forced unless a
 row asks otherwise, put back on dispose). The host rewrites the renderer's mode at a moment
