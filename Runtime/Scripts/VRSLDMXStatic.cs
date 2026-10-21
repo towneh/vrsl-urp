@@ -256,6 +256,27 @@ namespace VRSL.URP
                 }
             return props;
         }
+        // Each renderer's block is read first, so what other components set on it
+        // (LTCGI's per-renderer screen data) stays.
+        void _ApplyInstancedProperties(bool withDMX)
+        {
+            foreach(MeshRenderer r in objRenderers)
+            {
+                if(r != null)
+                {
+                    r.GetPropertyBlock(props);
+                    if(withDMX)
+                    {
+                        _WriteInstancedProperties();
+                    }
+                    else
+                    {
+                        _WriteInstancedPropertiesSansDMX();
+                    }
+                    r.SetPropertyBlock(_SetFinalIntensityComponents(props, r));
+                }
+            }
+        }
         public void _UpdateInstancedProperties()
         {
             if(objRenderers == null || objRenderers.Length == 0)
@@ -275,6 +296,10 @@ namespace VRSL.URP
                     return;
                 }
             }
+            _ApplyInstancedProperties(true);
+        }
+        void _WriteInstancedProperties()
+        {
             if(useLegacySectorMode)
             {
                 if(singleChannelMode)
@@ -314,13 +339,6 @@ namespace VRSL.URP
             props.SetFloat("_MaxConeLength", maxConeLength);
             props.SetFloat("_MaxMinPanAngle", (maxMinPan/2.0f));
             props.SetFloat("_MaxMinTiltAngle", (maxMinTilt/2.0f));
-            foreach(MeshRenderer r in objRenderers)
-            {
-                if(r != null)
-                {
-                    r.SetPropertyBlock(_SetFinalIntensityComponents(props, r));
-                }
-            }
         }
         /// <summary>
         /// Apply a change to the address fields (<see cref="useLegacySectorMode"/>,
@@ -353,6 +371,10 @@ namespace VRSL.URP
                     return;
                 }
             }
+            _ApplyInstancedProperties(false);
+        }
+        void _WriteInstancedPropertiesSansDMX()
+        {
             if(useLegacySectorMode)
             {
                 if(singleChannelMode)
@@ -391,13 +413,6 @@ namespace VRSL.URP
             props.SetFloat("_MaxConeLength", maxConeLength);
             props.SetFloat("_MaxMinPanAngle", (maxMinPan/2.0f));
             props.SetFloat("_MaxMinTiltAngle", (maxMinTilt/2.0f));
-            foreach(MeshRenderer r in objRenderers)
-            {
-                if(r != null)
-                {
-                    r.SetPropertyBlock(_SetFinalIntensityComponents(props, r));
-                }
-            }
         }
         /////////////////////////////////////////////////////////////////////////PROPERTIES///////////////////////////////////////////////////////////////////////////////////////////////
         public Color LightColorTint

@@ -713,6 +713,8 @@ move with their beams too (J4).
 | R1 | D | The rig on Ramp over two universes; one fixture moved from sector 3 to sector 10, another from sector 5 to universe 2 channel 1, each through `ApplyAddress()` and no manager call | From the second frame each beam decodes the colour of the fixture already at its new address, and every body renderer's property block carries the new `_DMXChannel` (131 and 521) |
 | R2 | D | The DMX flasher (a `VRSLDMXStatic` with two renderers) moved to universe 2 channel 27, then to sector 3 in single-channel mode on channel 4 | Both renderers read `_DMXChannel` 547, then 44 |
 | R3 | D | The rig on Ramp with strobe disabled, every fixture's `ApplyAddress()` called once to settle, then again with nothing changed | Colour and intensity bit-identical across the second call for all 50 fixtures; every body still on its own sector's channel |
+| R4 | D | The DMX flasher with a value set on each renderer's property block by something else (LTCGI's `_Udon_LTCGI_ScreenCount`) before its `Start`, then moved to universe 2 channel 27 | The value is still there after `Start` and after the move, and both renderers read channel 1, then 547. LTCGI sets its per-renderer screen data once, at its `Start`, so a fixture that replaced the block instead of adding to it would drop that data for good |
+| R5 | D | A rig mover with the same value set on its body renderers, moved from sector 3 to sector 10 through `ApplyAddress()` | The value is still there and the body reads sector 10's channel |
 
 ### Fixtures switched on and off
 

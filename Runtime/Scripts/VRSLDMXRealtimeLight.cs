@@ -261,7 +261,9 @@ namespace VRSL.URP
         // Fixture shell driving — pushes a MaterialPropertyBlock to the body and
         // flare renderers so their shaders read this fixture's address with DMX on.
         // The block carries the tint, curve and intensities too, so the material's
-        // own values for those stop counting on a listed renderer.
+        // own values for those stop counting on a listed renderer. Each renderer's
+        // block is read first, so what other components set on it (LTCGI's
+        // per-renderer screen data) stays.
         // ──────────────────────────────────────────────────────────────────────────
         public void DriveFixtureShells()
         {
@@ -269,6 +271,18 @@ namespace VRSL.URP
 
             if (_shellProps == null) _shellProps = new MaterialPropertyBlock();
 
+            for (int i = 0; i < fixtureShellRenderers.Length; i++)
+            {
+                var r = fixtureShellRenderers[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_shellProps);
+                WriteShellProps();
+                r.SetPropertyBlock(_shellProps);
+            }
+        }
+
+        void WriteShellProps()
+        {
             // Property names and value semantics mirror VRSLDMXStatic's
             // _UpdateInstancedProperties() so the same body shader works under either
             // driver. Fields with no equivalent on this component use sensible
@@ -293,12 +307,6 @@ namespace VRSL.URP
             _shellProps.SetFloat("_CurveMod",            curveMod);
             _shellProps.SetFloat("_MaxMinPanAngle",      maxMinPan  / 2f);
             _shellProps.SetFloat("_MaxMinTiltAngle",     maxMinTilt / 2f);
-
-            for (int i = 0; i < fixtureShellRenderers.Length; i++)
-            {
-                var r = fixtureShellRenderers[i];
-                if (r != null) r.SetPropertyBlock(_shellProps);
-            }
         }
 
         // Matches RawDMXConversion() / SectorConversion() in VRSLDMXStatic

@@ -10,7 +10,7 @@ namespace VRSL.URP.Tests
     /// A fixture moved to another address while the world runs, through
     /// <c>ApplyAddress()</c> and nothing else: no manager call, no inspector.
     ///
-    /// Rows R1 to R3 of TESTING.md.
+    /// Rows R1 to R5 of TESTING.md.
     /// </summary>
     class VRSLReaddressTests : VRSLDMXTest
     {
@@ -140,6 +140,78 @@ namespace VRSL.URP.Tests
                     AssertShellsOn(rig.Fixtures[i], VRSLDMXRig.ChannelOf(i),
                         $"sector {i}'s body moved with its address unchanged");
                 }
+            }
+            finally { rig.Dispose(); }
+        }
+
+        // One of the values LTCGI's adapter puts on each renderer it lights, once, at Start.
+        const string ForeignProperty = "_Udon_LTCGI_ScreenCount";
+        const int ForeignValue = 7;
+
+        static void SetForeign(Renderer r)
+        {
+            var block = new MaterialPropertyBlock();
+            r.GetPropertyBlock(block);
+            block.SetInteger(ForeignProperty, ForeignValue);
+            r.SetPropertyBlock(block);
+        }
+
+        static void AssertForeignKept(Renderer r, string when)
+        {
+            var block = new MaterialPropertyBlock();
+            r.GetPropertyBlock(block);
+            Assert.IsTrue(block.HasInteger(ForeignProperty) && block.GetInteger(ForeignProperty) == ForeignValue,
+                $"{r.name} lost {ForeignProperty} {when}: the fixture replaced the renderer's block instead of adding to it");
+        }
+
+        [UnityTest]
+        public IEnumerator R4_a_shader_driven_fixture_keeps_what_others_put_on_its_renderers()
+        {
+            const string Flasher = "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/VRSL-DMX-Static-Flasher-1CH.prefab";
+            var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Flasher);
+            Assert.IsNotNull(prefab, $"Asset not found: {Flasher}");
+            var go = Object.Instantiate(prefab);
+            try
+            {
+                var f = go.GetComponentInChildren<VRSLDMXStatic>();
+                Assert.IsNotNull(f, "the flasher prefab has no VRSLDMXStatic");
+                Assert.Greater(f.objRenderers.Length, 1, "the row wants a fixture with more than one renderer");
+                foreach (var r in f.objRenderers) SetForeign(r);
+
+                yield return null;                              // Start sets the first block
+                foreach (var r in f.objRenderers)
+                {
+                    AssertForeignKept(r, "at Start");
+                    Assert.AreEqual(1, ShellChannel(r), "the flasher ships on channel 1");
+                }
+
+                f.dmxChannel  = 27;
+                f.dmxUniverse = 2;
+                f.ApplyAddress();
+                foreach (var r in f.objRenderers)
+                {
+                    AssertForeignKept(r, "when re-addressed");
+                    Assert.AreEqual(27 + 520, ShellChannel(r), "every renderer must still take the new address");
+                }
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [UnityTest]
+        public IEnumerator R5_a_realtime_light_keeps_what_others_put_on_its_body()
+        {
+            var rig = VRSLDMXRig.Build();
+            try
+            {
+                yield return rig.Step(2);
+                var f = rig.Fixtures[3];
+                Assert.IsNotEmpty(f.fixtureShellRenderers, "the rig's mover has no body renderers to judge");
+                foreach (var r in f.fixtureShellRenderers) SetForeign(r);
+
+                f.sector = 10;
+                f.ApplyAddress();
+                foreach (var r in f.fixtureShellRenderers) AssertForeignKept(r, "when re-addressed");
+                AssertShellsOn(f, VRSLDMXRig.ChannelOf(10), "the body must still take the new address");
             }
             finally { rig.Dispose(); }
         }
