@@ -1336,7 +1336,7 @@ namespace VRSL.URP.Tests
             var made = new List<Object> { reference, quad, target };
             try
             {
-                RenderOnce(target);
+                RenderOnce();
 
                 // The lightmapper rasterises from the lightmap UVs, which cover the target. The
                 // positions sit off it and the texture UVs cover one corner, so a Meta pass that
@@ -1472,9 +1472,13 @@ namespace VRSL.URP.Tests
 
         /// <summary>A shader picks its URP subshader only once the pipeline has rendered, so a
         /// row that asks a material for a pass renders a camera first.</summary>
-        static void RenderOnce(RenderTexture target)
+        static void RenderOnce()
         {
             var camera = new GameObject("VRSL J13 camera").AddComponent<Camera>();
+            // A target of its own, created, with a depth buffer: URP 17.4 rejects some
+            // targets the Meta draw itself is fine with.
+            var target = new RenderTexture(16, 16, 24, RenderTextureFormat.ARGB32) { name = "VRSL J13 warm-up" };
+            target.Create();
             try
             {
                 camera.targetTexture = target;
@@ -1482,7 +1486,10 @@ namespace VRSL.URP.Tests
             }
             finally
             {
+                camera.targetTexture = null;
                 Object.DestroyImmediate(camera.gameObject);
+                target.Release();
+                Object.DestroyImmediate(target);
             }
         }
 
