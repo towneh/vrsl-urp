@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **DMX fixture bodies stay visible on D3D12 and Vulkan when no light manager is running.** On those graphics APIs, including Quest, the mover bodies, the surface and multi-channel bar bodies, lasers and lens flares disappeared in the editor outside Play mode and after the DMX light manager was switched off. They now draw as they do on D3D11, dark until a manager drives them.
 
 ## [0.3.0-rc.8] — 2026-10-21
 
