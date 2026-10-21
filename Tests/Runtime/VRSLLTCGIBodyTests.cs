@@ -211,6 +211,7 @@ namespace VRSL.URP.Tests
             var generatedBefore = System.IO.Directory.Exists(Generated)
                 ? System.IO.Directory.GetFiles(Generated) : new string[0];
             var controllerType = LtcgiType("LTCGI_Controller");
+            bool asyncWas = ShaderUtil.allowAsyncCompilation;
             try
             {
                 var (bodies, reference) = VRSLParBlinderBodyTests.BodyCubes(rig, "U4", owned);
@@ -300,6 +301,7 @@ namespace VRSL.URP.Tests
             }
             finally
             {
+                ShaderUtil.allowAsyncCompilation = asyncWas;
                 Shader.SetGlobalFloat("_Udon_LTCGI_GlobalEnable", 0f);
                 controllerType.GetField("Singleton").SetValue(null, null);
                 rig.Dispose();
