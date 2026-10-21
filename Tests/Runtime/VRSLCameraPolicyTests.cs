@@ -448,7 +448,9 @@ namespace VRSL.URP.Tests
         /// depth not yet written this frame and fades out. The flasher, the one of Z7's
         /// fixtures with a flare, seen from a mirror under <c>Skip</c> with the pipeline's
         /// Depth Texture on and the renderers copying depth after opaques, then after transparents, then after transparents
-        /// with the mirror under <c>Match</c>, whose VRSL passes ask for depth first.
+        /// with the mirror under <c>Match</c>, whose VRSL passes ask for depth first. The
+        /// rig's depth priming doesn't move this: its prepass fills the camera's depth
+        /// attachment, and the texture the flare samples still comes from the copy.
         /// </summary>
         [UnityTest]
         public IEnumerator M12_flares_in_a_skipped_mirror_need_depth_copied_after_opaques()
