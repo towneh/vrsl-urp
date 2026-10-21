@@ -14,6 +14,9 @@
 #else
     #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-DMXFunctions-URP.hlsl"
 #endif
+#if defined(VRSL_MOVER_FORWARD) && defined(_VRSL_LTCGI)
+    #include "Packages/town.mr.vrsl-urp/Runtime/Shaders/Shared/VRSL-LTCGI-URP.hlsl"
+#endif
 
 TEXTURE2D(_BumpMap);
 SAMPLER(sampler_BumpMap);
@@ -278,6 +281,9 @@ half4 VRSLMoverForwardFragment(VRSLMoverVaryings i) : SV_Target
     #endif
 
     half4 color = UniversalFragmentPBR(input, surface);
+    #if defined(_VRSL_LTCGI)
+        color.rgb += VRSLLTCGILighting(input, surface, i.uv1);
+    #endif
     return half4(MixFog(color.rgb, input.fogCoord), 1.0);
 }
 #endif

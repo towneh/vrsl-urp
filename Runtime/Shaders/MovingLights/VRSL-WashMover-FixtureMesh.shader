@@ -46,11 +46,15 @@
 		_DecorativeEmissiveMap("Decorative Emissive Map", 2D) = "black" {}
 		_DecorativeEmissiveMapStrength("Decorative Emissive Map Strength", Range(0,1)) = 0
 
+		[Space(16)]
+		[Header(LTCGI)]
+		[Toggle(_VRSL_LTCGI)] _VRSL_LTCGI ("Lit by LTCGI Screens (needs the LTCGI package)", Float) = 0
+
 	}
 
 	SubShader
 	{
-		Tags { "Queue" = "AlphaTest+1" "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" }
+		Tags { "Queue" = "AlphaTest+1" "RenderType" = "Opaque" "RenderPipeline" = "UniversalPipeline" "LTCGI" = "_VRSL_LTCGI" }
 
 		Pass
 		{
@@ -78,6 +82,7 @@
 			#pragma multi_compile_fog
 			#pragma multi_compile_instancing
 			#pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+			#pragma shader_feature_local_fragment _ _VRSL_LTCGI
 
 			#define VRSL_DMX
 			#define WASH

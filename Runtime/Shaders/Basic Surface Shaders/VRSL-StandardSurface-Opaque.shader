@@ -33,6 +33,7 @@
         _Metallic ("Metallic Blend", Range(0,1)) = 0.0
         _Glossiness ("Smoothness Blend", Range(0,1)) = 0.5
         [Enum(1CH,0,4CH,1,5CH,2,13CH,3)] _ChannelMode ("Channel Mode", Int) = 2
+        [Toggle(_VRSL_LTCGI)] _VRSL_LTCGI ("Lit by LTCGI Screens (needs the LTCGI package)", Float) = 0
 
     }
 
@@ -42,6 +43,7 @@
         {
             "RenderType" = "Opaque"
             "RenderPipeline" = "UniversalPipeline"
+            "LTCGI" = "_VRSL_LTCGI"
         }
         LOD 100
 
@@ -70,6 +72,7 @@
             #pragma multi_compile_fragment _ _CLUSTER_LIGHT_LOOP
             #pragma multi_compile _ PROBE_VOLUMES_L1 PROBE_VOLUMES_L2
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+            #pragma shader_feature_local _ _VRSL_LTCGI
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
@@ -77,6 +80,9 @@
             #include "../Shared/VRSL-Defines-URP.hlsl"
             #include "../Shared/VRSL-DMXFunctions-URP.hlsl"
             #include "VRSL-StandardSurface-Functions-URP.hlsl"
+            #if defined(_VRSL_LTCGI)
+                #include "../Shared/VRSL-LTCGI-URP.hlsl"
+            #endif
 
             struct Attributes
             {
@@ -84,6 +90,9 @@
                 float3 normalOS : NORMAL;
                 float4 tangentOS : TANGENT;
                 float2 uv : TEXCOORD0;
+                #if defined(_VRSL_LTCGI)
+                    float2 uv1 : TEXCOORD1;
+                #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -95,6 +104,9 @@
                 float3 positionWS : TEXCOORD2;
                 float4 tangentWS : TEXCOORD3;
                 half3 vertexLight : TEXCOORD4;
+                #if defined(_VRSL_LTCGI)
+                    float2 uv1 : TEXCOORD5;
+                #endif
                 UNITY_VERTEX_INPUT_INSTANCE_ID
                 UNITY_VERTEX_OUTPUT_STEREO
             };
@@ -121,6 +133,9 @@
 
                 // UVs
                 output.uv = TRANSFORM_TEX(input.uv, _MainTex);
+                #if defined(_VRSL_LTCGI)
+                    output.uv1 = input.uv1;
+                #endif
                 return output;
             }
 
@@ -180,7 +195,11 @@
                 surfaceData.normalTS = normalTS;
 
                 // Apply lighting
-                return UniversalFragmentPBR(lightingInput, surfaceData);
+                half4 litColor = UniversalFragmentPBR(lightingInput, surfaceData);
+                #if defined(_VRSL_LTCGI)
+                    litColor.rgb += VRSLLTCGILighting(lightingInput, surfaceData, input.uv1);
+                #endif
+                return litColor;
             }
             ENDHLSL
         }
