@@ -446,8 +446,8 @@ namespace VRSL.URP.Tests
         /// transparent pass. In a camera the policy skips, nothing asks URP for that depth
         /// any earlier, so on a renderer that copies it after transparents the flare reads
         /// depth not yet written this frame and fades out. The flasher, the one of Z7's
-        /// fixtures with a flare, seen from a mirror under <c>Skip</c> with the renderers
-        /// copying depth after opaques, then after transparents, then after transparents
+        /// fixtures with a flare, seen from a mirror under <c>Skip</c> with the pipeline's
+        /// Depth Texture on and the renderers copying depth after opaques, then after transparents, then after transparents
         /// with the mirror under <c>Match</c>, whose VRSL passes ask for depth first.
         /// </summary>
         [UnityTest]

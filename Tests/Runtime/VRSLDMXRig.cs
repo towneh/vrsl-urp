@@ -74,6 +74,7 @@ namespace VRSL.URP.Tests
         GPUResidentDrawerMode  _drawerWas;
         float?        _renderScale;
         float         _renderScaleWas;
+        bool          _depthTextureWas;
         UnityEngine.Rendering.Universal.DepthPrimingMode? _priming;
         readonly Dictionary<UnityEngine.Rendering.Universal.UniversalRendererData,
                             UnityEngine.Rendering.Universal.DepthPrimingMode> _primingWas = new();
@@ -142,10 +143,11 @@ namespace VRSL.URP.Tests
             UnityEngine.Rendering.Universal.DepthPrimingMode.Forced;
 
         /// <summary>When every Universal Renderer copies the depth texture while the rig
-        /// stands, unless <see cref="Build"/> was told to hold none. After Opaques is the
-        /// host's desktop renderer; a renderer copying after transparents leaves the
-        /// lens flares' occlusion test reading depth not yet written in a camera VRSL
-        /// skips (row M12), so rows read the same in any project.</summary>
+        /// stands, with the pipeline asset's Depth Texture held on, unless
+        /// <see cref="Build"/> was told to hold none. Both are the host's desktop
+        /// configuration. In a camera VRSL skips, a lens flare's occlusion test reads
+        /// this frame's depth only with both, and fades out otherwise (row M12), so
+        /// rows read the same in any project.</summary>
         public const UnityEngine.Rendering.Universal.CopyDepthMode DefaultCopyDepth =
             UnityEngine.Rendering.Universal.CopyDepthMode.AfterOpaques;
 
@@ -168,8 +170,8 @@ namespace VRSL.URP.Tests
         /// bit-identical, and the frame a stored capture was seeded from stopped
         /// reproducing on the same code.</param>
         /// <param name="copyDepth">When the depth texture is copied, held on every
-        /// Universal Renderer at every render and put back on dispose; null holds
-        /// nothing.</param>
+        /// Universal Renderer at every render with the asset's Depth Texture on, and
+        /// both put back on dispose; null holds neither.</param>
         /// <param name="drawer">GPU Resident Drawer mode, held on the pipeline asset at
         /// every render and put back on dispose; null holds nothing. Setting the
         /// asset's mode recreates the pipeline, so it is written only when it
@@ -280,6 +282,8 @@ namespace VRSL.URP.Tests
             rig._renderScale    = renderScale;
             rig._renderScaleWas = rig._asset != null ? rig._asset.renderScale : 1f;
             rig.HoldRenderScale();
+            rig._depthTextureWas = rig._asset != null && rig._asset.supportsCameraDepthTexture;
+            rig.HoldCopyDepth();
             rig._camera = new GameObject("Camera").AddComponent<Camera>();
             rig._camera.transform.SetParent(rig._root.transform, false);
             // Aimed across the near end of the truss and down at the floor, so several
@@ -501,9 +505,15 @@ namespace VRSL.URP.Tests
         void HoldCopyDepth()
         {
             if (!_copyDepth.HasValue) return;
+            if (_asset != null && !_asset.supportsCameraDepthTexture)
+                _asset.supportsCameraDepthTexture = true;
             foreach (var renderer in _copyDepthWas.Keys)
                 if (renderer != null && renderer.copyDepthMode != _copyDepth.Value)
+                {
                     renderer.copyDepthMode = _copyDepth.Value;
+                    // URP 17.4 builds its passes from the data once; this rebuilds them.
+                    renderer.SetDirty();
+                }
         }
 
         /// <summary>Advance exactly <paramref name="frames"/> frames, which is
@@ -1029,13 +1039,18 @@ namespace VRSL.URP.Tests
             _drawer = null;
             if (_asset != null && _renderScale.HasValue) _asset.renderScale = _renderScaleWas;
             _renderScale = null;
+            if (_asset != null && _copyDepth.HasValue) _asset.supportsCameraDepthTexture = _depthTextureWas;
             _asset = null;
             foreach (var pair in _primingWas)
                 if (pair.Key != null) pair.Key.depthPrimingMode = pair.Value;
             _primingWas.Clear();
             _priming = null;
             foreach (var pair in _copyDepthWas)
-                if (pair.Key != null) pair.Key.copyDepthMode = pair.Value;
+                if (pair.Key != null && pair.Key.copyDepthMode != pair.Value)
+                {
+                    pair.Key.copyDepthMode = pair.Value;
+                    pair.Key.SetDirty();
+                }
             _copyDepthWas.Clear();
             _copyDepth = null;
             if (_target != null) { _target.Release(); UnityEngine.Object.DestroyImmediate(_target); }
