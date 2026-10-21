@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.8] — 2026-10-21
+
 ### Added
 
 - **Fixture bodies can take light from LTCGI screens.** The par, blinder, flasher and light bar bodies and the spot and wash mover bodies have a **Lit by LTCGI Screens** toggle, off by default. With it on and [LTCGI](https://github.com/PiMaker/ltcgi) 1.7.4 or newer installed, a video wall lights the housings the way it lights the room around them. To turn it on without changing the package's materials, make a Material Variant of a fixture's body material in your own project, tick the toggle on the variant and assign it to your fixtures. LTCGI's controller picks up the renderers it's ticked on. The package doesn't depend on LTCGI: with the toggle off nothing about the shaders changes, and a project without LTCGI builds as before.
