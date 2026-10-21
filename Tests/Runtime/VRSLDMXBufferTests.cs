@@ -269,7 +269,7 @@ namespace VRSL.URP.Tests
                 };
                 var bodies = cubes.Where(c => readers.Contains(c.shader)).ToList();
                 Assert.AreEqual(readers.Length, bodies.Count, "J6's cubes don't carry every body that reads the DMX buffers");
-                var opaque = bodies[0].renderer.sharedMaterial;
+                var opaque = bodies.First(b => b.shader == readers[0]).renderer.sharedMaterial;
                 opaque.SetFloat("_ChannelMode", 3f);
                 opaque.EnableKeyword("_13CH_MODE");
 
