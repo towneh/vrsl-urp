@@ -83,6 +83,9 @@ namespace VRSL.URP
         /// counts them.</summary>
         internal static int WheelBuilds { get; private set; }
         internal static int NoiseBakes  { get; private set; }
+        /// <summary>Shader globals set since load, for the row that checks a frame with
+        /// nothing changed sets none.</summary>
+        internal static int Binds { get; private set; }
 
         public static void Join(IVRSLSceneResourceUser user)
         {
@@ -206,6 +209,7 @@ namespace VRSL.URP
                 s_cube = cube;
                 if (cube != null) Shader.SetGlobalTexture(s_DiscoballCube, cube);
                 Shader.SetGlobalFloat(s_CubeBound, cube != null ? 1f : 0f);
+                Binds++;
             }
         }
 
@@ -219,6 +223,7 @@ namespace VRSL.URP
             if (s_wheel != null)
             {
                 WheelBuilds++;
+                Binds++;
                 Shader.SetGlobalTexture(s_Gobos, s_wheel);
             }
         }
@@ -236,6 +241,7 @@ namespace VRSL.URP
             s_noise = VRSLVolumetricNoise.Bake(compute, context);
             s_noiseFrom = compute;
             if (VRSLVolumetricNoise.IsBaked(s_noise)) NoiseBakes++;
+            Binds++;
             Shader.SetGlobalTexture(s_VolNoise, s_noise);
         }
 

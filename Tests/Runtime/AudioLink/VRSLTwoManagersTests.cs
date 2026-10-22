@@ -371,6 +371,51 @@ namespace VRSL.URP.Tests
             }
         }
 
+        // ── Nothing per frame ─────────────────────────────────────────────────
+
+        /// <summary>GW11. Once both managers are running, a frame in which nothing changed
+        /// builds no wheel, bakes no noise, sets no shader global and allocates nothing in
+        /// the scene resources.</summary>
+        [UnityTest]
+        public IEnumerator GW11_a_frame_with_nothing_changed_builds_binds_and_allocates_nothing()
+        {
+            using var stage = new Stage(1,
+                dmx => dmx.quality = VRSLQuality.Standard,
+                (root, al) =>
+                {
+                    al.quality = VRSLQuality.Standard;
+                    Spot(root, "AudioLink spot", LightA, goboIndex: 3);
+                });
+            var rig = stage.Rig;
+            yield return rig.Step(4);
+            Assert.IsTrue(rig.Manager.VolumetricsEnabled && stage.AudioLink.VolumetricsEnabled,
+                          "the row needs beams on both managers");
+
+            int builds = VRSLSceneResources.WheelBuilds;
+            int bakes  = VRSLSceneResources.NoiseBakes;
+            int binds  = VRSLSceneResources.Binds;
+            long allocated = 0;
+            const int frames = 30;
+            for (int i = 0; i < frames; i++)
+            {
+                yield return null;
+                // First in the frame, so this call does the frame's work rather than
+                // finding it done.
+                long before = System.GC.GetAllocatedBytesForCurrentThread();
+                VRSLSceneResources.Prepare();
+                VRSLSceneResources.EnsureVolumetricNoise(rig.Manager.computeShader, rig.Manager);
+                allocated += System.GC.GetAllocatedBytesForCurrentThread() - before;
+                rig.RenderFrame();
+            }
+            Debug.Log($"[GW11] over {frames} frames: {VRSLSceneResources.WheelBuilds - builds} wheel builds, "
+                    + $"{VRSLSceneResources.NoiseBakes - bakes} noise bakes, {VRSLSceneResources.Binds - binds} binds, "
+                    + $"{allocated} bytes allocated");
+            Assert.AreEqual(builds, VRSLSceneResources.WheelBuilds, "a frame with nothing changed built a wheel");
+            Assert.AreEqual(bakes, VRSLSceneResources.NoiseBakes, "a frame with nothing changed baked noise");
+            Assert.AreEqual(binds, VRSLSceneResources.Binds, "a frame with nothing changed set a shader global");
+            Assert.AreEqual(0, allocated, "the scene resources allocated on a frame with nothing changed");
+        }
+
         // ── DMX's eight slots on a longer wheel ───────────────────────────────
 
         /// <summary>One universe of bytes the row chooses.</summary>
