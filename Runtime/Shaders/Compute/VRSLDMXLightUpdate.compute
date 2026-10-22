@@ -402,7 +402,7 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     }
 
     light.directionAndType = float4(normalize(finalDir),
-                                    VRSL_PackTypeAndGobo(cfg.forwardAndType.w, goboIdx));
+                                    VRSL_PackTypeGoboZone(cfg.forwardAndType.w, goboIdx, cfg.zone.x));
     // spotParams.z carries the emitter depth for a spot; a discoball has none, and the
     // slot says instead whether the raymarch should draw its dots.
     light.spotParams       = float4(innerCos, outerCos,

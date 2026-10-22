@@ -417,7 +417,7 @@ namespace VRSL.URP
         public bool VolumetricUseNoise => Quality.VolumetricNoise;
 
         // ── Structs — must match VRSLLightingLibrary.hlsl exactly ─────────────
-        // 9 × float4 = 144 bytes
+        // 10 × float4 = 160 bytes
         [StructLayout(LayoutKind.Sequential)]
         internal struct VRSLFixtureConfig
         {
@@ -433,6 +433,7 @@ namespace VRSL.URP
             public Vector4 extras;              // x=emitterDepth(m), y=5ch flag, z=curveMod,
                                                //   w=discoball beams
             public Vector4 tintAndSpin;         // xyz=discoball colour (linear), w=spin deg/s
+            public Vector4 zone;                // x=zone slot + 1 (0 = none)
         }
 
         // 4 × float4 = 64 bytes — must match VRSLLightData in VRSLLightingLibrary.hlsl,
@@ -1220,7 +1221,7 @@ namespace VRSL.URP
             FixtureConfigBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
                 FixtureCount,
-                Marshal.SizeOf<VRSLFixtureConfig>());   // 144 bytes
+                Marshal.SizeOf<VRSLFixtureConfig>());   // 160 bytes
 
             LightDataBuffer = new GraphicsBuffer(
                 GraphicsBuffer.Target.Structured,
@@ -1488,6 +1489,7 @@ namespace VRSL.URP
                 tintAndSpin  = new Vector4(tint.r, tint.g, tint.b, f.discoballSpinSpeed),
                 extras       = new Vector4(f.emitterDepth, f.use5ChannelMode ? 1f : 0f,
                                            f.curveMod, discoball && f.discoballBeams ? 1f : 0f),
+                zone         = new Vector4(f.ZoneCode, 0f, 0f, 0f),
             };
         }
 

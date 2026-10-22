@@ -272,7 +272,7 @@ namespace VRSL.URP
             public Vector4 intensityParams;   // x=maxIntensity, y=finalIntensity × globalIntensity,
                                               //   z=AudioLink active, w=discoball beams
             public Vector4 spotAngles;        // x=innerRatio(0..1), y=outerHalf(deg),
-                                              //   z=emitterDepth(m), w=unused
+                                              //   z=emitterDepth(m), w=zone slot + 1 (0 = none)
             public Vector4 alParams;          // x=band, y=delay, z=bandMultiplier, w=colorMode
             public Vector4 emissionColor;     // xyz=linear RGB, w=unused
             public Vector4 reserved;          // x=gobo slot, y=gobo or discoball spin speed,
@@ -794,7 +794,7 @@ namespace VRSL.URP
                 // half-angle in the compute shader.
                 // spotAngles.z = emitter depth in metres (virtual cone-apex pushback for
                 // area-emitter fixtures). 0 = point source.
-                spotAngles       = new Vector4(innerRatio, outerHalf, f.emitterDepth, 0f),
+                spotAngles       = new Vector4(innerRatio, outerHalf, f.emitterDepth, f.ZoneCode),
                 alParams         = new Vector4(
                     (int)f.band,
                     f.delay,

@@ -39,6 +39,7 @@ struct VRSLFixtureConfig
                                 // z = curveMod (body-glow dimmer-response match),
                                 // w = discoball beams (1 = the raymarch draws its dots)
     float4 tintAndSpin;         // xyz = discoball colour (linear), w = spin (deg/s)
+    float4 zone;                // x = zone slot + 1 (0 = none), yzw unused
 };
 
 // Per-fixture light state computed by the compute shader every frame.
@@ -57,14 +58,18 @@ struct VRSLLightData
                                 //     for a spot, the ball's for a discoball
 };
 
-// directionAndType.w carries two integers in one float: the light type in the
-// low two bits and the gobo slice above it, biased by one so "no gobo" (-1)
-// survives. Both are small integers and floats represent those exactly, so this
-// costs no precision — unlike packing them as halves, which would quantise the
-// spin phase and stipple a slowly rotating gobo.
-float VRSL_PackTypeAndGobo(float lightType, int goboIndex)
+// directionAndType.w carries three integers in one float: the light type in the
+// low two bits, the gobo slice above it, biased by one so "no gobo" (-1)
+// survives, and from VRSL_ZONE_UNIT up the light's zone slot plus one, 0 for an
+// unzoned light. All are small integers and floats represent those exactly to
+// 2^24, so this costs no precision — unlike packing them as halves, which would
+// quantise the spin phase and stipple a slowly rotating gobo. An unzoned light's
+// value is below VRSL_ZONE_UNIT, so telling the two apart is one compare.
+#define VRSL_ZONE_UNIT 1024.0
+
+float VRSL_PackTypeGoboZone(float lightType, int goboIndex, float zoneCode)
 {
-    return lightType + (float)(goboIndex + 1) * 4.0;
+    return lightType + (float)(min(goboIndex, 254) + 1) * 4.0 + zoneCode * VRSL_ZONE_UNIT;
 }
 
 // 0 = spot, 1 = point, 2 = discoball. Anything but a spot is omnidirectional.
@@ -78,7 +83,8 @@ bool VRSL_IsDiscoball(VRSLLightData light)
     return VRSL_LightType(light) > 1.5;
 }
 
-// -1 = no gobo, 0+ = slice in _VRSLGobos.
+// -1 = no gobo, 0+ = slice in _VRSLGobos. For a zoned light, read after
+// VRSL_TakeZone has taken the zone off.
 float VRSL_GoboIndex(VRSLLightData light)
 {
     return floor(light.directionAndType.w * 0.25) - 1.0;
@@ -89,6 +95,103 @@ float VRSL_GoboIndex(VRSLLightData light)
 bool VRSL_IsActive(VRSLLightData light)
 {
     return light.colorAndIntensity.w > 0.0;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Light zones — where a zoned light may reach (VRSLLightZones.cs)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// One header per zone slot, (first box row, box count, 0, 0), then three rows
+// per box: its world-to-box transform. A point is inside a box when its image
+// lies in the unit cube centred on the origin, and inside the zone when it is
+// inside any of its boxes. Bound globally by VRSLLightZones, the fallback buffer
+// when no zone is on.
+StructuredBuffer<float4> _VRSLZones;
+
+bool VRSL_IsZoned(VRSLLightData light)
+{
+    return light.directionAndType.w >= VRSL_ZONE_UNIT;
+}
+
+// The zone slot a zoned light names, taken off its packed value so the gobo
+// reads as it would unzoned.
+uint VRSL_TakeZone(inout VRSLLightData light)
+{
+    float code = floor(light.directionAndType.w * (1.0 / VRSL_ZONE_UNIT));
+    light.directionAndType.w -= code * VRSL_ZONE_UNIT;
+    return (uint)code - 1u;
+}
+
+float3 VRSL_ToZoneBox(uint row, float3 posWS)
+{
+    float4 p = float4(posWS, 1.0);
+    return float3(dot(_VRSLZones[row], p), dot(_VRSLZones[row + 1u], p), dot(_VRSLZones[row + 2u], p));
+}
+
+bool VRSL_InZoneBoxes(uint first, uint count, float3 posWS)
+{
+    bool inside = false;
+    [loop]
+    for (uint b = 0u; b < count; b++)
+    {
+        if (all(abs(VRSL_ToZoneBox(first + 3u * b, posWS)) <= 0.5))
+        {
+            inside = true;
+            break;
+        }
+    }
+    return inside;
+}
+
+// 1 where a zoned light may light posWS, 0 outside its zone. Takes the zone off
+// the light, so call it only for a light VRSL_IsZoned says is zoned.
+float VRSL_ZoneMask(inout VRSLLightData light, float3 posWS)
+{
+    float4 zone = _VRSLZones[VRSL_TakeZone(light)];
+    return VRSL_InZoneBoxes((uint)zone.x, (uint)zone.y, posWS) ? 1.0 : 0.0;
+}
+
+// Narrow a ray span [tNear, tFar] to run from the ray's first entry into a zoned
+// light's zone to its last exit, and say where its boxes are. Between the two the
+// ray may leave and re-enter, so a zone of more than one box needs an inside
+// test per sample; for one box the span is exactly the inside. False when the
+// span misses the zone. Takes the zone off the light, as VRSL_ZoneMask does.
+bool VRSL_ClipSpanToZone(inout VRSLLightData light, float3 rayOrigin, float3 rayDir,
+                         inout float tNear, inout float tFar,
+                         out uint first, out uint count)
+{
+    float4 zone = _VRSLZones[VRSL_TakeZone(light)];
+    first = (uint)zone.x;
+    count = (uint)zone.y;
+
+    float enter =  1e30;
+    float leave = -1e30;
+    [loop]
+    for (uint b = 0u; b < count; b++)
+    {
+        uint   row = first + 3u * b;
+        float3 o   = VRSL_ToZoneBox(row, rayOrigin);
+        float3 d   = float3(dot(_VRSLZones[row].xyz, rayDir),
+                            dot(_VRSLZones[row + 1u].xyz, rayDir),
+                            dot(_VRSLZones[row + 2u].xyz, rayDir));
+        // Slabs of the unit cube; a ray parallel to a pair divides by zero, and
+        // the infinities it makes fall out of the min and max.
+        float3 inv = 1.0 / d;
+        float3 t0  = (-0.5 - o) * inv;
+        float3 t1  = ( 0.5 - o) * inv;
+        float3 lo  = min(t0, t1);
+        float3 hi  = max(t0, t1);
+        float  a   = max(max(lo.x, lo.y), lo.z);
+        float  z   = min(min(hi.x, hi.y), hi.z);
+        if (a < z)
+        {
+            enter = min(enter, a);
+            leave = max(leave, z);
+        }
+    }
+    tNear = max(tNear, enter);
+    tFar  = min(tFar, leave);
+    return tFar > tNear;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -368,7 +471,7 @@ struct VRSLALFixtureConfig
                               // z = AudioLink active (1=sample AL, 0=static full intensity),
                               // w = discoball beams (1 = the raymarch draws its dots)
     float4 spotAngles;        // x = inner-to-outer ratio (0..1), y = outer half-angle (deg),
-                              // z = emitterDepth (m), w = unused
+                              // z = emitterDepth (m), w = zone slot + 1 (0 = none)
     float4 alParams;          // x = band (0–3), y = delay (0–127), z = bandMultiplier,
                               // w = colorMode (0=emission, 1–4=theme0–3, 5=colorChord,
                               //                6=colorTexture (HSV-normalised),

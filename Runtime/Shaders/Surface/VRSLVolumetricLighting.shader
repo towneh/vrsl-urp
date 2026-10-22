@@ -143,6 +143,102 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             }
 
 
+            // One light's in-scattering across [spanStart, spanEnd] of the view
+            // ray, added to accumulated, or skipped when the visibility bound says
+            // it can't be seen. zoneBoxes above one tests every sample against
+            // the light's zone, for a zone whose inside can be more than one piece
+            // of the ray. An unzoned light passes a literal 1, and the test
+            // compiles out.
+            void VRSL_MarchLight(VRSLLightData light, float3 cameraWS, float3 viewDir,
+                                 float3 toCamera, float spanStart, float spanEnd,
+                                 float proj, float3 toCentre, float maxPhase,
+                                 float outputScale, float invSpacing, int maxSteps,
+                                 float jitter, float density, float anisotropy,
+                                 float3 noise, uint zoneFirst, uint zoneBoxes,
+                                 inout float3 accumulated, inout uint marched,
+                                 inout uint stepsTaken, inout uint skipped)
+            {
+                float range = light.positionAndRange.w;
+                float span  = spanEnd - spanStart;
+
+                // Bound the most this light can add across the whole span
+                // and skip it when that cannot be seen. Evaluated at the
+                // ray's closest approach to the light within the span, which
+                // is where distance attenuation peaks; the angular falloff,
+                // the gobo, the phase function and the noise can each only
+                // reduce a sample from there, so every step is at or below
+                // this and the sum over the span is at or below peak times
+                // span. Conservative by construction: it marches lights it
+                // need not, and never skips one that would have shown.
+                if (VRSL_VOL_MIN_CONTRIB > 0.0)
+                {
+                    float  tClosest = clamp(proj, spanStart, spanEnd);
+                    float3 toLightC = toCentre - viewDir * tClosest;
+                    float3 colour   = light.colorAndIntensity.xyz;
+                    float  peak     = VRSL_DistanceAttenuation(dot(toLightC, toLightC), range)
+                                    * light.colorAndIntensity.w
+                                    * max(colour.r, max(colour.g, colour.b))
+                                    * maxPhase;
+                    if (peak * span * outputScale < VRSL_VOL_MIN_CONTRIB)
+                    {
+                        skipped += 1;
+                        return;
+                    }
+                }
+
+                // Steps from the span at a constant spacing, so a cone
+                // clipping half a metre of the ray costs a fraction of one
+                // running thirty metres down it. The level sets the spacing
+                // and the ceiling: a long span at High may take more steps
+                // than the same span at Standard, which is the intent.
+                int   steps    = clamp((int)ceil(span * invSpacing),
+                                       VRSL_MIN_VOL_STEPS, maxSteps);
+                float stepSize = span / steps;
+                marched    += 1;
+                stepsTaken += (uint)steps;
+
+                [loop]
+                for (int s = 0; s < steps; s++)
+                {
+                    float3 samplePos = cameraWS + viewDir
+                                     * (spanStart + (s + jitter) * stepSize);
+
+                    if (zoneBoxes > 1u)
+                    {
+                        if (!VRSL_InZoneBoxes(zoneFirst, zoneBoxes, samplePos)) continue;
+                    }
+
+                    float3 contrib = VRSL_EvaluateLightVolumetric(
+                        light, samplePos, toCamera, anisotropy);
+
+                    // The gobo fetch is the most expensive part of the step,
+                    // and a gobo can only reduce the result — skip the rest of
+                    // the step wherever the light already contributes nothing.
+                    if (!any(contrib > 0.0)) continue;
+
+                    contrib *= SampleGobo(
+                        VRSL_GoboIndex(light), light.spotParams.w,
+                        samplePos,
+                        light.positionAndRange.xyz,
+                        light.directionAndType.xyz,
+                        light.spotParams.y,
+                        light.spotParams.z)
+                             * VRSL_DiscoballMask(light, samplePos);
+
+                #ifdef _VRSL_VOLUMETRIC_NOISE
+                    // Evaluated per light rather than once per shared step,
+                    // so haze varies with each beam's own sample positions.
+                    // Costs a texture fetch per light per step where beams
+                    // overlap.
+                    float n = VRSL_VolumetricNoise(samplePos, noise.x,
+                                                   noise.y, _VRSLVolTime);
+                    contrib *= lerp(1.0, n, noise.z);
+                #endif
+
+                    accumulated += contrib * density * stepSize;
+                }
+            }
+
             // Accumulate VRSL light in-scattering from the camera through the
             // pixel out to rawDepth. Returns RGB radiance with alpha = 0, so the
             // march can write into a fresh half-res target without disturbing
@@ -185,11 +281,8 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     tint    *= unity_FogColor.rgb;
                 }
 
-            #ifdef _VRSL_VOLUMETRIC_NOISE
-                float noiseScale    = _VRSLVolDensity.y;
-                float noiseScroll   = _VRSLVolDensity.z;
-                float noiseStrength = _VRSLVolDensity.w;
-            #endif
+                // Scale, scroll and strength, read under _VRSL_VOLUMETRIC_NOISE.
+                float3 noise = _VRSLVolDensity.yzw;
 
                 // Everything a light's accumulated result is scaled by after the
                 // per-sample terms, folded once so the bound below compares in
@@ -280,79 +373,31 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                             continue;
                     }
 
-                    float span = spanEnd - spanStart;
-
-                    // Bound the most this light can add across the whole span
-                    // and skip it when that cannot be seen. Evaluated at the
-                    // ray's closest approach to the light within the span, which
-                    // is where distance attenuation peaks; the angular falloff,
-                    // the gobo, the phase function and the noise can each only
-                    // reduce a sample from there, so every step is at or below
-                    // this and the sum over the span is at or below peak times
-                    // span. Conservative by construction: it marches lights it
-                    // need not, and never skips one that would have shown.
-                    if (VRSL_VOL_MIN_CONTRIB > 0.0)
+                    // A zoned light marches only from the ray's first entry into
+                    // its zone to its last exit, which can only shorten the span.
+                    // A zone of one box is entered and left once, so the span is
+                    // exactly its inside; with more, the ray may leave and come
+                    // back, and the march tests each sample. The zoned march is
+                    // its own copy and never rejoins the unzoned one, which pays
+                    // the one compare and nothing else.
+                    [branch]
+                    if (VRSL_IsZoned(light))
                     {
-                        float  tClosest = clamp(proj, spanStart, spanEnd);
-                        float3 toLightC = toCentre - viewDir * tClosest;
-                        float3 colour   = light.colorAndIntensity.xyz;
-                        float  peak     = VRSL_DistanceAttenuation(dot(toLightC, toLightC), range)
-                                        * light.colorAndIntensity.w
-                                        * max(colour.r, max(colour.g, colour.b))
-                                        * maxPhase;
-                        if (peak * span * outputScale < VRSL_VOL_MIN_CONTRIB)
-                        {
-                            skipped += 1;
-                            continue;
-                        }
+                        uint zoneFirst, zoneBoxes;
+                        if (VRSL_ClipSpanToZone(light, cameraWS, viewDir,
+                                                spanStart, spanEnd, zoneFirst, zoneBoxes))
+                            VRSL_MarchLight(light, cameraWS, viewDir, toCamera, spanStart, spanEnd,
+                                            proj, toCentre, maxPhase, outputScale, invSpacing,
+                                            maxSteps, jitter, density, anisotropy, noise,
+                                            zoneFirst, zoneBoxes,
+                                            accumulated, marched, stepsTaken, skipped);
+                        continue;
                     }
 
-                    // Steps from the span at a constant spacing, so a cone
-                    // clipping half a metre of the ray costs a fraction of one
-                    // running thirty metres down it. The level sets the spacing
-                    // and the ceiling: a long span at High may take more steps
-                    // than the same span at Standard, which is the intent.
-                    int   steps    = clamp((int)ceil(span * invSpacing),
-                                           VRSL_MIN_VOL_STEPS, maxSteps);
-                    float stepSize = span / steps;
-                    marched    += 1;
-                    stepsTaken += (uint)steps;
-
-                    [loop]
-                    for (int s = 0; s < steps; s++)
-                    {
-                        float3 samplePos = cameraWS + viewDir
-                                         * (spanStart + (s + jitter) * stepSize);
-
-                        float3 contrib = VRSL_EvaluateLightVolumetric(
-                            light, samplePos, toCamera, anisotropy);
-
-                        // The gobo fetch is the most expensive part of the step,
-                        // and a gobo can only reduce the result — skip the rest of
-                        // the step wherever the light already contributes nothing.
-                        if (!any(contrib > 0.0)) continue;
-
-                        contrib *= SampleGobo(
-                            VRSL_GoboIndex(light), light.spotParams.w,
-                            samplePos,
-                            light.positionAndRange.xyz,
-                            light.directionAndType.xyz,
-                            light.spotParams.y,
-                            light.spotParams.z)
-                                 * VRSL_DiscoballMask(light, samplePos);
-
-                    #ifdef _VRSL_VOLUMETRIC_NOISE
-                        // Evaluated per light rather than once per shared step,
-                        // so haze varies with each beam's own sample positions.
-                        // Costs a texture fetch per light per step where beams
-                        // overlap.
-                        float n = VRSL_VolumetricNoise(samplePos, noiseScale,
-                                                       noiseScroll, _VRSLVolTime);
-                        contrib *= lerp(1.0, n, noiseStrength);
-                    #endif
-
-                        accumulated += contrib * density * stepSize;
-                    }
+                    VRSL_MarchLight(light, cameraWS, viewDir, toCamera, spanStart, spanEnd,
+                                    proj, toCentre, maxPhase, outputScale, invSpacing,
+                                    maxSteps, jitter, density, anisotropy, noise, 0u, 1u,
+                                    accumulated, marched, stepsTaken, skipped);
                 }
 
                 if (_VRSLVolCollectStats != 0)

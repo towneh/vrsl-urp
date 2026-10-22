@@ -172,8 +172,14 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
 
                     // A gobo can only ever reduce the contribution, so the
                     // texture-array fetch — the most expensive part of the loop —
-                    // is skipped wherever the light already reaches nothing.
+                    // is skipped wherever the light already reaches nothing. A
+                    // zoned light's zone is tested first, and the test is one
+                    // compare for a light with none.
                     if (any(contrib > 0.0))
+                    {
+                        [branch]
+                        if (VRSL_IsZoned(light))
+                            contrib *= VRSL_ZoneMask(light, posWS);
                         contrib *= SampleGobo(VRSL_GoboIndex(light), light.spotParams.w,
                                               posWS,
                                               light.positionAndRange.xyz,
@@ -181,6 +187,7 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                                               light.spotParams.y,
                                               light.spotParams.z)
                                  * VRSL_DiscoballMask(light, posWS);
+                    }
 
                     // Costliest term in the loop — a depth-buffer march per
                     // light — so it runs last, only for lights still reaching
