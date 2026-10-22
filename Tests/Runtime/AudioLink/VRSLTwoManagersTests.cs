@@ -7,6 +7,8 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.TestTools;
+using UnityEngine.TestTools.Constraints;
+using Is = UnityEngine.TestTools.Constraints.Is;
 using Object = UnityEngine.Object;
 
 namespace VRSL.URP.Tests
@@ -394,26 +396,32 @@ namespace VRSL.URP.Tests
             int builds = VRSLSceneResources.WheelBuilds;
             int bakes  = VRSLSceneResources.NoiseBakes;
             int binds  = VRSLSceneResources.Binds;
-            long allocated = 0;
+            int allocatingFrames = 0;
             const int frames = 30;
             for (int i = 0; i < frames; i++)
             {
                 yield return null;
                 // First in the frame, so this call does the frame's work rather than
-                // finding it done.
-                long before = System.GC.GetAllocatedBytesForCurrentThread();
-                VRSLSceneResources.Prepare();
-                VRSLSceneResources.EnsureVolumetricNoise(rig.Manager.computeShader, rig.Manager);
-                allocated += System.GC.GetAllocatedBytesForCurrentThread() - before;
+                // finding it done. Counted by the profiler's GC.Alloc samples:
+                // GC.GetAllocatedBytesForCurrentThread reads 0 under Unity's runtime.
+                try
+                {
+                    Assert.That(() =>
+                    {
+                        VRSLSceneResources.Prepare();
+                        VRSLSceneResources.EnsureVolumetricNoise(rig.Manager.computeShader, rig.Manager);
+                    }, Is.Not.AllocatingGCMemory());
+                }
+                catch (AssertionException) { allocatingFrames++; }
                 rig.RenderFrame();
             }
             Debug.Log($"[GW11] over {frames} frames: {VRSLSceneResources.WheelBuilds - builds} wheel builds, "
                     + $"{VRSLSceneResources.NoiseBakes - bakes} noise bakes, {VRSLSceneResources.Binds - binds} binds, "
-                    + $"{allocated} bytes allocated");
+                    + $"{allocatingFrames} frames allocating");
             Assert.AreEqual(builds, VRSLSceneResources.WheelBuilds, "a frame with nothing changed built a wheel");
             Assert.AreEqual(bakes, VRSLSceneResources.NoiseBakes, "a frame with nothing changed baked noise");
             Assert.AreEqual(binds, VRSLSceneResources.Binds, "a frame with nothing changed set a shader global");
-            Assert.AreEqual(0, allocated, "the scene resources allocated on a frame with nothing changed");
+            Assert.AreEqual(0, allocatingFrames, "the scene resources allocated on a frame with nothing changed");
         }
 
         // ── DMX's eight slots on a longer wheel ───────────────────────────────
