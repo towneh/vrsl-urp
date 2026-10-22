@@ -41,8 +41,8 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>GW4. The default wheel holds upstream's eight in order, then the Club
-        /// Orion logo, all the size of upstream's gobos, and both manager prefabs link it
-        /// without having been looked at.</summary>
+        /// Orion logo at the size of upstream's shaped gobos, and both manager prefabs link
+        /// it without having been looked at.</summary>
         [Test]
         public void GW4_the_default_wheel_is_upstreams_eight_then_the_Club_Orion_logo()
         {
@@ -54,10 +54,14 @@ namespace VRSL.URP.Tests
                 var gobo = wheel.gobos[i];
                 Assert.IsNotNull(gobo, $"slot {i + 1} of the default wheel is empty");
                 Assert.AreEqual(DefaultNames[i], gobo.name, $"slot {i + 1} of the default wheel");
-                // One larger gobo would resample every slice up to its size.
-                Assert.AreEqual(1024, gobo.width, $"{gobo.name} isn't the size of upstream's gobos");
-                Assert.AreEqual(1024, gobo.height, $"{gobo.name} isn't the size of upstream's gobos");
+                // Every slice is resampled to the largest gobo, so one larger than upstream's
+                // 1024 shaped gobos would grow them all. Upstream's Default imports at 64.
+                Assert.LessOrEqual(Mathf.Max(gobo.width, gobo.height), 1024,
+                                   $"{gobo.name} is larger than upstream's gobos, so every slice grows");
             }
+            var logo = wheel.gobos[DefaultNames.Length - 1];
+            Assert.AreEqual(1024, logo.width,  "the Club Orion logo isn't the size of upstream's shaped gobos");
+            Assert.AreEqual(1024, logo.height, "the Club Orion logo isn't the size of upstream's shaped gobos");
 
             foreach (var path in new[] { DmxPrefab, AudioLinkPrefab })
             {

@@ -217,9 +217,14 @@ namespace VRSL.URP.Tests
                                         Last last, Action<Texture2D> onRead)
         {
             using var stage = new Stage(dmxFixtures,
-                dmx => dmx.goboTextures = dmxWheel,
+                dmx =>
+                {
+                    dmx.goboWheel    = null;
+                    dmx.goboTextures = dmxWheel;
+                },
                 (root, al) =>
                 {
+                    al.goboWheel    = null;
                     al.goboTextures = audioLinkWheel;
                     Spot(root, "AudioLink spot, gobo 3", LightA, goboIndex: 3);
                     Spot(root, "AudioLink spot, gobo 9", LightB, goboIndex: 9);
