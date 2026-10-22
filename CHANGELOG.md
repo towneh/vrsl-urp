@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Light zones keep realtime light on its side of a wall.** A Light Zone (Add Component → VRSL → Light Zone) is one or more boxes, each a Light Zone Box on the zone's GameObject or a child of it, turned and scaled with its transform. A DMX or AudioLink realtime light assigned to a zone lights only what is inside its boxes: surface light, beams in the haze, disco ball dots on surfaces and in the haze, and gobos. Its flare and body glow are not limited. Put a box's face inside the wall that should stop the light, not on its surface; a wall 1 cm thick holds. Each fixture has a **Zone** field, and a fixture that names none takes the nearest Light Zone above it in the hierarchy, so a whole rig is zoned by putting one zone on its root. Zones can be switched, moved and resized while the world runs: a zone switched off stops limiting its lights, and a zone with every box switched off keeps them dark. A script that moves or resizes one box on its own calls `Refresh()` on the zone; moving the zone itself, switching boxes and animating their size are picked up by themselves. Call `SetZone()` on a fixture to move it to another zone. Nothing inside a zone blocks light: a pillar between a fixture and the wall behind it still lets the light through to the wall. A scene with no zones costs the same as before, and a light that isn't in a zone pays one comparison per pixel it reaches; a zoned light's beam is marched only across the part of the view inside its zone.
 
 ## [0.3.0-rc.10] — 2026-10-22
 

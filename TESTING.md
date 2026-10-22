@@ -208,10 +208,48 @@ their colour. `VRSL Diagnostics` and `Validate Renderer Setup` say when the draw
 |---|---|---|---|
 | O1 | — | `contactShadowStrength` 0 → 1, avatar standing in a beam | Shadow appears at its feet |
 | O2 | — | Walk the occluder towards the edge of frame | Shadow fades out as it leaves screen. **Expected**: shadows are screen-space only |
-| O3 | — | Wall between fixture and a surface across the room | Still lit through the wall. **Expected**: there are no light-perspective shadows |
+| O3 | — | Wall between an unzoned fixture and a surface across the room | Still lit through the wall. **Expected**: there are no light-perspective shadows. A light zone (**Light zones**) is what keeps a light on its side of a wall |
 | O4 | — | `Standard` against `High` on thin geometry | Less light leaks through at `High`, which traces further and samples more finely. The sample count is the level's, not a field |
 | O5 | — | `VRSLLightStencilTests`: the DMX and AudioLink lasers (on their prefab's mesh) and blinder lens flares (on a quad), each on a copy of its shipped material, lit red with no DMX or AudioLink input; captured shown and hidden without and then with a test shader writing stencil 142 over the whole view (colour and depth untouched, early in the opaque queue, as the original VRSL's light stencil did), depth priming off; measured on a half-float capture, summed over the frame. A probe drawing only where the stencil holds 142 shows the write reached the frame, or the row is inconclusive | Each adds the same light with the stencil as without, within 2%. The package has no light stencil, so nothing a world writes to the stencil hides a light |
 | O6 | — | `VRSLLightStencilTests`: the rig's frozen frame (every dimmer up, beams aimed at the floor) at Standard and at Off, without and then with O5's writer, then with the manager off; depth priming off | At each level the frame is the same with the stencil as without, within the image rows' 1.5/255. Standard against Off and Off against the manager off each differ on at least 1% of the frame, or the row is inconclusive: there'd be no beams or no surface light to judge |
+
+### Light zones
+
+A Light Zone is the union of the Light Zone Boxes on its GameObject and its children. A
+realtime light assigned to one (its Zone field, or failing that the nearest Light Zone above
+it in the hierarchy) lights only world positions inside the boxes, in surface light, beams,
+disco ball dots and gobos; its flare and body glow are not limited. A zone switched off stops
+limiting its lights; a zone that is on with every box off keeps them dark. Nothing inside a
+zone blocks light. `VRSLLightZoneTests` and `VRSLLightZoneRuntimeTests` in the suite cover LZ1
+to LZ5 and LZ8 to LZ14, and `VRSLAudioLinkZoneTests` (AudioLink test assembly) LZ6 and LZ7.
+
+The per-path rows build one scene in the rig: a light in a room aimed at the room's inner
+wall, a stairway behind the wall and an outer wall beyond it, with a zone whose one box takes
+in the room and ends half way through the inner wall. Each is judged on half-float captures
+from the room and from the stairway, as what the lights add over the same view with the lights
+off (the rig leaves the default sky reflection on the walls), and for beams as what the haze
+adds over the same view with the beams' intensity at nothing.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| LZ1 | D | **Surface light.** The rig's mover, white at full, aimed at the inner wall; captured unzoned, then zoned to the room | Unzoned, the light reaches the stairway through the wall, or the row shows nothing. Zoned, the stairway keeps under a hundredth of what reached it, and the room's frame matches its unzoned one to within 1% of the light in it, pixel by pixel |
+| LZ2 | D | **Beams.** LZ1 with the beams on, judged as what the haze adds | As LZ1, the room within 2% |
+| LZ3 | D | **Disco ball dots on surfaces.** The shipped DMX disco ball in the room, beams off | As LZ1 |
+| LZ4 | D | **Disco ball dots in the haze.** The same ball with its dots in the haze, judged as what the haze adds | As LZ2 |
+| LZ5 | D | **A gobo.** LZ1 on gobo slot 3 | As LZ1. The room's frame matching pixel by pixel is what shows the zoned light still reads its own gobo |
+| LZ6 | A | **AudioLink, surface light and a gobo.** An AudioLink spot with AudioLink off on Gobo Index 3 in the mover's place, the DMX manager holding nothing | As LZ1 |
+| LZ7 | A | **AudioLink, beams.** The same spot, open beam, beams on | As LZ2 |
+| LZ8 | D | **More than one box.** Open air, a zone of two boxes along a beam with a two-metre gap between; a point light over the gap; captured unzoned and zoned, with each box switched off in turn; then a zone of two overlapping boxes against a zone of the one box they make | The floor in each box lights as unzoned (within 2%) and the floor in the gap keeps under 2% of its unzoned light. Seen down the beam, the two-box zone's haze is under nine tenths of the unzoned haze and within a tenth of each box's haze alone added together; the overlapping pair's haze is within a tenth of the single box's. Seen red by mutation with the per-sample test taken out of the march |
+| LZ9 | D | **A zone changed while the world runs.** LZ1's light zoned to the room, then: the zone switched off and on; the zone moved over the stairway with nothing told, and back; its box grown over the stairway by a script with `Refresh()`, and put back; its box switched off and on | Switched off, the stairway lights as unzoned; on again, dark with the room as unzoned. Moved or grown over the stairway it lights as unzoned; put back, dark. With its only box off the light lights nothing, the room included; box on again, as zoned |
+| LZ10 | D | **A light moved between zones.** LZ1's light in the room's zone, then the stairway's (a zone round the stairway only), then the room's again | In the stairway's zone it lights the stairway as unzoned, through the wall, and nothing in the room; back in the room's, the reverse |
+| LZ11 | D | **A zone from a parent.** The same light with no zone of its own, moved under the stairway zone's GameObject, then out again | Under it, the light takes the stairway's zone and the room is dark; out again, it lights as unzoned |
+| LZ12 | D | **Nothing per frame.** Two zones (one of two boxes), a zoned light, beams on, thirty frames with nothing changed; then one zone moved | No zone data uploaded, nothing bound and no GC allocation in the scene resources' `Prepare` on any of the thirty (counted with `Is.Not.AllocatingGCMemory()`). Moving the zone uploads its data once. Seen red by mutation with the data rebuilt every frame |
+| LZ13 | D | **The fallback binding**, on D3D12 and on Vulkan (`VRSL_TEST_GFX`): LZ1's room with no zone ever on, then after a zone came and went | The room lights both times, the same within 1%. Both fullscreen passes declare the zone buffer, and D3D12 and Vulkan skip a draw whose declared buffer isn't bound; D3D11 reads an unbound buffer as zero and draws, so the row passes there whatever the binding. Seen red on D3D12 by mutation with the fallback left unbound |
+| LZ14 | D | **Thin walls.** LZ1 with the inner wall at 5 cm, 2 cm and 1 cm and the zone's face half way through, the room seen from 8.5 m and from 20 m | At each thickness and distance the room's frame zoned matches its unzoned one to within 1% of its light, and the stairway keeps under a hundredth of what reached it |
+| LZ15 | D, A | **By eye, editor.** A Light Zone added from the component menu, a box resized in the scene view, a fixture's Zone field set and cleared, a rig parented under a zone | A new zone starts with a box round it, drawn as an orange wire box (grey while the zone or box is off, filled while selected). A fixture's inspector shows its Zone field and, left empty, says in plain words which zone above it it stays inside or that it lights through walls with none. Moving or resizing a box in the scene view in Play moves the light's edge with it |
+| LZ16 | D, A | **By eye, desktop and headset.** The light zone demo room (a room, an inner wall, a stairway, an extension behind a partition, a pillar), unzoned then zoned, the partition raised and lowered, one mover moved to the stairway's zone | Zoned, the stairway is dark and the room as unzoned, in both eyes; the pillar lets light through to the wall behind it; the extension lights with the partition down and goes dark with it up; the moved mover lights only the stairway |
+| LZ17 | D, A | **Cost.** Built players from clean worktrees, interleaved, per the benchmarking rules, with a null pair (two builds of the same commit) beside each comparison: the standard sweep on the previous release against this one; on this one, the sweep with `-vrsl-zone-all` (every fixture in one zone, a box round the truss) against without, with the volumetric stats | With no zones no row moves beyond the run-to-run spread (`bench.sh compare` passes). With every fixture zoned no row is dearer beyond the spread, and the steps taken per pixel go down where the box clips the beams. The fxc listings of both fullscreen passes show an unzoned light running one added compare in each |
+| LZ18 | D, A | **Quest.** LZ16 and LZ17's zoned sweep on a Quest build | As on desktop |
 
 ### Cost and culling
 
@@ -398,7 +436,7 @@ the same URP prefabs; that they light correctly on a Legacy or Vertical grid is 
 | L5 | — | L4 against AcChosen's current `main` (the first Legacy set only; its three `GetInstanceID()` calls need patching to compile from Unity 6000.5) | As L4 |
 | L6 | — | Every prefab and scene in the package, read from the file | Each script a component names loads as a component (a MonoBehaviour) from this package or a package it depends on (dependencies of dependencies count: URP's `Volume` is in the core package). Only the AudioLink set (as L2) may carry AudioLink's own scripts, as the AudioLink example scene does, and those must load where AudioLink is installed; without AudioLink the set is left out, since its own components don't compile there either. A VRChat script, or one whose whole body compiles only under UdonSharp, would arrive in every scene as a missing script |
 | L8 | — | `VRSLScriptReferenceTests.L8`: every public type in the package's assemblies (`Towneh.VRSL.URP` and `Towneh.VRSL.URP.*`, the optional ones where they compile) | Each sits in a namespace. A type in the global namespace clashes with one of the same name in another package or the project. A failure names each type and its assembly |
-| L9 | — | `VRSLMigrationTableTests.L9`: the table's light stencil entries and the summary paragraph built from them | The table holds the original VRSL's eight light stencil assets by GUID (the four mask prefabs, the light and restoration stencil materials, the two shaders), each under its own name. The paragraph names each one found with its count, says how to keep light off an area without a stencil (aim, cone, range, and that a wall doesn't stop the light), and is empty with none found. The tool's scene walk needs the legacy package, so no suite row covers it |
+| L9 | — | `VRSLMigrationTableTests.L9`: the table's light stencil entries and the summary paragraph built from them | The table holds the original VRSL's eight light stencil assets by GUID (the four mask prefabs, the light and restoration stencil materials, the two shaders), each under its own name. The paragraph names each one found with its count, says how to keep light out of an area without a stencil (a light zone; or aim, cone and range, and that without a zone a wall doesn't stop the light), and is empty with none found. The tool's scene walk needs the legacy package, so no suite row covers it |
 | L10 | A | `VRSLAudioLinkConeWidthTests.L10`: `SpotAngleForLegacyConeWidth` on each shipped AudioLink prefab's realtime light, across the original cone width's range (0 to 5.5) | On the spot and wash movers the original prefab's width (2.25, 2.7) gives this prefab's angle, a width of 4 scales it by the same share, and the angle never narrows as the width grows and stays between 5° and 179° (0.15 gives 5°). On the par, blinder and discoball every width gives the light's current angle, since the original's width never reached their shaders |
 | L11 | D | `VRSLMigrationCopyTests.L11`: a stand-in for the original's DMX wash component on a switched-off object on a layer and tag of its own, the component off, placed onto the DMX wash prefab | The sibling is switched off, on the source's tag, every object of it on the source's layer, its realtime light off |
 | L12 | A | `VRSLMigrationCopyAudioLinkTests.L12`: a stand-in for the original's AudioLink wash component at the original prefab's values (global intensity 1, band multiplier 2.5), then one at half the intensity and twice the band multiplier with AudioLink off and band 2, each placed onto the AudioLink wash prefab | The untouched one arrives at this prefab's global intensity, band multiplier and final intensity, AudioLink on and the open gobo; the changed one at half this prefab's intensity and twice its band multiplier, AudioLink off, band 2 |
@@ -901,7 +939,9 @@ names and source and compile nothing.
 Don't raise these; they're documented limitations with reasons in
 the [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) page of the wiki.
 
-- Light doesn't stop at walls: there are contact shadows only, no light-perspective shadow maps.
+- An unzoned light doesn't stop at walls: there are contact shadows only, no light-perspective
+  shadow maps. A light zone keeps a light on its side of a wall; nothing inside the zone
+  blocks it.
 - Occluders off screen cast no shadow, and shadows fade as an occluder leaves frame.
 - Metallic-smoothness maps are read under Unity's own property names (`_MetallicGlossMap`,
   as URP's Lit uses). A shader that names its maps otherwise is read from its scalar
