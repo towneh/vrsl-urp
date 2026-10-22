@@ -46,6 +46,9 @@ namespace VRSL.URP
         /// as <see cref="VRSL_DMXURPLightManager.SetDmxInput"/> numbers it. Stream data, the
         /// scene's synthetic source, when it is not given.</summary>
         const string DmxInputArgument = "-vrsl-dmx-input";
+        /// <summary>Present on the command line: switch on the scene's second light
+        /// manager and its one light, to measure a scene with both managers.</summary>
+        const string SecondManagerArgument = "-vrsl-second-manager";
 
         /// <summary>What a script greps the log for. The player writes the folder
         /// itself rather than the caller guessing at a timestamp.</summary>
@@ -88,6 +91,21 @@ namespace VRSL.URP
                     yield break;
                 }
                 dmxInput = (VRSLDmxInput)n;
+            }
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), SecondManagerArgument) >= 0)
+            {
+                var root = GameObject.Find(VRSLBenchmarkScene.RootName);
+                var second = root != null ? root.transform.Find(VRSLBenchmarkScene.SecondManagerName) : null;
+                if (second == null)
+                {
+                    Debug.LogError($"[VRSL sweep] FAIL — {SecondManagerArgument} was given, but this player's "
+                                 + "scene has no second manager (built without AudioLink?).");
+                    Quit(1);
+                    yield break;
+                }
+                second.gameObject.SetActive(true);
+                // Its enable runs now; a frame lets it set up before the sweep finds it.
+                yield return null;
             }
             var job     = VRSLSweepJob.Run(outcome, Stamp, forceOwnNormals, mirrors, dmxInput);
 

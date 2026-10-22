@@ -44,6 +44,9 @@ namespace VRSL.URP
         public const string CameraName = "Benchmark Camera";
         /// <summary>Looked up by name to activate a subset, so it is not a literal.</summary>
         public const string TrussName  = "Truss";
+        /// <summary>The switched-off object holding a second light manager and its one
+        /// light, where the project has another light path (AudioLink).</summary>
+        public const string SecondManagerName = "Second Manager";
 
         /// <summary>The largest count in the matrix. The truss is built at this size
         /// and everything smaller is a subset of it.</summary>
@@ -241,6 +244,7 @@ namespace VRSL.URP
                 BuildFloor(root);
                 BuildTruss(root);
                 BuildManager(root);
+                BuildSecondManager(root);
                 BuildCamera(root);
             }
             catch
@@ -317,6 +321,37 @@ namespace VRSL.URP
             var synthetic = sourceGo.AddComponent<VRSL_SyntheticDMXChannelSource>();
             synthetic.pattern   = VRSL_SyntheticDMXChannelSource.Pattern.Ramp;
             synthetic.universes = RequiredUniverses;
+        }
+
+        const string AudioLinkManagerPrefab = Pkg + "Runtime/Prefabs/AudioLink/VRSL-AudioLink-LightManager.prefab";
+
+        /// <summary>
+        /// A second light manager holding one lit spot, switched off: what a scene with
+        /// both managers costs is measured by switching it on (the player's
+        /// <c>-vrsl-second-manager</c>). Switched off it costs a sweep nothing. Only where
+        /// AudioLink is installed, since that manager is the only other one.
+        /// </summary>
+        static void BuildSecondManager(GameObject root)
+        {
+            VRSLLightPath other = null;
+            foreach (var path in VRSLLightPaths.All)
+                if (path != VRSLLightPaths.Dmx) { other = path; break; }
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>(AudioLinkManagerPrefab);
+            if (other == null || source == null || source.GetComponent(other.Manager) == null) return;
+
+            var holder = new GameObject(SecondManagerName);
+            holder.transform.SetParent(root.transform, false);
+            holder.SetActive(false);
+            PrefabUtility.InstantiatePrefab(source, holder.transform);
+
+            // One spot in front of the truss, lit without AudioLink running.
+            var spot = new GameObject("Second Manager Spot");
+            spot.transform.SetParent(holder.transform, false);
+            spot.transform.SetLocalPositionAndRotation(new Vector3(0f, TrussHeight, 10f), Quaternion.Euler(90f, 0f, 0f));
+            var light = new SerializedObject(spot.AddComponent(other.RealtimeLight));
+            light.FindProperty("enableAudioLink").boolValue = false;
+            light.FindProperty("spotAngle").floatValue = 25f;
+            light.ApplyModifiedPropertiesWithoutUndo();
         }
 
         static void BuildCamera(GameObject root)
