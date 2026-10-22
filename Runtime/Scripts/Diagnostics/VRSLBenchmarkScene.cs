@@ -344,13 +344,16 @@ namespace VRSL.URP
             holder.SetActive(false);
             PrefabUtility.InstantiatePrefab(source, holder.transform);
 
-            // One spot in front of the truss, lit without AudioLink running.
+            // One small spot in front of the truss, lit without AudioLink running. Its
+            // range keeps it to a few of the screen's tiles, the case of a second manager
+            // with little to draw.
             var spot = new GameObject("Second Manager Spot");
             spot.transform.SetParent(holder.transform, false);
-            spot.transform.SetLocalPositionAndRotation(new Vector3(0f, TrussHeight, 10f), Quaternion.Euler(90f, 0f, 0f));
+            spot.transform.SetLocalPositionAndRotation(new Vector3(0f, 1.5f, 10f), Quaternion.Euler(90f, 0f, 0f));
             var light = new SerializedObject(spot.AddComponent(other.RealtimeLight));
             light.FindProperty("enableAudioLink").boolValue = false;
             light.FindProperty("spotAngle").floatValue = 25f;
+            light.FindProperty("range").floatValue = 2f;
             light.ApplyModifiedPropertiesWithoutUndo();
         }
 
