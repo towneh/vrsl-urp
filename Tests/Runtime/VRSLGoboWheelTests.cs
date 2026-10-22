@@ -1,8 +1,10 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace VRSL.URP.Tests
@@ -98,8 +100,8 @@ namespace VRSL.URP.Tests
 
         /// <summary>GW5. A manager with no wheel linked builds its wheel from its own list;
         /// linked, from the wheel.</summary>
-        [Test]
-        public void GW5_a_manager_with_no_wheel_uses_its_own_list()
+        [UnityTest]
+        public IEnumerator GW5_a_manager_with_no_wheel_uses_its_own_list()
         {
             var plain = Plain(3);
             try
@@ -108,11 +110,12 @@ namespace VRSL.URP.Tests
                 var manager = rig.Manager;
                 manager.goboWheel    = null;
                 manager.goboTextures = plain;
-                manager.RefreshFixtures();
+                // The wheel is built before the next camera records.
+                yield return rig.Step(1);
                 Assert.AreEqual(3, manager.GoboCount, "with no wheel linked the manager didn't build its own three gobos");
 
                 manager.goboWheel = LoadDefault();
-                manager.RefreshFixtures();
+                yield return rig.Step(1);
                 Assert.AreEqual(DefaultNames.Length, manager.GoboCount, "with the default wheel linked the manager didn't build its nine");
             }
             finally

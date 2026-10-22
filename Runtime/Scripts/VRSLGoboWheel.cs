@@ -4,8 +4,8 @@ using UnityEngine.Rendering;
 namespace VRSL.URP
 {
     /// <summary>
-    /// Packs the manager's gobo textures into the <c>Texture2DArray</c> the
-    /// lighting and volumetric shaders sample as <c>_VRSLGobos</c>.
+    /// Packs the scene's gobo wheel into the <c>Texture2DArray</c> the lighting
+    /// and volumetric shaders sample as <c>_VRSLGobos</c>.
     ///
     /// Built entirely on the GPU. The slices are produced by blitting each source
     /// straight into a layer of an array render texture, so there is no readback

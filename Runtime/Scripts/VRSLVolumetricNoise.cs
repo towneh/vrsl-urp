@@ -12,10 +12,9 @@ namespace VRSL.URP
     /// Generated rather than shipped. The kernel evaluates the lighting library's
     /// own noise function, so the texture cannot drift from the code that expects
     /// it, and its period is an implementation detail rather than an import
-    /// setting. Each manager bakes its own on the first frame it needs one and
-    /// releases it on disable: one dispatch and 256 KB, cheap enough that sharing
-    /// it between managers would save nothing worth a lifetime that has to survive
-    /// domain reloads.
+    /// setting. The scene bakes one on the first frame a manager draws beams, shared
+    /// by both managers and released with the last of them
+    /// (<see cref="VRSLSceneResources"/>).
     /// </remarks>
     public static class VRSLVolumetricNoise
     {

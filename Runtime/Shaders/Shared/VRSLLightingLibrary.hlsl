@@ -332,9 +332,9 @@ float SampleGobo(float goboIdx, float spinAngle, float3 posWS,
 // Discoball — a point light masked by a cubemap of its dots
 // ──────────────────────────────────────────────────────────────────────────────
 
-// One cubemap for every discoball in the scene, bound by the manager beside the
-// gobo wheel. _VRSLDiscoballCubeBound is 0 when the manager has none, and the
-// ball then lights as a plain point light.
+// One cubemap for every discoball in the scene, bound with the gobo wheel by
+// VRSLSceneResources. _VRSLDiscoballCubeBound is 0 when no manager has one, and
+// the ball then lights as a plain point light.
 TextureCube _VRSLDiscoballCube;
 float       _VRSLDiscoballCubeBound;
 

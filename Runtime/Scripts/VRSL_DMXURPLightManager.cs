@@ -23,7 +23,8 @@ namespace VRSL.URP
     /// textures, compute and shaders fill themselves in.
     /// </summary>
     [AddComponentMenu("VRSL/DMX URP Light Manager")]
-    public class VRSL_DMXURPLightManager : MonoBehaviour, IVRSLLightManager
+    public class VRSL_DMXURPLightManager : MonoBehaviour, IVRSLLightManager,
+                                           IVRSLSceneResourceUser
     {
         public static VRSL_DMXURPLightManager Instance { get; private set; }
 
@@ -357,7 +358,8 @@ namespace VRSL.URP
         public RTHandle        DMXMovementHandle   { get; private set; }
         public RTHandle        DMXStrobeHandle     { get; private set; }
         public RTHandle        DMXSpinTimerHandle  { get; private set; }
-        public RenderTexture   GoboArray           { get; private set; }
+        /// <summary>The scene's gobo wheel, shared with the AudioLink manager.</summary>
+        public RenderTexture   GoboArray           => VRSLSceneResources.GoboArray;
         public int  FixtureCount   { get; private set; }
         /// <summary>How many times this manager has looked through the scene for its
         /// fixtures, and how many of those changed its fixture buffers.</summary>
@@ -373,14 +375,14 @@ namespace VRSL.URP
         public bool DrivesSurfacePrepass(Camera cam)
             => isActiveAndEnabled && FixtureCount > 0
             && VRSLCameraFilter.Evaluate(cam, secondaryCameraMode, quality, OwnedSources()).Render;
-        public int  GoboCount      { get; private set; }
+        /// <summary>Slots on the scene's gobo wheel. DMX reaches the first eight.</summary>
+        public int  GoboCount      => VRSLSceneResources.GoboCount;
         public int  ComputeKernel  { get; private set; }
         public Material LightingMaterial   { get; private set; }
         public Material VolumetricMaterial { get; private set; }
-        /// <summary>The density field the raymarch samples, baked by
-        /// <see cref="VRSLVolumetricNoise"/> on the first frame that needs it.</summary>
-        public Texture  VolumetricNoiseTexture => _volumetricNoise;
-        Texture _volumetricNoise;
+        /// <summary>The density field the raymarch samples: the scene's one, shared by
+        /// both managers and baked on the first frame either draws beams.</summary>
+        public Texture  VolumetricNoiseTexture => VRSLSceneResources.VolumetricNoise;
         /// <summary>Counters from the raymarch, collected on request. Steps per
         /// light and lights skipped are only observable here: both are designed to
         /// leave the image alone.</summary>
@@ -505,6 +507,10 @@ namespace VRSL.URP
         public VRSLTileCullPass TileCullPass => _tileCullPass;
 
         bool IVRSLLightManager.OwnsSingleton => Instance == this;
+        bool        IVRSLSceneResourceUser.TakesPrecedence  => true;
+        Texture2D[] IVRSLSceneResourceUser.Gobos            => Gobos;
+        Cubemap     IVRSLSceneResourceUser.DiscoballCubemap => discoballCubemap;
+        bool        IVRSLSceneResourceUser.HoldsFixtures    => FixtureCount > 0;
         VRSLQuality IVRSLLightManager.QualitySetting { get => quality; set => quality = value; }
         float IVRSLLightManager.LightIntensity { get => lightIntensity; set => lightIntensity = value; }
         float IVRSLLightManager.VolumetricIntensity { get => volumetricIntensity; set => volumetricIntensity = value; }
@@ -550,6 +556,8 @@ namespace VRSL.URP
         {
             VRSLWiring.ResolveOnValidate(this);
             MarkConfigDirty();
+            // A gobo list edited in place in Play mode.
+            VRSLSceneResources.Invalidate();
         }
         #endif
 
@@ -587,6 +595,7 @@ namespace VRSL.URP
 #endif
 
             BindInput();
+            VRSLSceneResources.Join(this);
             RefreshFixtures();
             // After RefreshFixtures, which releases the fixture buffers and would
             // once have taken these with it. Allocated up front so the compute pass
@@ -622,7 +631,7 @@ namespace VRSL.URP
             ReleaseMaterials();
             ReleaseChannelBuffers();
             ReleaseTextureHandles();
-            VRSLVolumetricNoise.Release(ref _volumetricNoise);
+            VRSLSceneResources.Leave(this);
 
             // Last, so this one has finished tearing down before another starts
             // building. Both hold their own buffers, but the shipped state should
@@ -1229,7 +1238,7 @@ namespace VRSL.URP
             if (lightingShader != null && LightingMaterial == null)
                 LightingMaterial = new Material(lightingShader) { hideFlags = HideFlags.HideAndDontSave };
 
-            BuildGoboArray();
+            VRSLSceneResources.Invalidate();
             _configDirty = true;
         }
 
@@ -1731,30 +1740,10 @@ namespace VRSL.URP
             RTHandles.Release(DMXSpinTimerHandle); DMXSpinTimerHandle = null;
         }
 
-        void BuildGoboArray()
-        {
-            VRSLGoboWheel.Release(ref _goboArray);
-            _goboArray = VRSLGoboWheel.Build(Gobos, out int count, out _goboWheelComplete);
-            GoboArray  = _goboArray;
-            GoboCount  = count;
-        }
-
-        /// <summary>Rebuild the wheel once every source is fully streamed in, if
-        /// the first build caught one part-way. Cheap to ask every camera.</summary>
-        void CompleteGoboArray()
-        {
-            if (_goboWheelComplete || !VRSLGoboWheel.Resident(Gobos)) return;
-            BuildGoboArray();
-        }
-
-        RenderTexture _goboArray;
-        bool          _goboWheelComplete = true;
-
         void ReleaseBuffers()
         {
             FixtureConfigBuffer?.Release(); FixtureConfigBuffer = null;
             LightDataBuffer?.Release();     LightDataBuffer     = null;
-            VRSLGoboWheel.Release(ref _goboArray); GoboArray = null;
             VolumetricStats.Dispose();
         }
 
@@ -1970,24 +1959,15 @@ namespace VRSL.URP
             _surfacePrepass.ConfigureInput(input);
             _surfacePrepass.UrpNormals = normals.UseUrpNormals;
 
-            // Gobo wheel is a Texture2DArray, bound globally here because the
-            // render graph only accepts TextureHandle.
-            CompleteGoboArray();
-            if (GoboArray != null)
-                Shader.SetGlobalTexture("_VRSLGobos", GoboArray);
-            if (discoballCubemap != null)
-                Shader.SetGlobalTexture("_VRSLDiscoballCube", discoballCubemap);
-            Shader.SetGlobalFloat("_VRSLDiscoballCubeBound", discoballCubemap != null ? 1f : 0f);
-
-            // Baked here rather than on enable so a level switched at runtime from
-            // Off finds one. Bound the way the gobo wheel is: it is not a graph
-            // resource and nothing in the graph writes it.
+            // The gobo wheel, the disco ball cubemap and the beam noise are the scene's,
+            // bound by VRSLSceneResources and never from here, so neither manager can bind
+            // over the other's. Asked before this camera records, so a change reaches it;
+            // with nothing changed it binds nothing.
+            VRSLSceneResources.Prepare();
+            // On the first frame with beams rather than on enable, so a level switched at
+            // runtime from Off finds the noise.
             if (VolumetricsEnabled && VolumetricUseNoise)
-            {
-                if (_volumetricNoise == null)
-                    _volumetricNoise = VRSLVolumetricNoise.Bake(computeShader, this);
-                Shader.SetGlobalTexture("_VRSLVolNoise", _volumetricNoise);
-            }
+                VRSLSceneResources.EnsureVolumetricNoise(computeShader, this);
             // Made here for the same reason, and so a level without beams makes none.
             if (VolumetricsEnabled && VolumetricMaterial == null)
                 VolumetricMaterial = new Material(volumetricShader) { hideFlags = HideFlags.HideAndDontSave };
