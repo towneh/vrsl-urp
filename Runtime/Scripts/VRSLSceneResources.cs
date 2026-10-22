@@ -154,15 +154,18 @@ namespace VRSL.URP
         }
 
         /// <summary>
-        /// Bring the wheel and cubemap up to date with the managers, at most once a frame.
-        /// Called from each manager's camera callback before it records anything; with
-        /// nothing changed it compares a few references and binds nothing.
+        /// Bring the wheel, the cubemap and the light zones (<see cref="VRSLLightZones"/>)
+        /// up to date with the scene, at most once a frame. Called from each manager's
+        /// camera callback before it records anything; with nothing changed it compares a
+        /// few references and binds nothing.
         /// </summary>
         public static void Prepare()
         {
             int frame = Time.frameCount;
             if (s_preparedFrame == frame) return;
             s_preparedFrame = frame;
+
+            VRSLLightZones.Prepare();
 
             for (int i = 0; i < s_users.Count; i++)
             {

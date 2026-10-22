@@ -109,6 +109,12 @@ namespace VRSL.URP
         [Tooltip("Light attenuation range. Increase for larger spaces.")]
         public float range = 20f;
 
+        [Tooltip("The Light Zone this light stays inside: it lights only what is inside the "
+               + "zone's boxes, beams, disco ball dots and gobos included. Empty takes the "
+               + "nearest Light Zone above this fixture in the hierarchy, or none. To change "
+               + "it while the world runs, call SetZone().")]
+        public VRSLLightZone lightZone;
+
         [Range(0f, 1f)]
         [Tooltip("Distance in metres from the fixture's lens back to the conceptual cone apex. "
                + "0 (default) treats the light as a point source — the cone tapers to zero at "
@@ -255,6 +261,32 @@ namespace VRSL.URP
         {
             DriveFixtureShells();
             ConfigChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// Keep this light inside <paramref name="zone"/> from the next frame, or pass null
+        /// to take the nearest Light Zone above it in the hierarchy.
+        /// </summary>
+        public void SetZone(VRSLLightZone zone)
+        {
+            lightZone = zone;
+            ConfigChanged?.Invoke();
+        }
+
+        /// <summary>A zone came or went, so every light's zone slot is uploaded again.</summary>
+        internal static void RaiseConfigChanged() => ConfigChanged?.Invoke();
+
+        VRSLLightZone _parentZone;
+        int _parentZoneSeen = -1;
+
+        /// <summary>This light's zone as the light data packs it: its slot plus one, or 0.</summary>
+        internal float ZoneCode => VRSLLightZones.CodeFor(lightZone, transform, ref _parentZone, ref _parentZoneSeen);
+
+        // Moved under another zone.
+        void OnTransformParentChanged()
+        {
+            _parentZoneSeen = -1;
+            if (VRSLLightZones.Count > 0) ConfigChanged?.Invoke();
         }
 
         // ──────────────────────────────────────────────────────────────────────────

@@ -37,6 +37,7 @@ namespace VRSL.URP
         SerializedProperty _minSpotAngle;
         SerializedProperty _maxSpotAngle;
         SerializedProperty _range;
+        SerializedProperty _lightZone;
         SerializedProperty _emitterDepth;
         SerializedProperty _lensTransform;
         SerializedProperty _lightOriginOffset;
@@ -98,6 +99,7 @@ namespace VRSL.URP
             _minSpotAngle        = serializedObject.FindProperty("minSpotAngle");
             _maxSpotAngle        = serializedObject.FindProperty("maxSpotAngle");
             _range               = serializedObject.FindProperty("range");
+            _lightZone           = serializedObject.FindProperty("lightZone");
             _emitterDepth        = serializedObject.FindProperty("emitterDepth");
             _lensTransform       = serializedObject.FindProperty("lensTransform");
             _lightOriginOffset   = serializedObject.FindProperty("lightOriginOffset");
@@ -208,6 +210,7 @@ namespace VRSL.URP
                         new GUIContent("Spot Angle", _maxSpotAngle.tooltip));
             }
             EditorGUILayout.PropertyField(_range);
+            VRSLLightZoneField.Draw(_lightZone, ((Component)target).transform);
             // Emitter depth only meaningfully affects spot cones; hide for point lights
             // since the math collapses back to a point source regardless.
             if (!_isPointLight.boolValue && !isOmni)

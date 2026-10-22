@@ -4,7 +4,8 @@ namespace VRSL.URP
 {
     /// <summary>
     /// The DMX buffers bound while no manager owns them: in the editor outside Play, before
-    /// a manager starts, and after the last one switches off.
+    /// a manager starts, and after the last one switches off. Also the light zone data
+    /// while no zone is switched on.
     ///
     /// D3D12 and Vulkan skip any draw whose shader declares a buffer that isn't bound, so
     /// without these every shader that includes the DMX reads (the mover bodies, the
@@ -20,7 +21,9 @@ namespace VRSL.URP
         static readonly int s_SpinPhase   = Shader.PropertyToID("_VRSLU_DMXSpinPhase");
         static readonly int s_StrobePhase = Shader.PropertyToID("_VRSLU_DMXStrobePhase");
 
-        static GraphicsBuffer s_channels, s_movement, s_spinPhase, s_strobePhase;
+        static readonly int s_Zones       = Shader.PropertyToID("_VRSLZones");
+
+        static GraphicsBuffer s_channels, s_movement, s_spinPhase, s_strobePhase, s_zones;
         // Set by the quit and reload hooks: a manager switching off after them must not
         // allocate buffers that nothing is left to release.
         static bool s_shutDown;
@@ -45,6 +48,25 @@ namespace VRSL.URP
             Shader.SetGlobalBuffer(s_StrobePhase, s_strobePhase);
         }
 
+        /// <summary>The light zone data bound while no zone is switched on (see
+        /// <see cref="VRSLLightZones"/>, which binds it). No light is zoned then, so
+        /// nothing reads it. Null where nothing draws.</summary>
+        internal static GraphicsBuffer Zones
+        {
+            get
+            {
+                if (s_shutDown || SystemInfo.graphicsDeviceType == UnityEngine.Rendering.GraphicsDeviceType.Null)
+                    return null;
+                if (s_zones == null || !s_zones.IsValid())
+                {
+                    s_zones?.Release();
+                    s_zones = new GraphicsBuffer(GraphicsBuffer.Target.Structured, 1, 16);
+                    s_zones.SetData(new Vector4[1]);
+                }
+                return s_zones;
+            }
+        }
+
         static GraphicsBuffer Zeroed(GraphicsBuffer.Target target)
         {
             var buffer = new GraphicsBuffer(target, 1, sizeof(float));
@@ -64,6 +86,7 @@ namespace VRSL.URP
             s_movement?.Release();    s_movement    = null;
             s_spinPhase?.Release();   s_spinPhase   = null;
             s_strobePhase?.Release(); s_strobePhase = null;
+            s_zones?.Release();       s_zones       = null;
         }
 
         /// <summary>Both hooks, because the editor and a player each run only one of them.
@@ -79,6 +102,9 @@ namespace VRSL.URP
             // Statics survive entering Play with domain reload off.
             s_shutDown = false;
             Bind();
+            // Once, here, rather than in Bind: a manager switching off calls that, and
+            // the zones aren't a manager's to unbind.
+            if (VRSLLightZones.Buffer == null && Zones != null) Shader.SetGlobalBuffer(s_Zones, Zones);
 #if UNITY_EDITOR
             UnityEditor.AssemblyReloadEvents.beforeAssemblyReload -= ShutDown;
             UnityEditor.AssemblyReloadEvents.beforeAssemblyReload += ShutDown;

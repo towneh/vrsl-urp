@@ -34,6 +34,7 @@ namespace VRSL.URP
         SerializedProperty _isPointLight;
         SerializedProperty _spotAngle;
         SerializedProperty _range;
+        SerializedProperty _lightZone;
         SerializedProperty _emitterDepth;
         SerializedProperty _lensTransform;
 
@@ -83,6 +84,7 @@ namespace VRSL.URP
             _isPointLight              = serializedObject.FindProperty("isPointLight");
             _spotAngle                 = serializedObject.FindProperty("spotAngle");
             _range                     = serializedObject.FindProperty("range");
+            _lightZone                 = serializedObject.FindProperty("lightZone");
             _emitterDepth              = serializedObject.FindProperty("emitterDepth");
             _lensTransform             = serializedObject.FindProperty("lensTransform");
 
@@ -154,6 +156,7 @@ namespace VRSL.URP
                 EditorGUILayout.PropertyField(_spotAngle);
             }
             EditorGUILayout.PropertyField(_range, new GUIContent(isDiscoball ? "Range" : "Spot Range", _range.tooltip));
+            VRSLLightZoneField.Draw(_lightZone, ((Component)target).transform);
             // Emitter depth only meaningfully affects spot cones; hide for point lights
             // since the math collapses back to a point source regardless.
             if (!_isPointLight.boolValue && !isDiscoball)
