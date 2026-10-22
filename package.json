@@ -1,7 +1,7 @@
 {
   "name": "town.mr.vrsl-urp",
   "displayName": "VR Stage Lighting URP",
-  "version": "0.3.0-rc.9",
+  "version": "0.3.0-rc.10",
   "description": "Realtime stage lighting and raymarched beams for Unity 6000.4+ and URP 17.4+, driven by DMX or AudioLink. Adds its render passes at runtime and leaves your URP asset and renderer alone. Installs beside com.acchosen.vr-stage-lighting: asset GUIDs, shader names and runtime globals don't collide.",
   "unity": "6000.4",
   "author": {

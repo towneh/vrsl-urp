@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.3.0-rc.10] — 2026-10-22
+
 ### Added
 
 - **Gobo wheels.** A gobo wheel is an asset holding the gobos your moving lights project, in order. Both light managers have a new **Gobo Wheel** field, and every light in the scene uses the one wheel, so a gobo you add is there for DMX and AudioLink lights alike. The package ships a default wheel with upstream VRSL's eight gobos in their usual order and the Club Orion logo in slot 9, and the manager prefabs link it. DMX lights choose from the first eight with the gobo channel, on the same DMX ranges as before; AudioLink lights reach every slot through Gobo Index, which now goes past 8. A wheel longer than nine costs video memory, not frame time.
