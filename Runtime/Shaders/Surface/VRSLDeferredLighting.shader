@@ -99,6 +99,15 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
 
                 float2 uv = i.uv;
 
+                // A tile no light reaches adds nothing, so it returns before the depth,
+                // normal and surface reads that are most of a pixel's cost when the loop
+                // has nothing to do. A quad straddling such a tile's edge reads its
+                // depth-derived normal fallback across the returned pixel, as one at the
+                // sky's edge does; pixels with a prepass normal are unaffected.
+                uint tileIndex  = VRSL_TileIndex(uv, VRSL_EyeIndex());
+                uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
+                if (lightCount == 0u) return 0;
+
                 // Skip skybox / far-plane pixels
                 float rawDepth = SampleSceneDepth(uv);
 #if UNITY_REVERSED_Z
@@ -145,9 +154,6 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                 // One dither value per pixel, reused by every light's trace.
                 float shadowDither = InterleavedGradientNoise(i.positionCS.xy,
                                                               (int)(_Time.y * 60.0));
-
-                uint tileIndex = VRSL_TileIndex(uv, VRSL_EyeIndex());
-                uint lightCount = VRSL_LightListCount(tileIndex, _VRSLLightCount);
 
                 float3 lighting = 0;
                 // [loop] rather than letting the compiler choose: the body now
