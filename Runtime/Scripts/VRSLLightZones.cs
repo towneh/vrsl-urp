@@ -215,6 +215,23 @@ namespace VRSL.URP
             }
         }
 
+#if UNITY_EDITOR
+        // An author dragging or resizing a box in the scene view or the inspector in Play.
+        // The editor's own edits only, so a script moving a box still needs Refresh() here
+        // as it does in a player.
+        [UnityEditor.InitializeOnLoadMethod]
+        static void WatchEdits()
+        {
+            UnityEditor.ObjectChangeEvents.changesPublished -= OnEdits;
+            UnityEditor.ObjectChangeEvents.changesPublished += OnEdits;
+        }
+
+        static void OnEdits(ref UnityEditor.ObjectChangeEventStream stream)
+        {
+            if (s_count > 0) s_dirty = true;
+        }
+#endif
+
         /// <summary>Statics survive entering Play with domain reload off; anything left
         /// from before is let go.</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
