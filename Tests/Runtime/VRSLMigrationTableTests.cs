@@ -75,10 +75,10 @@ namespace VRSL.URP.Tests
             string summary = VRSLMigrationTable.LightStencilSummary(found);
             foreach (var f in found)
                 StringAssert.Contains($"{f.Key}: {f.Value}", summary, "the summary must name each stencil found and count it");
-            foreach (var word in new[] { "range", "cone", "wall" })
+            foreach (var word in new[] { "Light Zone", "range", "cone", "wall" })
                 StringAssert.Contains(word, summary,
-                    "the summary must say how to keep light off an area without a stencil: placement, range and "
-                  + "the cone, and that a wall doesn't stop the light");
+                    "the summary must say how to keep light out of an area without a stencil: a light zone, or "
+                  + "placement, range and the cone, and that without a zone a wall doesn't stop the light");
         }
     }
 }

@@ -179,10 +179,12 @@ namespace VRSL.URP
             return "Light stencils from the original VRSL, left as they are. VRSL-URP has no light stencil, so "
                  + "they no longer keep light off anything and you can delete them:\n"
                  + string.Join("\n", found.OrderBy(f => f.Key).Select(f => $"  {f.Key}: {f.Value}"))
-                 + "\n\nTo keep fixture light off an area, aim the fixtures away from it, narrow their cone or "
-                 + "shorten their range. A fixture still lights a surface on the far side of a wall, because "
-                 + "the lights have no shadow maps. Beams stop at whatever stands in front of them, and flares and "
-                 + "lasers hide behind it.";
+                 + "\n\nTo keep fixture light out of an area, put the fixtures in a Light Zone (Add Component, "
+                 + "VRSL, Light Zone) round the space they should light, with its box faces inside the walls: "
+                 + "they then light nothing outside it, beams included. Without a zone a fixture lights a surface "
+                 + "on the far side of a wall, because the lights have no shadow maps; aiming it away, narrowing "
+                 + "its cone or shortening its range are the other ways. Beams stop at whatever stands in front "
+                 + "of them, and flares and lasers hide behind it.";
         }
     }
 }
