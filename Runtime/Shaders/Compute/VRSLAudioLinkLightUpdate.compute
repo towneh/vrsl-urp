@@ -33,10 +33,9 @@ StructuredBuffer<VRSLALFixtureConfig>  _ALFixtureConfigs;
 RWStructuredBuffer<VRSLLightData>      _LightData;
 uint                                    _FixtureCount;
 uint                                    _VRSLGoboCount;
-// Elapsed seconds since scene load — supplied from CPU each frame. Used to
-// integrate the gobo spin rate into a rotation phase, matching the volumetric
-// AudioLink shader's _Time.w · 10 · spinSpeed (degrees). fmod in the kernel
-// keeps the phase bounded to avoid float precision drift after long sessions.
+// Elapsed seconds since scene load, supplied from the CPU each frame. The gobo's
+// rotation phase is this times its spin rate (see the kernel); fmod there keeps the
+// phase bounded so it doesn't lose precision over a long session.
 float                                   _VRSLTime;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -185,13 +184,12 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     light.positionAndRange  = float4(cfg.positionAndRange.xyz, cfg.positionAndRange.w);
     // Intensity doubles as the active flag — see VRSLLightingLibrary.hlsl.
     light.colorAndIntensity = float4(color, combinedIntensity > 0.001 ? combinedIntensity : 0.0);
-    // Gobo spin phase (radians), integrated from the Static's spinSpeed.
-    // Scale factor π/9 (2× the projection shader's projected-gobo rate) is an
-    // empirical match to the volumetric cone's visible stripe-pattern rotation,
-    // which the GPU light's floor projection is usually compared against.
-    // Negative sign matches the volumetric's direction convention
-    // (spinSpeed *= -goboSpinSpeed in VRSL-StandardMover-VolumetricFrag.cginc).
-    // fmod to [-2π, 2π] bounds precision for long-running scenes.
+    // Gobo spin phase in radians: 20° a second per unit of spin speed (0.34906585 is
+    // π/9 rad/s), two thirds of upstream VRSL's projection shader, which turns at
+    // _Time.w × 10 × speed degrees, 30° a second. Negative to turn the way upstream's
+    // volumetric cone does (spinSpeed *= -goboSpinSpeed in its
+    // VRSL-StandardMover-VolumetricFrag.cginc). fmod to [-2π, 2π] bounds precision for
+    // long-running scenes.
     float spinPhase = fmod(cfg.reserved.y * _VRSLTime * -0.34906585, 6.28318530718);
     // A discoball turns at its authored rate in degrees per second about its axis.
     bool discoball = lightType == 2;

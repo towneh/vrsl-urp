@@ -98,7 +98,9 @@ namespace VRSL.URP
         public int goboIndex = 1;
 
         [Range(-10f, 10f)]
-        [Tooltip("Gobo rotation speed. 0 = no spin, negative = anti-clockwise, positive = clockwise. Matches the volumetric shader's spin range.")]
+        [Tooltip("How fast the gobo turns: 20° a second for each unit, so 1 turns it once "
+               + "every 18 seconds and 10 about once every 2 seconds. Positive turns it "
+               + "clockwise, negative anti-clockwise, 0 holds it still.")]
         public float goboSpinSpeed = 0f;
 
         // ──────────────────────────────────────────────────────────────────────────
