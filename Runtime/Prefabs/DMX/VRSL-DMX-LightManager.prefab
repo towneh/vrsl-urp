@@ -66,6 +66,8 @@ MonoBehaviour:
   volumetricNoiseScale: 0.3
   volumetricNoiseScrollSpeed: 0.1
   volumetricNoiseStrength: 0.7
+  goboWheel: {fileID: 11400000, guid: 2bbe85cfce714b1b80bfaa65bae8e18d, type: 2}
+  goboWheelVersion: 0
   goboTextures:
   - {fileID: 2800000, guid: f7599b8713278f4c0b0bd11fcd836c6a, type: 3}
   - {fileID: 2800000, guid: 6f40818edcd035ed4078ecc48e774ba5, type: 3}

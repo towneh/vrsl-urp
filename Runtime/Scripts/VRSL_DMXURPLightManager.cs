@@ -151,9 +151,24 @@ namespace VRSL.URP
         public bool coupleToSceneFog = false;
 
         [Header("Gobos")]
-        [Tooltip("Gobo textures available to all DMX fixtures. Packed into a shared Texture2DArray. "
-               + "DMX channel +11 selects the slot (0 = open/no gobo). Order matches DMX value range.")]
+        [Tooltip("The gobos every light in the scene can project, shared with the AudioLink "
+               + "manager. The package's default holds upstream VRSL's eight and the Club Orion "
+               + "logo; VRSL → URP → Gobo Wheel edits a wheel or makes one of your own. DMX lights "
+               + "choose from the first eight by the gobo channel. Leave empty to use this "
+               + "manager's own list below.")]
+        public VRSLGoboWheelAsset goboWheel;
+
+        // 0 until the editor has looked at this manager's gobos (VRSLGoboWheelUpgrade).
+        // Never 1 in a prefab, for the reason dmxInputVersion gives.
+        [SerializeField, HideInInspector] internal int goboWheelVersion;
+
+        [Tooltip("This manager's own gobos, slot 1 first, used when Gobo Wheel is empty. The "
+               + "gobo channel chooses from the first eight.")]
         public Texture2D[] goboTextures;
+
+        /// <summary>The gobos this manager's lights index: its wheel's, or its own list
+        /// when it links none.</summary>
+        internal Texture2D[] Gobos => goboWheel != null ? goboWheel.gobos : goboTextures;
 
         [Tooltip("The dot pattern every discoball fixture in the scene throws, as a cubemap. "
                + "The one that ships is a plain mirror ball. Leave empty and a discoball "
@@ -509,32 +524,7 @@ namespace VRSL.URP
         void Reset() => LoadDefaultGoboWheel();
 
         [ContextMenu("Load Default Gobo Wheel")]
-        void LoadDefaultGoboWheel()
-        {
-            const string folder =
-                "Packages/town.mr.vrsl-urp/Runtime/Textures/MoverLightTextures/GOBO/IndividualGobos";
-
-            var guids = UnityEditor.AssetDatabase.FindAssets("t:Texture2D", new[] { folder });
-            var list  = new List<Texture2D>();
-            foreach (var guid in guids)
-            {
-                var tex = UnityEditor.AssetDatabase.LoadAssetAtPath<Texture2D>(
-                    UnityEditor.AssetDatabase.GUIDToAssetPath(guid));
-                if (tex != null) list.Add(tex);
-            }
-
-            // Default gobo first (matches shader slot 1 = lowest DMX values), then alphabetically
-            list.Sort((a, b) =>
-            {
-                bool aD = a.name.Contains("Default");
-                bool bD = b.name.Contains("Default");
-                if (aD != bD) return aD ? -1 : 1;
-                return string.Compare(a.name, b.name, System.StringComparison.Ordinal);
-            });
-
-            goboTextures = list.ToArray();
-            UnityEditor.EditorUtility.SetDirty(this);
-        }
+        void LoadDefaultGoboWheel() => VRSLGoboWheelUpgrade.LoadDefault(this);
 #endif
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
@@ -1744,7 +1734,7 @@ namespace VRSL.URP
         void BuildGoboArray()
         {
             VRSLGoboWheel.Release(ref _goboArray);
-            _goboArray = VRSLGoboWheel.Build(goboTextures, out int count, out _goboWheelComplete);
+            _goboArray = VRSLGoboWheel.Build(Gobos, out int count, out _goboWheelComplete);
             GoboArray  = _goboArray;
             GoboCount  = count;
         }
@@ -1753,7 +1743,7 @@ namespace VRSL.URP
         /// the first build caught one part-way. Cheap to ask every camera.</summary>
         void CompleteGoboArray()
         {
-            if (_goboWheelComplete || !VRSLGoboWheel.Resident(goboTextures)) return;
+            if (_goboWheelComplete || !VRSLGoboWheel.Resident(Gobos)) return;
             BuildGoboArray();
         }
 

@@ -90,8 +90,11 @@ namespace VRSL.URP
         [Tooltip("Emit as a point light instead of a spot.")]
         public bool isPointLight = false;
 
-        [Range(1, 8)]
-        [Tooltip("Gobo selection (matches the AudioLink Static Select GOBO slider). 1 = Default (open beam), 2–8 = shaped gobos.")]
+        [Min(1)]
+        [Tooltip("Which slot of the scene's gobo wheel this light projects, 1 for the first. On "
+               + "the default wheel 1 is an open beam, 2 to 8 are upstream VRSL's shaped gobos "
+               + "and 9 is the Club Orion logo. A slot past the end of the wheel shows the last "
+               + "one.")]
         public int goboIndex = 1;
 
         [Range(-10f, 10f)]

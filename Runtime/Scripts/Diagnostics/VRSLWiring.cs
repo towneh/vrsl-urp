@@ -260,6 +260,9 @@ namespace VRSL.URP
             // Before resolution, which would otherwise fill an old manager's empty Grid
             // Textures and leave it reading the Horizontal set whatever it was set up for.
             if (manager is VRSL_DMXURPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
+            // Before the manager builds its wheel, which it does from what this leaves.
+            if (manager is IVRSLLightManager && manager is MonoBehaviour behaviour)
+                VRSLGoboWheelUpgrade.Upgrade(behaviour);
 
             var result = Resolve(manager);
             if (!result.ChangedAnything && result.Unresolved.Count == 0) return;

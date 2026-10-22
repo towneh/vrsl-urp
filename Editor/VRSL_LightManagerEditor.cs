@@ -316,6 +316,7 @@ namespace VRSL.URP.EditorScripts
                 // Also how a prefab asset whose manager still has separate grid texture
                 // fields is brought across, since automatic resolution never touches assets.
                 if (manager is VRSL_DMXURPLightManager dmx) VRSLGridUpgrade.Upgrade(dmx);
+                if (manager is MonoBehaviour behaviour) VRSLGoboWheelUpgrade.Upgrade(behaviour);
                 // No Undo.RecordObject here: Resolve writes through SerializedObject,
                 // which registers its own undo. Recording as well would put two entries
                 // on the stack for one repair, so undoing it would take two presses.
