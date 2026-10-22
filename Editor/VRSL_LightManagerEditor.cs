@@ -47,9 +47,72 @@ namespace VRSL.URP.EditorScripts
             // Everything else, drawn the way it always was and in the order it is
             // declared. A field added later lands here rather than nowhere, which is the
             // point of drawing the groups above by name and the rest by exclusion.
-            DrawPropertiesExcluding(serializedObject, skip.ToArray());
+            DrawRest(skip);
 
             serializedObject.ApplyModifiedProperties();
+        }
+
+        /// <summary>What <c>DrawPropertiesExcluding</c> draws, with the gobo fields drawn
+        /// as one section where they are declared.</summary>
+        void DrawRest(List<string> skip)
+        {
+            var it = serializedObject.GetIterator();
+            for (bool enter = true; it.NextVisible(enter); enter = false)
+            {
+                if (skip.Contains(it.name)) continue;
+                if (it.name == VRSLGoboWheelUpgrade.WheelField) { DrawGobos(it.Copy()); continue; }
+                if (it.name == VRSLGoboWheelUpgrade.ListField) continue;
+                EditorGUILayout.PropertyField(it, true);
+            }
+        }
+
+        /// <summary>
+        /// The wheel this manager links, or its own list when it links none, what DMX and
+        /// AudioLink lights reach on it, and whether another manager in the scene changes
+        /// what its lights show. The list is offered for editing only when no wheel is
+        /// linked, since then it is what the lights use; otherwise the wheel is edited in
+        /// the Gobo Wheel window.
+        /// </summary>
+        void DrawGobos(SerializedProperty wheel)
+        {
+            EditorGUILayout.PropertyField(wheel);
+            var list = serializedObject.FindProperty(VRSLGoboWheelUpgrade.ListField);
+            if (serializedObject.isEditingMultipleObjects || wheel.hasMultipleDifferentValues)
+            {
+                if (list != null) EditorGUILayout.PropertyField(list, true);
+                return;
+            }
+
+            var asset = wheel.objectReferenceValue as VRSLGoboWheelAsset;
+            int count;
+            if (asset != null)
+            {
+                count = asset.gobos?.Length ?? 0;
+                EditorGUILayout.LabelField($"{count} gobos from {asset.name}.", EditorStyles.wordWrappedMiniLabel);
+            }
+            else
+            {
+                EditorGUILayout.PropertyField(list, new GUIContent("Own Gobos", list.tooltip), true);
+                count = list.arraySize;
+                EditorGUILayout.LabelField(
+                    "No wheel is linked, so this manager's lights use its own gobos above. To share them "
+                  + "with every manager in the scene, make a wheel from them in the Gobo Wheel window.",
+                    EditorStyles.wordWrappedMiniLabel);
+            }
+
+            bool dmx = target is VRSL_DMXURPLightManager;
+            EditorGUILayout.LabelField(
+                dmx ? (count > VRSLGoboWheelAsset.DmxSlots
+                        ? $"DMX lights choose from the first eight with the gobo channel; slots 9 to {count} "
+                        + "are for AudioLink lights."
+                        : "DMX lights choose a slot with the gobo channel.")
+                    : "AudioLink lights pick a slot with Gobo Index.",
+                EditorStyles.wordWrappedMiniLabel);
+
+            string conflict = VRSLGoboWheelGUI.Conflict((MonoBehaviour)target);
+            if (conflict != null) EditorGUILayout.HelpBox(conflict, MessageType.Warning);
+
+            if (GUILayout.Button("Edit gobo wheel…")) VRSL_GoboWheelWindow.Open(asset);
         }
 
         /// <summary>Fields whose effect the quality level decides, in the order an
