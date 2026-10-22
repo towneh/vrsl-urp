@@ -49,6 +49,9 @@ namespace VRSL.URP
         /// <summary>Present on the command line: switch on the scene's second light
         /// manager and its one light, to measure a scene with both managers.</summary>
         const string SecondManagerArgument = "-vrsl-second-manager";
+        /// <summary>Present on the command line: keep every fixture inside one light zone,
+        /// a box round the truss and the floor beneath it, to measure what zones cost.</summary>
+        const string ZoneAllArgument = "-vrsl-zone-all";
 
         /// <summary>What a script greps the log for. The player writes the folder
         /// itself rather than the caller guessing at a timestamp.</summary>
@@ -106,6 +109,20 @@ namespace VRSL.URP
                 second.gameObject.SetActive(true);
                 // Its enable runs now; a frame lets it set up before the sweep finds it.
                 yield return null;
+            }
+            if (Array.IndexOf(Environment.GetCommandLineArgs(), ZoneAllArgument) >= 0)
+            {
+                var root = GameObject.Find(VRSLBenchmarkScene.RootName);
+                if (root == null)
+                {
+                    Debug.LogError($"[VRSL sweep] FAIL — {ZoneAllArgument} was given, but this player has no sweep scene.");
+                    Quit(1);
+                    yield break;
+                }
+                // On the root, so every fixture under it takes the zone from a parent.
+                VRSLBenchmarkScene.ZoneEverything(root);
+                yield return null;
+                Debug.Log($"[VRSL sweep] every fixture zoned ({VRSLLightZones.Count} zone).");
             }
             var job     = VRSLSweepJob.Run(outcome, Stamp, forceOwnNormals, mirrors, dmxInput);
 

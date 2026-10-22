@@ -82,6 +82,26 @@ namespace VRSL.URP
         public const int CaptureWidth  = 1920;
         public const int CaptureHeight = 1080;
 
+        const float TrussWidth  = 30f;
+        const float TrussHeight = 6f;
+
+        /// <summary>
+        /// Keep every fixture in the scene inside one light zone on <paramref name="root"/>:
+        /// a box round the truss and the floor beneath it, wider and deeper than the rig by
+        /// as much again, so beams swinging past it are clipped. For the cost row with
+        /// every fixture zoned (<c>-vrsl-zone-all</c>).
+        /// </summary>
+        public static VRSLLightZone ZoneEverything(GameObject root)
+        {
+            var zone = root.AddComponent<VRSLLightZone>();
+            var box  = new GameObject("Zone box").AddComponent<VRSLLightZoneBox>();
+            box.transform.SetParent(root.transform, false);
+            box.center = new Vector3(0f, TrussHeight * 0.5f + 1f, 0f);
+            box.size   = new Vector3(TrussWidth * 2f, TrussHeight + 4f, TrussWidth);
+            zone.Refresh();
+            return zone;
+        }
+
 #if UNITY_EDITOR
         /// <summary>
         /// Usable 13-channel sectors per universe.
@@ -112,8 +132,6 @@ namespace VRSL.URP
         static int RequiredUniverses =>
             Mathf.CeilToInt((SectorFor(MaxFixtures - 1) * 13 + 13) / (float)VRSLDMX.SlotsPerUniverse);
 
-        const float TrussWidth  = 30f;
-        const float TrussHeight = 6f;
         const float FloorSize   = 150f;
 
         /// <summary>
