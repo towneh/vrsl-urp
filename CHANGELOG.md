@@ -2,7 +2,20 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Gobo wheels.** A gobo wheel is an asset holding the gobos your moving lights project, in order. Both light managers have a new **Gobo Wheel** field, and every light in the scene uses the one wheel, so a gobo you add is there for DMX and AudioLink lights alike. The package ships a default wheel with upstream VRSL's eight gobos in their usual order and the Club Orion logo in slot 9, and the manager prefabs link it. DMX lights choose from the first eight with the gobo channel, on the same DMX ranges as before; AudioLink lights reach every slot through Gobo Index, which now goes past 8. A wheel longer than nine costs video memory, not frame time.
+- **VRSL → URP → Gobo Wheel.** A window showing which gobos each manager in the open scenes uses, and saying when one manager's lights will show the other's. Make an editable copy of the default wheel, start a new one, or make one from a manager's own gobo list; reorder, add and remove gobos with each slot's DMX range beside it; see how much memory the wheel takes and which gobo, if any, is making every slot larger; and link the wheel from every manager in one step, which one Undo reverses. A wheel asset's inspector has the same slot editor.
+
+### Fixed
+
+- **A disco ball keeps its dots beside a light manager with no disco ball cubemap.** With both managers in a scene, a manager without a cubemap (one added with Add Component, or with the field cleared) could take the other manager's disco ball's dots away, so it lit the room as a plain point light.
+- **Both light managers light the same camera properly.** Each manager's lights always drew, but the gobos, the disco ball cubemap and the beam haze came from whichever manager set up for the camera last, even one with no fixtures, so with different gobo lists one manager's lights could show the other's gobos. One wheel, cubemap and beam noise now serve the whole scene; when the managers' gobos differ, the DMX manager's are used, and the managers' inspectors and the Gobo Wheel window say so.
+
+### Changed
+
+- **Existing scenes and worlds keep their gobos.** A manager whose own gobo list isn't upstream's eight keeps using that list: the first time the editor looks at it, the default wheel comes off it and the Console says how to make the list into a wheel. A manager holding upstream's eight takes the default wheel and gains the ninth slot. Worlds already built load as they did, each manager using its own list.
+- **A scene with both managers costs less.** It builds one gobo wheel and one beam noise volume rather than one per manager, and the surface lighting skips screen tiles no light reaches, so a second manager with a few lights no longer pays for every pixel.
 
 ## [0.3.0-rc.9] — 2026-10-22
 

@@ -27,9 +27,9 @@ namespace VRSL.URP
     /// camera-independent and the manager dispatches it once per frame, before the
     /// first camera's passes record.
     ///
-    ///   1. LightingPass — reuses Hidden/VRSL-URP/DeferredLighting; identical to the
-    ///      DMX realtime light path. The two paths share the same lighting shader
-    ///      and the same _VRSLLights / _VRSLLightCount globals.
+    ///   1. LightingPass — reuses Hidden/VRSL-URP/DeferredLighting, as the DMX
+    ///      realtime light path does. Each pass binds its own light list
+    ///      (_VRSLLights, _VRSLLightCount and the tile list) just before its draw.
     ///
     ///   2. VolumetricPass — three Render Graph sub-passes (depth downsample,
     ///      half-res raymarch, bilateral upsample composite) using
@@ -40,10 +40,9 @@ namespace VRSL.URP
     /// passes per camera. There is no ScriptableRendererFeature in this pipeline —
     /// the runtime-injection path is the only supported mode of operation.
     ///
-    /// Note: running the AudioLink path simultaneously with the DMX path on the
-    /// same camera is not currently supported — both write to _VRSLLights /
-    /// _VRSLLightCount and the last pass to execute wins. A future merged-buffer
-    /// path can address this.
+    /// Both managers can light one camera: each pass draws its own lights, and the
+    /// gobo wheel, disco ball cubemap and beam noise they share are bound once for the
+    /// scene by VRSLSceneResources.
     /// </summary>
     public static class VRSLAudioLinkLightPasses
     {

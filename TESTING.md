@@ -575,6 +575,34 @@ render checks, and D1 is the one that catches a mismatch.
 | K5 | A | The shipped AudioLink prefab tilted 30° beside the AudioLink manager, spin at 90°/s, twelve frames | The prefab's `lensTransform` is its sphere and the sphere is a mirror (as K6); the ball turns about the fixture's up by the authored angle (within a quarter), in the dots' sense, without moving |
 | K6 | D | The shipped DMX prefab, not instantiated | Its `lensTransform` is its `Discoball-Sphere`, whose material is fully metallic and fully smooth with the facet normal map on |
 
+### Gobo wheel and both managers on one camera
+
+One gobo wheel, disco ball cubemap and beam noise serve the whole scene, bound as shader globals
+by `VRSLSceneResources` and never from a manager's camera callback. The DMX manager's wheel and
+cubemap are the scene's when it has them, the AudioLink manager's otherwise. GW1 to GW3, GW8, GW10
+and GW11 are in the AudioLink test assembly (`VRSLTwoManagersTests`, `VRSLSceneResourceCountTests`),
+since they need both managers; GW4 to GW7 and GW9 are `VRSLGoboWheelTests`, with GW6 and GW7 on the
+AudioLink manager in `VRSLAudioLinkGoboWheelTests`. Rows that order the camera callbacks take a
+manager's handler off `beginCameraRendering` and put it back, which puts it last, rather than
+relying on the order the managers were enabled in.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| GW1 | D, A | Both managers on the rig's camera, an AudioLink disco ball from the shipped prefab three metres over the floor with AudioLink off, the DMX manager holding no cubemap; frames with the ball off, with no cubemap on either manager, and with the AudioLink manager's cubemap, once with each manager's callback last | Judged as K2 is. With no cubemap anywhere the ball floods over 5% of the frame; with the AudioLink manager's cubemap it lights more than 0.2% and under 60% of that flood, whichever callback runs last. A manager with no cubemap must not take another's dots away |
+| GW2 | D, A | Both managers on the rig's camera with no wheel linked, the DMX manager's own list upstream's eight with a half-open gobo in slot 3 and another in a ninth slot, the AudioLink manager's upstream's eight; two AudioLink spots, AudioLink off, on Gobo Index 3 and 9; references with both managers holding the DMX list and both holding the AudioLink one | The references differ by more than 2% of a box round each pool, and the frame with the lists differing matches the DMX-list reference to under 0.5% there, with either manager's callback last. Both lights show the DMX manager's gobos |
+| GW3 | D, A | GW2 with the DMX manager enabled and holding no fixtures | The same: a manager with nothing to draw still decides the scene's wheel, and nothing it skips can leave the other's lights on a different one |
+| GW4 | — | The default gobo wheel asset and both manager prefabs | Slots 1 to 9 are `VRSL-SpotLightGOBO-Default`, `-5PointStar`, `-8PointStar`, `-ApolloOrb`, `-Spiral`, `-Sticks`, `-Swooshes`, `-Triangles`, `-ClubOrion`, none larger than 1024 and the logo 1024 by 1024, the size of upstream's shaped gobos. Both prefabs link it, hold upstream's eight in their own list, and have never been looked at (marker 0) |
+| GW5 | D | The rig's manager with no wheel linked and a list of three, then the default wheel linked | Three slots on the scene's wheel, then nine, each by the next frame |
+| GW6 | D, A | A manager from its prefab, never looked at, whose own list is upstream's eight with the Club Orion logo written over slot 8, switched on | The default wheel comes off it, it is marked looked at, and its lights index its own eight with the logo in slot 8. Seen red with the first look removed from enable |
+| GW7 | D, A | The same with upstream's eight in its list | It keeps the default wheel, is marked looked at, and its lights index all nine |
+| GW8 | D, A | A ten-slot wheel asset linked from both managers; DMX movers on gobo values 240, 254, 255 and on each side of every band edge (44, 45, 74, 75 … 224, 225), and an AudioLink spot on Gobo Index 10, on D3D11 and Vulkan | 240, 254 and 255 choose slot 8 (255 is exactly 8.5 before rounding, so the decode caps DMX at the first eight); every value inside a band chooses the slot GW9 shows it under, and a value exactly on an edge one of the two beside it; the AudioLink spot gets slot 10. Seen red by mutation with the cap removed and the rounding made half-up |
+| GW9 | — | The DMX range the Gobo Wheel window shows for each slot | Slot 1 is DMX 0–44, 2 is 45–74, 3 is 75–104, 4 is 105–134, 5 is 135–164, 6 is 165–194, 7 is 195–224, 8 is 225–255, and slot 9 has none (AudioLink only) |
+| GW10 | D, A | Both managers drawing beams at Standard with the default wheel, one fixture each | One live gobo wheel array and one live beam noise volume, both managers reporting the same ones, and neither outliving the managers |
+| GW11 | D, A | GW10's scene running, then thirty frames with nothing changed | No wheel built, no noise baked, no shader global set and no GC allocation in the scene resources on any of them (counted by the profiler's GC.Alloc samples). Seen red by mutation with the wheel rebuilt every frame |
+| GW12 | D, A | **By eye, editor.** VRSL → URP → Gobo Wheel with both managers in a scene | It lists each manager and the gobos it uses, and says in plain words when one manager's lights show the other's gobos. Make an editable copy of the default lands a copy in Assets; the default itself can't be edited. Each slot shows its thumbnail, name and DMX range, slots past eight read "AudioLink only", and reordering, adding and removing work. The memory line changes with the slot count, and a gobo larger than the rest is named with how much more the wheel takes. Use this wheel for every manager links it from both, and one Undo puts both back. A manager's inspector shows its wheel's gobo count, offers its own list only with no wheel linked, says when the other manager's gobos win, and opens the window |
+| GW13 | D, A | **By eye, desktop and headset.** A scene with both managers sharing a wheel with a ninth gobo, three lights on one floor: a DMX mover on gobo 3, an AudioLink light on Gobo Index 9, an AudioLink light with AudioLink off on 5 | Each shows its gobo on the floor and in the beam, in both eyes. The same with the DMX manager holding no fixtures |
+| GW14 | D, A | **Cost.** Built players from clean worktrees, interleaved, per the benchmarking rules: the standard sweep on the previous release against this one; the sweep with `-vrsl-second-manager` (an AudioLink manager holding one light beside the DMX one) before and after the deferred lighting's empty-tile return | With one manager no row moves beyond the run-to-run spread (`bench.sh compare` passes). With the second manager the empty-tile return makes the frame cheaper or leaves it alone, never dearer |
+
 ### Volumetrics
 
 `VRSLVolumetricLoopTests` in the suite covers V14 to V17. V11 to V13 want eyes and a
@@ -882,8 +910,6 @@ the [Architecture](https://github.com/towneh/vrsl-urp/wiki/Architecture) page of
 - No ambient occlusion term. AO models indirect occlusion and would be wrong applied to
   direct light.
 - Transparent geometry receives no VRSL light: the passes run after opaques.
-- Running the DMX and AudioLink managers on the same camera is unsupported; both write
-  `_VRSLLights` and the last one scheduled wins.
 ---
 
 ## Reporting
