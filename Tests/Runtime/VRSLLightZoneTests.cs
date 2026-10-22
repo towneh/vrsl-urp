@@ -43,19 +43,20 @@ namespace VRSL.URP.Tests
             room.Zone = zoneGo.AddComponent<VRSLLightZone>();
             var box = zoneGo.AddComponent<VRSLLightZoneBox>();
             float near = -12f, far = thickness * 0.5f;
-            box.center = new Vector3((near + far) * 0.5f, 3.5f, 0f);
-            box.size   = new Vector3(far - near, 9f, 24f);
+            box.center = new Vector3((near + far) * 0.5f, 5.5f, 0f);
+            box.size   = new Vector3(far - near, 13f, 34f);
             return room;
         }
 
+        // Tall and wide enough that the room camera sees nothing past the inner wall.
         static GameObject Wall(Transform parent, string name, float x, float thickness)
         {
             var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
             wall.name = name;
             Object.DestroyImmediate(wall.GetComponent<Collider>());
             wall.transform.SetParent(parent, false);
-            wall.transform.localPosition = new Vector3(x, 3f, 0f);
-            wall.transform.localScale    = new Vector3(thickness, 6f, 12f);
+            wall.transform.localPosition = new Vector3(x, 5f, 0f);
+            wall.transform.localScale    = new Vector3(thickness, 10f, 30f);
             return wall;
         }
 
@@ -220,17 +221,19 @@ namespace VRSL.URP.Tests
 
         /// <summary>Both views, beams on and (when <paramref name="beamsOnly"/>) again
         /// with the beams' intensity at nothing, so a row can take what the haze alone
-        /// adds.</summary>
+        /// adds; and with the lights off, for what the lights add at all. The walls
+        /// reflect the default sky whatever the lights do, so a frame's own sum is not
+        /// what lit it.</summary>
         internal sealed class Views
         {
-            public Texture2D Room, Stairs, RoomNoBeams, StairsNoBeams;
+            public Texture2D Room, Stairs, RoomNoBeams, StairsNoBeams, RoomDark, StairsDark;
 
-            public double RoomLight(bool beamsOnly)  => beamsOnly ? VRSLZoneRoom.Added(Room, RoomNoBeams) : VRSLZoneRoom.Energy(Room);
-            public double StairLight(bool beamsOnly) => beamsOnly ? VRSLZoneRoom.Added(Stairs, StairsNoBeams) : VRSLZoneRoom.Energy(Stairs);
+            public double RoomLight(bool beamsOnly, Views dark)  => beamsOnly ? VRSLZoneRoom.Added(Room, RoomNoBeams) : VRSLZoneRoom.Added(Room, dark.Room);
+            public double StairLight(bool beamsOnly, Views dark) => beamsOnly ? VRSLZoneRoom.Added(Stairs, StairsNoBeams) : VRSLZoneRoom.Added(Stairs, dark.Stairs);
 
             public void Destroy()
             {
-                foreach (var t in new[] { Room, Stairs, RoomNoBeams, StairsNoBeams })
+                foreach (var t in new[] { Room, Stairs, RoomNoBeams, StairsNoBeams, RoomDark, StairsDark })
                     if (t != null) Object.DestroyImmediate(t);
             }
         }
@@ -257,21 +260,28 @@ namespace VRSL.URP.Tests
                         float roomTolerance)
         {
             var (rig, room, source) = Stage(beams, goboSlot, moverLit: !ball);
+            var dark   = new Views();
             var before = new Views();
             var after  = new Views();
             try
             {
                 var lights = ball ? new[] { HangBall(rig, haze) } : new[] { rig.Fixtures[0] };
                 var m = rig.Manager;
+                m.lightIntensity = 0f;
+                m.MarkConfigDirty();
+                yield return Take(rig, () => m.volumetricIntensity, v => m.volumetricIntensity = v, false, dark);
+                m.lightIntensity = 1f;
+                m.MarkConfigDirty();
                 yield return Take(rig, () => m.volumetricIntensity, v => m.volumetricIntensity = v, beamsOnly, before);
                 foreach (var light in lights) light.SetZone(room.Zone);
                 yield return Take(rig, () => m.volumetricIntensity, v => m.volumetricIntensity = v, beamsOnly, after);
 
-                VRSLZoneRoom.Judge(row, before.StairLight(beamsOnly), after.StairLight(beamsOnly),
-                                   before.Room, after.Room, before.RoomLight(beamsOnly), roomTolerance);
+                VRSLZoneRoom.Judge(row, before.StairLight(beamsOnly, dark), after.StairLight(beamsOnly, dark),
+                                   before.Room, after.Room, before.RoomLight(beamsOnly, dark), roomTolerance);
             }
             finally
             {
+                dark.Destroy();
                 before.Destroy();
                 after.Destroy();
                 rig.Dispose();

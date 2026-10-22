@@ -20,6 +20,7 @@ namespace VRSL.URP.Tests
         {
             var rig  = VRSLDMXRig.Build(fixtures: 0, withSource: false, targetSize: ImageSize);
             GameObject root = null;
+            var dark   = new VRSLLightZoneTests.Views();
             var before = new VRSLLightZoneTests.Views();
             var after  = new VRSLLightZoneTests.Views();
             try
@@ -55,17 +56,22 @@ namespace VRSL.URP.Tests
                 root.SetActive(true);
                 Assert.AreSame(manager, VRSL_AudioLinkURPLightManager.Instance, "the row's AudioLink manager should own the singleton");
 
+                manager.lightIntensity = 0f;
+                yield return VRSLLightZoneTests.Take(rig, () => manager.volumetricIntensity,
+                                                     v => manager.volumetricIntensity = v, false, dark);
+                manager.lightIntensity = 1f;
                 yield return VRSLLightZoneTests.Take(rig, () => manager.volumetricIntensity,
                                                      v => manager.volumetricIntensity = v, beams, before);
                 light.SetZone(room.Zone);
                 yield return VRSLLightZoneTests.Take(rig, () => manager.volumetricIntensity,
                                                      v => manager.volumetricIntensity = v, beams, after);
 
-                VRSLZoneRoom.Judge(row, before.StairLight(beams), after.StairLight(beams),
-                                   before.Room, after.Room, before.RoomLight(beams), roomTolerance);
+                VRSLZoneRoom.Judge(row, before.StairLight(beams, dark), after.StairLight(beams, dark),
+                                   before.Room, after.Room, before.RoomLight(beams, dark), roomTolerance);
             }
             finally
             {
+                dark.Destroy();
                 before.Destroy();
                 after.Destroy();
                 if (root != null) Object.DestroyImmediate(root);
