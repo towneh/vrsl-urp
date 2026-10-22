@@ -370,6 +370,104 @@ namespace VRSL.URP.Tests
                 foreach (var f in frames) Object.DestroyImmediate(f);
             }
         }
+
+        // ── DMX's eight slots on a longer wheel ───────────────────────────────
+
+        /// <summary>One universe of bytes the row chooses.</summary>
+        sealed class Bytes : IVRSLDMXChannelSource, IDisposable
+        {
+            Unity.Collections.NativeArray<VRSLDMXBlock> _blocks =
+                new(1, Unity.Collections.Allocator.Persistent);
+            Unity.Collections.NativeArray<byte> _values =
+                new(VRSLDMX.UsableSlotsPerUniverse, Unity.Collections.Allocator.Persistent);
+
+            public Bytes() => _blocks[0] = new VRSLDMXBlock
+                { universe = 0, start = 0, length = VRSLDMX.UsableSlotsPerUniverse };
+
+            public int UniverseCount => 1;
+
+            /// <summary>Channel numbers are 1-based, as a desk counts them.</summary>
+            public byte this[int channel] { set => _values[channel - 1] = value; }
+
+            public bool TryGetBlocks(out Unity.Collections.NativeArray<VRSLDMXBlock> blocks,
+                                     out int blockCount, out Unity.Collections.NativeArray<byte> values)
+            {
+                blocks = _blocks; values = _values; blockCount = 1;
+                return true;
+            }
+
+            public void Dispose()
+            {
+                if (_blocks.IsCreated) _blocks.Dispose();
+                if (_values.IsCreated) _values.Dispose();
+            }
+        }
+
+        static int GoboSlice(Vector4 directionAndType) => Mathf.FloorToInt(directionAndType.w * 0.25f) - 1;
+
+        /// <summary>
+        /// GW8. On a ten-slot wheel both managers share, DMX gobo values 240, 254 and 255
+        /// all choose slot 8, the last of upstream's bands (255 is exactly 8.5 before
+        /// rounding), and an AudioLink light set to slot 10 gets slot 10.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator GW8_DMX_reaches_the_first_eight_slots_and_AudioLink_all_of_them()
+        {
+            var plain = new Texture2D[10];
+            for (int i = 0; i < plain.Length; i++) plain[i] = new Texture2D(8, 8) { name = $"slot {i + 1}" };
+            var wheel = ScriptableObject.CreateInstance<VRSLGoboWheelAsset>();
+            wheel.gobos = plain;
+            var source = new Bytes();
+            Stage stage = null;
+            try
+            {
+                VRSLAudioLinkRealtimeLight slot10 = null;
+                stage = new Stage(3,
+                    dmx => dmx.goboWheel = wheel,
+                    (root, al) =>
+                    {
+                        al.goboWheel = wheel;
+                        slot10 = Spot(root, "AudioLink spot, gobo 10", LightA, goboIndex: 10);
+                    });
+                var rig = stage.Rig;
+                byte[] gobo = { 240, 254, 255 };
+                for (int i = 0; i < 3; i++)
+                {
+                    int abs = VRSLDMXRig.ChannelOf(i);
+                    rig.Fixtures[i].enableGobo = true;
+                    source[VRSLDMXRig.DimmerChannel(abs)] = 255;
+                    source[abs + 11] = gobo[i];
+                }
+                rig.Manager.ChannelSource = source;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+                rig.Manager.MarkConfigDirty();
+                yield return rig.Step(3);
+
+                Assert.AreEqual(10, VRSLSceneResources.GoboCount, "the scene's wheel isn't the ten-slot one");
+                rig.Calibrate();
+                var lights = rig.ReadLights();
+                for (int i = 0; i < 3; i++)
+                {
+                    int slice = GoboSlice(lights[i].directionAndType);
+                    Debug.Log($"[GW8] DMX gobo {gobo[i]} chose slot {slice + 1}");
+                    Assert.AreEqual(7, slice, $"DMX gobo {gobo[i]} chose slot {slice + 1}, not 8");
+                }
+
+                var al = stage.AudioLink;
+                var data = new Vector4[al.FixtureCount * 4];
+                al.LightDataBuffer.GetData(data);
+                int alSlice = GoboSlice(data[1]);
+                Debug.Log($"[GW8] AudioLink Gobo Index {slot10.goboIndex} chose slot {alSlice + 1}");
+                Assert.AreEqual(9, alSlice, "the AudioLink light set to slot 10 didn't get it");
+            }
+            finally
+            {
+                stage?.Dispose();
+                source.Dispose();
+                Object.DestroyImmediate(wheel);
+                foreach (var t in plain) Object.DestroyImmediate(t);
+            }
+        }
     }
 }
 #endif

@@ -22,6 +22,8 @@ StructuredBuffer<VRSLFixtureConfig>   _FixtureConfigs;
 RWStructuredBuffer<VRSLLightData>     _LightData;
 uint                                   _FixtureCount;
 uint                                   _VRSLGoboCount;
+// Slots the gobo channel reaches. Mirrors VRSLGoboWheelAsset.DmxSlots.
+#define VRSL_DMX_GOBO_SLOTS 8
 
 // ── DMX channels as bytes ─────────────────────────────────────────────────────
 // Set by VRSL_DMXURPLightManager when a channel source is publishing. Channel n
@@ -388,11 +390,14 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
     // at -1 (the SampleGobo no-op) for them; otherwise their spill is masked down to a
     // narrow gobo'd cone, and zeroed entirely when slot 0 is a patterned gobo.
     // forwardAndType.w < 0.5 == spot.
+    // DMX chooses from the wheel's first eight slots by upstream's bands; a longer
+    // wheel's further slots are for AudioLink lights. 255 is exactly 8.5 before rounding,
+    // which a GPU may round either way, so the cap is what keeps it on slot 8.
     int goboIdx = -1;
     if (_VRSLGoboCount > 0 && cfg.forwardAndType.w < 0.5)
     {
         int slot = (int)round(goboRaw * 255.0 / 30.0);
-        slot    = clamp(slot, 1, (int)_VRSLGoboCount);
+        slot    = clamp(slot, 1, min((int)_VRSLGoboCount, VRSL_DMX_GOBO_SLOTS));
         goboIdx = slot - 1; // convert to 0-based array index
     }
 
