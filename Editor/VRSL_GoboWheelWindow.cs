@@ -106,19 +106,22 @@ namespace VRSL.URP.EditorScripts
         /// remove. Read-only for the package's own wheel.</summary>
         internal static void DrawSlots(SerializedObject wheel, bool readOnly)
         {
-            var gobos = wheel.FindProperty(nameof(VRSLGoboWheelAsset.gobos));
-            if (!s_lists.TryGetValue(wheel, out var list) || list.serializedProperty != gobos)
+            // Kept per SerializedObject, so a drag or a selection lasts from one GUI event
+            // to the next.
+            if (!s_lists.TryGetValue(wheel, out var list))
             {
                 if (s_lists.Count > 32) s_lists.Clear();
-                list = new ReorderableList(wheel, gobos, true, true, true, true)
+                list = new ReorderableList(wheel, wheel.FindProperty(nameof(VRSLGoboWheelAsset.gobos)),
+                                           true, true, true, true)
                 {
                     elementHeight = 44f,
                 };
                 list.drawHeaderCallback = rect => EditorGUI.LabelField(rect,
                     "Slots. DMX reaches the first eight; AudioLink lights reach every slot.");
+                var made = list;
                 list.drawElementCallback = (rect, index, active, focused) =>
                 {
-                    var element = gobos.GetArrayElementAtIndex(index);
+                    var element = made.serializedProperty.GetArrayElementAtIndex(index);
                     var thumb = new Rect(rect.x, rect.y + 2f, 40f, 40f);
                     var nameRect = new Rect(rect.x + 48f, rect.y + 4f, rect.width - 48f, EditorGUIUtility.singleLineHeight);
                     var rangeRect = new Rect(rect.x + 48f, rect.y + 4f + EditorGUIUtility.singleLineHeight,
@@ -214,7 +217,14 @@ namespace VRSL.URP.EditorScripts
             _wheelSo = wheel != null ? new SerializedObject(wheel) : null;
         }
 
-        void OnHierarchyChange() => Repaint();
+        // Refreshed here rather than left to expire, so a manager deleted or switched off is
+        // gone before the next GUI pass, and the list can't change between a pass's Layout
+        // and Repaint events.
+        void OnHierarchyChange()
+        {
+            VRSLGoboWheelGUI.SceneManagers(fresh: true);
+            Repaint();
+        }
         void OnFocus() => VRSLGoboWheelGUI.SceneManagers(fresh: true);
 
         void OnGUI()

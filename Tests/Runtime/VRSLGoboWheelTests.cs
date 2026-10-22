@@ -144,13 +144,7 @@ namespace VRSL.URP.Tests
             return (root, manager);
         }
 
-        static Texture2D[] Resolved(MonoBehaviour manager) => manager switch
-        {
-            VRSL_DMXURPLightManager dmx => dmx.Gobos,
-            _ => (Texture2D[])manager.GetType().GetProperty("Gobos",
-                     System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
-                 .GetValue(manager),
-        };
+        static Texture2D[] Resolved(MonoBehaviour manager) => ((IVRSLSceneResourceUser)manager).Gobos;
 
         /// <summary>
         /// GW6. A saved manager whose own list isn't upstream's eight, Club Orion's case
