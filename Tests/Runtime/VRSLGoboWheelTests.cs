@@ -206,6 +206,20 @@ namespace VRSL.URP.Tests
 
         [Test]
         public void GW7_a_saved_DMX_manager_with_upstreams_eight_takes_the_default_wheel() => TakesTheDefault(DmxPrefab);
+
+        /// <summary>GW9. The DMX ranges the Gobo Wheel window shows for each slot are the
+        /// ones the decode picks by, and slots past eight have none.</summary>
+        [Test]
+        public void GW9_each_slots_DMX_range_is_the_one_the_decode_uses()
+        {
+            (int, int)[] expected =
+            {
+                (0, 44), (45, 74), (75, 104), (105, 134), (135, 164), (165, 194), (195, 224), (225, 255),
+            };
+            for (int slot = 1; slot <= 8; slot++)
+                Assert.AreEqual(expected[slot - 1], VRSLGoboWheelAsset.DmxRange(slot), $"slot {slot}'s DMX range");
+            Assert.IsNull(VRSLGoboWheelAsset.DmxRange(9), "slot 9 shows a DMX range, but DMX can't reach it");
+        }
     }
 }
 #endif

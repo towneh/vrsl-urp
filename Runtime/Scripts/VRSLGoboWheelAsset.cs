@@ -20,6 +20,17 @@ namespace VRSL.URP
         /// eight, and shows already programmed keep those ranges.</summary>
         public const int DmxSlots = 8;
 
+        /// <summary>The DMX values that choose slot <paramref name="slot"/>, counted from 1,
+        /// or null for a slot only AudioLink lights reach. Upstream's bands: 30 values a
+        /// slot, centred on multiples of 30, with the first and last running to the ends.</summary>
+        public static (int lo, int hi)? DmxRange(int slot)
+        {
+            if (slot < 1 || slot > DmxSlots) return null;
+            int lo = slot == 1 ? 0 : 30 * slot - 15;
+            int hi = slot == DmxSlots ? 255 : 30 * slot + 14;
+            return (lo, hi);
+        }
+
         [Tooltip("The gobos, slot 1 first. DMX lights reach the first eight; AudioLink lights "
                + "reach every slot.")]
         public Texture2D[] gobos;

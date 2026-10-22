@@ -408,7 +408,10 @@ namespace VRSL.URP.Tests
         /// <summary>
         /// GW8. On a ten-slot wheel both managers share, DMX gobo values 240, 254 and 255
         /// all choose slot 8, the last of upstream's bands (255 is exactly 8.5 before
-        /// rounding), and an AudioLink light set to slot 10 gets slot 10.
+        /// rounding), a value either side of a band's edge chooses the slot the Gobo Wheel
+        /// window shows it under, and an AudioLink light set to slot 10 gets slot 10. A
+        /// value exactly on an edge (45, 75 … 225, half-way before rounding) may take
+        /// either neighbour: the GPU rounds a half to even, nudged by float error.
         /// </summary>
         [UnityTest]
         public IEnumerator GW8_DMX_reaches_the_first_eight_slots_and_AudioLink_all_of_them()
@@ -422,7 +425,8 @@ namespace VRSL.URP.Tests
             try
             {
                 VRSLAudioLinkRealtimeLight slot10 = null;
-                stage = new Stage(3,
+                byte[] gobo = { 240, 254, 255, 44, 45, 74, 75, 104, 105, 134, 135, 164, 165, 194, 195, 224, 225 };
+                stage = new Stage(gobo.Length,
                     dmx => dmx.goboWheel = wheel,
                     (root, al) =>
                     {
@@ -430,8 +434,7 @@ namespace VRSL.URP.Tests
                         slot10 = Spot(root, "AudioLink spot, gobo 10", LightA, goboIndex: 10);
                     });
                 var rig = stage.Rig;
-                byte[] gobo = { 240, 254, 255 };
-                for (int i = 0; i < 3; i++)
+                for (int i = 0; i < gobo.Length; i++)
                 {
                     int abs = VRSLDMXRig.ChannelOf(i);
                     rig.Fixtures[i].enableGobo = true;
@@ -446,11 +449,20 @@ namespace VRSL.URP.Tests
                 Assert.AreEqual(10, VRSLSceneResources.GoboCount, "the scene's wheel isn't the ten-slot one");
                 rig.Calibrate();
                 var lights = rig.ReadLights();
-                for (int i = 0; i < 3; i++)
+                var chose = new System.Text.StringBuilder();
+                for (int i = 0; i < gobo.Length; i++)
+                    chose.Append($" {gobo[i]}→{GoboSlice(lights[i].directionAndType) + 1}");
+                Debug.Log($"[GW8] DMX gobo value → slot:{chose}");
+                for (int i = 0; i < gobo.Length; i++)
                 {
-                    int slice = GoboSlice(lights[i].directionAndType);
-                    Debug.Log($"[GW8] DMX gobo {gobo[i]} chose slot {slice + 1}");
-                    Assert.AreEqual(7, slice, $"DMX gobo {gobo[i]} chose slot {slice + 1}, not 8");
+                    int slot = GoboSlice(lights[i].directionAndType) + 1;
+                    var shown = VRSLGoboWheelAsset.DmxRange(slot);
+                    Assert.IsTrue(shown.HasValue, $"DMX gobo {gobo[i]} chose slot {slot}, past the eight DMX reaches");
+                    bool onEdge = gobo[i] % 30 == 15 && gobo[i] < 255;
+                    bool inShown = gobo[i] >= shown.Value.lo && gobo[i] <= shown.Value.hi;
+                    bool neighbour = onEdge && slot == gobo[i] / 30;
+                    Assert.That(inShown || neighbour,
+                        $"DMX gobo {gobo[i]} chose slot {slot}, which the window shows as DMX {shown.Value.lo}–{shown.Value.hi}");
                 }
 
                 var al = stage.AudioLink;

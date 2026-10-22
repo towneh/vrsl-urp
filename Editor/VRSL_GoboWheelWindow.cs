@@ -95,18 +95,8 @@ namespace VRSL.URP.EditorScripts
             return null;
         }
 
-        /// <summary>The DMX values that choose slot <paramref name="slot"/>, counted from 1,
-        /// or null for a slot only AudioLink lights reach.</summary>
-        internal static (int lo, int hi)? DmxRange(int slot)
-        {
-            if (slot < 1 || slot > VRSLGoboWheelAsset.DmxSlots) return null;
-            int lo = slot == 1 ? 0 : 30 * slot - 15;
-            int hi = slot == VRSLGoboWheelAsset.DmxSlots ? 255 : 30 * slot + 14;
-            return (lo, hi);
-        }
-
         internal static string SlotLabel(int slot) =>
-            DmxRange(slot) is { } r ? $"DMX {r.lo}–{r.hi}" : "AudioLink only";
+            VRSLGoboWheelAsset.DmxRange(slot) is { } r ? $"DMX {r.lo}–{r.hi}" : "AudioLink only";
 
         // ── The slot editor ───────────────────────────────────────────────────
 
