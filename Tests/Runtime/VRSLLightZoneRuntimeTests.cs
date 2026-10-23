@@ -353,6 +353,135 @@ namespace VRSL.URP.Tests
             }
         }
 
+        // ── LZ19 and LZ20: reparented higher up ────────────────────────────────
+
+        /// <summary>
+        /// LZ19. A light with no zone of its own, under a rig GameObject: the rig moved under
+        /// the stairway zone's GameObject and out again, the light's own parent unchanged.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LZ19_a_light_takes_the_zone_its_rig_is_moved_under()
+        {
+            var (rig, room, source) = VRSLLightZoneTests.Stage(beams: false);
+            var dark = new VRSLLightZoneTests.Views();
+            var shots = new System.Collections.Generic.List<VRSLLightZoneTests.Views>();
+            try
+            {
+                var m = rig.Manager;
+                var light = rig.Fixtures[0];
+                var stairs = NewZone(room.Root.transform, "Stairway zone");
+                AddBox(stairs, "Stairway", new Vector3(VRSLZoneRoom.WallThickness * 0.5f, -1f, -17f),
+                                           new Vector3(VRSLZoneRoom.OuterWallX + 0.15f, 12f, 17f));
+                var top = rig.Floor.transform.parent;
+                var hung = light.transform;
+                while (hung.parent != top) hung = hung.parent;
+                var truss = new GameObject("Truss").transform;
+                truss.SetParent(top, false);
+                hung.SetParent(truss, true);
+                IEnumerator Take(VRSLLightZoneTests.Views into)
+                    => VRSLLightZoneTests.Take(rig, () => m.volumetricIntensity, v => m.volumetricIntensity = v, false, into);
+                VRSLLightZoneTests.Views Next() { var v = new VRSLLightZoneTests.Views(); shots.Add(v); return v; }
+                (double stairs, double room) Light(VRSLLightZoneTests.Views v) => (v.StairLight(false, dark), v.RoomLight(false, dark));
+
+                m.lightIntensity = 0f; m.MarkConfigDirty();
+                yield return Take(dark);
+                m.lightIntensity = 1f; m.MarkConfigDirty();
+
+                var open = Next();       yield return Take(open);
+                truss.SetParent(stairs.transform, true);
+                var under = Next();      yield return Take(under);
+                truss.SetParent(top, true);
+                var outAgain = Next();   yield return Take(outAgain);
+
+                var o = Light(open);
+                foreach (var (name, v) in new[] { ("rig under the stairway zone", under), ("rig out again", outAgain) })
+                {
+                    var l = Light(v);
+                    Debug.Log($"[LZ19] {name}: stairway {l.stairs:F1}, room {l.room:F1} (unzoned {o.stairs:F1}, {o.room:F1})");
+                }
+                Assert.Greater(o.room, 1.0, "unzoned, nothing reaches the room; the row shows nothing");
+                Assert.Less(Light(under).room, o.room * 0.01, "with its rig under the stairway zone's GameObject the light should take that zone");
+                Assert.AreEqual(o.room, Light(outAgain).room, o.room * 0.01, "with its rig moved out again the light should be unzoned");
+            }
+            finally
+            {
+                dark.Destroy();
+                foreach (var v in shots) v.Destroy();
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// LZ20. LZ1's light zoned to the room, whose only live box sits two GameObjects
+        /// below the zone: the box moved out of the zone and back, then the GameObject
+        /// holding it moved out and back, with nothing told.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LZ20_a_box_moved_out_of_its_zone_stops_counting()
+        {
+            var (rig, room, source) = VRSLLightZoneTests.Stage(beams: false);
+            var dark = new VRSLLightZoneTests.Views();
+            var shots = new System.Collections.Generic.List<VRSLLightZoneTests.Views>();
+            try
+            {
+                var m = rig.Manager;
+                var light = rig.Fixtures[0];
+                var own = room.Zone.GetComponent<VRSLLightZoneBox>();
+                var group = new GameObject("Boxes").transform;
+                group.SetParent(room.Zone.transform, false);
+                var holder = new GameObject("Holder").transform;
+                holder.SetParent(group, false);
+                var nested = holder.gameObject.AddComponent<VRSLLightZoneBox>();
+                nested.center = own.center; nested.size = own.size;
+                own.enabled = false;
+                light.SetZone(room.Zone);
+                var top = rig.Floor.transform.parent;
+                IEnumerator Take(VRSLLightZoneTests.Views into)
+                    => VRSLLightZoneTests.Take(rig, () => m.volumetricIntensity, v => m.volumetricIntensity = v, false, into);
+                VRSLLightZoneTests.Views Next() { var v = new VRSLLightZoneTests.Views(); shots.Add(v); return v; }
+                (double stairs, double room) Light(VRSLLightZoneTests.Views v) => (v.StairLight(false, dark), v.RoomLight(false, dark));
+
+                m.lightIntensity = 0f; m.MarkConfigDirty();
+                yield return Take(dark);
+                m.lightIntensity = 1f; m.MarkConfigDirty();
+
+                var zoned = Next();      yield return Take(zoned);
+                holder.SetParent(top, true);
+                var boxOut = Next();     yield return Take(boxOut);
+                holder.SetParent(group, true);
+                var boxBack = Next();    yield return Take(boxBack);
+                var inner = new GameObject("Inner").transform;
+                inner.SetParent(holder.parent, false);
+                holder.SetParent(inner, true);
+                yield return Take(Next());
+                inner.SetParent(top, true);
+                var parentOut = Next();  yield return Take(parentOut);
+                inner.SetParent(group, true);
+                var parentBack = Next(); yield return Take(parentBack);
+
+                var z = Light(zoned);
+                foreach (var (name, v) in new[] { ("box moved out", boxOut), ("box back", boxBack),
+                                                  ("its parent moved out", parentOut), ("its parent back", parentBack) })
+                {
+                    var l = Light(v);
+                    Debug.Log($"[LZ20] {name}: stairway {l.stairs:F1}, room {l.room:F1} (zoned {z.stairs:F1}, {z.room:F1})");
+                }
+                Assert.Greater(z.room, 1.0, "zoned through the nested box, the room is dark; the row shows nothing");
+                Assert.Less(Light(boxOut).room, z.room * 0.01, "with its only live box moved out of the zone the light should light nothing");
+                Assert.AreEqual(z.room, Light(boxBack).room, z.room * 0.01, "with the box moved back the room should light as before");
+                Assert.Less(Light(parentOut).room, z.room * 0.01, "with the box's parent moved out of the zone the light should light nothing");
+                Assert.AreEqual(z.room, Light(parentBack).room, z.room * 0.01, "with the box's parent moved back the room should light as before");
+            }
+            finally
+            {
+                dark.Destroy();
+                foreach (var v in shots) v.Destroy();
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
         // ── LZ12: nothing per frame ────────────────────────────────────────────
 
         /// <summary>

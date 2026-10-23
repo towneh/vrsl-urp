@@ -22,6 +22,9 @@ namespace VRSL.URP
         void OnEnable()  => VRSLLightZones.MarkChanged();
         void OnDisable() => VRSLLightZones.MarkChanged();
 
+        // Moved in or out of a zone. Unity calls this for a move of any parent above it too.
+        void OnTransformParentChanged() => VRSLLightZones.MarkChanged();
+
         // An animation driving the size or centre.
         void OnDidApplyAnimationProperties() => VRSLLightZones.MarkChanged();
 

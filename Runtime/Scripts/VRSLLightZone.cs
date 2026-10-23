@@ -18,8 +18,9 @@ namespace VRSL.URP
     /// wall behind it still lets the light through to the wall. Put a box's face inside the
     /// wall that should stop the light, not on its surface.
     ///
-    /// Moving the zone, switching boxes on and off, editing a box in the inspector and
-    /// animating its size are picked up on their own. A box moved on its own while the
+    /// Moving the zone, switching boxes on and off, moving a box or a light (or a parent
+    /// above it) in or out of the zone, editing a box in the inspector and animating its
+    /// size are picked up on their own. A box moved on its own while the
     /// world runs (by a script or an animation that doesn't move the zone), or resized by
     /// a script, needs <see cref="Refresh"/> afterwards.
     /// </remarks>

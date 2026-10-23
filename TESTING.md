@@ -221,7 +221,7 @@ it in the hierarchy) lights only world positions inside the boxes, in surface li
 disco ball dots and gobos; its flare and body glow are not limited. A zone switched off stops
 limiting its lights; a zone that is on with every box off keeps them dark. Nothing inside a
 zone blocks light. `VRSLLightZoneTests` and `VRSLLightZoneRuntimeTests` in the suite cover LZ1
-to LZ5 and LZ8 to LZ14, and `VRSLAudioLinkZoneTests` (AudioLink test assembly) LZ6 and LZ7.
+to LZ5, LZ8 to LZ14, LZ19 and LZ20, and `VRSLAudioLinkZoneTests` (AudioLink test assembly) LZ6 and LZ7.
 
 The per-path rows build one scene in the rig: a light in a room aimed at the room's inner
 wall, a stairway behind the wall and an outer wall beyond it, with a zone whose one box takes
@@ -250,6 +250,8 @@ adds over the same view with the beams' intensity at nothing.
 | LZ16 | D, A | **By eye, desktop and headset.** The light zone demo room (a room, an inner wall, a stairway, an extension behind a partition, a pillar), unzoned then zoned, the partition raised and lowered, one mover moved to the stairway's zone | Zoned, the stairway is dark and the room as unzoned, in both eyes; the pillar lets light through to the wall behind it; the extension lights with the partition down and goes dark with it up; the moved mover lights only the stairway |
 | LZ17 | D, A | **Cost.** Built players from clean worktrees, interleaved, per the benchmarking rules, with a null pair (two builds of the same commit) beside each comparison: the standard sweep on the previous release against this one; on this one, the sweep with `-vrsl-zone-all` (every fixture in one zone, a box round the truss) against without, with the volumetric stats | With no zones no row moves beyond the run-to-run spread (`bench.sh compare` passes). With every fixture zoned no row is dearer beyond the spread, and the steps taken per pixel go down where the box clips the beams. The fxc listings of both fullscreen passes show an unzoned light running one added compare in each |
 | LZ18 | D, A | **Quest.** LZ16 and LZ17's zoned sweep on a Quest build | As on desktop |
+| LZ19 | D | **A zone from a rig's parent.** LZ11's light, no zone of its own, under a rig GameObject; the rig moved under the stairway zone's GameObject and out again, the light's own parent unchanged | Rig under it, the room is dark; out again, the light lights as unzoned. Seen red by mutation with the light's parent-changed handler taken out |
+| LZ20 | D | **A box moved out of its zone.** LZ1's light zoned to the room, whose only live box sits two GameObjects below the zone; the box moved out and back, then the GameObject holding it moved out and back, nothing told | Moved out, the light lights nothing; moved back, the room lights as before |
 
 ### Cost and culling
 
