@@ -65,7 +65,7 @@ namespace VRSL.URP
         {
             UnityEditor.EditorGUILayout.PropertyField(property, new GUIContent("Zone", property.tooltip));
             if (property.hasMultipleDifferentValues || property.objectReferenceValue != null) return;
-            var inherited = light.GetComponentInParent<VRSLLightZone>();
+            var inherited = light.GetComponentInParent<VRSLLightZone>(true);
             UnityEditor.EditorGUILayout.HelpBox(inherited != null
                 ? $"Stays inside {inherited.name}, the Light Zone above it."
                 : "No zone: lights everything its range reaches, through walls too.",

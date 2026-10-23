@@ -46,12 +46,13 @@ namespace VRSL.URP
         string DarkFixturesReason { get; }
     }
 
-    /// <summary>What the control panel's discoball slider needs from a realtime
-    /// light.</summary>
+    /// <summary>What the control panel's discoball slider and the Light Zone inspector
+    /// need from a realtime light.</summary>
     internal interface IVRSLRealtimeLight
     {
         bool IsDiscoball { get; }
         float GlobalIntensity { get; set; }
+        VRSLLightZone LightZone { get; }
     }
 
     /// <summary>A manager whose fixtures can take their colour from a texture the

@@ -82,6 +82,7 @@ namespace VRSL.URP
 
         bool IVRSLRealtimeLight.IsDiscoball => fixtureType == DMXFixtureType.Discoball;
         float IVRSLRealtimeLight.GlobalIntensity { get => globalIntensity; set => globalIntensity = value; }
+        VRSLLightZone IVRSLRealtimeLight.LightZone => lightZone;
 
         [Tooltip("Dimmer-response curve, matched to the body-glow surface's _CurveMod. The "
                + "surface emission scales as dimmer² × (1 + (curveMod-1)·dimmer); "

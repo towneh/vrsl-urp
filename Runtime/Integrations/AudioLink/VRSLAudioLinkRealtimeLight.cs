@@ -134,6 +134,7 @@ namespace VRSL.URP
 
         bool IVRSLRealtimeLight.IsDiscoball => fixtureType == AudioLinkFixtureType.Discoball;
         float IVRSLRealtimeLight.GlobalIntensity { get => globalIntensity; set => globalIntensity = value; }
+        VRSLLightZone IVRSLRealtimeLight.LightZone => lightZone;
 
         // ── Pan / Tilt ────────────────────────────────────────────────────────
         [Tooltip("Enable per-frame world transform read for moving-head direction. "

@@ -39,7 +39,10 @@ namespace VRSL.URP
             foreach (var light in s_lights)
             {
                 if (light == null) continue;
-                var named = new SerializedObject(light).FindProperty("lightZone")?.objectReferenceValue as VRSLLightZone;
+                var named = ((IVRSLRealtimeLight)light).LightZone;
+                // Inactive parents included, so a fixture switched off counts towards the zone
+                // it will use when it's on. For a light that is on every parent is active, so
+                // this is the zone the runtime picks.
                 var resolved = named != null ? named : light.GetComponentInParent<VRSLLightZone>(true);
                 if (resolved == zone) into.Add(light);
             }
