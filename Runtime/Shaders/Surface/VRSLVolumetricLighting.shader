@@ -155,6 +155,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                                  float outputScale, float invSpacing, int maxSteps,
                                  float jitter, float density, float anisotropy,
                                  float3 noise, uint zoneFirst, uint zoneBoxes,
+                                 VRSLZoneStretches stretches,
                                  inout float3 accumulated, inout uint marched,
                                  inout uint stepsTaken, inout uint skipped)
             {
@@ -209,8 +210,8 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     if (zoneBoxes > 1u)
                     {
                         if (t >= inEnd)
-                            VRSL_ZoneStretchFrom(zoneFirst, zoneBoxes, cameraWS, viewDir,
-                                                 t, inStart, inEnd);
+                            VRSL_ZoneStretchAt(stretches, zoneFirst, zoneBoxes,
+                                               cameraWS, viewDir, t, inStart, inEnd);
                         if (t < inStart)
                         {
                             // On to the first sample of the next stretch, or past the
@@ -314,6 +315,9 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 uint   stepsTaken  = 0;
                 uint   skipped     = 0;
 
+                VRSLZoneStretches stretches = (VRSLZoneStretches)0;
+                uint stretchesZone = 0xFFFFFFFFu;
+
                 // The whole view ray for this pixel stays inside one screen
                 // tile, and the tile frustum spans the camera's full depth
                 // range, so the light list is resolved once and reused for
@@ -394,19 +398,32 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     // its zone to its last exit, which can only shorten the span.
                     // A zone of one box is entered and left once, so the span is
                     // exactly its inside; with more, the ray may leave and come
-                    // back, and the march skips the gaps. The zoned march is
-                    // its own copy and never rejoins the unzoned one, which pays
-                    // the one compare and nothing else.
+                    // back, and the march skips the gaps. Where the ray runs
+                    // through the zone depends on the pixel and not the light, so
+                    // it is worked out for the first light in a zone and kept for
+                    // the rest. The zoned march is its own copy and never rejoins
+                    // the unzoned one, which pays the one compare and nothing else.
                     [branch]
                     if (VRSL_IsZoned(light))
                     {
-                        uint zoneFirst, zoneBoxes;
-                        if (VRSL_ClipSpanToZone(light, cameraWS, viewDir,
-                                                spanStart, spanEnd, zoneFirst, zoneBoxes))
+                        uint   zoneSlot  = VRSL_TakeZone(light);
+                        float4 zone      = _VRSLZones[zoneSlot];
+                        uint   zoneFirst = (uint)zone.x;
+                        uint   zoneBoxes = (uint)zone.y;
+                        [branch]
+                        if (zoneSlot != stretchesZone)
+                        {
+                            stretches     = VRSL_ZoneStretches(zoneFirst, zoneBoxes,
+                                                               cameraWS, viewDir, maxDist);
+                            stretchesZone = zoneSlot;
+                        }
+                        spanStart = max(spanStart, stretches.start.x);
+                        spanEnd   = min(spanEnd, stretches.last);
+                        if (spanEnd > spanStart)
                             VRSL_MarchLight(light, cameraWS, viewDir, toCamera, spanStart, spanEnd,
                                             proj, toCentre, maxPhase, outputScale, invSpacing,
                                             maxSteps, jitter, density, anisotropy, noise,
-                                            zoneFirst, zoneBoxes,
+                                            zoneFirst, zoneBoxes, stretches,
                                             accumulated, marched, stepsTaken, skipped);
                         continue;
                     }
@@ -414,6 +431,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     VRSL_MarchLight(light, cameraWS, viewDir, toCamera, spanStart, spanEnd,
                                     proj, toCentre, maxPhase, outputScale, invSpacing,
                                     maxSteps, jitter, density, anisotropy, noise, 0u, 1u,
+                                    (VRSLZoneStretches)0,
                                     accumulated, marched, stepsTaken, skipped);
                 }
 

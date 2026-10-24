@@ -172,36 +172,6 @@ bool VRSL_ZoneBoxSpan(uint row, float3 rayOrigin, float3 rayDir,
     return enter < leave;
 }
 
-// Narrow a ray span [tNear, tFar] to run from the ray's first entry into a zoned
-// light's zone to its last exit, and say where its boxes are. Between the two the
-// ray may leave and re-enter, which VRSL_ZoneStretchFrom walks; for one box the
-// span is exactly the inside. False when the span misses the zone. Takes the zone
-// off the light, as VRSL_ZoneMask does.
-bool VRSL_ClipSpanToZone(inout VRSLLightData light, float3 rayOrigin, float3 rayDir,
-                         inout float tNear, inout float tFar,
-                         out uint first, out uint count)
-{
-    float4 zone = _VRSLZones[VRSL_TakeZone(light)];
-    first = (uint)zone.x;
-    count = (uint)zone.y;
-
-    float enter =  1e30;
-    float leave = -1e30;
-    [loop]
-    for (uint b = 0u; b < count; b++)
-    {
-        float a, z;
-        if (VRSL_ZoneBoxSpan(first + 3u * b, rayOrigin, rayDir, a, z))
-        {
-            enter = min(enter, a);
-            leave = max(leave, z);
-        }
-    }
-    tNear = max(tNear, enter);
-    tFar  = min(tFar, leave);
-    return tFar > tNear;
-}
-
 // The next stretch of a ray inside a zone's boxes at or after t, as [start, end);
 // start and end are 1e30 once the ray has left the zone for good. Where boxes
 // overlap, end is where the box the stretch starts in is left, and asking again
@@ -226,6 +196,96 @@ void VRSL_ZoneStretchFrom(uint first, uint count, float3 rayOrigin, float3 rayDi
             end   = leave;
         }
     }
+}
+
+// A zone's inside along one view ray, worked out once per pixel and shared by
+// every light in that zone: the first four stretches, merged where boxes
+// overlap or abut, sorted, with unused slots at 1e30. Past limit there may be
+// more than four, and the stretches there come from VRSL_ZoneStretchFrom.
+// last is where the ray leaves the zone for the last time.
+struct VRSLZoneStretches
+{
+    float4 start;
+    float4 end;
+    float  limit;
+    float  last;
+};
+
+float VRSL_Min4(float4 v) { return min(min(v.x, v.y), min(v.z, v.w)); }
+float VRSL_Max4(float4 v) { return max(max(v.x, v.y), max(v.z, v.w)); }
+
+// Slots of v moved along to make room for, or close up behind, a stretch that
+// merged `merged` of the stored ones.
+float4 VRSL_ZoneShift(float4 v, float merged)
+{
+    return merged < 0.5 ? float4(1e30, v.xyz)
+         : merged < 1.5 ? v
+         : merged < 2.5 ? float4(v.yzw, 1e30)
+         : merged < 3.5 ? float4(v.zw, 1e30, 1e30)
+         :                float4(v.w, 1e30, 1e30, 1e30);
+}
+
+void VRSL_ZoneStretchesAdd(inout VRSLZoneStretches z, float a, float b)
+{
+    // Stretches closer than this join; no sample lands in a gap that thin.
+    const float join = 1e-3;
+    // Sorted and apart, so the stretches wholly before [a, b] are a prefix and
+    // those wholly after it a suffix; what lies between merges with it.
+    bool4 before  = z.end < a - join;
+    bool4 after   = z.start > b + join;
+    float nBefore = dot((float4)before, 1.0);
+    float merged  = 4.0 - nBefore - dot((float4)after, 1.0);
+    bool4 inside  = !(before || after);
+    float mergedA = min(a, VRSL_Min4(inside ? z.start : 1e30));
+    float mergedB = max(b, VRSL_Max4(inside ? z.end : -1e30));
+
+    // A fifth stretch drops whichever is last, and the walk takes over from it.
+    if (merged < 0.5 && z.start.w < 1e30)
+        z.limit = nBefore > 3.5 ? a : z.start.w;
+
+    bool4 at = float4(0.0, 1.0, 2.0, 3.0) == nBefore;
+    z.start = before ? z.start : (at ? mergedA : VRSL_ZoneShift(z.start, merged));
+    z.end   = before ? z.end   : (at ? mergedB : VRSL_ZoneShift(z.end, merged));
+}
+
+VRSLZoneStretches VRSL_ZoneStretches(uint first, uint count, float3 rayOrigin, float3 rayDir,
+                                     float tMax)
+{
+    VRSLZoneStretches z;
+    z.start = 1e30;
+    z.end   = 1e30;
+    z.limit = 1e30;
+    z.last  = -1e30;
+    [loop]
+    for (uint b = 0u; b < count; b++)
+    {
+        float enter, leave;
+        if (!VRSL_ZoneBoxSpan(first + 3u * b, rayOrigin, rayDir, enter, leave))
+            continue;
+        enter = max(enter, 0.0);
+        leave = min(leave, tMax);
+        if (leave <= enter)
+            continue;
+        z.last = max(z.last, leave);
+        leave  = min(leave, z.limit);
+        if (leave > enter)
+            VRSL_ZoneStretchesAdd(z, enter, leave);
+    }
+    return z;
+}
+
+// The stretch of the ray inside the zone at or after t, as VRSL_ZoneStretchFrom
+// gives it, read from the stored stretches where it can be.
+void VRSL_ZoneStretchAt(VRSLZoneStretches z, uint first, uint count,
+                        float3 rayOrigin, float3 rayDir, float t,
+                        out float start, out float end)
+{
+    bool4 ahead = z.end > t;
+    start = VRSL_Min4(ahead ? z.start : 1e30);
+    end   = VRSL_Min4(ahead ? z.end : 1e30);
+    [branch]
+    if (start > z.limit)
+        VRSL_ZoneStretchFrom(first, count, rayOrigin, rayDir, max(t, z.limit), start, end);
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
