@@ -145,10 +145,10 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
 
             // One light's in-scattering across [spanStart, spanEnd] of the view
             // ray, added to accumulated, or skipped when the visibility bound says
-            // it can't be seen. zoneBoxes above one tests every sample against
-            // the light's zone, for a zone whose inside can be more than one piece
-            // of the ray. An unzoned light passes a literal 1, and the test
-            // compiles out.
+            // it can't be seen. zoneBoxes above one walks the zone's stretches of
+            // the ray, for a zone whose inside can be more than one piece of it,
+            // and skips the samples between them. An unzoned light passes a
+            // literal 1, and the walk compiles out.
             void VRSL_MarchLight(VRSLLightData light, float3 cameraWS, float3 viewDir,
                                  float3 toCamera, float spanStart, float spanEnd,
                                  float proj, float3 toCentre, float maxPhase,
@@ -197,16 +197,33 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 marched    += 1;
                 stepsTaken += (uint)steps;
 
+                // The zone stretch the samples are in; the first sample asks for it.
+                float inStart = 0.0;
+                float inEnd   = -1.0;
+
                 [loop]
                 for (int s = 0; s < steps; s++)
                 {
-                    float3 samplePos = cameraWS + viewDir
-                                     * (spanStart + (s + jitter) * stepSize);
+                    float t = spanStart + (s + jitter) * stepSize;
 
                     if (zoneBoxes > 1u)
                     {
-                        if (!VRSL_InZoneBoxes(zoneFirst, zoneBoxes, samplePos)) continue;
+                        if (t >= inEnd)
+                            VRSL_ZoneStretchFrom(zoneFirst, zoneBoxes, cameraWS, viewDir,
+                                                 t, inStart, inEnd);
+                        if (t < inStart)
+                        {
+                            // On to the first sample of the next stretch, or past the
+                            // last step when there is none. Always forward, so a
+                            // sample rounding short of the stretch can't hold the
+                            // march in place.
+                            s = max(s, (int)min(ceil((inStart - spanStart) / stepSize - jitter),
+                                                (float)steps) - 1);
+                            continue;
+                        }
                     }
+
+                    float3 samplePos = cameraWS + viewDir * t;
 
                     float3 contrib = VRSL_EvaluateLightVolumetric(
                         light, samplePos, toCamera, anisotropy);
@@ -377,7 +394,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     // its zone to its last exit, which can only shorten the span.
                     // A zone of one box is entered and left once, so the span is
                     // exactly its inside; with more, the ray may leave and come
-                    // back, and the march tests each sample. The zoned march is
+                    // back, and the march skips the gaps. The zoned march is
                     // its own copy and never rejoins the unzoned one, which pays
                     // the one compare and nothing else.
                     [branch]

@@ -151,11 +151,32 @@ float VRSL_ZoneMask(inout VRSLLightData light, float3 posWS)
     return VRSL_InZoneBoxes((uint)zone.x, (uint)zone.y, posWS) ? 1.0 : 0.0;
 }
 
+// Where a ray runs through the zone box at row, from enter to leave in ray
+// parameter t. False when it misses the box.
+bool VRSL_ZoneBoxSpan(uint row, float3 rayOrigin, float3 rayDir,
+                      out float enter, out float leave)
+{
+    float3 o   = VRSL_ToZoneBox(row, rayOrigin);
+    float3 d   = float3(dot(_VRSLZones[row].xyz, rayDir),
+                        dot(_VRSLZones[row + 1u].xyz, rayDir),
+                        dot(_VRSLZones[row + 2u].xyz, rayDir));
+    // Slabs of the unit cube; a ray parallel to a pair divides by zero, and
+    // the infinities it makes fall out of the min and max.
+    float3 inv = 1.0 / d;
+    float3 t0  = (-0.5 - o) * inv;
+    float3 t1  = ( 0.5 - o) * inv;
+    float3 lo  = min(t0, t1);
+    float3 hi  = max(t0, t1);
+    enter = max(max(lo.x, lo.y), lo.z);
+    leave = min(min(hi.x, hi.y), hi.z);
+    return enter < leave;
+}
+
 // Narrow a ray span [tNear, tFar] to run from the ray's first entry into a zoned
 // light's zone to its last exit, and say where its boxes are. Between the two the
-// ray may leave and re-enter, so a zone of more than one box needs an inside
-// test per sample; for one box the span is exactly the inside. False when the
-// span misses the zone. Takes the zone off the light, as VRSL_ZoneMask does.
+// ray may leave and re-enter, which VRSL_ZoneStretchFrom walks; for one box the
+// span is exactly the inside. False when the span misses the zone. Takes the zone
+// off the light, as VRSL_ZoneMask does.
 bool VRSL_ClipSpanToZone(inout VRSLLightData light, float3 rayOrigin, float3 rayDir,
                          inout float tNear, inout float tFar,
                          out uint first, out uint count)
@@ -169,21 +190,8 @@ bool VRSL_ClipSpanToZone(inout VRSLLightData light, float3 rayOrigin, float3 ray
     [loop]
     for (uint b = 0u; b < count; b++)
     {
-        uint   row = first + 3u * b;
-        float3 o   = VRSL_ToZoneBox(row, rayOrigin);
-        float3 d   = float3(dot(_VRSLZones[row].xyz, rayDir),
-                            dot(_VRSLZones[row + 1u].xyz, rayDir),
-                            dot(_VRSLZones[row + 2u].xyz, rayDir));
-        // Slabs of the unit cube; a ray parallel to a pair divides by zero, and
-        // the infinities it makes fall out of the min and max.
-        float3 inv = 1.0 / d;
-        float3 t0  = (-0.5 - o) * inv;
-        float3 t1  = ( 0.5 - o) * inv;
-        float3 lo  = min(t0, t1);
-        float3 hi  = max(t0, t1);
-        float  a   = max(max(lo.x, lo.y), lo.z);
-        float  z   = min(min(hi.x, hi.y), hi.z);
-        if (a < z)
+        float a, z;
+        if (VRSL_ZoneBoxSpan(first + 3u * b, rayOrigin, rayDir, a, z))
         {
             enter = min(enter, a);
             leave = max(leave, z);
@@ -192,6 +200,32 @@ bool VRSL_ClipSpanToZone(inout VRSLLightData light, float3 rayOrigin, float3 ray
     tNear = max(tNear, enter);
     tFar  = min(tFar, leave);
     return tFar > tNear;
+}
+
+// The next stretch of a ray inside a zone's boxes at or after t, as [start, end);
+// start and end are 1e30 once the ray has left the zone for good. Where boxes
+// overlap, end is where the box the stretch starts in is left, and asking again
+// from there carries on through the box overlapping it. A march that asks again
+// each time a sample passes end walks the zone's inside with no test per sample.
+void VRSL_ZoneStretchFrom(uint first, uint count, float3 rayOrigin, float3 rayDir,
+                          float t, out float start, out float end)
+{
+    start = 1e30;
+    end   = 1e30;
+    [loop]
+    for (uint b = 0u; b < count; b++)
+    {
+        float enter, leave;
+        if (!VRSL_ZoneBoxSpan(first + 3u * b, rayOrigin, rayDir, enter, leave)
+            || leave <= t)
+            continue;
+        float from = max(enter, t);
+        if (from < start || (from == start && leave > end))
+        {
+            start = from;
+            end   = leave;
+        }
+    }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
