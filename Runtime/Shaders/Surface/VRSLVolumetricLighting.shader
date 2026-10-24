@@ -315,8 +315,10 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                 uint   stepsTaken  = 0;
                 uint   skipped     = 0;
 
+            #ifdef VRSL_LIGHT_ZONES
                 VRSLZoneStretches stretches = (VRSLZoneStretches)0;
                 uint stretchesZone = 0xFFFFFFFFu;
+            #endif
 
                 // The whole view ray for this pixel stays inside one screen
                 // tile, and the tile frustum spans the camera's full depth
@@ -402,7 +404,8 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     // through the zone depends on the pixel and not the light, so
                     // it is worked out for the first light in a zone and kept for
                     // the rest. The zoned march is its own copy and never rejoins
-                    // the unzoned one, which pays the one compare and nothing else.
+                    // the unzoned one.
+                #ifdef VRSL_LIGHT_ZONES
                     [branch]
                     if (VRSL_IsZoned(light))
                     {
@@ -427,6 +430,7 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                                             accumulated, marched, stepsTaken, skipped);
                         continue;
                     }
+                #endif
 
                     VRSL_MarchLight(light, cameraWS, viewDir, toCamera, spanStart, spanEnd,
                                     proj, toCentre, maxPhase, outputScale, invSpacing,
@@ -504,6 +508,9 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
             #pragma fragment frag
             #pragma target   4.5
             #pragma multi_compile_local_fragment _ _VRSL_VOLUMETRIC_NOISE
+            // On while any light zone is (VRSLLightZones), so a scene without zones
+            // marches with no zone code at all.
+            #pragma multi_compile_fragment _ VRSL_LIGHT_ZONES
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
 
             // TEXTURE2D_X resolves to Texture2DArray under SPI VR (manager

@@ -45,6 +45,9 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
             // command buffer; the macros below route per-instance writes to
             // the correct eye slice of the camera color target.
             #pragma multi_compile _ STEREO_INSTANCING_ON STEREO_MULTIVIEW_ON
+            // On while any light zone is (VRSLLightZones), so a scene without zones
+            // lights with no zone code at all.
+            #pragma multi_compile_fragment _ VRSL_LIGHT_ZONES
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/DeclareDepthTexture.hlsl"
@@ -173,13 +176,14 @@ Shader "Hidden/VRSL-URP/DeferredLighting"
                     // A gobo can only ever reduce the contribution, so the
                     // texture-array fetch — the most expensive part of the loop —
                     // is skipped wherever the light already reaches nothing. A
-                    // zoned light's zone is tested first, and the test is one
-                    // compare for a light with none.
+                    // zoned light's zone is tested first.
                     if (any(contrib > 0.0))
                     {
+#ifdef VRSL_LIGHT_ZONES
                         [branch]
                         if (VRSL_IsZoned(light))
                             contrib *= VRSL_ZoneMask(light, posWS);
+#endif
                         contrib *= SampleGobo(VRSL_GoboIndex(light), light.spotParams.w,
                                               posWS,
                                               light.positionAndRange.xyz,

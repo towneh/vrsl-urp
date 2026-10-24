@@ -9,9 +9,10 @@ using Is = UnityEngine.TestTools.Constraints.Is;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// LZ8 to LZ14 of TESTING.md: zones of more than one box, zones and lights changed
-    /// while the world runs, the zone data's cost on a frame where nothing changed, its
-    /// fallback binding, and how thin a wall a zone's face can sit in.
+    /// LZ8 to LZ14 and LZ19 to LZ21 of TESTING.md: zones of more than one box, zones and
+    /// lights changed while the world runs, the zone data's cost on a frame where nothing
+    /// changed, its fallback binding, how thin a wall a zone's face can sit in, and the
+    /// keyword that selects the zone variants.
     /// </summary>
     class VRSLLightZoneRuntimeTests : VRSLDMXTest
     {
@@ -572,6 +573,41 @@ namespace VRSL.URP.Tests
             finally
             {
                 dark.Destroy(); never.Destroy(); after.Destroy();
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
+        // ── LZ21: the zone keyword ─────────────────────────────────────────────
+
+        /// <summary>
+        /// LZ21. The fullscreen shaders' zone variants are selected only while a zone is on:
+        /// off with none, on as soon as one joins, and off again within a few frames of the
+        /// last one leaving, read from the global keyword itself.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator LZ21_the_zone_variants_run_only_while_a_zone_is_on()
+        {
+            var (rig, room, source) = VRSLLightZoneTests.Stage(beams: true);
+            try
+            {
+                Object.DestroyImmediate(room.Zone.gameObject);
+                yield return Frames(rig);
+                Assert.AreEqual(0, VRSLLightZones.Count, "a zone is switched on");
+                Assert.IsFalse(Shader.IsKeywordEnabled("VRSL_LIGHT_ZONES"), "with no zone on, the zone variants are selected");
+
+                var zone = NewZone(room.Root.transform, "Zone that comes and goes");
+                AddBox(zone, "Box", Vector3.zero, Vector3.one);
+                Assert.IsTrue(Shader.IsKeywordEnabled("VRSL_LIGHT_ZONES"), "a zone came on and the zone variants aren't selected");
+                yield return Frames(rig);
+                Assert.IsTrue(Shader.IsKeywordEnabled("VRSL_LIGHT_ZONES"), "with a zone on, the zone variants were let go");
+
+                Object.DestroyImmediate(zone.gameObject);
+                yield return Frames(rig);
+                Assert.IsFalse(Shader.IsKeywordEnabled("VRSL_LIGHT_ZONES"), "the last zone left and the zone variants are still selected");
+            }
+            finally
+            {
                 rig.Dispose();
                 source.Dispose();
             }

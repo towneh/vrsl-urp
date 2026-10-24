@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace VRSL.URP
 {
@@ -25,10 +26,16 @@ namespace VRSL.URP
     /// across every camera and reaches shaders outside VRSL's own passes. With no zone
     /// enabled the fallback buffer is bound instead, since D3D12 and Vulkan skip a draw
     /// whose declared buffer is unbound.
+    ///
+    /// The global keyword <c>VRSL_LIGHT_ZONES</c> selects the lighting and raymarch
+    /// variants that read zones. It goes on when the first zone joins and off a couple of
+    /// frames after the last one leaves, once every light's packed type has been rebuilt
+    /// without its zone, so a scene with no zone on renders with no zone code at all.
     /// </remarks>
     internal static class VRSLLightZones
     {
         static readonly int s_Zones = Shader.PropertyToID("_VRSLZones");
+        static readonly GlobalKeyword s_Keyword = GlobalKeyword.Create("VRSL_LIGHT_ZONES");
 
         /// <summary>The most zones a scene can enable at once: the slot is packed into a
         /// float above the light type and gobo, which is exact to 2^24.</summary>
@@ -42,6 +49,8 @@ namespace VRSL.URP
         static bool s_dirty = true;
         static int  s_preparedFrame = -1;
         static bool s_warnedFull;
+        static bool s_keywordOn;
+        static int  s_keywordOffFrame = -1;
 
         /// <summary>Zones enabled now.</summary>
         public static int Count => s_count;
@@ -78,6 +87,7 @@ namespace VRSL.URP
             else s_slots[slot] = zone;
             zone.Slot = slot;
             s_count++;
+            SetKeyword(true);
             Changed();
         }
 
@@ -133,7 +143,11 @@ namespace VRSL.URP
         /// </summary>
         public static void Prepare()
         {
-            if (s_count == 0) return;
+            if (s_count == 0)
+            {
+                if (s_keywordOffFrame >= 0 && Time.frameCount >= s_keywordOffFrame) SetKeyword(false);
+                return;
+            }
             int frame = Time.frameCount;
             if (s_preparedFrame == frame) return;
             s_preparedFrame = frame;
@@ -207,12 +221,26 @@ namespace VRSL.URP
             s_buffer = null;
             s_dirty  = true;
             s_preparedFrame = -1;
+            // Lights still carry their zone until the managers' next config upload, which
+            // can be the frame after this one.
+            if (s_keywordOn) s_keywordOffFrame = Time.frameCount + 2;
             var fallback = VRSLDMXFallbackBuffers.Zones;
             if (fallback != null)
             {
                 Shader.SetGlobalBuffer(s_Zones, fallback);
                 Binds++;
             }
+        }
+
+        /// <summary>Whether the shaders' zone variants are selected now.</summary>
+        internal static bool KeywordOn => s_keywordOn;
+
+        static void SetKeyword(bool on)
+        {
+            s_keywordOffFrame = -1;
+            if (s_keywordOn == on) return;
+            s_keywordOn = on;
+            Shader.SetKeyword(s_Keyword, on);
         }
 
 #if UNITY_EDITOR
@@ -245,6 +273,10 @@ namespace VRSL.URP
             s_buffer = null;
             s_dirty = true;
             s_preparedFrame = -1;
+            // The keyword is global state that outlives the statics.
+            s_keywordOn = false;
+            s_keywordOffFrame = -1;
+            Shader.SetKeyword(s_Keyword, false);
         }
     }
 }
