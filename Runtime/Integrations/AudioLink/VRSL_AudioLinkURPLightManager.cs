@@ -270,7 +270,7 @@ namespace VRSL.URP
             public Vector4 forwardAndType;    // xyz=world forward (per-frame; a discoball's up
                                               //   axis), w=light type (0=spot, 1=point, 2=discoball)
             public Vector4 intensityParams;   // x=maxIntensity, y=finalIntensity × globalIntensity,
-                                              //   z=AudioLink active, w=discoball beams
+                                              //   z=AudioLink active, w=haze switch (see BuildConfig)
             public Vector4 spotAngles;        // x=innerRatio(0..1), y=outerHalf(deg),
                                               //   z=emitterDepth(m), w=unused
             public Vector4 alParams;          // x=band, y=delay, z=bandMultiplier, w=colorMode
@@ -785,11 +785,13 @@ namespace VRSL.URP
                 // intensityParams.y carries the combined finalIntensity × globalIntensity
                 // scalar (folded CPU-side so the compute shader stays oblivious to the split).
                 // intensityParams.z = AudioLink active flag (1 = sample amplitude, 0 = static full).
+                // intensityParams.w is 1 where the light's haze differs from its type's
+                // default: a discoball's dots drawn, any other light's beam left out.
                 intensityParams  = new Vector4(
                     f.maxIntensity * lightIntensity,
                     f.finalIntensity * f.globalIntensity,
                     f.enableAudioLink ? 1f : 0f,
-                    discoball && f.discoballBeams ? 1f : 0f),
+                    (discoball ? f.discoballBeams : !f.Beams) ? 1f : 0f),
                 // spotAngles.x = inner-to-outer ratio (0..1) — applied to the outer
                 // half-angle in the compute shader.
                 // spotAngles.z = emitter depth in metres (virtual cone-apex pushback for

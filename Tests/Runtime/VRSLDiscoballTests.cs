@@ -63,7 +63,7 @@ namespace VRSL.URP.Tests
             var first = FindBall(rig);
 
             Assert.Greater(first.colorAndIntensity.w, 0f, "the discoball is not lit; its dimmer channel reads zero");
-            Assert.AreEqual(-1f, Mathf.Floor(first.directionAndType.w * 0.25f) - 1f, 0.01f,
+            Assert.AreEqual(-1f, Mathf.Floor(first.directionAndType.w * 0.125f) - 1f, 0.01f,
                 "a discoball carries a gobo slice; it should carry none");
             var axis = new Vector3(first.directionAndType.x, first.directionAndType.y, first.directionAndType.z);
             Assert.Greater(Vector3.Dot(axis, ball.transform.up), 0.999f,

@@ -37,7 +37,9 @@ struct VRSLFixtureConfig
                                 // z = invertTilt (0/1), w = enableGobo (0/1)
     float4 extras;              // x = emitterDepth (m), y = 5-channel mode flag,
                                 // z = curveMod (body-glow dimmer-response match),
-                                // w = discoball beams (1 = the raymarch draws its dots)
+                                // w = haze switch: 1 draws a discoball's dots in the
+                                //     haze and leaves any other light's beam out, so 0
+                                //     keeps each type's default
     float4 tintAndSpin;         // xyz = discoball colour (linear), w = spin (deg/s)
 };
 
@@ -48,23 +50,24 @@ struct VRSLLightData
 {
     float4 positionAndRange;    // xyz = world position, w = range
     float4 directionAndType;    // xyz = normalised direction (spot) or spin axis (discoball),
-                                // w   = light type and gobo slice, packed (see below)
+                                // w   = light type, haze flag and gobo slice, packed
+                                //       (see below)
     float4 colorAndIntensity;   // xyz = linear RGB, w = intensity (0 = inactive, skip)
     float4 spotParams;          // x = cos(inner half-angle), y = cos(outer half-angle),
-                                // z = emitterDepth (m) — virtual cone-apex pushback,
-                                //     or, for a discoball, 1 when the raymarch draws it
+                                // z = emitterDepth (m) — virtual cone-apex pushback
                                 // w = spin phase (radians, wrapped to ±2π): the gobo's
                                 //     for a spot, the ball's for a discoball
 };
 
-// directionAndType.w carries two integers in one float: the light type in the
-// low two bits and the gobo slice above it, biased by one so "no gobo" (-1)
-// survives. Both are small integers and floats represent those exactly, so this
-// costs no precision — unlike packing them as halves, which would quantise the
-// spin phase and stipple a slowly rotating gobo.
-float VRSL_PackTypeAndGobo(float lightType, int goboIndex)
+// directionAndType.w carries three integers in one float: the light type in the
+// low two bits, a bit set when the raymarch leaves the light out, and the gobo
+// slice above it, biased by one so "no gobo" (-1) survives. All are small
+// integers and floats represent those exactly, so this costs no precision —
+// unlike packing them as halves, which would quantise the spin phase and stipple
+// a slowly rotating gobo.
+float VRSL_PackTypeAndGobo(float lightType, int goboIndex, bool inHaze)
 {
-    return lightType + (float)(goboIndex + 1) * 4.0;
+    return lightType + (inHaze ? 0.0 : 4.0) + (float)(goboIndex + 1) * 8.0;
 }
 
 // 0 = spot, 1 = point, 2 = discoball. Anything but a spot is omnidirectional.
@@ -78,10 +81,17 @@ bool VRSL_IsDiscoball(VRSLLightData light)
     return VRSL_LightType(light) > 1.5;
 }
 
+// Whether the raymarch draws the light: a spot's or point's beam, a discoball's
+// dots. Surface lighting ignores it.
+bool VRSL_InHaze(VRSLLightData light)
+{
+    return fmod(light.directionAndType.w, 8.0) < 4.0;
+}
+
 // -1 = no gobo, 0+ = slice in _VRSLGobos.
 float VRSL_GoboIndex(VRSLLightData light)
 {
-    return floor(light.directionAndType.w * 0.25) - 1.0;
+    return floor(light.directionAndType.w * 0.125) - 1.0;
 }
 
 // An inactive fixture emits nothing, so intensity doubles as the active flag and
@@ -366,7 +376,7 @@ struct VRSLALFixtureConfig
                               //       a discoball's up axis), w = light type (0=spot, 1=point, 2=discoball)
     float4 intensityParams;   // x = maxIntensity, y = finalIntensity × globalIntensity,
                               // z = AudioLink active (1=sample AL, 0=static full intensity),
-                              // w = discoball beams (1 = the raymarch draws its dots)
+                              // w = haze switch, as VRSLFixtureConfig.extras.w
     float4 spotAngles;        // x = inner-to-outer ratio (0..1), y = outer half-angle (deg),
                               // z = emitterDepth (m), w = unused
     float4 alParams;          // x = band (0–3), y = delay (0–127), z = bandMultiplier,

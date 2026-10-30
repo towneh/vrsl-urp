@@ -48,6 +48,7 @@ namespace VRSL.URP
         SerializedProperty _goboSpinSpeed;
         SerializedProperty _discoballSpinSpeed;
         SerializedProperty _discoballBeams;
+        SerializedProperty _beams;
 
         // Fixture Shell
         SerializedProperty _fixtureShellRenderers;
@@ -95,6 +96,7 @@ namespace VRSL.URP
             _goboSpinSpeed   = serializedObject.FindProperty("goboSpinSpeed");
             _discoballSpinSpeed = serializedObject.FindProperty("discoballSpinSpeed");
             _discoballBeams     = serializedObject.FindProperty("discoballBeams");
+            _beams              = serializedObject.FindProperty("beams");
 
             _fixtureShellRenderers = serializedObject.FindProperty("fixtureShellRenderers");
         }
@@ -192,12 +194,16 @@ namespace VRSL.URP
 
             // ── Fixture Settings ──────────────────────────────────────────────
             // Spotlights and Custom show gobo selection. Washlights, Blinders,
-            // ParLights don't have gobos — hide the section entirely.
-            if (showGobo)
+            // ParLights don't have gobos, so they show the beam switch alone.
+            if (!isDiscoball)
             {
                 GUILayout.Label("Fixture Settings", _sectionLabel);
-                EditorGUILayout.PropertyField(_goboIndex);
-                EditorGUILayout.PropertyField(_goboSpinSpeed);
+                EditorGUILayout.PropertyField(_beams, new GUIContent("Beam In The Haze", _beams.tooltip));
+                if (showGobo)
+                {
+                    EditorGUILayout.PropertyField(_goboIndex);
+                    EditorGUILayout.PropertyField(_goboSpinSpeed);
+                }
 
                 EditorGUILayout.Space();
                 EditorGUILayout.Space();

@@ -431,7 +431,7 @@ namespace VRSL.URP
             public Vector4 panSettings;         // x=maxMinPan, y=panOffset, z=invertPan, w=enableGoboSpin
             public Vector4 tiltSettings;        // x=maxMinTilt,y=tiltOffset,z=invertTilt,w=enableGobo
             public Vector4 extras;              // x=emitterDepth(m), y=5ch flag, z=curveMod,
-                                               //   w=discoball beams
+                                               //   w=haze switch (see BuildConfig)
             public Vector4 tintAndSpin;         // xyz=discoball colour (linear), w=spin deg/s
         }
 
@@ -1485,9 +1485,12 @@ namespace VRSL.URP
                 // the compressed static DMX layout instead of the 13-channel layout.
                 // extras.z carries _CurveMod so the point light reproduces the body-glow
                 // surface's non-linear dimmer response (kept in sync via the shell MPB).
+                // extras.w is 1 where the light's haze differs from its type's default:
+                // a discoball's dots drawn, any other light's beam left out.
                 tintAndSpin  = new Vector4(tint.r, tint.g, tint.b, f.discoballSpinSpeed),
                 extras       = new Vector4(f.emitterDepth, f.use5ChannelMode ? 1f : 0f,
-                                           f.curveMod, discoball && f.discoballBeams ? 1f : 0f),
+                                           f.curveMod,
+                                           (discoball ? f.discoballBeams : !f.Beams) ? 1f : 0f),
             };
         }
 

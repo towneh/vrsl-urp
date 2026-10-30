@@ -261,10 +261,12 @@ Shader "Hidden/VRSL-URP/VolumetricLighting"
                     // tens of times longer than the lit part of the ray. Point
                     // lights fill their sphere, so the sphere span is already
                     // tight for them.
-                    // A discoball draws in the haze only when the fixture asks: its
-                    // dots are hundreds of thin beams, a cubemap fetch per step for
-                    // one light across every tile its sphere covers.
-                    if (VRSL_IsDiscoball(light) && light.spotParams.z < 0.5) continue;
+                    // A light whose fixture keeps it out of the haze still lights
+                    // surfaces; here it costs nothing past this test. A discoball is
+                    // out unless asked for: its dots are hundreds of thin beams, a
+                    // cubemap fetch per step for one light across every tile its
+                    // sphere covers.
+                    if (!VRSL_InHaze(light)) continue;
 
                     if (VRSL_LightType(light) < 0.5)
                     {

@@ -401,12 +401,12 @@ void UpdateLights(uint3 id : SV_DispatchThreadID)
         goboIdx = slot - 1; // convert to 0-based array index
     }
 
+    // A discoball's dots stay out of the haze unless asked for; any other light's
+    // beam is in it unless switched off.
+    bool inHaze = discoball ? cfg.extras.w > 0.5 : cfg.extras.w < 0.5;
     light.directionAndType = float4(normalize(finalDir),
-                                    VRSL_PackTypeAndGobo(cfg.forwardAndType.w, goboIdx));
-    // spotParams.z carries the emitter depth for a spot; a discoball has none, and the
-    // slot says instead whether the raymarch should draw its dots.
-    light.spotParams       = float4(innerCos, outerCos,
-                                    discoball ? cfg.extras.w : cfg.extras.x, spinSpeed);
+                                    VRSL_PackTypeAndGobo(cfg.forwardAndType.w, goboIdx, inHaze));
+    light.spotParams       = float4(innerCos, outerCos, cfg.extras.x, spinSpeed);
     _LightData[idx] = light;
 }
 

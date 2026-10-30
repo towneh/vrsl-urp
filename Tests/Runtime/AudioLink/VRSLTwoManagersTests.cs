@@ -456,7 +456,7 @@ namespace VRSL.URP.Tests
             }
         }
 
-        static int GoboSlice(Vector4 directionAndType) => Mathf.FloorToInt(directionAndType.w * 0.25f) - 1;
+        static int GoboSlice(Vector4 directionAndType) => Mathf.FloorToInt(directionAndType.w * 0.125f) - 1;
 
         /// <summary>
         /// GW8. On a ten-slot wheel both managers share, DMX gobo values 240, 254 and 255

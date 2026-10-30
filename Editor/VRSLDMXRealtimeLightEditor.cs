@@ -52,6 +52,7 @@ namespace VRSL.URP
 
         // Fixture Settings
         SerializedProperty _enableStrobe;
+        SerializedProperty _beams;
         SerializedProperty _enableGobo;
         SerializedProperty _enableGoboSpin;
 
@@ -111,6 +112,7 @@ namespace VRSL.URP
             _tiltOffset          = serializedObject.FindProperty("tiltOffset");
 
             _enableStrobe        = serializedObject.FindProperty("enableStrobe");
+            _beams               = serializedObject.FindProperty("beams");
             _enableGobo          = serializedObject.FindProperty("enableGobo");
             _enableGoboSpin      = serializedObject.FindProperty("enableGoboSpin");
 
@@ -264,6 +266,7 @@ namespace VRSL.URP
             {
                 GUILayout.Label("Fixture Settings", _sectionLabel);
                 EditorGUILayout.PropertyField(_enableStrobe);
+                EditorGUILayout.PropertyField(_beams, new GUIContent("Beam In The Haze", _beams.tooltip));
 
                 EditorGUILayout.Space();
                 EditorGUILayout.Space();

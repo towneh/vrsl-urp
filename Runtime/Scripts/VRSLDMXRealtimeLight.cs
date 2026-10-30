@@ -146,6 +146,28 @@ namespace VRSL.URP
         [Tooltip("Allow DMX channel +10 to drive gobo spin speed. Disable to lock the gobo in place.")]
         public bool enableGoboSpin = true;
 
+        [Tooltip("Draw this light's beam in the haze. Off, it still lights surfaces and "
+               + "projects its gobo, as a projector would with no haze in the room, and the "
+               + "beam pass skips it. A discoball has its own switch, Dots In The Haze.")]
+        [SerializeField] bool beams = true;
+
+        /// <summary>
+        /// Whether the light draws its beam in the haze. Off, it lights surfaces and
+        /// projects its gobo exactly as it does on, and the beam pass skips it. Set it
+        /// while the world runs and it takes effect the next frame. A discoball ignores
+        /// it and follows <see cref="discoballBeams"/>.
+        /// </summary>
+        public bool Beams
+        {
+            get => beams;
+            set
+            {
+                if (beams == value) return;
+                beams = value;
+                ConfigChanged?.Invoke();
+            }
+        }
+
         // ──────────────────────────────────────────────────────────────────────────
         // Discoball
         // ──────────────────────────────────────────────────────────────────────────
