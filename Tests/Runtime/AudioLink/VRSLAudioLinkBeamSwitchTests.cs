@@ -30,8 +30,8 @@ namespace VRSL.URP.Tests
 
         static bool OutOfHaze(Vector4 directionAndType) => Mathf.Repeat(directionAndType.w, 8f) >= 4f;
 
-        /// <summary>V23. Every shipped AudioLink realtime light has its beam on; on a
-        /// spot from the prefab the switch is in the light record a frame after it is
+        /// <summary>V23. Every shipped AudioLink realtime light has its beam on, and so
+        /// does one saved before the switch existed; on a spot from the prefab the switch is in the light record a frame after it is
         /// set, both ways, and leaves the type and the gobo slice alone.</summary>
         [UnityTest]
         public IEnumerator V23_AudioLink_the_beam_switch_reaches_the_light_record_the_next_frame()
@@ -43,6 +43,12 @@ namespace VRSL.URP.Tests
                 foreach (var f in prefab.GetComponentsInChildren<VRSLAudioLinkRealtimeLight>(true))
                     Assert.IsTrue(f.Beams, $"{path}: {f.name} ships with its beam off");
             }
+            VRSLBeamSwitchTests.WithPrefabSavedWithoutBeams(SpotPrefab, prefab =>
+            {
+                var saved = prefab.GetComponentInChildren<VRSLAudioLinkRealtimeLight>(true);
+                Assert.IsNotNull(saved, "the copied spot carries no AudioLink realtime light");
+                Assert.IsTrue(saved.Beams, "a light saved before the switch existed loads with its beam off");
+            });
 
             VRSLDMXRig rig = null;
             GameObject root = null;

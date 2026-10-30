@@ -14,6 +14,8 @@ namespace VRSL.URP.Tests
     /// </summary>
     class VRSLBeamSwitchTests : VRSLDMXTest
     {
+        const string SpotPrefab =
+            "Packages/town.mr.vrsl-urp/Runtime/Prefabs/DMX/VRSL-DMX-Mover-Spotlight-13CH.prefab";
         const int ImageSize    = 512;
         const int WarmUpFrames = 4;
 
@@ -171,31 +173,66 @@ namespace VRSL.URP.Tests
                 Assert.IsFalse(OutOfHaze(l), $"a light is still out of the haze a frame after its beam came back: {l.directionAndType}");
         }
 
-        /// <summary>V21. Every shipped DMX realtime light has its beam on, including
-        /// those saved before the switch existed, which carry no value for it.</summary>
+        /// <summary>A copy of a shipped prefab with any saved beam value taken out,
+        /// imported fresh into a folder of its own and deleted after: a light saved
+        /// before the switch existed, read by the scripts as they are now. The shipped
+        /// prefab itself won't do, since its import is cached from whenever the editor
+        /// last read it.</summary>
+        internal static void WithPrefabSavedWithoutBeams(string prefabPath, System.Action<GameObject> check)
+        {
+            string text = System.IO.File.ReadAllText(System.IO.Path.GetFullPath(prefabPath));
+            string stripped = new Regex(@"^\s+beams:.*\r?\n", RegexOptions.Multiline).Replace(text, "");
+            string leaf   = "VRSL-BeamsRow-" + System.Guid.NewGuid().ToString("N");
+            string folder = "Assets/" + leaf;
+            bool mine = false;
+            try
+            {
+                Assert.IsFalse(UnityEditor.AssetDatabase.IsValidFolder(folder), "the row's folder already exists");
+                UnityEditor.AssetDatabase.CreateFolder("Assets", leaf);
+                mine = UnityEditor.AssetDatabase.IsValidFolder(folder);
+                Assert.IsTrue(mine, "could not create the row's folder");
+                string path = $"{folder}/Saved-Before-Beams.prefab";
+                System.IO.File.WriteAllText(System.IO.Path.GetFullPath(path), stripped);
+                UnityEditor.AssetDatabase.ImportAsset(path, UnityEditor.ImportAssetOptions.ForceSynchronousImport);
+                var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
+                Assert.IsNotNull(prefab, $"the copy of {prefabPath} did not import");
+                check(prefab);
+            }
+            finally
+            {
+                if (mine)
+                {
+                    UnityEditor.AssetDatabase.DeleteAsset(folder);
+                    UnityEditor.AssetDatabase.Refresh();
+                }
+            }
+        }
+
+        /// <summary>V21. Every shipped DMX realtime light has its beam on, and so does
+        /// one saved before the switch existed, which carries no value for it.</summary>
         [Test]
         public void V21_every_shipped_DMX_realtime_light_has_its_beam_on()
         {
-            int lights = 0, unsaved = 0;
-            var key = new Regex(@"^\s+beams:", RegexOptions.Multiline);
+            int lights = 0;
             foreach (var guid in UnityEditor.AssetDatabase.FindAssets("t:Prefab", new[] { "Packages/town.mr.vrsl-urp/Runtime/Prefabs" }))
             {
                 string path = UnityEditor.AssetDatabase.GUIDToAssetPath(guid);
                 var prefab  = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
-                var found   = prefab.GetComponentsInChildren<VRSLDMXRealtimeLight>(true);
-                if (found.Length == 0) continue;
-                if (!key.IsMatch(System.IO.File.ReadAllText(System.IO.Path.GetFullPath(path)))) unsaved++;
-                foreach (var f in found)
+                foreach (var f in prefab.GetComponentsInChildren<VRSLDMXRealtimeLight>(true))
                 {
                     lights++;
                     Assert.IsTrue(f.Beams, $"{path}: {f.name} ships with its beam off");
                 }
             }
-            Debug.Log($"[V21] {lights} realtime light(s), {unsaved} prefab(s) saved without the field");
+            Debug.Log($"[V21] {lights} shipped DMX realtime light(s)");
             Assert.Greater(lights, 0, "no shipped prefab carries a DMX realtime light");
-            Assert.Greater(unsaved, 0,
-                "every prefab now saves the field, so this row no longer sees a light saved before it "
-              + "existed; point it at a scene saved by an older release");
+
+            WithPrefabSavedWithoutBeams(SpotPrefab, prefab =>
+            {
+                var light = prefab.GetComponentInChildren<VRSLDMXRealtimeLight>(true);
+                Assert.IsNotNull(light, "the copied spot carries no DMX realtime light");
+                Assert.IsTrue(light.Beams, "a light saved before the switch existed loads with its beam off");
+            });
         }
 
         /// <summary>V22. A discoball follows Dots In The Haze and nothing else: off it
