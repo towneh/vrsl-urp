@@ -2,7 +2,9 @@
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **A light's beam can be left out of the haze.** DMX and AudioLink realtime lights have a **Beam In The Haze** switch under Fixture Settings, on by default. Off, the light still lights surfaces and projects its gobo, and the beam pass skips it, so it costs nothing there. Use it for a light standing in for a projector, where a cone hanging in the air from a fixture nobody can see would give it away. Scripts set it through `Beams`, which takes effect the next frame. A disco ball keeps its own **Dots In The Haze** switch, and existing scenes and prefabs load with every beam on.
 
 ## [0.3.0-rc.10] — 2026-10-22
 

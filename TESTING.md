@@ -605,7 +605,8 @@ relying on the order the managers were enabled in.
 
 ### Volumetrics
 
-`VRSLVolumetricLoopTests` in the suite covers V14 to V17. V11 to V13 want eyes and a
+`VRSLVolumetricLoopTests` in the suite covers V14 to V17, `VRSLBeamSwitchTests` V18 to V22
+and `VRSLAudioLinkBeamSwitchTests` (AudioLink tests assembly) V23. V11 to V13 want eyes and a
 frame capture, and V11 reads its number off `VRSL Diagnostics`.
 
 | # | Path | Scenario | Expected |
@@ -625,6 +626,12 @@ frame capture, and V11 reads its number off `VRSL Diagnostics`.
 | V15 | — | `VRSLVolumetricLoopTests`: bake with a compute that has no kernel | The shared 1×1×1 white fallback, so density is unmodulated rather than zeroed, and one warning per session naming the kernel. Releasing a fallback leaves it alone |
 | V16 | — | `VRSLVolumetricLoopTests`: collect the raymarch counters on the rig with its movers pointed straight down, at `Standard`, then at `High` | Steps per light marched never below 4 and never above the level's ceiling, and higher at `High` than at `Standard` on the same spans. The second half says the count follows the level's spacing rather than sitting at the ceiling |
 | V17 | — | `VRSLVolumetricLoopTests`: the same rig, frozen and on the Ramp, with `volumetricIntensity` at `1e-12` | Every light that reaches the loop is skipped by the bound and no step is taken; the count of lights reaching the loop is unchanged from the lit frame, so the bound moved only the verdict. Restoring the intensity restores the march |
+| V18 | D | The rig frozen for image capture at `Standard`: every beam on; every beam off (`Beams`); every beam on with `volumetricIntensity` at `1e-12` as the surface-only reference | Beams on differs from the reference on more than 1% of the frame. Beams off matches the reference within the image threshold: the floor, the gobos and the colours as they were, nothing in the air |
+| V19 | D | V17's rig on the Ramp, counters collected lit, with every beam off, then with them back on | With the beams off nothing is marched, no step is taken and nothing is skipped by the bound (the lights never reach it), while the pass still counts its pixels. Back on, as many lights reach the loop as before |
+| V20 | D | The rig on the Fixtures pattern; every light's `Beams` set off, one frame, then on, one frame | One frame after each change every light record carries the new state, with its type and gobo slice unchanged. A frame is all it takes, though DMX fixture configs upload only on change |
+| V21 | D | Every shipped prefab carrying a DMX realtime light | Every one has its beam on, and at least one prefab was saved without the field, so the row covers a light saved before the switch existed |
+| V22 | D | One discoball from the shipped prefab over the rig's floor, the rig's mover dark; counters with Dots In The Haze off, on, on with `Beams` off, then off with `Beams` on | Not marched with its dots off, marched with them on, and `Beams` changes neither |
+| V23 | A | Every shipped AudioLink realtime light prefab; then an AudioLink spot from its prefab, AudioLink off, Gobo Index 3, its `Beams` set off for a frame and back on for a frame | Every prefab has its beam on. The spot's light record follows each change within a frame, type and gobo slice (2) unchanged |
 
 Rows about what is in the air point the movers down: free-running under the synthetic
 pattern, the rig's movers point off sideways and put almost no beam in frame. V16 and V17
