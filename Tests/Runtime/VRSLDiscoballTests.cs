@@ -21,7 +21,7 @@ namespace VRSL.URP.Tests
 
         /// <summary>Hang a discoball from the prefab above the rig's floor, patched at
         /// the channel whose dimmer the Fixtures pattern holds at full.</summary>
-        static VRSLDMXRealtimeLight Hang(VRSLDMXRig rig, float spinDegPerSec)
+        internal static VRSLDMXRealtimeLight Hang(VRSLDMXRig rig, float spinDegPerSec)
         {
             var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(Prefab);
             Assert.IsNotNull(prefab, $"the discoball prefab is not at {Prefab}");
