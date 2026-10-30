@@ -82,10 +82,11 @@ bool VRSL_IsDiscoball(VRSLLightData light)
 }
 
 // Whether the raymarch draws the light: a spot's or point's beam, a discoball's
-// dots. Surface lighting ignores it.
+// dots. Surface lighting ignores it. The packed value is never negative, so frac
+// does fmod's work without its sign handling, which the raymarch pays per light.
 bool VRSL_InHaze(VRSLLightData light)
 {
-    return fmod(light.directionAndType.w, 8.0) < 4.0;
+    return frac(light.directionAndType.w * 0.125) < 0.5;
 }
 
 // -1 = no gobo, 0+ = slice in _VRSLGobos.
