@@ -162,8 +162,8 @@ namespace VRSL.URP
         static float PackMode(Texture2D source, Texture2D[] colorSources)
         {
             if (PacksInColor(source, colorSources)) return PackColor;
-            // An alpha-only texture reads black in its red channel on some APIs, so its
-            // mask comes from the alpha it does carry.
+            // An alpha-only texture samples with its red channel black (D3D11 at least),
+            // so its mask comes from the alpha it does carry.
             if (source != null && GraphicsFormatUtility.IsAlphaOnlyFormat(source.graphicsFormat)) return PackAlpha;
             return PackRed;
         }
