@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0-rc.12] — 2026-10-31
+
 ### Added
 
 - **Gobos in colour.** A gobo can now project in its own colours, tinted by the light, so a white light shows a coloured logo as drawn. Tick **In colour** beside the gobo in the Gobo Wheel window or the wheel's inspector (scripts add it to the wheel's `colorGobos`). The beam takes the colour too. Draw the gobo as an ordinary colour texture with the colour on black or on transparency. Every other gobo projects as a grey mask from its red channel, exactly as before, and a wheel with no gobo in colour is stored as it was. Colour needs a gobo wheel: a light manager's own gobo list stays grey.
