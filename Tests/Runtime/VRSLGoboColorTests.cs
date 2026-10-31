@@ -84,8 +84,8 @@ namespace VRSL.URP.Tests
         /// before gobos had colour (the default copy into a linear target). The stock
         /// gobos are loaded as shipped, compressed.
         /// </summary>
-        [Test]
-        public void GW16_a_wheel_with_no_colour_gobo_stores_every_gobo_as_its_red_mask()
+        [UnityTest]
+        public IEnumerator GW16_a_wheel_with_no_colour_gobo_stores_every_gobo_as_its_red_mask()
         {
             var wheel = AssetDatabase.LoadAssetAtPath<VRSLGoboWheelAsset>(DefaultWheel);
             Assert.IsNotNull(wheel, DefaultWheel);
@@ -98,7 +98,11 @@ namespace VRSL.URP.Tests
             RenderTexture array = null, reference = null;
             try
             {
-                Assert.IsTrue(VRSLGoboWheel.Resident(sources), "a stock gobo isn't fully resident in the editor");
+                // A gobo nothing has drawn yet may hold only its smallest mips; the
+                // streamer brings the rest in over a few frames once asked.
+                for (int frame = 0; frame < 300 && !VRSLGoboWheel.Resident(sources); frame++)
+                    yield return null;
+                Assert.IsTrue(VRSLGoboWheel.Resident(sources), "a stock gobo never became fully resident");
                 array = VRSLGoboWheel.Build(sources, out int count, out _);
                 Assert.AreEqual(sources.Length, count);
                 Assert.IsFalse(array.sRGB, "a wheel with no gobo in colour isn't linear, so every existing wheel moves");
@@ -156,12 +160,18 @@ namespace VRSL.URP.Tests
                 // Listed in colour too: a single channel has no colour to keep.
                 array = VRSLGoboWheel.Build(sources, new[] { red, alpha }, out _, out _);
                 Assert.IsFalse(array.sRGB, "single-channel gobos counted as colour");
+                var slices = new byte[sources.Length][];
+                int centre = (Size / 2 * Size + Size / 2) * 4;
                 for (int slice = 0; slice < sources.Length; slice++)
                 {
-                    var stored = ReadSlice(array, slice);
+                    slices[slice] = ReadSlice(array, slice);
+                    Debug.Log($"[GW17] {sources[slice].name}: centre stored ({slices[slice][centre]}, "
+                            + $"{slices[slice][centre + 1]}, {slices[slice][centre + 2]})");
+                }
+                for (int slice = 0; slice < sources.Length; slice++)
+                {
+                    var stored = slices[slice];
                     var s = sources[slice];
-                    Debug.Log($"[GW17] {s.name}: centre stored ({stored[(Size / 2 * Size + Size / 2) * 4]}, "
-                            + $"{stored[(Size / 2 * Size + Size / 2) * 4 + 1]}, {stored[(Size / 2 * Size + Size / 2) * 4 + 2]})");
                     for (int y = 0; y < Size; y++)
                         for (int x = 0; x < Size; x++)
                         {
@@ -199,7 +209,6 @@ namespace VRSL.URP.Tests
             try
             {
                 array = VRSLGoboWheel.Build(new[] { tex }, new[] { tex }, out _, out _);
-                Assert.IsTrue(array.sRGB, "a wheel holding a gobo in colour isn't sRGB");
                 var stored = ReadSlice(array, 0);
                 foreach (var (x, drawn) in new[] { (Size / 4, mid), (3 * Size / 4, dark) })
                 {
@@ -212,6 +221,7 @@ namespace VRSL.URP.Tests
                     Assert.AreEqual(drawn.g, got.y, 1.0f, $"green of ({drawn.r}, {drawn.g}, {drawn.b})");
                     Assert.AreEqual(drawn.b, got.z, 1.0f, $"blue of ({drawn.r}, {drawn.g}, {drawn.b})");
                 }
+                Assert.IsTrue(array.sRGB, "a wheel holding a gobo in colour isn't sRGB");
             }
             finally
             {
