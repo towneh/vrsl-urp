@@ -391,13 +391,23 @@ namespace VRSL.URP.Tests
             wheel.colorGobos = new[] { stripes };
             var underWhite = new Vector3[3];
             var underRed   = new Vector3[3];
+            var unlit      = new Vector3[3];
             var at = StripeProbes;
             try
             {
+                // The rig's floor isn't black with every light off (it reflects the
+                // default sky), so each probe is judged on what the light adds to it.
+                yield return CaptureColorGobo(wheel, Color.black, unlit);
                 yield return CaptureColorGobo(wheel, Color.white, underWhite);
                 yield return CaptureColorGobo(wheel, Color.red, underRed);
-                Debug.Log($"[GW15] white light: {underWhite[0]} {underWhite[1]} {underWhite[2]}; "
-                        + $"red light: {underRed[0]} {underRed[1]} {underRed[2]}");
+                for (int i = 0; i < 3; i++)
+                {
+                    underWhite[i] = Vector3.Max(underWhite[i] - unlit[i], Vector3.zero);
+                    underRed[i]   = Vector3.Max(underRed[i] - unlit[i], Vector3.zero);
+                }
+                Debug.Log($"[GW15] with the light black the floor reads {unlit[0]} {unlit[1]} {unlit[2]}; "
+                        + $"a white light adds {underWhite[0]} {underWhite[1]} {underWhite[2]}, "
+                        + $"a red one {underRed[0]} {underRed[1]} {underRed[2]}");
 
                 Assert.IsTrue(DominatedBy(underWhite[1], 1),
                               $"the middle stripe lands {underWhite[1]} under a white light, not green");
