@@ -294,14 +294,16 @@ float3 VRSL_EvaluateLightVolumetric(VRSLLightData light, float3 samplePos,
 Texture2DArray _VRSLGobos;
 SamplerState   sampler_linear_clamp;
 
-// Project a world-space point onto the light's gobo texture and return the
-// resulting [0,1] grayscale mask (1.0 when no gobo is assigned). spinAngle is
-// the fully-integrated rotation in radians, wrapped to [-2π, 2π] by the
-// compute shader (see VRSLDMXLightUpdate.compute) — this makes the gobo
+// Project a world-space point onto the light's gobo texture and return what the
+// gobo passes there, per channel in [0,1] (1.0 when no gobo is assigned). A grey
+// gobo is stored with its mask in all three channels and a gobo in colour with
+// its RGB (VRSLGoboWheel), so the caller multiplies it into the light either way.
+// spinAngle is the fully-integrated rotation in radians, wrapped to [-2π, 2π] by
+// the compute shader (see VRSLDMXLightUpdate.compute) — this makes the gobo
 // position stay continuous across DMX rate changes.
-float SampleGobo(float goboIdx, float spinAngle, float3 posWS,
-                 float3 lightPos, float3 lightDir, float cosOuter,
-                 float emitterDepth)
+float3 SampleGobo(float goboIdx, float spinAngle, float3 posWS,
+                  float3 lightPos, float3 lightDir, float cosOuter,
+                  float emitterDepth)
 {
     if (goboIdx < -0.5) return 1.0;
 
@@ -336,7 +338,7 @@ float SampleGobo(float goboIdx, float spinAngle, float3 posWS,
     }
 
     return _VRSLGobos.SampleLevel(sampler_linear_clamp,
-                                  float3(u, v, goboIdx), 0).r;
+                                  float3(u, v, goboIdx), 0).rgb;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────

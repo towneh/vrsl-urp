@@ -12,6 +12,10 @@ namespace VRSL.URP
     /// ranges; AudioLink lights reach every slot through their Gobo Index. To use gobos of
     /// your own, make a wheel (VRSL → URP → Gobo Wheel, or Create → VRSL → URP → Gobo
     /// Wheel) and link it from the managers. Edit your copy, never the package's.
+    ///
+    /// A gobo projects as a grey mask unless it is listed in <see cref="colorGobos"/>, when
+    /// it projects in its own colours, tinted by the light. Colour needs a wheel: a
+    /// manager's own gobo list is always grey.
     /// </remarks>
     [CreateAssetMenu(menuName = "VRSL/URP/Gobo Wheel", fileName = "VRSL-GoboWheel")]
     public class VRSLGoboWheelAsset : ScriptableObject
@@ -34,6 +38,19 @@ namespace VRSL.URP
         [Tooltip("The gobos, slot 1 first. DMX lights reach the first eight; AudioLink lights "
                + "reach every slot.")]
         public Texture2D[] gobos;
+
+        [Tooltip("Gobos that project in their own colours, tinted by the light. Every other gobo "
+               + "projects as a grey mask from its red channel.")]
+        public Texture2D[] colorGobos;
+
+        /// <summary>Whether <paramref name="gobo"/> is listed in <paramref name="colorGobos"/>.</summary>
+        internal static bool InColor(Texture2D[] colorGobos, Texture2D gobo)
+        {
+            if (gobo == null || colorGobos == null) return false;
+            foreach (var c in colorGobos)
+                if (c == gobo) return true;
+            return false;
+        }
 
 #if UNITY_EDITOR
         /// <summary>Raised when the wheel is edited, so a running scene picks the change

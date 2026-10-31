@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 
 namespace VRSL.URP.EditorScripts
 {
@@ -54,7 +55,7 @@ namespace VRSL.URP.EditorScripts
         {
             var users = new List<IVRSLSceneResourceUser>();
             foreach (var m in managers) users.Add((IVRSLSceneResourceUser)m.Manager);
-            var (gobos, _) = VRSLSceneResources.Choose(users);
+            var (gobos, _, _) = VRSLSceneResources.Choose(users);
             if (gobos == null) return null;
             foreach (var m in managers)
                 if (ReferenceEquals(m.Gobos, gobos)) return m;
@@ -102,8 +103,54 @@ namespace VRSL.URP.EditorScripts
 
         static readonly Dictionary<SerializedObject, ReorderableList> s_lists = new();
 
-        /// <summary>The wheel's slots: thumbnail, name and DMX range, to reorder, add and
-        /// remove. Read-only for the package's own wheel.</summary>
+        static readonly GUIContent s_inColor = new("In colour",
+            "Project this gobo in its own colours, tinted by the light. Off, it projects as a grey "
+          + "mask from its red channel.");
+        static readonly GUIContent s_noColor = new("In colour",
+            "This texture has a single channel, so it has no colour to keep and always projects "
+          + "as a grey mask.");
+
+        static bool Holds(SerializedProperty list, Object item)
+        {
+            for (int i = 0; i < list.arraySize; i++)
+                if (list.GetArrayElementAtIndex(i).objectReferenceValue == item) return true;
+            return false;
+        }
+
+        static void SetInColor(SerializedProperty colors, Texture2D gobo, bool on)
+        {
+            if (on)
+            {
+                if (Holds(colors, gobo)) return;
+                colors.arraySize++;
+                colors.GetArrayElementAtIndex(colors.arraySize - 1).objectReferenceValue = gobo;
+                return;
+            }
+            for (int i = colors.arraySize - 1; i >= 0; i--)
+                if (colors.GetArrayElementAtIndex(i).objectReferenceValue == gobo)
+                    RemoveAt(colors, i);
+        }
+
+        static void RemoveAt(SerializedProperty list, int index)
+        {
+            // Clearing first, since deleting a set object reference element only nulls it.
+            list.GetArrayElementAtIndex(index).objectReferenceValue = null;
+            list.DeleteArrayElementAtIndex(index);
+        }
+
+        /// <summary>Drop colour entries no slot holds any more, so removing a gobo
+        /// leaves nothing behind.</summary>
+        static void PruneColors(SerializedProperty gobos, SerializedProperty colors)
+        {
+            for (int i = colors.arraySize - 1; i >= 0; i--)
+            {
+                var c = colors.GetArrayElementAtIndex(i).objectReferenceValue;
+                if (c == null || !Holds(gobos, c)) RemoveAt(colors, i);
+            }
+        }
+
+        /// <summary>The wheel's slots: thumbnail, name, DMX range and whether it projects
+        /// in colour, to reorder, add and remove. Read-only for the package's own wheel.</summary>
         internal static void DrawSlots(SerializedObject wheel, bool readOnly)
         {
             // Kept per SerializedObject, so a drag or a selection lasts from one GUI event
@@ -122,8 +169,12 @@ namespace VRSL.URP.EditorScripts
                 list.drawElementCallback = (rect, index, active, focused) =>
                 {
                     var element = made.serializedProperty.GetArrayElementAtIndex(index);
+                    const float toggleWidth = 84f;
                     var thumb = new Rect(rect.x, rect.y + 2f, 40f, 40f);
-                    var nameRect = new Rect(rect.x + 48f, rect.y + 4f, rect.width - 48f, EditorGUIUtility.singleLineHeight);
+                    var nameRect = new Rect(rect.x + 48f, rect.y + 4f, rect.width - 48f - toggleWidth,
+                                            EditorGUIUtility.singleLineHeight);
+                    var colorRect = new Rect(rect.xMax - toggleWidth, rect.y + 4f, toggleWidth,
+                                             EditorGUIUtility.singleLineHeight);
                     var rangeRect = new Rect(rect.x + 48f, rect.y + 4f + EditorGUIUtility.singleLineHeight,
                                              rect.width - 48f, EditorGUIUtility.singleLineHeight);
                     element.objectReferenceValue = EditorGUI.ObjectField(
@@ -131,12 +182,26 @@ namespace VRSL.URP.EditorScripts
                     var tex = element.objectReferenceValue as Texture2D;
                     EditorGUI.LabelField(nameRect, $"{index + 1}.  {(tex != null ? tex.name : "Empty: an open beam")}");
                     EditorGUI.LabelField(rangeRect, SlotLabel(index + 1), EditorStyles.miniLabel);
+                    if (tex == null) return;
+
+                    var colors = made.serializedProperty.serializedObject.FindProperty(
+                        nameof(VRSLGoboWheelAsset.colorGobos));
+                    bool hasColor = GraphicsFormatUtility.GetComponentCount(tex.graphicsFormat) > 1;
+                    using (new EditorGUI.DisabledScope(!hasColor))
+                    {
+                        bool was = hasColor && Holds(colors, tex);
+                        bool now = EditorGUI.ToggleLeft(colorRect, hasColor ? s_inColor : s_noColor, was);
+                        if (now != was) SetInColor(colors, tex, now);
+                    }
                 };
                 s_lists[wheel] = list;
             }
 
             using (new EditorGUI.DisabledScope(readOnly))
                 list.DoLayoutList();
+            if (!readOnly)
+                PruneColors(list.serializedProperty,
+                            wheel.FindProperty(nameof(VRSLGoboWheelAsset.colorGobos)));
         }
 
         /// <summary>

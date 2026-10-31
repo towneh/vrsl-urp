@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Experimental.Rendering;
 using UnityEngine.Rendering;
 
 namespace VRSL.URP
@@ -12,11 +13,26 @@ namespace VRSL.URP
     /// and no per-slice CPU upload — rebuilding the wheel doesn't stall the frame.
     ///
     /// Slice resolution follows the largest source rather than a fixed size, so a
-    /// detailed gobo isn't quietly resampled down. Linear, because a gobo is a
-    /// mask rather than colour: the shaders read <c>.r</c>.
+    /// detailed gobo isn't quietly resampled down.
+    ///
+    /// The shaders read a slice's RGB and multiply it into the light. A grey gobo is
+    /// stored with its red channel in all three, the mask the light is cut by; a gobo
+    /// in colour keeps its RGB, premultiplied by its alpha. The array is linear unless
+    /// it holds a gobo in colour, then sRGB, which keeps dark colours that linear 8-bit
+    /// storage would band.
     /// </summary>
     public static class VRSLGoboWheel
     {
+        static readonly int s_Pack = Shader.PropertyToID("_VRSLGoboPack");
+
+        /// <summary>Loaded from Resources, so it ships in every build with the package.</summary>
+        internal const string PackShaderResource = "VRSL-URP-GoboWheelPack";
+
+        const float PackRed = 0f, PackAlpha = 1f, PackColor = 2f;
+
+        static Material s_pack;
+        static bool     s_packMissing;
+
         /// <summary>Lower bound on slice resolution.</summary>
         public const int MinResolution = 64;
 
@@ -66,11 +82,23 @@ namespace VRSL.URP
         /// should build it again once <see cref="Resident"/> says so.
         /// </summary>
         public static RenderTexture Build(Texture2D[] sources, out int sliceCount, out bool complete)
+            => Build(sources, null, out sliceCount, out complete);
+
+        /// <summary>
+        /// Build the array with the gobos listed in <paramref name="colorSources"/> in
+        /// colour and the rest grey. See the other overload.
+        /// </summary>
+        public static RenderTexture Build(Texture2D[] sources, Texture2D[] colorSources,
+                                          out int sliceCount, out bool complete)
         {
             sliceCount = sources?.Length ?? 0;
             complete   = true;
             if (sliceCount == 0) return null;
             complete = Resident(sources);
+
+            bool anyColor = false;
+            for (int i = 0; i < sources.Length; i++)
+                if (PacksInColor(sources[i], colorSources)) { anyColor = true; break; }
 
             int resolution = MinResolution;
             for (int i = 0; i < sources.Length; i++)
@@ -85,7 +113,7 @@ namespace VRSL.URP
             {
                 dimension        = TextureDimension.Tex2DArray,
                 volumeDepth      = sliceCount,
-                sRGB             = false,
+                sRGB             = anyColor,
                 useMipMap        = false,
                 autoGenerateMips = false,
                 msaaSamples      = 1,
@@ -100,6 +128,7 @@ namespace VRSL.URP
             };
             array.Create();
 
+            var pack = PackMaterial();
             var previous = RenderTexture.active;
             for (int i = 0; i < sliceCount; i++)
             {
@@ -109,12 +138,64 @@ namespace VRSL.URP
                 // the array, and a slice left alone holds whatever the allocation
                 // returned, which the shaders would sample as a mask.
                 Texture source = sources[i] != null ? sources[i] : Texture2D.whiteTexture;
-                Graphics.Blit(source, array, 0, i);
+                if (pack == null)
+                {
+                    Graphics.Blit(source, array, 0, i);
+                    continue;
+                }
+                pack.SetFloat(s_Pack, PackMode(sources[i], colorSources));
+                Graphics.Blit(source, array, pack, 0, i);
             }
             RenderTexture.active = previous;
             if (complete) ReleaseMipRequests(sources);
 
             return array;
+        }
+
+        /// <summary>Whether <paramref name="source"/> is stored in colour: listed, and
+        /// with more than one channel to keep.</summary>
+        internal static bool PacksInColor(Texture2D source, Texture2D[] colorSources)
+            => source != null
+            && VRSLGoboWheelAsset.InColor(colorSources, source)
+            && GraphicsFormatUtility.GetComponentCount(source.graphicsFormat) > 1;
+
+        static float PackMode(Texture2D source, Texture2D[] colorSources)
+        {
+            if (PacksInColor(source, colorSources)) return PackColor;
+            // An alpha-only texture reads black in its red channel on some APIs, so its
+            // mask comes from the alpha it does carry.
+            if (source != null && GraphicsFormatUtility.IsAlphaOnlyFormat(source.graphicsFormat)) return PackAlpha;
+            return PackRed;
+        }
+
+        static Material PackMaterial()
+        {
+            if (s_pack != null) return s_pack;
+            if (s_packMissing) return null;
+            var shader = Resources.Load<Shader>(PackShaderResource);
+            if (shader == null || !shader.isSupported)
+            {
+                s_packMissing = true;
+                Debug.LogWarning("[VRSL] The gobo wheel's packing shader is missing from this build, so gobos "
+                               + "project without their colour and grey gobos may carry a faint tint. "
+                               + "Reinstall the VRSL-URP package to put it back.");
+                return null;
+            }
+            s_pack = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+            return s_pack;
+        }
+
+        /// <summary>Let go of the packing material; the next build makes it again.</summary>
+        internal static void ReleasePack()
+        {
+            s_packMissing = false;
+            if (s_pack == null) return;
+#if UNITY_EDITOR
+            if (!Application.isPlaying) Object.DestroyImmediate(s_pack);
+            else
+#endif
+            Object.Destroy(s_pack);
+            s_pack = null;
         }
 
         public static void Release(ref RenderTexture array)

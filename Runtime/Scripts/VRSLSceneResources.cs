@@ -19,6 +19,10 @@ namespace VRSL.URP
         /// list when it links none.</summary>
         Texture2D[] Gobos { get; }
 
+        /// <summary>The gobos to keep in colour: its wheel asset's, or null on its own
+        /// list, which is always grey.</summary>
+        Texture2D[] ColorGobos { get; }
+
         Cubemap DiscoballCubemap { get; }
 
         /// <summary>Whether this manager draws anything. With no user holding fixtures
@@ -52,13 +56,16 @@ namespace VRSL.URP
 
         // What each user offered when last looked at, by reference, so a field pointed
         // somewhere else is noticed without comparing contents every frame.
-        static readonly List<Texture2D[]> s_seenGobos = new();
-        static readonly List<Cubemap>     s_seenCubes = new();
-        static readonly List<bool>        s_seenHolds = new();
+        static readonly List<Texture2D[]> s_seenGobos  = new();
+        static readonly List<Texture2D[]> s_seenColors = new();
+        static readonly List<Cubemap>     s_seenCubes  = new();
+        static readonly List<bool>        s_seenHolds  = new();
 
         static bool          s_dirty = true;
         static int           s_preparedFrame = -1;
         static Texture2D[]   s_builtFrom;
+        static Texture2D[]   s_builtColorsFrom;
+        static bool[]        s_builtInColor;
         static RenderTexture s_wheel;
         static bool          s_wheelComplete = true;
         static Cubemap       s_cube;
@@ -92,6 +99,7 @@ namespace VRSL.URP
             if (user == null || s_users.Contains(user)) return;
             s_users.Add(user);
             s_seenGobos.Add(null);
+            s_seenColors.Add(null);
             s_seenCubes.Add(null);
             s_seenHolds.Add(false);
             s_dirty = true;
@@ -103,6 +111,7 @@ namespace VRSL.URP
             if (i < 0) return;
             s_users.RemoveAt(i);
             s_seenGobos.RemoveAt(i);
+            s_seenColors.RemoveAt(i);
             s_seenCubes.RemoveAt(i);
             s_seenHolds.RemoveAt(i);
             if (s_users.Count == 0) ReleaseAll();
@@ -115,11 +124,13 @@ namespace VRSL.URP
 
         /// <summary>
         /// The wheel and cubemap the scene uses from what <paramref name="users"/> offer:
-        /// the DMX manager's where it has one, otherwise the other's.
+        /// the DMX manager's where it has one, otherwise the other's. The gobos kept in
+        /// colour come with the wheel, from the same manager.
         /// </summary>
-        public static (Texture2D[] gobos, Cubemap cube) Choose(IReadOnlyList<IVRSLSceneResourceUser> users)
+        public static (Texture2D[] gobos, Texture2D[] colorGobos, Cubemap cube) Choose(
+            IReadOnlyList<IVRSLSceneResourceUser> users)
         {
-            Texture2D[] gobos = null;
+            Texture2D[] gobos = null, colors = null;
             Cubemap cube = null;
             bool gobosFirst = false, cubeFirst = false;
             for (int i = 0; i < users.Count; i++)
@@ -130,6 +141,7 @@ namespace VRSL.URP
                 if (g != null && g.Length > 0 && (gobos == null || (u.TakesPrecedence && !gobosFirst)))
                 {
                     gobos = g;
+                    colors = u.ColorGobos;
                     gobosFirst = u.TakesPrecedence;
                 }
                 var c = u.DiscoballCubemap;
@@ -139,7 +151,7 @@ namespace VRSL.URP
                     cubeFirst = u.TakesPrecedence;
                 }
             }
-            return (gobos, cube);
+            return (gobos, colors, cube);
         }
 
         /// <summary>Whether two wheels hold the same gobos in the same order.</summary>
@@ -169,12 +181,15 @@ namespace VRSL.URP
                 var u = s_users[i];
                 if (!VRSLLightPaths.IsAlive(u)) { s_dirty = true; continue; }
                 var g = u.Gobos;
+                var k = u.ColorGobos;
                 var c = u.DiscoballCubemap;
                 bool h = u.HoldsFixtures;
-                if (!ReferenceEquals(g, s_seenGobos[i]) || c != s_seenCubes[i] || h != s_seenHolds[i])
+                if (!ReferenceEquals(g, s_seenGobos[i]) || !ReferenceEquals(k, s_seenColors[i])
+                    || c != s_seenCubes[i] || h != s_seenHolds[i])
                 {
-                    s_seenGobos[i] = g;
-                    s_seenCubes[i] = c;
+                    s_seenGobos[i]  = g;
+                    s_seenColors[i] = k;
+                    s_seenCubes[i]  = c;
                     s_seenHolds[i] = h;
                     s_dirty = true;
                 }
@@ -188,21 +203,22 @@ namespace VRSL.URP
             else if (!s_wheelComplete && VRSLGoboWheel.Resident(s_builtFrom))
             {
                 // The first build caught a gobo part-way through streaming in.
-                BuildWheel(s_builtFrom);
+                BuildWheel(s_builtFrom, s_builtColorsFrom);
             }
         }
 
         static void Resolve()
         {
-            var (gobos, cube) = Choose(s_users);
+            var (gobos, colors, cube) = Choose(s_users);
 
             bool anyFixtures = false;
             foreach (var u in s_users)
                 if (VRSLLightPaths.IsAlive(u) && u.HoldsFixtures) { anyFixtures = true; break; }
             if (!anyFixtures) gobos = null;
 
-            if (!SameWheel(gobos, s_builtFrom) || (gobos != null && s_wheel == null))
-                BuildWheel(gobos);
+            if (!SameWheel(gobos, s_builtFrom) || !SameColors(gobos, colors)
+                || (gobos != null && s_wheel == null))
+                BuildWheel(gobos, colors);
 
             if (cube != s_cube)
             {
@@ -213,12 +229,31 @@ namespace VRSL.URP
             }
         }
 
-        static void BuildWheel(Texture2D[] gobos)
+        /// <summary>Whether each slot of <paramref name="gobos"/> would be stored in colour
+        /// exactly as the built wheel's are.</summary>
+        static bool SameColors(Texture2D[] gobos, Texture2D[] colors)
+        {
+            int n = gobos?.Length ?? 0;
+            if (n != (s_builtInColor?.Length ?? 0)) return false;
+            for (int i = 0; i < n; i++)
+                if (VRSLGoboWheel.PacksInColor(gobos[i], colors) != s_builtInColor[i]) return false;
+            return true;
+        }
+
+        static void BuildWheel(Texture2D[] gobos, Texture2D[] colors)
         {
             VRSLGoboWheel.Release(ref s_wheel);
-            // A copy, so an author editing the list in place reads as a change.
+            // Copies, so an author editing either list in place reads as a change.
             s_builtFrom = gobos != null ? (Texture2D[])gobos.Clone() : null;
-            s_wheel = VRSLGoboWheel.Build(s_builtFrom, out int count, out s_wheelComplete);
+            s_builtColorsFrom = colors != null ? (Texture2D[])colors.Clone() : null;
+            s_builtInColor = null;
+            if (s_builtFrom != null)
+            {
+                s_builtInColor = new bool[s_builtFrom.Length];
+                for (int i = 0; i < s_builtFrom.Length; i++)
+                    s_builtInColor[i] = VRSLGoboWheel.PacksInColor(s_builtFrom[i], s_builtColorsFrom);
+            }
+            s_wheel = VRSLGoboWheel.Build(s_builtFrom, s_builtColorsFrom, out int count, out s_wheelComplete);
             GoboCount = s_wheel != null ? count : 0;
             if (s_wheel != null)
             {
@@ -248,7 +283,10 @@ namespace VRSL.URP
         static void ReleaseAll()
         {
             VRSLGoboWheel.Release(ref s_wheel);
+            VRSLGoboWheel.ReleasePack();
             s_builtFrom = null;
+            s_builtColorsFrom = null;
+            s_builtInColor = null;
             s_wheelComplete = true;
             GoboCount = 0;
             VRSLVolumetricNoise.Release(ref s_noise);
@@ -266,6 +304,7 @@ namespace VRSL.URP
         {
             s_users.Clear();
             s_seenGobos.Clear();
+            s_seenColors.Clear();
             s_seenCubes.Clear();
             s_seenHolds.Clear();
             ReleaseAll();

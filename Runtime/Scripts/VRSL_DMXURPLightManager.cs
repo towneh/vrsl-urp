@@ -509,6 +509,7 @@ namespace VRSL.URP
         bool IVRSLLightManager.OwnsSingleton => Instance == this;
         bool        IVRSLSceneResourceUser.TakesPrecedence  => true;
         Texture2D[] IVRSLSceneResourceUser.Gobos            => Gobos;
+        Texture2D[] IVRSLSceneResourceUser.ColorGobos       => goboWheel != null ? goboWheel.colorGobos : null;
         Cubemap     IVRSLSceneResourceUser.DiscoballCubemap => discoballCubemap;
         bool        IVRSLSceneResourceUser.HoldsFixtures    => FixtureCount > 0;
         VRSLQuality IVRSLLightManager.QualitySetting { get => quality; set => quality = value; }
