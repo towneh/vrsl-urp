@@ -16,7 +16,8 @@ namespace VRSL.URP.Tests
     /// <summary>
     /// Rows GW1 to GW3 of TESTING.md: the DMX and AudioLink managers lighting one camera,
     /// with the scene's gobo wheel and disco ball cubemap the same for both whichever
-    /// manager's camera callback runs last.
+    /// manager's camera callback runs last. GW15, a gobo in colour on the floor, uses the
+    /// same stage.
     ///
     /// The order is set by taking a manager's handler off
     /// <c>RenderPipelineManager.beginCameraRendering</c> and putting it back, which puts it
@@ -297,6 +298,129 @@ namespace VRSL.URP.Tests
         [UnityTest]
         public IEnumerator GW3_one_wheel_with_the_DMX_manager_holding_no_fixtures()
             => GobosRow("GW3", dmxFixtures: 0);
+
+        // ── A gobo in colour ──────────────────────────────────────────────────
+
+        /// <summary>Three upright stripes, red, green and blue, drawn in sRGB.</summary>
+        static Texture2D Stripes()
+        {
+            const int size = 64;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false, false) { name = "red green blue stripes" };
+            var pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+                for (int x = 0; x < size; x++)
+                    pixels[y * size + x] = x < size / 3 ? new Color32(255, 0, 0, 255)
+                                         : x < 2 * size / 3 ? new Color32(0, 255, 0, 255)
+                                         : new Color32(0, 0, 255, 255);
+            tex.SetPixels32(pixels);
+            tex.Apply(false, false);
+            return tex;
+        }
+
+        /// <summary>Where GW15 reads the floor: the pool's centre and a metre either side,
+        /// across the stripes.</summary>
+        static readonly Vector3[] StripeProbes =
+        {
+            new(LightA.x - 1f, 0f, LightA.z),
+            new(LightA.x,      0f, LightA.z),
+            new(LightA.x + 1f, 0f, LightA.z),
+        };
+
+        static IEnumerator CaptureColorGobo(VRSLGoboWheelAsset wheel, Color color, Vector3[] means)
+        {
+            using var stage = new Stage(1,
+                dmx => dmx.goboWheel = wheel,
+                (root, al) =>
+                {
+                    al.goboWheel = wheel;
+                    Spot(root, "AudioLink spot, gobo 1 in colour", LightA, goboIndex: 1).emissionColor = color;
+                });
+            Texture2D frame = null;
+            try
+            {
+                yield return WarmUpAndRead(stage, t => frame = t);
+                for (int i = 0; i < StripeProbes.Length; i++)
+                    means[i] = MeanAround(stage.Rig, frame, StripeProbes[i]);
+            }
+            finally
+            {
+                if (frame != null) Object.DestroyImmediate(frame);
+            }
+        }
+
+        /// <summary>The frame's mean colour in a small box round where
+        /// <paramref name="world"/> lands.</summary>
+        static Vector3 MeanAround(VRSLDMXRig rig, Texture2D frame, Vector3 world)
+        {
+            const int half = 3;
+            var p = PixelOf(rig, world);
+            var pixels = frame.GetPixels32();
+            Vector3 sum = Vector3.zero;
+            int n = 0;
+            for (int y = p.y - half; y <= p.y + half; y++)
+                for (int x = p.x - half; x <= p.x + half; x++)
+                {
+                    var c = pixels[y * frame.width + x];
+                    sum += new Vector3(c.r, c.g, c.b);
+                    n++;
+                }
+            return sum / n;
+        }
+
+        static int Dominant(Vector3 c) => c.x >= c.y && c.x >= c.z ? 0 : c.y >= c.z ? 1 : 2;
+
+        static bool DominatedBy(Vector3 c, int channel)
+        {
+            float own = c[channel];
+            for (int i = 0; i < 3; i++)
+                if (i != channel && c[i] * 4f > own) return false;
+            return own > 40f;
+        }
+
+        /// <summary>
+        /// GW15. A spot whose gobo is in colour, red, green and blue stripes, lands each
+        /// stripe in its own colour on the floor under a white light; under a red light the
+        /// green and blue stripes go dark.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator GW15_a_gobo_in_colour_lands_its_colours()
+        {
+            var stripes = Stripes();
+            var wheel = ScriptableObject.CreateInstance<VRSLGoboWheelAsset>();
+            wheel.gobos = new[] { stripes };
+            wheel.colorGobos = new[] { stripes };
+            var underWhite = new Vector3[3];
+            var underRed   = new Vector3[3];
+            var at = StripeProbes;
+            try
+            {
+                yield return CaptureColorGobo(wheel, Color.white, underWhite);
+                yield return CaptureColorGobo(wheel, Color.red, underRed);
+                Debug.Log($"[GW15] white light: {underWhite[0]} {underWhite[1]} {underWhite[2]}; "
+                        + $"red light: {underRed[0]} {underRed[1]} {underRed[2]}");
+
+                Assert.IsTrue(DominatedBy(underWhite[1], 1),
+                              $"the middle stripe lands {underWhite[1]} under a white light, not green");
+                int left = Dominant(underWhite[0]), right = Dominant(underWhite[2]);
+                Assert.IsTrue((left == 0 && right == 2) || (left == 2 && right == 0),
+                              $"the outer stripes land {underWhite[0]} and {underWhite[2]}, not red and blue");
+                Assert.IsTrue(DominatedBy(underWhite[0], left), $"the stripe at {at[0]} lands {underWhite[0]}");
+                Assert.IsTrue(DominatedBy(underWhite[2], right), $"the stripe at {at[2]} lands {underWhite[2]}");
+
+                int redSide = left == 0 ? 0 : 2, blueSide = 2 - redSide;
+                float lit = underRed[redSide].x;
+                Assert.Greater(lit, 40f, $"the red stripe under a red light lands only {underRed[redSide]}");
+                float green = underRed[1].x + underRed[1].y + underRed[1].z;
+                float blue  = underRed[blueSide].x + underRed[blueSide].y + underRed[blueSide].z;
+                Assert.Less(green, lit * 0.02f, $"the green stripe under a red light lands {underRed[1]}");
+                Assert.Less(blue,  lit * 0.02f, $"the blue stripe under a red light lands {underRed[blueSide]}");
+            }
+            finally
+            {
+                Object.DestroyImmediate(wheel);
+                Object.DestroyImmediate(stripes);
+            }
+        }
 
         // ── The disco ball ────────────────────────────────────────────────────
 
