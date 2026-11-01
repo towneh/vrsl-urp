@@ -2,6 +2,56 @@
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-11-01
+
+The first full release since 0.1.0. 0.2.0 never got past its release candidates, so these notes cover everything since 0.1.0. The release candidate sections of the [changelog](https://github.com/towneh/vrsl-urp/blob/main/CHANGELOG.md) give the detail of each change.
+
+Surfaces now light in their own colour and gloss, one DMX manager reads any of upstream VRSL's three grid layouts or DMX sent as data, one set of fixture prefabs works on all of them, and AudioLink is optional.
+
+### Upgrading from 0.1.0
+
+- **Unity 6000.4 and URP 17.4 or newer.** The fixture shaders that read DMX need shader model 4.5.
+- **The package identifier is `town.mr.vrsl-urp`.** It was `net.towneh.vrsl-urp`, so change the key in your project's `Packages/manifest.json`. Asset GUIDs are unchanged.
+- **Scenes using the Vertical or Legacy prefabs go through 0.3.0-rc.4 first.** There's now one set of fixture prefabs for every grid layout, and the per-layout Vertical and Legacy prefabs are gone, so a scene still holding them shows Missing Prefabs. Open it with 0.3.0-rc.4 and run **VRSL → URP → Replace Superseded Prefabs in Scene**, which keeps each instance's settings, then upgrade. Horizontal and AudioLink prefabs kept their GUIDs and need nothing.
+- **Open and save each scene with a DMX manager once.** Its five decode texture fields become **DMX Input** and a **Grid Textures** asset.
+- **A DMX fixture at full output is half as bright.** `maxIntensity` is on the same scale as a URP spot light's Intensity. Double it on fixtures that looked right before, or set `curveMod` to 1.
+- **`quality` replaces nine tuning fields on both managers** (`volumetricResolution`, `volumetricStepCount`, `volumetricUseNoise`, `volumetricNoiseScale`, `volumetricNoiseScrollSpeed`, `volumetricNoiseStrength`, `contactShadowSteps`, `contactShadowDistance`, `contactShadowThickness`). A scene that set them opens at `Standard`, which matches their defaults.
+- **`secondaryCameraMode` takes `Match`, `Reduced`, `SurfaceOnly` or `Skip`.** A scene saved with `Full` reads as `Match`. The manager prefabs use `Reduced`.
+- **Some classes are renamed.** `VRSL_URPLightManager` is `VRSL_DMXURPLightManager`, and the fixture components are `VRSLDMXRealtimeLight`, `VRSLDMXStatic`, `VRSLAudioLinkRealtimeLight`, `VRSLAudioLinkStatic` and `VRSLAudioLinkLaser`, without the `VRStageLighting_` prefix. `SmoothingPanelOpener` and `VRSL_AudioLink_SmoothingPanel` are in the `VRSL.URP` namespace. Scenes and prefabs keep their components; only scripts that name the old classes need changing.
+- **AudioLink is optional and has its own assemblies.** Install AudioLink 3.1.2 or newer for the AudioLink fixtures. An assembly definition of your own that uses them needs a reference to `Towneh.VRSL.URP.AudioLink`.
+- **Your own shaders read DMX through `Runtime/Shaders/VRSLDMX.hlsl`.** `VRSLDMX.cginc` and the Built-in mover and lighting includes are gone, and the includes in `Runtime/Shaders/Shared/` are internal to the package.
+- **Some assets are gone.** The Built-in projection and volumetric mesh shaders and materials; the `Directional Light (For Depth)` prefab, so delete any copy in your scene; the shader-driven discoballs, which the realtime discoball replaces; `AudioLink-VRSLEdition` and `AudioLinkController-WithVRSLSmoothing`, where AudioLink's own prefabs do the job; and the `VRSL-URP/Other/Standard` shader, so switch materials on it to URP Lit.
+- **Lasers and lens flares ignore stencil 142.** Nothing in the package wrote it. To keep fixture light off an area, aim the fixtures away from it, narrow their cone or shorten their range.
+- **Par and blinder bodies and blinder flares follow DMX** instead of glowing at full. **Shell Emission Tint** sets their brightness.
+
+### Added
+
+- **Surfaces lit in their own colour and gloss.** A prepass reads each surface's colour, smoothness and metallic, maps included, from any material written the URP way, and the lighting runs URP's BRDF on them. `prepassLayers` chooses the layers that take part, and `contactShadowStrength` turns on screen-space contact shadows.
+- **Tiled light culling.** Each pixel pays for the fixtures that reach its screen tile, up to 256 of them, not for every fixture in the scene.
+- **One quality setting** (`Off`, `Standard`, `High`) on both managers, and a **secondary-camera policy** that renders mirrors and other texture cameras a level below the scene by default.
+- **Beams that cost what they cross.** Each light is marched only across its own cone along the view ray, at a fixed step spacing.
+- **One DMX manager for any input.** **DMX Input** reads the Horizontal, Vertical or Legacy grid in the video, or **Stream data** from a channel source, and every fixture prefab works with each. A world can switch while it runs with `SetDmxInput`.
+- **DMX as data.** `BasisUserDataToVRSLDMX` reads Truss records carried in a Basis media player's stream, and the Truss OSC source reads them straight from `truss-relay --osc`, so the fixtures get the exact values the desk sent. Write your own source with `IVRSLDMXChannelSource` or `VRSLTrussRecordSource`.
+- **DMX over video from a Basis media player.** `BasisVideoToVRSLDMX` and `BasisVideoRenderTextureOutput` feed the decode from the player's picture, including a grid that fills only part of it, and can follow the manager's layout.
+- **Gobo wheels.** One wheel asset serves every light in the scene, DMX and AudioLink alike, and **VRSL → URP → Gobo Wheel** edits it. The default wheel holds upstream's eight gobos and the Club Orion logo, and a gobo can project in its own colours, tinted by the light.
+- **A realtime discoball**, a point light whose dots come from a cubemap, with the ball turning alongside them.
+- **Beam In The Haze** on each realtime light, which leaves its beam out of the haze while it still lights surfaces, and **`lightIntensity`** on the managers to scale every fixture's light.
+- **Fixture bodies lit by URP.** Mover heads, pars, blinders, flashers and light bars take the main and additional lights, light probes and Adaptive Probe Volumes like URP Lit, and bake their housing's colour. With **Lit by LTCGI Screens** ticked on a material and LTCGI 1.7.4 or newer installed, a video wall lights them too.
+- **`Runtime/Shaders/VRSLDMX.hlsl`**, a supported include for reading DMX in your own shaders on any grid layout or stream data.
+- **Tools.** **Validate Renderer Setup**, the **Performance** window, **VRSL Diagnostics** on each manager, the **DMX Monitor** and **Repair Manager Wiring**. The managers find their own shader and texture references.
+- **Migration from upstream VRSL.** The migration tool places a URP fixture beside each upstream one or converts it in place, carrying its settings, on/off state and references across, and lists what it can't carry and what deleting the originals would break.
+- **Fixtures that follow the scene.** `ApplyAddress()` re-patches a DMX fixture while the world runs, and the managers pick up realtime fixtures switched on, off or spawned at runtime.
+
+### Fixed
+
+Every fix is listed in the release candidate sections of the [changelog](https://github.com/towneh/vrsl-urp/blob/main/CHANGELOG.md). The ones a 0.1.0 scene is most likely to have run into:
+
+- **DMX reads the right channel.** Each channel comes from its own grid cell on every layout and GPU, Legacy strobe included, and channels past what a grid carries, or left at 0, read as 0.
+- **Fixture bodies render lit and keep their normals.** Mover heads and the AudioLink statics took no URP light, some bodies wrote normals that SSAO and VRSL light read wrongly, and on D3D12 and Vulkan the bodies vanished with no manager running.
+- **Surfaces keep their colour under VRSL light** at any render scale, from both sides of a double-sided material, and when the GPU Resident Drawer batches them.
+- **Shader-driven fixtures keep reading DMX** with every realtime fixture switched off, and in cameras VRSL doesn't light.
+- **Fixtures leave other components' data on their renderers.** They used to replace the renderer's property block, wiping what LTCGI and others had stored there.
+
 ## [0.3.0-rc.13] — 2026-11-01
 
 ### Fixed
