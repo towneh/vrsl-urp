@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0-rc.13] — 2026-11-01
+
 ### Fixed
 
 - **The Basis integrations no longer break Cilbox scenes.** `BasisUserDataToVRSLDMX`, `BasisVideoToVRSLDMX` and `BasisVideoRenderTextureOutput` were marked `[Cilboxable]` whenever Cilbox was in the project, but none of them can run under Cilbox, and a scene holding `BasisUserDataToVRSLDMX` failed Cilbox's scene processing, which in the editor's Play mode left every Cilbox script in that scene running outside the sandbox. They are now plain components in every project and the package no longer references Cilbox. A world uses them as ordinary components, on a Basis client that includes VRSL-URP and allows them in worlds.
