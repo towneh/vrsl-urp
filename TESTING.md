@@ -822,9 +822,8 @@ J14 and J15 what it takes from light probes and probe volumes.
 ### Basis video → DMX (optional integration)
 
 Needs `com.basis.mediaplayer` in the project; without it the assembly is skipped and none of
-these rows apply. `com.cnlohr.cilbox` is optional: with it the components are `[Cilboxable]`
-and usable from sandboxed world scripts, without it they are plain components for a
-scene-owned player.
+these rows apply. The components are plain components for a scene-owned player, whether or
+not `com.cnlohr.cilbox` is in the project.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -834,7 +833,7 @@ scene-owned player.
 | B4 | D | Two clients, one reporting `OutputFrameIsTopLeftOrigin` | Grid decodes the same way up on both. A vertical flip on one means the per-client origin correction |
 | B5 | D | Change stream resolution or re-open mid-cue, so the player reallocates `OutputTexture` | Decode continues; the global is republished on the new texture rather than left on the dead one |
 | B6 | — | Project without `com.basis.mediaplayer` | `Towneh.VRSL.URP.Basis` and its test assembly skipped on their define constraint, no compile errors, rest of the package unaffected |
-| B6a | — | Project with `com.basis.mediaplayer` but without `com.cnlohr.cilbox` | The three integration components compile and work on a scene-owned player, without the `[Cilboxable]` attribute; with Cilbox added they carry it |
+| B6a | — | Project with `com.basis.mediaplayer`, once without `com.cnlohr.cilbox` and once with it; with it, a scene holding `BasisUserDataToVRSLDMX` and a Cilbox script entered in Play | The three integration components compile and work on a scene-owned player in both, and none carries `[Cilboxable]`. With Cilbox, its scene processing completes without an error and the Cilbox script runs under Cilbox |
 | B7 | D | `VRSLBasisUserDataTests.B7_B8` in the suite: a real `BasisMediaPlayer` plays `truss-dmx-ramp.ts` (300 frames, one Truss DMX record per frame carrying VRSL's Ramp, universes 0-3 from the start), `BasisUserDataToVRSLDMX` with `minimumUniverses = 4` feeds the manager | After 30 records: nothing dropped, `UniverseCount` 4, and every one of the 2080 channels read back through the shader equals `RampValue` of its flat address; after all 300: still nothing dropped, the header's frame index and sequence agree and track the frame. A count short of 300 at `Ended` is a lost record, and the first place to look is the hand-over between the player's drain and a subscriber that attached a frame late |
 | B8 | D | Same row, past frame 90, where the stream starts naming universe 4 | `UniverseCount` grows to 5 exactly once and all 2600 channels read the Ramp, the new universe included; it does not shrink again |
 | B9 | D | `VRSLBasisUserDataTests.B9` in the suite: `truss-dmx-ramp-damaged.ts`, every tenth record with a value bit flipped after its CRC was written | 30 of 300 dropped, `BadCrc` observed as the reason while playing, and the buffer still byte-exact from the 270 that arrived intact |
