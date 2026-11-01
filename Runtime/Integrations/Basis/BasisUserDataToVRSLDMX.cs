@@ -1,9 +1,6 @@
 using System;
 using System.Reflection;
 using UnityEngine;
-#if VRSL_CILBOX_PRESENT
-using Cilbox;
-#endif
 
 namespace VRSL.URP.BasisIntegration
 {
@@ -17,9 +14,6 @@ namespace VRSL.URP.BasisIntegration
     /// camera, no decode chain: the bytes the desk sent are the bytes the
     /// fixtures read.
     /// </summary>
-#if VRSL_CILBOX_PRESENT
-    [Cilboxable]
-#endif
     [DisallowMultipleComponent]
     [AddComponentMenu("VRSL-URP/VRSL Truss SEI DMX Output")]
     public class BasisUserDataToVRSLDMX : VRSLTrussRecordSource

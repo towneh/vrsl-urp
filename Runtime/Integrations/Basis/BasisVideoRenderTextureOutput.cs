@@ -1,9 +1,6 @@
 using System;
 using UnityEngine;
 using UnityEngine.Experimental.Rendering;
-#if VRSL_CILBOX_PRESENT
-using Cilbox;
-#endif
 
 namespace VRSL.URP.BasisIntegration
 {
@@ -12,9 +9,6 @@ namespace VRSL.URP.BasisIntegration
     // into Target sampled at four source UVs (one per Target corner), so crop, camera roll,
     // flip and shear are all expressible. Set the four UVs by dragging the corners over the
     // live grid in the inspector, or bake them from the old DMX camera as a starting point.
-#if VRSL_CILBOX_PRESENT
-    [Cilboxable]
-#endif
     [DisallowMultipleComponent]
     [AddComponentMenu("VRSL-URP/VRSL Basis Video RT Output")]
     public class BasisVideoRenderTextureOutput : MonoBehaviour
