@@ -63,7 +63,7 @@ namespace VRSL.URP
         public int dmxUniverse = 1;
 
         [Tooltip("The sector this fixture moves to when Use Alternate Address is on, for a "
-               + "rig patched two ways that the world switches between.")]
+               + "rig with a second patch that the world switches to.")]
         public int alternateSector = 0;
 
         [Tooltip("The DMX start channel this fixture moves to when Use Alternate Address is on.")]
@@ -76,7 +76,8 @@ namespace VRSL.URP
                + "Invert Pan below applies on its usual address.")]
         public bool alternateInvertPan = false;
 
-        [Tooltip("Move this fixture to its alternate address. Beam and body follow from the next "
+        [Tooltip("Move this fixture to its alternate address, its place in the second patch. "
+               + "Beam and body follow from the next "
                + "frame, and come back when it's switched off.")]
         [SerializeField] bool useAlternateAddress = false;
 
@@ -148,6 +149,53 @@ namespace VRSL.URP
                 DriveFixtureShells();
                 ConfigChanged?.Invoke();
             }
+        }
+
+        /// <summary>
+        /// <see cref="maxIntensity"/>, for a script or a uGUI listener. Set it while the
+        /// world runs and the light follows from the next frame.
+        /// </summary>
+        public float MaxIntensity
+        {
+            get => maxIntensity;
+            set => SetConfig(ref maxIntensity, value);
+        }
+
+        /// <summary>
+        /// <see cref="range"/>, for a script or a uGUI listener. Set it while the world
+        /// runs and the light follows from the next frame.
+        /// </summary>
+        public float Range
+        {
+            get => range;
+            set => SetConfig(ref range, value);
+        }
+
+        /// <summary>
+        /// <see cref="minSpotAngle"/>, for a script or a uGUI listener. Set it while the
+        /// world runs and the light follows from the next frame.
+        /// </summary>
+        public float MinSpotAngle
+        {
+            get => minSpotAngle;
+            set => SetConfig(ref minSpotAngle, value);
+        }
+
+        /// <summary>
+        /// <see cref="maxSpotAngle"/>, for a script or a uGUI listener. Set it while the
+        /// world runs and the light follows from the next frame.
+        /// </summary>
+        public float MaxSpotAngle
+        {
+            get => maxSpotAngle;
+            set => SetConfig(ref maxSpotAngle, value);
+        }
+
+        void SetConfig(ref float field, float value)
+        {
+            if (field == value) return;
+            field = value;
+            ConfigChanged?.Invoke();
         }
 
         bool IVRSLRealtimeLight.IsDiscoball => fixtureType == DMXFixtureType.Discoball;

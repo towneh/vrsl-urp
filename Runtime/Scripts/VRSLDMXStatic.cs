@@ -112,7 +112,7 @@ namespace VRSL.URP
 
         [Space(5)]
         [Header("Alternate Address")]
-        [Tooltip ("The sector this fixture moves to when Use Alternate Address is on, for a rig patched two ways that the world switches between.")]
+        [Tooltip ("The sector this fixture moves to when Use Alternate Address is on, for a rig with a second patch that the world switches to.")]
         public int alternateSector;
         [Tooltip ("The DMX start channel this fixture moves to when Use Alternate Address is on.")]
         public int alternateDmxChannel = 1;
@@ -120,7 +120,7 @@ namespace VRSL.URP
         public int alternateDmxUniverse = 1;
         [Tooltip ("Whether pan runs the other way while the fixture is on its alternate address. Invert Pan applies on its usual address.")]
         public bool alternateInvertPan;
-        [Tooltip ("Move this fixture to its alternate address. It follows from the next frame, and comes back when this is switched off.")]
+        [Tooltip ("Move this fixture to its alternate address, its place in the second patch. It follows from the next frame, and comes back when this is switched off.")]
         [SerializeField] bool useAlternateAddress;
 
         [HideInInspector]
