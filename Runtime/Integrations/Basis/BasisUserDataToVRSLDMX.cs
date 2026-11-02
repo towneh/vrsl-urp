@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using UnityEngine;
 
 namespace VRSL.URP.BasisIntegration
@@ -22,20 +21,6 @@ namespace VRSL.URP.BasisIntegration
         public BasisMediaPlayer Player;
 
         BasisMediaPlayer _subscribed;
-        Delegate         _handler;
-        bool             _warnedNoUserData;
-
-        // Basis's C media player has no OnUserDataReceived; the Rust one raises
-        // it. Bound by name so this assembly
-        // compiles against either, which it can because the handler's signature
-        // is framework types only: the delegate type is the player's, the
-        // parameters are not.
-        static readonly EventInfo s_UserDataEvent =
-            typeof(BasisMediaPlayer).GetEvent("OnUserDataReceived", BindingFlags.Instance | BindingFlags.Public);
-
-        /// <summary>Whether the media player in this project publishes SEI user
-        /// data at all. False means this source can never receive a record.</summary>
-        public static bool PlayerPublishesUserData => s_UserDataEvent != null;
 
         protected override void OnEnable()
         {
@@ -58,32 +43,13 @@ namespace VRSL.URP.BasisIntegration
 
         void Subscribe(BasisMediaPlayer player)
         {
-            if (s_UserDataEvent == null)
-            {
-                _subscribed = player;
-                if (player != null && !_warnedNoUserData)
-                {
-                    _warnedNoUserData = true;
-                    Debug.LogWarning("[VRSL URP] This Basis media player doesn't pass on stream data, so the "
-                                   + "Truss SEI DMX Output will stay dark. Update Basis, or feed the manager "
-                                   + "another way.",
-                                     this);
-                }
-                return;
-            }
-
             // By reference: a destroyed player compares equal to null the Unity
             // way while the managed object still holds the delegate.
-            if (!ReferenceEquals(_subscribed, null) && _handler != null)
-                s_UserDataEvent.RemoveEventHandler(_subscribed, _handler);
+            if (!ReferenceEquals(_subscribed, null))
+                _subscribed.OnUserDataReceived -= OnUserData;
             _subscribed = player;
             if (_subscribed != null)
-            {
-                _handler ??= Delegate.CreateDelegate(
-                    s_UserDataEvent.EventHandlerType, this,
-                    GetType().GetMethod(nameof(OnUserData), BindingFlags.Instance | BindingFlags.NonPublic));
-                s_UserDataEvent.AddEventHandler(_subscribed, _handler);
-            }
+                _subscribed.OnUserDataReceived += OnUserData;
         }
 
         void OnUserData(long ptsUs, Guid uuid, ReadOnlySpan<byte> payload)
