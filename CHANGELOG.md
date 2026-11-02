@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-11-02
+
 ### Added
 
 - **Settings a world script or a UI control can change while the world runs.** The DMX realtime light has `FinalIntensity`, `GlobalIntensity`, `MaxIntensity`, `Range`, `MinSpotAngle` and `MaxSpotAngle` properties. The AudioLink realtime light has `EnableAudioLink`, `Delay`, `BandMultiplier`, `FinalIntensity`, `GlobalIntensity`, `GoboIndex`, `GoboSpinSpeed`, `MaxIntensity`, `SpotAngle`, `Range` and `DiscoballSpinSpeed`. Each one takes effect from the next frame, on the body too where the body shows it. A uGUI Slider or Toggle can call them from its On Value Changed list, which is the way a Basis world script reaches a package component.
@@ -9,7 +11,7 @@
 
 ### Fixed
 
-- **Intensity changes on a DMX realtime light take effect while the world runs.** Before, a script setting `globalIntensity`, `finalIntensity`, `maxIntensity`, `range` or the spot angles saw no change until something else made the manager upload its fixture data again. Set them through the new properties.
+- **Changes to a DMX realtime light's intensity, range and cone take effect while the world runs.** Before, a script setting `globalIntensity`, `finalIntensity`, `maxIntensity`, `range` or the spot angles saw no change until something else made the manager upload its fixture data again. Set them through the new properties.
 - **The AudioLink realtime light's body keeps what other components put on its renderers**, such as LTCGI's screen data, as the DMX lights' bodies already did.
 
 ## [0.3.0] — 2026-11-01
