@@ -9,6 +9,14 @@
 - **Settings a world script or a UI control can change while the world runs.** The DMX realtime light has `FinalIntensity`, `GlobalIntensity`, `MaxIntensity`, `Range`, `MinSpotAngle` and `MaxSpotAngle` properties. The AudioLink realtime light has `EnableAudioLink`, `Delay`, `BandMultiplier`, `FinalIntensity`, `GlobalIntensity`, `GoboIndex`, `GoboSpinSpeed`, `MaxIntensity`, `SpotAngle`, `Range` and `DiscoballSpinSpeed`. Each one takes effect from the next frame, on the body too where the body shows it. A uGUI Slider or Toggle can call them from its On Value Changed list, which is the way a Basis world script reaches a package component.
 - **An alternate address on DMX fixtures.** The DMX realtime light and DMX Static each take a second address (a sector, or a channel and universe) with its own **Alternate Invert Pan**. Switching **Use Alternate Address** on moves the fixture there from the next frame, and switching it off brings it back. A rig with a second patch can switch every fixture to it at once with one Toggle whose listeners set each fixture's `UseAlternateAddress`.
 
+### Changed
+
+- **The Truss SEI DMX source needs a Basis media player that passes on stream data.** `BasisUserDataToVRSLDMX` subscribes to the player's `OnUserDataReceived` event directly. In a project whose media player has no such event (Basis's older C player), the package's Basis integration no longer compiles, where in 0.3.0 it compiled and logged a warning that the source would stay dark. Update Basis to a version with the Rust media player.
+
+### Removed
+
+- `BasisUserDataToVRSLDMX.PlayerPublishesUserData`. Every media player the integration compiles against passes on stream data, so it could only ever read `true`.
+
 ### Fixed
 
 - **Changes to a DMX realtime light's intensity, range and cone take effect while the world runs.** Before, a script setting `globalIntensity`, `finalIntensity`, `maxIntensity`, `range` or the spot angles saw no change until something else made the manager upload its fixture data again. Set them through the new properties.
