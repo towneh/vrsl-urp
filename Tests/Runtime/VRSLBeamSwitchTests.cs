@@ -179,10 +179,16 @@ namespace VRSL.URP.Tests
         /// prefab itself won't do, since its import is cached from whenever the editor
         /// last read it.</summary>
         internal static void WithPrefabSavedWithoutBeams(string prefabPath, System.Action<GameObject> check)
+            => WithPrefabSavedWithout(prefabPath, @"^\s+beams:.*\r?\n", check);
+
+        /// <summary>A fresh import of a copy of the prefab with every line matching
+        /// <paramref name="fieldLines"/> taken out, as a scene saved before those
+        /// fields existed would hold it.</summary>
+        internal static void WithPrefabSavedWithout(string prefabPath, string fieldLines, System.Action<GameObject> check)
         {
             string text = System.IO.File.ReadAllText(System.IO.Path.GetFullPath(prefabPath));
-            string stripped = new Regex(@"^\s+beams:.*\r?\n", RegexOptions.Multiline).Replace(text, "");
-            string leaf   = "VRSL-BeamsRow-" + System.Guid.NewGuid().ToString("N");
+            string stripped = new Regex(fieldLines, RegexOptions.Multiline).Replace(text, "");
+            string leaf   = "VRSL-SavedRow-" + System.Guid.NewGuid().ToString("N");
             string folder = "Assets/" + leaf;
             bool mine = false;
             try
@@ -191,7 +197,7 @@ namespace VRSL.URP.Tests
                 UnityEditor.AssetDatabase.CreateFolder("Assets", leaf);
                 mine = UnityEditor.AssetDatabase.IsValidFolder(folder);
                 Assert.IsTrue(mine, "could not create the row's folder");
-                string path = $"{folder}/Saved-Before-Beams.prefab";
+                string path = $"{folder}/Saved-Before.prefab";
                 System.IO.File.WriteAllText(System.IO.Path.GetFullPath(path), stripped);
                 UnityEditor.AssetDatabase.ImportAsset(path, UnityEditor.ImportAssetOptions.ForceSynchronousImport);
                 var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(path);
