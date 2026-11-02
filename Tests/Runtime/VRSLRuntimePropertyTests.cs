@@ -13,8 +13,8 @@ namespace VRSL.URP.Tests
     /// DMX realtime light's intensities, the alternate address on the DMX realtime
     /// light and DMX Static, and a uGUI control's persistent listener calling them.
     ///
-    /// Rows RP1 to RP6 of TESTING.md; RP7 is the AudioLink light's, in the AudioLink
-    /// test assembly.
+    /// Rows RP1 to RP6 and RP8 of TESTING.md; RP7 is the AudioLink light's, in the
+    /// AudioLink test assembly.
     /// </summary>
     class VRSLRuntimePropertyTests : VRSLDMXTest
     {
@@ -121,6 +121,41 @@ namespace VRSL.URP.Tests
             finally { rig.Dispose(); }
         }
 
+        /// <summary>RP8. A DMX realtime light's maximum intensity, range and spot angles
+        /// set while the world runs reach its uploaded config, and its beam, with nothing
+        /// else called.</summary>
+        [UnityTest]
+        public IEnumerator RP8_DMX_range_and_cone_set_at_runtime_reach_the_light()
+        {
+            var rig = VRSLDMXRig.Build();
+            try
+            {
+                var f = rig.Fixtures[3];
+                Assert.IsTrue(f.enableConeWidth, "the rig's mover should zoom, so both spot angles count");
+                yield return RampRig(rig);
+                var before       = rig.ReadLights();
+                var configBefore = ConfigOf(rig, f);
+                Assert.Greater(before[3].colorAndIntensity.w, 0f, "sector 3 must be lit, or a ratio proves nothing");
+                Assert.AreNotEqual(12.5f, configBefore.positionAndRange.w, "the rig's range already reads 12.5");
+
+                f.MaxIntensity = f.maxIntensity * 0.5f;
+                f.Range        = 12.5f;
+                f.MinSpotAngle = 8f;
+                f.MaxSpotAngle = 40f;
+                yield return rig.Step(2);
+
+                var config = ConfigOf(rig, f);
+                Assert.AreEqual(configBefore.rightAndMaxIntensity.w * 0.5f, config.rightAndMaxIntensity.w, 1e-4f,
+                    "Max Intensity set at runtime didn't reach the uploaded config");
+                Assert.AreEqual(12.5f, config.positionAndRange.w, 1e-6f, "Range set at runtime didn't reach the uploaded config");
+                Assert.AreEqual(20f, config.spotAngles.y, 1e-6f, "Max Spot Angle 40 is a half angle of 20 in the uploaded config");
+                Assert.AreEqual(4f,  config.spotAngles.w, 1e-6f, "Min Spot Angle 8 is a half angle of 4 in the uploaded config");
+                AssertRatio(0.5f, before[3].colorAndIntensity.w, rig.ReadLights()[3].colorAndIntensity.w,
+                    "half the Max Intensity didn't halve the light");
+            }
+            finally { rig.Dispose(); }
+        }
+
         /// <summary>RP2. A setter given the value the light already has raises no
         /// config change, so a relay firing every frame with an unchanged value
         /// doesn't re-upload every fixture.</summary>
@@ -154,6 +189,17 @@ namespace VRSL.URP.Tests
                 Assert.AreEqual(3, raised, "the alternate address switched on without one config change");
                 f.UseAlternateAddress = true;
                 Assert.AreEqual(3, raised, "the alternate address switched on again raised another");
+
+                f.MaxIntensity = f.MaxIntensity;
+                f.Range        = f.Range;
+                f.MinSpotAngle = f.MinSpotAngle;
+                f.MaxSpotAngle = f.MaxSpotAngle;
+                Assert.AreEqual(3, raised, "a config setter given the current value raised a config change");
+                f.MaxIntensity = 3f;
+                f.Range        = 7f;
+                f.MinSpotAngle = 9f;
+                f.MaxSpotAngle = 33f;
+                Assert.AreEqual(7, raised, "the four config setters didn't raise one config change each");
             }
             finally
             {
