@@ -177,8 +177,8 @@ namespace VRSL.URP
             }
             else
             {
-                EditorGUILayout.PropertyField(_dmxChannel);
-                EditorGUILayout.PropertyField(_dmxUniverse);
+                EditorGUILayout.PropertyField(_dmxChannel, new GUIContent("DMX Channel", _dmxChannel.tooltip));
+                EditorGUILayout.PropertyField(_dmxUniverse, new GUIContent("DMX Universe", _dmxUniverse.tooltip));
             }
             EditorGUILayout.PropertyField(_useAlternateAddress);
             using (new EditorGUI.IndentLevelScope())
