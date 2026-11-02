@@ -739,9 +739,15 @@ namespace VRSL.URP.EditorScripts
             return text;
         }
 
+        // A fixture changes address with no scene event (ApplyAddress, UseAlternateAddress),
+        // so the list is also rebuilt every half second while the window is read.
+        double _patchesBuilt;
+
         void EnsurePatches()
         {
-            if (_patches != null) return;
+            double now = EditorApplication.timeSinceStartup;
+            if (_patches != null && now - _patchesBuilt < 0.5) return;
+            _patchesBuilt = now;
             _patches = new List<Patch>();
 
             foreach (var f in Object.FindObjectsByType<VRSLDMXRealtimeLight>())
