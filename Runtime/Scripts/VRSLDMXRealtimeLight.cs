@@ -62,6 +62,44 @@ namespace VRSL.URP
                + "To change this while the world runs, set it and then call ApplyAddress().")]
         public int dmxUniverse = 1;
 
+        [Tooltip("The sector this fixture moves to when Use Alternate Address is on, for a "
+               + "rig patched two ways that the world switches between.")]
+        public int alternateSector = 0;
+
+        [Tooltip("The DMX start channel this fixture moves to when Use Alternate Address is on.")]
+        public int alternateDmxChannel = 1;
+
+        [Tooltip("The universe this fixture moves to when Use Alternate Address is on.")]
+        public int alternateDmxUniverse = 1;
+
+        [Tooltip("Whether pan runs the other way while the fixture is on its alternate address. "
+               + "Invert Pan below applies on its usual address.")]
+        public bool alternateInvertPan = false;
+
+        [Tooltip("Move this fixture to its alternate address. Beam and body follow from the next "
+               + "frame, and come back when it's switched off.")]
+        [SerializeField] bool useAlternateAddress = false;
+
+        /// <summary>
+        /// Whether the fixture reads its alternate address (<see cref="alternateSector"/>,
+        /// or <see cref="alternateDmxChannel"/> and <see cref="alternateDmxUniverse"/>,
+        /// by <see cref="useLegacySectorMode"/>) and pans by
+        /// <see cref="alternateInvertPan"/>. Set it while the world runs and the beam and
+        /// body follow from the next frame. A uGUI Toggle's listener can call it.
+        /// </summary>
+        public bool UseAlternateAddress
+        {
+            get => useAlternateAddress;
+            set
+            {
+                if (useAlternateAddress == value) return;
+                useAlternateAddress = value;
+                ApplyAddress();
+            }
+        }
+
+        internal bool PanInverted => useAlternateAddress ? alternateInvertPan : invertPan;
+
         // ──────────────────────────────────────────────────────────────────────────
         // Light settings
         // ──────────────────────────────────────────────────────────────────────────
@@ -80,8 +118,40 @@ namespace VRSL.URP
                + "scene-wide dimming without adjusting every fixture individually.")]
         public float globalIntensity = 1f;
 
+        /// <summary>
+        /// <see cref="finalIntensity"/>, for a script or a uGUI listener. Set it while the
+        /// world runs and the light and body follow from the next frame.
+        /// </summary>
+        public float FinalIntensity
+        {
+            get => finalIntensity;
+            set
+            {
+                if (finalIntensity == value) return;
+                finalIntensity = value;
+                DriveFixtureShells();
+                ConfigChanged?.Invoke();
+            }
+        }
+
+        /// <summary>
+        /// <see cref="globalIntensity"/>, for a script or a uGUI listener. Set it while the
+        /// world runs and the light and body follow from the next frame.
+        /// </summary>
+        public float GlobalIntensity
+        {
+            get => globalIntensity;
+            set
+            {
+                if (globalIntensity == value) return;
+                globalIntensity = value;
+                DriveFixtureShells();
+                ConfigChanged?.Invoke();
+            }
+        }
+
         bool IVRSLRealtimeLight.IsDiscoball => fixtureType == DMXFixtureType.Discoball;
-        float IVRSLRealtimeLight.GlobalIntensity { get => globalIntensity; set => globalIntensity = value; }
+        float IVRSLRealtimeLight.GlobalIntensity { get => GlobalIntensity; set => GlobalIntensity = value; }
 
         [Tooltip("Dimmer-response curve, matched to the body-glow surface's _CurveMod. The "
                + "surface emission scales as dimmer² × (1 + (curveMod-1)·dimmer); "
@@ -268,8 +338,8 @@ namespace VRSL.URP
 
         /// <summary>
         /// Apply a change to the address fields (<see cref="useLegacySectorMode"/>,
-        /// <see cref="sector"/>, <see cref="dmxChannel"/>, <see cref="dmxUniverse"/>)
-        /// made while the world runs. The beam and the fixture body both follow the new
+        /// <see cref="sector"/>, <see cref="dmxChannel"/>, <see cref="dmxUniverse"/>, their
+        /// alternates and the two pan inversions) made while the world runs. The beam and the fixture body both follow the new
         /// address from the next frame. Calling it with the address unchanged changes
         /// nothing.
         /// </summary>
@@ -312,7 +382,7 @@ namespace VRSL.URP
             // override, no cone-mesh tuning since URP prefabs drop the cone mesh).
             _shellProps.SetInt(  "_DMXChannel",          ComputeAbsoluteChannel());
             _shellProps.SetInt(  "_NineUniverseMode",    0);
-            _shellProps.SetInt(  "_PanInvert",           invertPan          ? 1 : 0);
+            _shellProps.SetInt(  "_PanInvert",           PanInverted        ? 1 : 0);
             _shellProps.SetInt(  "_TiltInvert",          invertTilt         ? 1 : 0);
             _shellProps.SetInt(  "_LegacyGoboRange",     0);
             _shellProps.SetInt(  "_EnableStrobe",        enableStrobe       ? 1 : 0);
@@ -337,8 +407,10 @@ namespace VRSL.URP
         public int ComputeAbsoluteChannel()
         {
             if (useLegacySectorMode)
-                return Mathf.Abs(sector * 13 + 1);
-            return Mathf.Abs(dmxChannel + (dmxUniverse - 1) * 512 + (dmxUniverse - 1) * 8);
+                return Mathf.Abs((useAlternateAddress ? alternateSector : sector) * 13 + 1);
+            int channel  = useAlternateAddress ? alternateDmxChannel  : dmxChannel;
+            int universe = useAlternateAddress ? alternateDmxUniverse : dmxUniverse;
+            return Mathf.Abs(channel + (universe - 1) * 512 + (universe - 1) * 8);
         }
     }
 

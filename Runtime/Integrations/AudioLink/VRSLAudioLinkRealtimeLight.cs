@@ -145,7 +145,88 @@ namespace VRSL.URP
         public float globalIntensity = 1f;
 
         bool IVRSLRealtimeLight.IsDiscoball => fixtureType == AudioLinkFixtureType.Discoball;
-        float IVRSLRealtimeLight.GlobalIntensity { get => globalIntensity; set => globalIntensity = value; }
+        float IVRSLRealtimeLight.GlobalIntensity { get => GlobalIntensity; set => GlobalIntensity = value; }
+
+        // ── Properties ────────────────────────────────────────────────────────
+        // The fields above, for a script or a uGUI listener. Each takes effect from
+        // the next frame; the ones the body glow reads update the body too.
+
+        /// <summary><see cref="enableAudioLink"/>; the body follows.</summary>
+        public bool EnableAudioLink
+        {
+            get => enableAudioLink;
+            set { if (enableAudioLink == value) return; enableAudioLink = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="delay"/>; the body follows.</summary>
+        public int Delay
+        {
+            get => delay;
+            set { if (delay == value) return; delay = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="bandMultiplier"/>; the body follows.</summary>
+        public float BandMultiplier
+        {
+            get => bandMultiplier;
+            set { if (bandMultiplier == value) return; bandMultiplier = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="finalIntensity"/>; the body follows.</summary>
+        public float FinalIntensity
+        {
+            get => finalIntensity;
+            set { if (finalIntensity == value) return; finalIntensity = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="globalIntensity"/>; the body follows.</summary>
+        public float GlobalIntensity
+        {
+            get => globalIntensity;
+            set { if (globalIntensity == value) return; globalIntensity = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="goboIndex"/>; the body follows.</summary>
+        public int GoboIndex
+        {
+            get => goboIndex;
+            set { if (goboIndex == value) return; goboIndex = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="goboSpinSpeed"/>; the body follows.</summary>
+        public float GoboSpinSpeed
+        {
+            get => goboSpinSpeed;
+            set { if (goboSpinSpeed == value) return; goboSpinSpeed = value; DriveFixtureShells(); }
+        }
+
+        /// <summary><see cref="maxIntensity"/>.</summary>
+        public float MaxIntensity
+        {
+            get => maxIntensity;
+            set => maxIntensity = value;
+        }
+
+        /// <summary><see cref="spotAngle"/>.</summary>
+        public float SpotAngle
+        {
+            get => spotAngle;
+            set => spotAngle = value;
+        }
+
+        /// <summary><see cref="range"/>.</summary>
+        public float Range
+        {
+            get => range;
+            set => range = value;
+        }
+
+        /// <summary><see cref="discoballSpinSpeed"/>.</summary>
+        public float DiscoballSpinSpeed
+        {
+            get => discoballSpinSpeed;
+            set => discoballSpinSpeed = value;
+        }
 
         // ── Pan / Tilt ────────────────────────────────────────────────────────
         [Tooltip("Enable per-frame world transform read for moving-head direction. "
@@ -258,6 +339,22 @@ namespace VRSL.URP
                 useTraditional      = 1;
             }
 
+            for (int i = 0; i < fixtureShellRenderers.Length; i++)
+            {
+                var r = fixtureShellRenderers[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_shellProps);
+                WriteShellProps(enableThemeColor, themeColorTarget, enableColorChord,
+                                enableTextureSample, useTraditional);
+                r.SetPropertyBlock(_shellProps);
+            }
+        }
+
+        // Each renderer's block is read first, so what other components set on it
+        // (LTCGI's per-renderer screen data) stays.
+        void WriteShellProps(int enableThemeColor, int themeColorTarget, int enableColorChord,
+                             int enableTextureSample, int useTraditional)
+        {
             _shellProps.SetFloat("_EnableAudioLink",          enableAudioLink ? 1f : 0f);
             _shellProps.SetFloat("_Band",                     (float)(int)band);
             _shellProps.SetFloat("_Delay",                    delay);
@@ -275,12 +372,6 @@ namespace VRSL.URP
             _shellProps.SetInt(  "_EnableColorChord",         enableColorChord);
             _shellProps.SetFloat("_TextureColorSampleX",      textureSamplingCoordinates.x);
             _shellProps.SetFloat("_TextureColorSampleY",      textureSamplingCoordinates.y);
-
-            for (int i = 0; i < fixtureShellRenderers.Length; i++)
-            {
-                if (fixtureShellRenderers[i] != null)
-                    fixtureShellRenderers[i].SetPropertyBlock(_shellProps);
-            }
         }
 
         // ─────────────────────────────────────────────────────────────────────

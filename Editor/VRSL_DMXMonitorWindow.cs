@@ -760,9 +760,13 @@ namespace VRSL.URP.EditorScripts
             foreach (var f in Object.FindObjectsByType<VRSLDMXStatic>())
             {
                 if (!f.enableDMXChannels) continue;
+                bool alt     = f.UseAlternateAddress;
+                int sector   = alt ? f.alternateSector      : f.sector;
+                int channel  = alt ? f.alternateDmxChannel  : f.dmxChannel;
+                int universe = alt ? f.alternateDmxUniverse : f.dmxUniverse;
                 int first = f.useLegacySectorMode
-                    ? Mathf.Abs(f.sector * 13 + 1)
-                    : Mathf.Abs(f.dmxChannel + (f.dmxUniverse - 1) * 512 + (f.dmxUniverse - 1) * 8);
+                    ? Mathf.Abs(sector * 13 + 1)
+                    : Mathf.Abs(channel + (universe - 1) * 512 + (universe - 1) * 8);
                 if (f.singleChannelMode && f.useLegacySectorMode) first += Mathf.Abs(f.Channel);
                 _patches.Add(new Patch
                 {

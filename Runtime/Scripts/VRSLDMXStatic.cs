@@ -110,6 +110,19 @@ namespace VRSL.URP
         public float maxMinPan = 180f;
         public float maxMinTilt = -180f;
 
+        [Space(5)]
+        [Header("Alternate Address")]
+        [Tooltip ("The sector this fixture moves to when Use Alternate Address is on, for a rig patched two ways that the world switches between.")]
+        public int alternateSector;
+        [Tooltip ("The DMX start channel this fixture moves to when Use Alternate Address is on.")]
+        public int alternateDmxChannel = 1;
+        [Tooltip ("The universe this fixture moves to when Use Alternate Address is on.")]
+        public int alternateDmxUniverse = 1;
+        [Tooltip ("Whether pan runs the other way while the fixture is on its alternate address. Invert Pan applies on its usual address.")]
+        public bool alternateInvertPan;
+        [Tooltip ("Move this fixture to its alternate address. It follows from the next frame, and comes back when this is switched off.")]
+        [SerializeField] bool useAlternateAddress;
+
         [HideInInspector]
         public int fixtureDefintion;
 
@@ -179,7 +192,7 @@ namespace VRSL.URP
 
         int SectorConversion()
         {
-            int x =  Mathf.Abs(Mathf.FloorToInt((int) sector * 13) + 1);
+            int x =  Mathf.Abs(Mathf.FloorToInt((int) (useAlternateAddress ? alternateSector : sector) * 13) + 1);
         // = calculatedDMXChannel;//outgoing channel
         // float z = calculatedDMXChannel/512.0f;
             //Debug.Log(z);
@@ -236,9 +249,11 @@ namespace VRSL.URP
 
         int RawDMXConversion()
         {
-                calculatedDMXChannel = dmxChannel;
-                calculatedDMXUniverse = dmxUniverse;
-                int chan = Mathf.Abs(dmxChannel + ((dmxUniverse-1) * 512) + ((dmxUniverse-1) * 8));
+                int channel  = useAlternateAddress ? alternateDmxChannel  : dmxChannel;
+                int universe = useAlternateAddress ? alternateDmxUniverse : dmxUniverse;
+                calculatedDMXChannel = channel;
+                calculatedDMXUniverse = universe;
+                int chan = Mathf.Abs(channel + ((universe-1) * 512) + ((universe-1) * 8));
             //  Debug.Log("Channel: " + chan);
                 return chan;
         }
@@ -320,7 +335,7 @@ namespace VRSL.URP
             }
 
             props.SetInt("_NineUniverseMode", nineUniverseMode == true ? 1 : 0);
-            props.SetInt("_PanInvert", invertPan == true ? 1 : 0);
+            props.SetInt("_PanInvert", PanInverted ? 1 : 0);
             props.SetInt("_LegacyGoboRange", legacyGoboRange == true ? 1 : 0);
             props.SetInt("_TiltInvert", invertTilt == true ? 1 : 0);
             props.SetInt("_EnableStrobe", enableStrobe == true ? 1 : 0);
@@ -343,14 +358,34 @@ namespace VRSL.URP
         /// <summary>
         /// Apply a change to the address fields (<see cref="useLegacySectorMode"/>,
         /// <see cref="sector"/>, <see cref="Channel"/>, <see cref="dmxChannel"/>,
-        /// <see cref="dmxUniverse"/>) made while the world runs. The fixture follows the
-        /// new address from the next frame. Calling it with the address unchanged
-        /// changes nothing.
+        /// <see cref="dmxUniverse"/>, their alternates and the two pan inversions) made
+        /// while the world runs. The fixture follows the new address from the next frame.
+        /// Calling it with the address unchanged changes nothing.
         /// </summary>
         public void ApplyAddress()
         {
             _UpdateInstancedProperties();
         }
+
+        /// <summary>
+        /// Whether the fixture reads its alternate address (<see cref="alternateSector"/>,
+        /// or <see cref="alternateDmxChannel"/> and <see cref="alternateDmxUniverse"/>,
+        /// by <see cref="useLegacySectorMode"/>) and pans by
+        /// <see cref="alternateInvertPan"/>. Set it while the world runs and the fixture
+        /// follows from the next frame. A uGUI Toggle's listener can call it.
+        /// </summary>
+        public bool UseAlternateAddress
+        {
+            get => useAlternateAddress;
+            set
+            {
+                if (useAlternateAddress == value) return;
+                useAlternateAddress = value;
+                ApplyAddress();
+            }
+        }
+
+        bool PanInverted => useAlternateAddress ? alternateInvertPan : invertPan;
 
         public void _UpdateInstancedPropertiesSansDMX()
         {
@@ -394,7 +429,7 @@ namespace VRSL.URP
                 props.SetInt("_DMXChannel", RawDMXConversion());
             }
             props.SetInt("_NineUniverseMode", nineUniverseMode == true ? 1 : 0);
-            props.SetInt("_PanInvert", invertPan == true ? 1 : 0);
+            props.SetInt("_PanInvert", PanInverted ? 1 : 0);
             props.SetInt("_TiltInvert", invertTilt == true ? 1 : 0);
             props.SetInt("_LegacyGoboRange", legacyGoboRange == true ? 1 : 0);
             props.SetInt("_EnableStrobe", 0);

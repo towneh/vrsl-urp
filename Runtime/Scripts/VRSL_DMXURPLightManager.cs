@@ -1473,7 +1473,7 @@ namespace VRSL.URP
                 panSettings  = new Vector4(
                     f.maxMinPan,
                     f.panOffset,
-                    f.invertPan      ? 1f : 0f,
+                    f.PanInverted    ? 1f : 0f,
                     f.enableGoboSpin ? 1f : 0f),
                 // Subtract 90° from tiltOffset: baseForward for moving heads already points
                 // world -Y (via the 90° X root rotation), so the Rodrigues default is not re-applied.

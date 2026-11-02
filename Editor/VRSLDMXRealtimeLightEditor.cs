@@ -26,6 +26,11 @@ namespace VRSL.URP
         SerializedProperty _sector;
         SerializedProperty _dmxChannel;
         SerializedProperty _dmxUniverse;
+        SerializedProperty _useAlternateAddress;
+        SerializedProperty _alternateSector;
+        SerializedProperty _alternateDmxChannel;
+        SerializedProperty _alternateDmxUniverse;
+        SerializedProperty _alternateInvertPan;
 
         // General Settings
         SerializedProperty _maxIntensity;
@@ -89,6 +94,11 @@ namespace VRSL.URP
             _sector              = serializedObject.FindProperty("sector");
             _dmxChannel          = serializedObject.FindProperty("dmxChannel");
             _dmxUniverse         = serializedObject.FindProperty("dmxUniverse");
+            _useAlternateAddress  = serializedObject.FindProperty("useAlternateAddress");
+            _alternateSector      = serializedObject.FindProperty("alternateSector");
+            _alternateDmxChannel  = serializedObject.FindProperty("alternateDmxChannel");
+            _alternateDmxUniverse = serializedObject.FindProperty("alternateDmxUniverse");
+            _alternateInvertPan   = serializedObject.FindProperty("alternateInvertPan");
 
             _maxIntensity        = serializedObject.FindProperty("maxIntensity");
             _finalIntensity      = serializedObject.FindProperty("finalIntensity");
@@ -169,6 +179,21 @@ namespace VRSL.URP
             {
                 EditorGUILayout.PropertyField(_dmxChannel);
                 EditorGUILayout.PropertyField(_dmxUniverse);
+            }
+            EditorGUILayout.PropertyField(_useAlternateAddress);
+            using (new EditorGUI.IndentLevelScope())
+            {
+                if (_useLegacySectorMode.boolValue)
+                {
+                    EditorGUILayout.PropertyField(_alternateSector);
+                }
+                else
+                {
+                    EditorGUILayout.PropertyField(_alternateDmxChannel, new GUIContent("Alternate DMX Channel", _alternateDmxChannel.tooltip));
+                    EditorGUILayout.PropertyField(_alternateDmxUniverse, new GUIContent("Alternate DMX Universe", _alternateDmxUniverse.tooltip));
+                }
+                if (showMovement)
+                    EditorGUILayout.PropertyField(_alternateInvertPan);
             }
 
             EditorGUILayout.Space();
