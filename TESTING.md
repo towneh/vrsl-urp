@@ -767,6 +767,25 @@ move with their beams too (J4).
 | R4 | D | The DMX flasher with a value set on each renderer's property block by something else (LTCGI's `_Udon_LTCGI_ScreenCount`) before its `Start`, then moved to universe 2 channel 27 | The value is still there after `Start` and after the move, and both renderers read channel 1, then 547. LTCGI sets its per-renderer screen data once, at its `Start`, so a fixture that replaced the block instead of adding to it would drop that data for good |
 | R5 | D | A rig mover with the same value set on its body renderers, moved from sector 3 to sector 10 through `ApplyAddress()` | The value is still there and the body reads sector 10's channel |
 
+### Runtime properties
+
+`VRSLRuntimePropertyTests` in the suite; RP7 in the AudioLink test assembly. A world script
+changes a light's settings while the world runs through its properties, and a Basis world
+script reaches them only through a uGUI control's persistent listener, which can call a
+property setter but can't write a field. The DMX manager uploads fixture data only when a
+light says its config changed, so a DMX setter that didn't say so would change nothing on
+the GPU.
+
+| # | Path | Scenario | Expected |
+|---|---|---|---|
+| RP1 | D | The rig on Ramp with strobe disabled; sector 3's `GlobalIntensity` set to 0.25, then its `FinalIntensity` to 0.5, with no other call | From the second frame sector 3's decoded intensity is 0.25, then 0.125, of what it was (to a part in 500), sector 4's unchanged, and every body renderer's block carries `_GlobalIntensity` 0.25 and `_FinalIntensity` 0.5 |
+| RP2 | — | A DMX realtime light's `GlobalIntensity`, `FinalIntensity` and `UseAlternateAddress` each set to the value it holds, then to a new value, then to that value again | `ConfigChanged` raised once per change and never for a value the light already held |
+| RP3 | D | The rig on Ramp over two universes; sector 3 with alternate sector 10 and pan inverted only at home, sector 5 addressed as universe 1 channel 66 with alternate universe 2 channel 1 and pan inverted only on the alternate; both switched to their alternate address, then back | On the alternate, from the second frame, the beams decode sectors 10 and 40, the bodies read `_DMXChannel` 131 and 521, and each light's uploaded config and body `_PanInvert` take the alternate pan inversion; switched back, colour, channel and pan inversion are as they were |
+| RP4 | — | The DMX flasher (a `VRSLDMXStatic` with two renderers) with alternate universe 2 channel 27, switched over and back; then in single-channel sector mode on sector 0 channel 4 with alternate sector 3 and pan inverted only at home, switched over and back | Both renderers read `_DMXChannel` 547 then 1, then 5, 44 and 5 again, and `_PanInvert` 1, 0, 1 |
+| RP5 | D | The rig on Ramp; a uGUI Slider and Toggle whose persistent listeners call sector 3's `set_GlobalIntensity` and `set_UseAlternateAddress` (alternate sector 10); the Slider set to 0.3, then the Toggle on | Each control holds one persistent call naming the setter; from the second frame after each, sector 3's intensity is 0.3 of what it was, then its beam decodes sector 10 |
+| RP6 | — | A fresh import of copies of the DMX spot and flasher prefabs with every alternate-address line taken out, as a scene saved before the alternate address existed holds them | Both load with `UseAlternateAddress` off and the address, pan inversion and intensities of the shipped prefabs |
+| RP7 | A | An AudioLink spot from the prefab beside the AudioLink manager, a value set on its body renderers' blocks by something else (LTCGI's `_Udon_LTCGI_ScreenCount`); all eleven properties set | At once, every body renderer's block carries the new AudioLink switch, delay, band multiplier, both intensities, gobo and spin, and still the other value; the next frame the uploaded config carries the new maximum intensity, intensities, AudioLink switch, half spot angle, range, delay, band multiplier, gobo slot and spin |
+
 ### Fixtures switched on and off
 
 `VRSLRuntimeEnableTests` (DMX, on the rig) and `VRSLAudioLinkRuntimeEnableTests` (AudioLink, plain

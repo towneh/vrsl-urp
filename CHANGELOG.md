@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Settings a world script or a UI control can change while the world runs.** The DMX realtime light has `FinalIntensity` and `GlobalIntensity` properties. The AudioLink realtime light has `EnableAudioLink`, `Delay`, `BandMultiplier`, `FinalIntensity`, `GlobalIntensity`, `GoboIndex`, `GoboSpinSpeed`, `MaxIntensity`, `SpotAngle`, `Range` and `DiscoballSpinSpeed`. Each one takes effect from the next frame, body included. A uGUI Slider or Toggle can call them from its On Value Changed list, which is the way a Basis world script reaches a package component.
+- **An alternate address on DMX fixtures.** The DMX realtime light and DMX Static each take a second address (a sector, or a channel and universe) with its own **Alternate Invert Pan**. Switching **Use Alternate Address** on moves the fixture there from the next frame, and switching it off brings it back. A rig patched two ways can switch every fixture at once with one Toggle whose listeners set each fixture's `UseAlternateAddress`.
+
+### Fixed
+
+- **Intensity changes on a DMX realtime light take effect while the world runs.** Before, a script setting `globalIntensity` or `finalIntensity` saw no change until something else made the manager upload its fixture data again. Set them through the new properties.
+- **The AudioLink realtime light's body keeps what other components put on its renderers**, such as LTCGI's screen data, as the DMX lights' bodies already did.
+
 ## [0.3.0] — 2026-11-01
 
 The first full release since 0.1.0. 0.2.0 never got past its release candidates, so these notes cover everything since 0.1.0. The release candidate sections of the [changelog](https://github.com/towneh/vrsl-urp/blob/main/CHANGELOG.md) give the detail of each change.
