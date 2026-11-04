@@ -235,7 +235,8 @@ tile grid for this reason; a figure quoted without them is a figure of an unknow
 
 `VRSLQualityPresetTests` in the suite covers Q3 and Q4, and `VRSLAudioLinkQualityPresetTests`
 (the AudioLink test assembly) Q5. Q1 and Q2 want a frame capture,
-and Q6 is judged by looking at the inspector. `VRSLControlPanelVersionTests` covers Q10.
+and Q6 is judged by looking at the inspector. `VRSLControlPanelVersionTests` covers Q10 and
+`VRSLControlPanelMasterTests` Q11.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -249,6 +250,7 @@ and Q6 is judged by looking at the inspector. `VRSLControlPanelVersionTests` cov
 | Q8 | — | Same, press Standard then Off, then drag the light and beams sliders | The manager's `quality` follows the buttons (both managers where the scene has both). The beams slider scales `volumetricIntensity` and the light slider scales `lightIntensity`, both as a share of the authored value, so a scene authored at 2 reaches 1 at half. Removing the panel from the scene changes nothing |
 | Q9 | — | `lightIntensity` at 0.5 on the manager, no panel | Every fixture casts half the light and the beams dim with it; the fixture bodies glow as before, since the body glow is the material's and not the manager's |
 | Q10 | — | The control panel's inspector, wherever the package is installed and wherever the project lives | The version line under the logo names the installed version, the one in `package.json`. Where the version can't be read it shows `?.?.?`, never a version number |
+| Q11 | D | `VRSLControlPanelMasterTests.Q11`: the control panel on a rig with a DMX discoball, its master, fixture, beam and discoball sliders assigned, with and without a light slider; the master set to a half | With a light slider, the manager's Light Intensity halves and its beam intensity and the discoball's Global Intensity stay as authored: the beams and the discoball follow the light, so the master reaches them once. Without a light slider, the beams and the discoball halve, since nothing else carries the master to them |
 
 ### Wiring
 
@@ -819,8 +821,8 @@ the realtime light drives them from the fixture's address with tint 2 (the 5-cha
 `use5ChannelMode`). A renderer left off the list glows at full whatever the desk sends, which
 is what to suspect when a par lens stays lit at black. J6 to J12 check the body, flare and
 laser shaders under URP's lights, fog and depth, J13 what a body gives baked lighting, and
-J14 and J15 what it takes from light probes and probe volumes, and J16 how a mover's lens
-follows the dimmer.
+J14 and J15 what it takes from light probes and probe volumes, and J16 and J17 how a mover's
+lens follows the dimmer and the manager's Light Intensity.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -840,6 +842,7 @@ follows the dimmer.
 | J14 | — | The forward pass of every fixture body shader (the three static bodies and the four mover bodies), read for its keyword declarations, then its fragment compiled for Windows with `PROBE_VOLUMES_L1` and again with `PROBE_VOLUMES_L2` | Each pass declares both keywords in a `multi_compile`, and each compiled fragment binds `_APVResIndex`, so a body takes its baked light from Adaptive Probe Volumes as URP Lit does. A body without them gets only the ambient probe in a world baked with probe volumes. How much bounce light reaches a body in a baked scene is judged by eye, not here |
 | J15 | — | Every renderer on a package prefab whose materials use a fixture body shader (the bodies of J14), read for its Light Probes setting | Each is set to Blend Probes. With Light Probes off, URP gives a renderer the ambient probe alone, probe volumes included, whatever its shader samples. Lens flares are not bodies and aren't checked. A failure names the prefab and renderer |
 | J16 | D | `VRSLParBlinderBodyTests.J16`: the DMX spot and wash mover, strobe off and cast light off, each seen from 3 m down its beam with its lens lit white from a channel source at dimmer 0, full, three quarters and half; summed over a half-float capture | What each adds over its dimmer-0 frame at three quarters and half is, within a tenth, dimmer⁶ × (1 + (curveMod - 1) × dimmer) / curveMod of what it adds at full: the curve its beam and cast light follow, times dimmer⁴. At full the lens is far past white after tonemapping, so on a gentler curve it still looks lit after the beam and the spot it casts have dimmed. A lens on the beam's curve alone keeps sixteen times as much at half dimmer |
+| J17 | D | `VRSLParBlinderBodyTests.J17`: the DMX spot and wash mover, set up as in J16, at full dimmer with the manager's Light Intensity at 1, 0.5 and 2; then the manager at 0.5 switched off | What each adds over its dimmer-0 frame is, within a tenth, 0.5² = 0.25 of its light at 1 when Light Intensity is 0.5, and all of it at 2: the beam and cast light scale with Light Intensity in a straight line, and the lens takes it below 1 squared, steeper as it is for the dimmer, so turning the light down dims the lens with them on screen. The manager publishes 0.5 as `_VRSLU_LightDimming` and puts it back to 0 when it lets go, so a lens with no manager stays at full |
 
 ### Basis video → DMX (optional integration)
 

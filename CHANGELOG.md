@@ -6,6 +6,7 @@
 
 - **The DMX spot mover's lens lights when its spot and beam do.** `VRSL-StandardMover-FixtureMat-HQ-Horizontal` had **Lens Max Brightness** at 0, which caps the lens's glow at nothing. It's 1 now, as on upstream VRSL's Horizontal material.
 - **A DMX mover's lens fades with its beam.** The lens followed the dimmer in a straight line while the beam and cast light follow the fixture's dimmer curve (**Curve Mod**), so on a fade or a pulse the beam went well before the lens. The lens now dims on that curve times dimmer⁴, on spot and wash movers alike. It's far brighter than the haze at full, so it needs the steeper curve to look as if it fades with the beam and the spot it casts. At full dimmer it's as bright as before.
+- **The control panel's master slider dims the moving heads evenly.** A DMX mover's lens now dims with the manager's **Light Intensity** below 1, squared, so turning the light down takes the lens down with the beam and the spot it casts. Above 1 the lens is unchanged. The master also scaled the beams and the discoballs twice, through their own sliders and again through the light they follow, so at half they fell to a quarter; with a light slider on the panel it now reaches them once, through the light.
 
 ## [0.3.1] — 2026-11-02
 
