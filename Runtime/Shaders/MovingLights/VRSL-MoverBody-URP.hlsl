@@ -213,6 +213,9 @@ half VRSLMoverDimmerCurve(half dimmer)
     half curveMod = max(UNITY_ACCESS_INSTANCED_PROP(Props, _CurveMod), 1.0);
     return dimmer * dimmer * (1.0 + (curveMod - 1.0) * dimmer) / curveMod;
 }
+
+// 1 - the DMX manager's lightIntensity, clamped to 0..1; 0 when no manager publishes it.
+float _VRSLU_LightDimming;
 #endif
 
 half3 VRSLMoverLensEmission(VRSLMoverVaryings i)
@@ -237,6 +240,11 @@ half3 VRSLMoverLensEmission(VRSLMoverVaryings i)
         }
         emission = lerp(half4(0, 0, 0, emission.w), emission, getGlobalIntensity());
         emission = lerp(half4(0, 0, 0, emission.w), emission, getFinalIntensity());
+        // The manager's lightIntensity below 1 scales the beam and cast light in a straight line;
+        // the lens takes it squared, steeper for the same reason it takes dimmer⁴ on top of the
+        // beam's curve, and in about the same proportion to the beam's response.
+        half level = 1.0 - _VRSLU_LightDimming;
+        emission *= level * level;
         return emission.rgb * _UniversalIntensity;
     #else
         half intensities = getGlobalIntensity() * getFinalIntensity() * _UniversalIntensity;

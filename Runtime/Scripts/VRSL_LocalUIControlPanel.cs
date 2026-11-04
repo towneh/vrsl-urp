@@ -402,11 +402,16 @@ namespace VRSL.URP
         {
             if (masterSlider != null)
             {
+                // The beams and the discoballs are light the managers cast, so the master reaches
+                // them through the light slider; scaling their own sliders as well would square it.
                 fixtureIntensityMax = masterSlider.value;
-                volumetricIntensityMax = masterSlider.value;
                 lightIntensityMax = masterSlider.value;
-                discoballIntensityMax = masterSlider.value;
                 laserIntensityMax = masterSlider.value;
+                if (lightSlider == null)
+                {
+                    volumetricIntensityMax = masterSlider.value;
+                    discoballIntensityMax = masterSlider.value;
+                }
                 if (masterSliderText != null)
                     masterSliderText.text = Mathf.Round(masterSlider.value * 100.0f).ToString();
             }

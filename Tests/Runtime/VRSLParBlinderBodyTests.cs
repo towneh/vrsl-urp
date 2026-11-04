@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
     /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J16 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J17 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1570,6 +1570,107 @@ namespace VRSL.URP.Tests
                             $"{path}: at dimmer {d:F3} the lens keeps {share:F4} of its full light, where it should keep {expected:F4} (the beam keeps {beam:F4})");
                     }
                 }
+            }
+            finally
+            {
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// J17. The manager's light intensity below 1 reaches a DMX mover's lens squared, steeper
+        /// than the beam and cast light take it, as the dimmer does, so a control panel turning the
+        /// light down dims the lens with the beam and the spot it casts. Above 1 the lens stays at full. Each mover is
+        /// seen down its beam at full dimmer with its lens lit white; what the body adds over the
+        /// dimmer-0 frame at light intensity 0.5 and 2 is compared with what it adds at 1. When
+        /// the manager lets go, the global it reads goes back to leaving lenses at full.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J17_mover_lenses_follow_the_managers_light_intensity()
+        {
+            string[] paths = { "VRSL-DMX-Mover-Spotlight-13CH.prefab", "VRSL-DMX-Mover-WashLight-13CH.prefab" };
+            var rig    = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var source = new FixedChannels();
+            try
+            {
+                yield return rig.Step(2);
+                var placed = new List<(string path, VRSLDMXRealtimeLight light)>();
+                for (int i = 0; i < paths.Length; i++)
+                {
+                    var go = Object.Instantiate(Load(paths[i]), rig.Floor.transform.parent);
+                    go.transform.localPosition = new Vector3(100f + 20f * i, 6f, 0f);
+                    var light = go.GetComponent<VRSLDMXRealtimeLight>();
+                    light.useLegacySectorMode = true;
+                    light.sector = 2 + 2 * i;
+                    light.enableStrobe = false;
+                    // No cast light or beam, whatever the light intensity: it scales maxIntensity.
+                    light.maxIntensity = 0f;
+                    light.ApplyAddress();
+                    placed.Add((paths[i], light));
+                }
+                rig.Manager.ChannelSource = source;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+                rig.Manager.RefreshFixtures();
+
+                var added = new Dictionary<(string, string), float>();
+                foreach (var (label, dimmer, intensity) in new[] { ("dark", 0f, 1f), ("1", 1f, 1f), ("0.5", 1f, 0.5f), ("2", 1f, 2f) })
+                {
+                    var values = new float[VRSLDMX.UsableSlotsPerUniverse];
+                    foreach (var (_, light) in placed)
+                    {
+                        int abs = light.ComputeAbsoluteChannel();
+                        values[VRSLDMXRig.DimmerChannel(abs) - 1] = dimmer;
+                        for (int c = 0; c < 3; c++)
+                            values[VRSLDMXRig.RedChannel(abs) + c - 1] = 1f;
+                    }
+                    source.Set(values);
+                    rig.Manager.lightIntensity = intensity;
+                    rig.Manager.MarkConfigDirty();
+                    yield return rig.Step(12);
+
+                    var raw = rig.ReadRaw();
+                    foreach (var (path, light) in placed)
+                    {
+                        var at = light.transform.position;
+                        var record = raw.OrderBy(d => Vector3.Distance(at,
+                            new Vector3(d.positionAndRange.x, d.positionAndRange.y, d.positionAndRange.z))).First();
+                        var origin = new Vector3(record.positionAndRange.x, record.positionAndRange.y, record.positionAndRange.z);
+                        var beam   = new Vector3(record.directionAndType.x, record.directionAndType.y, record.directionAndType.z).normalized;
+                        rig.Camera.transform.SetPositionAndRotation(origin + 3f * beam, Quaternion.LookRotation(-beam, Vector3.up));
+                        var frame = CaptureHdr(rig);
+                        try
+                        {
+                            float sum = 0f;
+                            foreach (var p in frame.GetPixels()) sum += p.r + p.g + p.b;
+                            Debug.Log($"[J17] {path} at light intensity {label}: sum {sum}");
+                            added[(path, label)] = sum;
+                        }
+                        finally { Object.DestroyImmediate(frame); }
+                    }
+                }
+
+                foreach (var (path, _) in placed)
+                {
+                    float full = added[(path, "1")] - added[(path, "dark")];
+                    Assert.Greater(full, 0f, $"{path}: the lens adds nothing at full dimmer");
+                    float half  = (added[(path, "0.5")] - added[(path, "dark")]) / full;
+                    float above = (added[(path, "2")]   - added[(path, "dark")]) / full;
+                    Debug.Log($"[J17] {path}: {half:F4} of full at light intensity 0.5, {above:F4} at 2");
+                    Assert.AreEqual(0.25f, half, 0.025f,
+                        $"{path}: at light intensity 0.5 the lens keeps {half:F4} of its light, where it should keep 0.25");
+                    Assert.AreEqual(1f, above, 0.05f,
+                        $"{path}: at light intensity 2 the lens keeps {above:F4} of its light, where it should stay at full");
+                }
+
+                rig.Manager.lightIntensity = 0.5f;
+                yield return rig.Step(2);
+                Assert.AreEqual(0.5f, Shader.GetGlobalFloat("_VRSLU_LightDimming"), 1e-6f,
+                    "the manager at light intensity 0.5 must publish a shortfall of 0.5");
+                rig.Manager.enabled = false;
+                Assert.AreEqual(0f, Shader.GetGlobalFloat("_VRSLU_LightDimming"), 1e-6f,
+                    "a manager letting go must leave the lenses at full, not at the light it was last set to");
+                rig.Manager.enabled = true;
             }
             finally
             {

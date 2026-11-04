@@ -455,6 +455,7 @@ namespace VRSL.URP
         VRSLDmxInput? _boundInput;
         bool _fixtureRefreshPending;
         bool _publishedStrobeDisabled;
+        float _publishedLightDimming = -1f;
 
         // Render-pass instances. Allocated in OnEnable, reused across cameras and
         // frames, dropped in OnDisable. Stateless beyond renderPassEvent, the
@@ -656,6 +657,8 @@ namespace VRSL.URP
                 Shader.SetGlobalInteger(s_DMXChannelCount, 0);
                 Shader.SetGlobalInteger(s_DMXGridLayout, 0);
                 Shader.SetGlobalInteger(s_StrobeDisabled, 0);
+                Shader.SetGlobalFloat(s_LightDimming, 0f);
+                _publishedLightDimming = -1f;
                 VRSLDMXFallbackBuffers.Bind();
             }
         }
@@ -740,6 +743,7 @@ namespace VRSL.URP
             }
             TurnDiscoballs();
             if (disableStrobe != _publishedStrobeDisabled) PublishStrobeDisabled();
+            if (LightDimming != _publishedLightDimming) PublishLightDimming();
 
             if (_configDirty)
             {
@@ -902,6 +906,7 @@ namespace VRSL.URP
         static readonly int s_StrobeFreqs    = Shader.PropertyToID("_VRSLU_StrobeFreqs");
         static readonly int s_TimeY          = Shader.PropertyToID("_VRSLU_TimeY");
         static readonly int s_StrobeDisabled = Shader.PropertyToID("_VRSLU_StrobeDisabled");
+        static readonly int s_LightDimming   = Shader.PropertyToID("_VRSLU_LightDimming");
         static readonly int s_DMXMovement    = Shader.PropertyToID("_VRSLU_DMXMovement");
         static readonly int s_MoveSmooth     = Shader.PropertyToID("_VRSLU_MoveSmooth");
         static readonly int s_UniverseStep   = Shader.PropertyToID("_VRSLU_UniverseStep");
@@ -1555,6 +1560,7 @@ namespace VRSL.URP
             // with no DMX manager read the grid the way they always have.
             if (GridLayout is { } layout) Shader.SetGlobalInteger(s_DMXGridLayout, (int)layout);
             PublishStrobeDisabled();
+            PublishLightDimming();
 
             if (GridLayout == null)
             {
@@ -1601,6 +1607,17 @@ namespace VRSL.URP
         {
             _publishedStrobeDisabled = disableStrobe;
             Shader.SetGlobalInteger(s_StrobeDisabled, disableStrobe ? 1 : 0);
+        }
+
+        // How far lightIntensity sits below 1, for the mover lenses: they take no part in the
+        // fixture configs lightIntensity scales, so they read it here. Published as the
+        // shortfall so that unset, 0, leaves a lens at full.
+        float LightDimming => 1f - Mathf.Clamp01(lightIntensity);
+
+        void PublishLightDimming()
+        {
+            _publishedLightDimming = LightDimming;
+            Shader.SetGlobalFloat(s_LightDimming, _publishedLightDimming);
         }
 
         void PublishDMX(string label, int globalId, RenderTexture tex)
