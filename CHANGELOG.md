@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **The DMX spot mover's lens lights when its spot and beam do.** `VRSL-StandardMover-FixtureMat-HQ-Horizontal` had **Lens Max Brightness** at 0, which caps the lens's glow at nothing. It's 1 now, as on upstream VRSL's Horizontal material.
+
 ## [0.3.1] — 2026-11-02
 
 ### Added
