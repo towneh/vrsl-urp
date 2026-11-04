@@ -218,7 +218,9 @@ half VRSLMoverDimmerCurve(half dimmer)
 half3 VRSLMoverLensEmission(VRSLMoverVaryings i)
 {
     #if defined(VRSL_DMX)
-        // The lens at full dimmer, capped, then dimmed on the beam's curve so the two fade together.
+        // The lens at full dimmer, capped, then dimmed on the beam's curve times the dimmer once more.
+        // At full the lens is far brighter than the haze, so on the beam's curve alone it still shows
+        // after the beam has faded out.
         half dimmer = i.intensityStrobe.x;
         half4 emission = getEmissionColor() * (isStrobe() == 1 ? i.intensityStrobe.y : 1.0);
         if (isDMX() == 1)
@@ -229,7 +231,7 @@ half3 VRSLMoverLensEmission(VRSLMoverVaryings i)
         {
             half limit = 0.025;
             if (all(i.rgbColor.rgb * dimmer * _FixtureMaxIntensity >= limit) || dimmer >= limit)
-                emission *= _FixutreIntensityMultiplier * VRSLMoverDimmerCurve(dimmer);
+                emission *= _FixutreIntensityMultiplier * VRSLMoverDimmerCurve(dimmer) * dimmer;
             else
                 emission = half4(0, 0, 0, 1);
         }

@@ -1471,15 +1471,15 @@ namespace VRSL.URP.Tests
         }
 
         /// <summary>
-        /// J16. A DMX mover's lens dims on the same curve as its cast light and beam,
-        /// dimmer² × (1 + (curveMod - 1) × dimmer) / curveMod, so the two fade together. Each
-        /// mover is seen down its beam with its lens lit white; the light the body adds over
-        /// the dimmer-0 frame at half and quarter dimmer is compared with what it adds at full.
-        /// A lens following the dimmer in a straight line keeps about half its light at half
-        /// dimmer, where the curve keeps under a fifth.
+        /// J16. A DMX mover's lens dims on its beam's curve times the dimmer once more,
+        /// dimmer³ × (1 + (curveMod - 1) × dimmer) / curveMod, so it goes out with the beam
+        /// although at full it is far brighter than the haze. Each mover is seen down its beam
+        /// with its lens lit white; the light the body adds over the dimmer-0 frame at half and
+        /// quarter dimmer is compared with what it adds at full. A lens on the beam's curve alone
+        /// keeps twice as much at half dimmer, one in a straight line five times as much.
         /// </summary>
         [UnityTest]
-        public IEnumerator J16_mover_lenses_dim_on_the_beams_curve()
+        public IEnumerator J16_mover_lenses_fade_faster_than_their_beams()
         {
             string[] paths = { "VRSL-DMX-Mover-Spotlight-13CH.prefab", "VRSL-DMX-Mover-WashLight-13CH.prefab" };
             float[] dimmers = { 0f, 1f, 0.5f, 0.25f };
@@ -1561,11 +1561,12 @@ namespace VRSL.URP.Tests
                     {
                         // The dimmer as the desk's byte carries it.
                         float d = Mathf.RoundToInt(255f * dimmer) / 255f;
-                        float expected = d * d * (1f + (curveMod - 1f) * d) / curveMod;
+                        float beam     = d * d * (1f + (curveMod - 1f) * d) / curveMod;
+                        float expected = beam * d;
                         float share    = (added[(path, dimmer)] - added[(path, 0f)]) / full;
-                        Debug.Log($"[J16] {path} at dimmer {d:F3}: {share:F4} of full, the beam's curve {expected:F4}");
+                        Debug.Log($"[J16] {path} at dimmer {d:F3}: {share:F4} of full, expected {expected:F4}, the beam keeps {beam:F4}");
                         Assert.AreEqual(expected, share, 0.1f * expected,
-                            $"{path}: at dimmer {d:F3} the lens keeps {share:F4} of its full light where the beam keeps {expected:F4}");
+                            $"{path}: at dimmer {d:F3} the lens keeps {share:F4} of its full light, where it should keep {expected:F4} (the beam keeps {beam:F4})");
                     }
                 }
             }

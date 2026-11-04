@@ -5,7 +5,7 @@
 ### Fixed
 
 - **The DMX spot mover's lens lights when its spot and beam do.** `VRSL-StandardMover-FixtureMat-HQ-Horizontal` had **Lens Max Brightness** at 0, which caps the lens's glow at nothing. It's 1 now, as on upstream VRSL's Horizontal material.
-- **A DMX mover's lens fades with its beam.** The lens followed the dimmer in a straight line while the beam and cast light follow the fixture's dimmer curve (**Curve Mod**), so on a fade or a pulse the beam went well before the lens. The lens now dims on the same curve, on spot and wash movers alike. At full dimmer it's as bright as before.
+- **A DMX mover's lens fades with its beam.** The lens followed the dimmer in a straight line while the beam and cast light follow the fixture's dimmer curve (**Curve Mod**), so on a fade or a pulse the beam went well before the lens. The lens now dims on that curve times the dimmer once more, on spot and wash movers alike, so it goes out with the beam although it's far brighter than the haze at full. At full dimmer it's as bright as before.
 
 ## [0.3.1] — 2026-11-02
 
