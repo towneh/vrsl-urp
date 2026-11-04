@@ -187,7 +187,7 @@ UNITY_INSTANCING_BUFFER_START(Props)
         UNITY_DEFINE_INSTANCED_PROP(uint, _EnableThemeColorSampling)
         UNITY_DEFINE_INSTANCED_PROP(uint, _UseTraditionalSampling)
     #endif
-    #ifdef VRSL_SURFACE
+    #if defined(VRSL_SURFACE) || (defined(VRSL_DMX) && defined(VRSL_MOVER_FORWARD))
         UNITY_DEFINE_INSTANCED_PROP(half, _CurveMod)
     #endif
     UNITY_DEFINE_INSTANCED_PROP(uint, _PanInvert)

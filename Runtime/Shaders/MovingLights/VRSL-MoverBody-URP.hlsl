@@ -140,7 +140,7 @@ VRSLMoverVaryings VRSLMoverVertex(VRSLMoverAttributes v)
         #if defined(VRSL_DMX)
             uint dmx = getDMXChannel();
             o.intensityStrobe = float2(GetDMXIntensity(dmx, 1.0), GetStrobeOutput(dmx));
-            o.rgbColor = GetDMXColor(dmx);
+            o.rgbColor = GetDMXColorChannels(dmx);
         #endif
     #endif
     return o;
@@ -205,19 +205,31 @@ bool VRSLMoverIsLens(VRSLMoverVaryings i)
     return (i.uv.x == 0.0 && i.uv.y == 0.0) || _PureEmissiveToggle == 1;
 }
 
+#if defined(VRSL_DMX)
+// The dimmer response of the fixture's cast light and beam (VRSLDMXLightUpdate.compute), 1 at
+// full: dimmer² × (1 + (curveMod - 1) × dimmer) / curveMod.
+half VRSLMoverDimmerCurve(half dimmer)
+{
+    half curveMod = max(UNITY_ACCESS_INSTANCED_PROP(Props, _CurveMod), 1.0);
+    return dimmer * dimmer * (1.0 + (curveMod - 1.0) * dimmer) / curveMod;
+}
+#endif
+
 half3 VRSLMoverLensEmission(VRSLMoverVaryings i)
 {
     #if defined(VRSL_DMX)
+        // The lens at full dimmer, capped, then dimmed on the beam's curve so the two fade together.
+        half dimmer = i.intensityStrobe.x;
         half4 emission = getEmissionColor() * (isStrobe() == 1 ? i.intensityStrobe.y : 1.0);
         if (isDMX() == 1)
-            emission *= i.rgbColor;
+            emission *= half4(i.rgbColor.rgb * _FixtureMaxIntensity, 1);
         emission *= _FixtureMaxIntensity * 1500;
         emission = clamp(emission, 0, _LensMaxBrightness * 100);
         if (isDMX() == 1)
         {
             half limit = 0.025;
-            if (all(i.rgbColor >= half4(limit, limit, limit, 1)) || i.intensityStrobe.x >= limit)
-                emission = lerp(emission, emission * _FixutreIntensityMultiplier, PositivePow(i.intensityStrobe.x, 1.9));
+            if (all(i.rgbColor.rgb * dimmer * _FixtureMaxIntensity >= limit) || dimmer >= limit)
+                emission *= _FixutreIntensityMultiplier * VRSLMoverDimmerCurve(dimmer);
             else
                 emission = half4(0, 0, 0, 1);
         }

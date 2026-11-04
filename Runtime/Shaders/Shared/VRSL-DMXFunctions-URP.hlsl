@@ -281,8 +281,8 @@ float GetTiltValue(uint DMXChannel)
     #endif
 }
 
-//Function for getting the RGB Color Value (Channels 4, 5, and 6)
-half4 GetDMXColor(uint DMXChannel)
+// The RGB channels (+7 to +9) before the dimmer.
+half4 GetDMXColorChannels(uint DMXChannel)
 {
     half redchannel = DMXValue(DMXChannel + 7);
     half greenchannel = DMXValue(DMXChannel + 8);
@@ -294,7 +294,13 @@ half4 GetDMXColor(uint DMXChannel)
         greenchannel = greenchannel * _GreenMultiplier;
     #endif
 
-    return lerp(float4(0,0,0,1), half4(redchannel,greenchannel,bluechannel,1), GetDMXIntensity(DMXChannel, _FixtureMaxIntensity));
+    return half4(redchannel, greenchannel, bluechannel, 1);
+}
+
+//Function for getting the RGB Color Value (Channels 4, 5, and 6)
+half4 GetDMXColor(uint DMXChannel)
+{
+    return lerp(float4(0,0,0,1), GetDMXColorChannels(DMXChannel), GetDMXIntensity(DMXChannel, _FixtureMaxIntensity));
 }
 
 half getDMXConeWidth(uint DMXChannel) //Motor Speed Channel// CHANNEL 5
