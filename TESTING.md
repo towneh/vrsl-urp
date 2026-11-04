@@ -819,7 +819,8 @@ the realtime light drives them from the fixture's address with tint 2 (the 5-cha
 `use5ChannelMode`). A renderer left off the list glows at full whatever the desk sends, which
 is what to suspect when a par lens stays lit at black. J6 to J12 check the body, flare and
 laser shaders under URP's lights, fog and depth, J13 what a body gives baked lighting, and
-J14 and J15 what it takes from light probes and probe volumes.
+J14 and J15 what it takes from light probes and probe volumes, and J16 how a mover's lens
+follows the dimmer.
 
 | # | Path | Scenario | Expected |
 |---|---|---|---|
@@ -838,6 +839,7 @@ J14 and J15 what it takes from light probes and probe volumes.
 | J13 | — | Each static fixture body shader (the AudioLink static body, the DMX surface body and multi-channel bar body) and URP Lit with colour (0.8, 0.3, 0.1), Metallic 0.4 and smoothness 0.7, the bodies' glow tint at (2, 1, 0.5); each one's Meta pass drawn the way the lightmapper draws it, rasterised from a quad's lightmap UVs that cover the target while its positions sit off it and its texture UVs cover one corner, once for albedo and once for emission, on a half-float target | Each body returns URP Lit's albedo for the same surface and black for emission, so a body marked to contribute to baked lighting bakes its housing's colour and none of its glow. A body without a Meta pass bakes as white. If URP Lit's own albedo doesn't come back in its colour, the draw is wrong and the row fails |
 | J14 | — | The forward pass of every fixture body shader (the three static bodies and the four mover bodies), read for its keyword declarations, then its fragment compiled for Windows with `PROBE_VOLUMES_L1` and again with `PROBE_VOLUMES_L2` | Each pass declares both keywords in a `multi_compile`, and each compiled fragment binds `_APVResIndex`, so a body takes its baked light from Adaptive Probe Volumes as URP Lit does. A body without them gets only the ambient probe in a world baked with probe volumes. How much bounce light reaches a body in a baked scene is judged by eye, not here |
 | J15 | — | Every renderer on a package prefab whose materials use a fixture body shader (the bodies of J14), read for its Light Probes setting | Each is set to Blend Probes. With Light Probes off, URP gives a renderer the ambient probe alone, probe volumes included, whatever its shader samples. Lens flares are not bodies and aren't checked. A failure names the prefab and renderer |
+| J16 | D | `VRSLParBlinderBodyTests.J16`: the DMX spot and wash mover, strobe off and cast light off, each seen from 3 m down its beam with its lens lit white from a channel source at dimmer 0, full, half and a quarter; summed over a half-float capture | What each adds over its dimmer-0 frame at half and a quarter is, within a tenth, dimmer² × (1 + (curveMod - 1) × dimmer) / curveMod of what it adds at full, the curve its beam and cast light follow, so the lens fades with the beam. A lens following the dimmer in a straight line keeps about half its light at half dimmer |
 
 ### Basis video → DMX (optional integration)
 

@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
     /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J15 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J16 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1468,6 +1468,112 @@ namespace VRSL.URP.Tests
             Debug.Log($"[J15] {checkedRenderers} body renderers, {failures.Count} not blending probes");
             Assert.Greater(checkedRenderers, 0, "no prefab renderer uses a fixture body shader, so the row checked nothing");
             Assert.IsEmpty(failures, string.Join("\n", failures));
+        }
+
+        /// <summary>
+        /// J16. A DMX mover's lens dims on the same curve as its cast light and beam,
+        /// dimmer² × (1 + (curveMod - 1) × dimmer) / curveMod, so the two fade together. Each
+        /// mover is seen down its beam with its lens lit white; the light the body adds over
+        /// the dimmer-0 frame at half and quarter dimmer is compared with what it adds at full.
+        /// A lens following the dimmer in a straight line keeps about half its light at half
+        /// dimmer, where the curve keeps under a fifth.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J16_mover_lenses_dim_on_the_beams_curve()
+        {
+            string[] paths = { "VRSL-DMX-Mover-Spotlight-13CH.prefab", "VRSL-DMX-Mover-WashLight-13CH.prefab" };
+            float[] dimmers = { 0f, 1f, 0.5f, 0.25f };
+            var rig    = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var source = new FixedChannels();
+            try
+            {
+                yield return rig.Step(2);
+                var placed = new List<(string path, VRSLDMXRealtimeLight light)>();
+                for (int i = 0; i < paths.Length; i++)
+                {
+                    var go = Object.Instantiate(Load(paths[i]), rig.Floor.transform.parent);
+                    go.transform.localPosition = new Vector3(100f + 20f * i, 6f, 0f);
+                    var light = go.GetComponent<VRSLDMXRealtimeLight>();
+                    Assert.IsNotEmpty(light.fixtureShellRenderers ?? new MeshRenderer[0],
+                        $"{paths[i]} drives no body, so its lens can't follow the dimmer");
+                    light.useLegacySectorMode = true;
+                    light.sector = 2 + 2 * i;
+                    light.enableStrobe = false;
+                    // No cast light or beam: seen down the beam, either would light the
+                    // measured pixels whatever the lens did.
+                    light.maxIntensity = 0f;
+                    light.ApplyAddress();
+                    placed.Add((paths[i], light));
+                }
+                rig.Manager.ChannelSource = source;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+                rig.Manager.RefreshFixtures();
+
+                var added = new Dictionary<(string, float), float>();
+                foreach (float dimmer in dimmers)
+                {
+                    var values = new float[VRSLDMX.UsableSlotsPerUniverse];
+                    foreach (var (_, light) in placed)
+                    {
+                        int abs = light.ComputeAbsoluteChannel();
+                        values[VRSLDMXRig.DimmerChannel(abs) - 1] = dimmer;
+                        for (int c = 0; c < 3; c++)
+                            values[VRSLDMXRig.RedChannel(abs) + c - 1] = 1f;
+                    }
+                    source.Set(values);
+                    yield return rig.Step(12);
+
+                    var raw = rig.ReadRaw();
+                    foreach (var (path, light) in placed)
+                    {
+                        var at = light.transform.position;
+                        var record = raw.OrderBy(d => Vector3.Distance(at,
+                            new Vector3(d.positionAndRange.x, d.positionAndRange.y, d.positionAndRange.z))).First();
+                        var origin = new Vector3(record.positionAndRange.x, record.positionAndRange.y, record.positionAndRange.z);
+                        var beam   = new Vector3(record.directionAndType.x, record.directionAndType.y, record.directionAndType.z).normalized;
+                        rig.Camera.transform.SetPositionAndRotation(origin + 3f * beam, Quaternion.LookRotation(-beam, Vector3.up));
+                        var frame = CaptureHdr(rig);
+                        try
+                        {
+                            // The whole frame: only the dimmer changes between captures, so
+                            // anything else in view cancels against the dimmer-0 frame.
+                            float sum = 0f, peak = 0f;
+                            foreach (var p in frame.GetPixels())
+                            {
+                                sum += p.r + p.g + p.b;
+                                peak = Mathf.Max(peak, Mathf.Max(p.r, Mathf.Max(p.g, p.b)));
+                            }
+                            Debug.Log($"[J16] {path} at dimmer {dimmer}: peak {peak}, sum {sum}");
+                            added[(path, dimmer)] = sum;
+                            if (dimmer == 1f)
+                                Assert.Greater(peak, 1f, $"{path}: the lens must light at full dimmer (peak {peak})");
+                        }
+                        finally { Object.DestroyImmediate(frame); }
+                    }
+                }
+
+                foreach (var (path, light) in placed)
+                {
+                    float full = added[(path, 1f)] - added[(path, 0f)];
+                    Assert.Greater(full, 0f, $"{path}: the lens adds nothing at full dimmer");
+                    float curveMod = Mathf.Max(light.curveMod, 1f);
+                    foreach (float dimmer in new[] { 0.5f, 0.25f })
+                    {
+                        // The dimmer as the desk's byte carries it.
+                        float d = Mathf.RoundToInt(255f * dimmer) / 255f;
+                        float expected = d * d * (1f + (curveMod - 1f) * d) / curveMod;
+                        float share    = (added[(path, dimmer)] - added[(path, 0f)]) / full;
+                        Debug.Log($"[J16] {path} at dimmer {d:F3}: {share:F4} of full, the beam's curve {expected:F4}");
+                        Assert.AreEqual(expected, share, 0.1f * expected,
+                            $"{path}: at dimmer {d:F3} the lens keeps {share:F4} of its full light where the beam keeps {expected:F4}");
+                    }
+                }
+            }
+            finally
+            {
+                rig.Dispose();
+                source.Dispose();
+            }
         }
 
         /// <summary>A shader picks its URP subshader only once the pipeline has rendered, so a
