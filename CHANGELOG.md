@@ -12,6 +12,7 @@
 
 - **The DMX spot mover's lens lights up.** Its material had **Lens Max Brightness** at 0; it's 1 now, as on upstream VRSL.
 - **Mover lenses fade with their beams.** A DMX mover's lens followed the dimmer in a straight line, so it stayed lit after the beam had gone. It now follows the beam's dimmer curve, more steeply, and is as bright as before at full.
+- **Par and blinder bodies fade with the light they cast.** They stayed lit long after their light had dimmed; they now dim more steeply and with the manager's **Light Intensity**, as bright as before at full. Flashers, light bars and strobes are unchanged.
 - **The control panel's master slider dims moving heads evenly.** Lenses now dim with the manager's **Light Intensity** below 1, and the master no longer scales beams and discoballs twice (at half they fell to a quarter).
 
 ## [0.3.1] — 2026-11-02
