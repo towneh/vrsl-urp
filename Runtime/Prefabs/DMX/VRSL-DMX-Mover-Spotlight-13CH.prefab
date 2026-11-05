@@ -144,9 +144,10 @@ MonoBehaviour:
   sector: 0
   dmxChannel: 1
   dmxUniverse: 1
-  maxIntensity: 10
+  maxIntensity: 20
   finalIntensity: 1
   globalIntensity: 1
+  curveMod: 4
   enableStrobe: 1
   enableConeWidth: 1
   minSpotAngle: 5

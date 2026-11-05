@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **The DMX spot mover ships brighter at the top of its dimmer.** `VRSL-DMX-Mover-Spotlight-13CH` has **Max Intensity** 20 (was 10) and **Curve Mod** 4 (was 2): full output is twice as bright, and the bottom of the dimmer, which goes by Max Intensity ÷ Curve Mod, is where it was. Spots placed from the prefab take the new values; spots with their own keep them.
+
 ### Fixed
 
 - **The DMX spot mover's lens lights when its spot and beam do.** `VRSL-StandardMover-FixtureMat-HQ-Horizontal` had **Lens Max Brightness** at 0, which caps the lens's glow at nothing. It's 1 now, as on upstream VRSL's Horizontal material.
