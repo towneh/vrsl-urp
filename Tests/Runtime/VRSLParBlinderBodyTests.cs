@@ -14,7 +14,7 @@ namespace VRSL.URP.Tests
     /// DMX; the 5-channel ones cast light from a 5-channel patch. The AudioLink laser
     /// follows its colour and amplitude inputs.
     ///
-    /// Rows J1 to J4 and J6 to J17 of TESTING.md.
+    /// Rows J1 to J4 and J6 to J20 of TESTING.md.
     /// </summary>
     class VRSLParBlinderBodyTests : VRSLDMXTest
     {
@@ -1677,6 +1677,345 @@ namespace VRSL.URP.Tests
                 rig.Dispose();
                 source.Dispose();
             }
+        }
+
+        /// <summary>
+        /// J18. A DMX par's and blinder's body dims on its cast light's curve times dimmer²,
+        /// dimmer⁴ × (1 + (curveMod - 1) × dimmer) / curveMod. At full the body is far past white
+        /// after tonemapping, so on its light's curve alone it still looks lit after the spot it
+        /// casts has dimmed. Each fixture is seen from 3 m down its beam with its lens lit white
+        /// and its flare hidden; the light the body adds over the dimmer-0 frame at three
+        /// quarters and half dimmer is compared with what it adds at full. A body on its light's
+        /// curve alone keeps four times as much at half dimmer.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J18_par_and_blinder_bodies_fade_faster_than_their_light()
+        {
+            float[] dimmers = { 0f, 1f, 0.75f, 0.5f };
+            var rig    = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var source = new FixedChannels();
+            try
+            {
+                yield return rig.Step(2);
+                var placed = PlaceBodies(rig, source);
+                var added = new Dictionary<(string, float), float>();
+                foreach (float dimmer in dimmers)
+                {
+                    source.Set(BodyValues(placed, dimmer));
+                    yield return rig.Step(12);
+                    var raw = rig.ReadRaw();
+                    foreach (var (path, light) in placed)
+                    {
+                        float sum = BodySum(rig, raw, light, out float peak);
+                        Debug.Log($"[J18] {path} at dimmer {dimmer}: peak {peak}, sum {sum}");
+                        added[(path, dimmer)] = sum;
+                        if (dimmer == 1f)
+                            Assert.Greater(peak, 1f, $"{path}: the body must light at full dimmer (peak {peak})");
+                    }
+                }
+
+                foreach (var (path, light) in placed)
+                {
+                    float full = added[(path, 1f)] - added[(path, 0f)];
+                    Assert.Greater(full, 0f, $"{path}: the body adds nothing at full dimmer");
+                    float curveMod = Mathf.Max(BodyCurveMod(light), 1f);
+                    foreach (float dimmer in new[] { 0.75f, 0.5f })
+                    {
+                        float d = Mathf.RoundToInt(255f * dimmer) / 255f;
+                        float cast     = d * d * (1f + (curveMod - 1f) * d) / curveMod;
+                        float expected = cast * d * d;
+                        float share    = (added[(path, dimmer)] - added[(path, 0f)]) / full;
+                        Debug.Log($"[J18] {path} at dimmer {d:F3}: {share:F4} of full, expected {expected:F4}, the cast light keeps {cast:F4}");
+                        Assert.AreEqual(expected, share, 0.1f * expected,
+                            $"{path}: at dimmer {d:F3} the body keeps {share:F4} of its full light, where it should keep {expected:F4} (its cast light keeps {cast:F4})");
+                    }
+                }
+            }
+            finally
+            {
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// J19. The manager's light intensity below 1 reaches a DMX par's and blinder's body in a
+        /// straight line, as it does the light the fixture casts, so a control panel turning the
+        /// light down dims the body with it. Above 1 the body stays at full. Each fixture is set
+        /// up as in J18 at full dimmer; what the body adds over the dimmer-0 frame at light
+        /// intensity 0.5 and 2 is compared with what it adds at 1.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J19_par_and_blinder_bodies_follow_the_managers_light_intensity()
+        {
+            var rig    = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var source = new FixedChannels();
+            try
+            {
+                yield return rig.Step(2);
+                var placed = PlaceBodies(rig, source);
+                var added = new Dictionary<(string, string), float>();
+                foreach (var (label, dimmer, intensity) in new[] { ("dark", 0f, 1f), ("1", 1f, 1f), ("0.5", 1f, 0.5f), ("2", 1f, 2f) })
+                {
+                    source.Set(BodyValues(placed, dimmer));
+                    rig.Manager.lightIntensity = intensity;
+                    rig.Manager.MarkConfigDirty();
+                    yield return rig.Step(12);
+                    var raw = rig.ReadRaw();
+                    foreach (var (path, light) in placed)
+                    {
+                        float sum = BodySum(rig, raw, light, out _);
+                        Debug.Log($"[J19] {path} at light intensity {label}: sum {sum}");
+                        added[(path, label)] = sum;
+                    }
+                }
+
+                foreach (var (path, _) in placed)
+                {
+                    float full = added[(path, "1")] - added[(path, "dark")];
+                    Assert.Greater(full, 0f, $"{path}: the body adds nothing at full dimmer");
+                    float half  = (added[(path, "0.5")] - added[(path, "dark")]) / full;
+                    float above = (added[(path, "2")]   - added[(path, "dark")]) / full;
+                    Debug.Log($"[J19] {path}: {half:F4} of full at light intensity 0.5, {above:F4} at 2");
+                    Assert.AreEqual(0.5f, half, 0.05f,
+                        $"{path}: at light intensity 0.5 the body keeps {half:F4} of its light, where it should keep 0.5");
+                    Assert.AreEqual(1f, above, 0.05f,
+                        $"{path}: at light intensity 2 the body keeps {above:F4} of its light, where it should stay at full");
+                }
+            }
+            finally
+            {
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// J20. The bodies of shader-driven fixtures, which cast no light, keep the dimmer curve
+        /// alone, dimmer² × (1 + (curveMod - 1) × dimmer) / curveMod, and the manager's light
+        /// intensity leaves them alone: J18's and J19's fade is for bodies that have a cast
+        /// light to stay in step with. The 1-channel flasher, the 13-channel light bar and the
+        /// 5-channel 6x4 strobe, turned to face a camera 3 m away, lit white at dimmer 0, full,
+        /// three quarters and half, then at full with light intensity 0.5.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator J20_shader_driven_bodies_keep_their_dimmer_curve()
+        {
+            var paths = new[]
+            {
+                "VRSL-DMX-Static-Flasher-1CH.prefab",
+                "VRSL-DMX-Static-LightBar-13CH.prefab",
+                "VRSL-DMX-Static-6x4StrobeLight-5CH.prefab",
+            };
+            var rig    = VRSLDMXRig.Build(withSource: false, targetSize: 512);
+            var source = new FixedChannels();
+            try
+            {
+                yield return rig.Step(2);
+                var placed = new List<(string path, GameObject go)>();
+                for (int i = 0; i < paths.Length; i++)
+                {
+                    var go = Object.Instantiate(Load(paths[i]), rig.Floor.transform.parent);
+                    go.transform.localPosition = new Vector3(100f + 20f * i, 6f, 0f);
+                    // Upright these glow at the floor; turned, the side they glow from faces -z.
+                    go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+                    var statics = go.GetComponentsInChildren<VRSLDMXStatic>(true);
+                    Assert.IsNotEmpty(statics, $"{paths[i]} has no shader-driven fixture, so the row checks nothing");
+                    Assert.IsNull(go.GetComponentInChildren<VRSLDMXRealtimeLight>(true),
+                        $"{paths[i]} casts light, so it belongs in J18");
+                    foreach (var s in statics)
+                    {
+                        s.useLegacySectorMode = true;
+                        s.sector              = 2 + 2 * i;
+                        s.enableStrobe        = false;
+                        // The flasher's body runs past what a half-float capture holds at full; a
+                        // constant scale leaves the share of full the row compares unchanged.
+                        if (paths[i].Contains("Flasher")) s.finalIntensity = 0.01f;
+                        s.ApplyAddress();
+                    }
+                    // The flasher's flare has its own shader and curve.
+                    foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                        if (r.sharedMaterial != null && r.sharedMaterial.shader.name.Contains("Lens Flare"))
+                            r.enabled = false;
+                    placed.Add((paths[i], go));
+                }
+                rig.Manager.ChannelSource = source;
+                rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+                rig.Manager.RefreshFixtures();
+
+                float[] Values(float dimmer)
+                {
+                    var values = new float[VRSLDMX.UsableSlotsPerUniverse];
+                    foreach (var (_, go) in placed)
+                        foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                        {
+                            var block = new MaterialPropertyBlock();
+                            r.GetPropertyBlock(block);
+                            if (!block.HasInt("_DMXChannel") || r.sharedMaterial == null) continue;
+                            int abs = block.GetInt("_DMXChannel");
+                            var m = r.sharedMaterial;
+                            if (m.IsKeywordEnabled("_13CH_MODE"))
+                            {
+                                values[VRSLDMXRig.DimmerChannel(abs) - 1] = dimmer;
+                                for (int c = 0; c < 3; c++) values[VRSLDMXRig.RedChannel(abs) + c - 1] = 1f;
+                            }
+                            else
+                            {
+                                values[abs - 1] = dimmer;
+                                if (m.IsKeywordEnabled("_5CH_MODE"))
+                                    for (int c = 0; c < 3; c++) values[abs + c] = 1f;
+                            }
+                        }
+                    return values;
+                }
+
+                float Sum(GameObject go, out float peak)
+                {
+                    rig.Camera.transform.SetPositionAndRotation(go.transform.position + 3f * Vector3.back, Quaternion.identity);
+                    var frame = CaptureHdr(rig);
+                    try
+                    {
+                        float sum = 0f;
+                        peak = 0f;
+                        foreach (var p in frame.GetPixels())
+                        {
+                            sum += p.r + p.g + p.b;
+                            peak = Mathf.Max(peak, Mathf.Max(p.r, Mathf.Max(p.g, p.b)));
+                        }
+                        return sum;
+                    }
+                    finally { Object.DestroyImmediate(frame); }
+                }
+
+                var added = new Dictionary<(string, string), float>();
+                foreach (var (label, dimmer, intensity) in new[] { ("0", 0f, 1f), ("1", 1f, 1f), ("0.75", 0.75f, 1f), ("0.5", 0.5f, 1f), ("light 0.5", 1f, 0.5f) })
+                {
+                    source.Set(Values(dimmer));
+                    rig.Manager.lightIntensity = intensity;
+                    rig.Manager.MarkConfigDirty();
+                    yield return rig.Step(12);
+                    foreach (var (path, go) in placed)
+                    {
+                        added[(path, label)] = Sum(go, out float peak);
+                        Debug.Log($"[J20] {path} at {label}: peak {peak}, sum {added[(path, label)]}");
+                        Assert.Less(peak, 60000f, $"{path} at {label}: the body clips the half-float capture (peak {peak}), so its share of full can't be read");
+                    }
+                }
+
+                foreach (var (path, go) in placed)
+                {
+                    var body = go.GetComponentsInChildren<Renderer>(true).First(r =>
+                    {
+                        var b = new MaterialPropertyBlock();
+                        r.GetPropertyBlock(b);
+                        return b.HasInt("_DMXChannel") && r.sharedMaterial != null && r.sharedMaterial.HasProperty("_CurveMod")
+                            && !r.sharedMaterial.shader.name.Contains("Lens Flare");
+                    });
+                    float curveMod = Mathf.Max(body.sharedMaterial.GetFloat("_CurveMod"), 1f);
+                    float full = added[(path, "1")] - added[(path, "0")];
+                    Assert.Greater(full, 0f, $"{path}: the body adds nothing at full dimmer");
+                    foreach (var (label, dimmer) in new[] { ("0.75", 0.75f), ("0.5", 0.5f) })
+                    {
+                        float d = Mathf.RoundToInt(255f * dimmer) / 255f;
+                        float expected = d * d * (1f + (curveMod - 1f) * d) / curveMod;
+                        float share    = (added[(path, label)] - added[(path, "0")]) / full;
+                        Debug.Log($"[J20] {path} at dimmer {d:F3}: {share:F4} of full, expected {expected:F4}");
+                        Assert.AreEqual(expected, share, 0.1f * expected,
+                            $"{path}: at dimmer {d:F3} the body keeps {share:F4} of its full light, where it should keep {expected:F4}");
+                    }
+                    float light = (added[(path, "light 0.5")] - added[(path, "0")]) / full;
+                    Debug.Log($"[J20] {path}: {light:F4} of full at light intensity 0.5");
+                    Assert.AreEqual(1f, light, 0.05f,
+                        $"{path}: at light intensity 0.5 the body keeps {light:F4} of its light, where it should stay at full: it casts none");
+                }
+            }
+            finally
+            {
+                rig.Dispose();
+                source.Dispose();
+            }
+        }
+
+        /// <summary>J18 and J19's fixtures: every par and blinder, 20 m apart so each is seen
+        /// alone, strobe and cast light off, flares hidden (their own shader, not the body's),
+        /// reading the channel source.</summary>
+        static List<(string path, VRSLDMXRealtimeLight light)> PlaceBodies(VRSLDMXRig rig, FixedChannels source)
+        {
+            var placed = new List<(string path, VRSLDMXRealtimeLight light)>();
+            for (int i = 0; i < ParsAndBlinders.Length; i++)
+            {
+                var go = Object.Instantiate(Load(ParsAndBlinders[i]), rig.Floor.transform.parent);
+                go.transform.localPosition = new Vector3(100f + 20f * i, 6f, 0f);
+                var light = go.GetComponent<VRSLDMXRealtimeLight>();
+                Assert.IsNotEmpty(light.fixtureShellRenderers ?? new MeshRenderer[0],
+                    $"{ParsAndBlinders[i]} drives no body, so its body can't follow the dimmer");
+                light.useLegacySectorMode = true;
+                light.sector = 2 + 2 * i;
+                light.enableStrobe = false;
+                // No cast light: seen down its beam it would light the measured pixels.
+                light.maxIntensity = 0f;
+                light.ApplyAddress();
+                foreach (var r in go.GetComponentsInChildren<Renderer>(true))
+                    if (r.sharedMaterial != null && r.sharedMaterial.shader.name.Contains("Lens Flare"))
+                        r.enabled = false;
+                placed.Add((ParsAndBlinders[i], light));
+            }
+            rig.Manager.ChannelSource = source;
+            rig.Manager.SetDmxInput((int)VRSLDmxInput.StreamData);
+            rig.Manager.RefreshFixtures();
+            return placed;
+        }
+
+        /// <summary>Every placed fixture's dimmer at <paramref name="dimmer"/> and its colour
+        /// white, in its own channel layout.</summary>
+        static float[] BodyValues(List<(string path, VRSLDMXRealtimeLight light)> placed, float dimmer)
+        {
+            var values = new float[VRSLDMX.UsableSlotsPerUniverse];
+            foreach (var (_, light) in placed)
+            {
+                int abs = light.ComputeAbsoluteChannel();
+                bool five = light.use5ChannelMode;
+                values[(five ? abs : VRSLDMXRig.DimmerChannel(abs)) - 1] = dimmer;
+                for (int c = 0; c < 3; c++)
+                    values[(five ? abs + 1 : VRSLDMXRig.RedChannel(abs)) + c - 1] = 1f;
+            }
+            return values;
+        }
+
+        /// <summary>The whole frame summed from 3 m down the fixture's beam: only the dimmer or
+        /// light intensity changes between captures, so anything else in view cancels against
+        /// the dimmer-0 frame.</summary>
+        static float BodySum(VRSLDMXRig rig, VRSL_DMXURPLightManager.VRSLLightData[] raw, VRSLDMXRealtimeLight light, out float peak)
+        {
+            var at = light.transform.position;
+            var record = raw.OrderBy(d => Vector3.Distance(at,
+                new Vector3(d.positionAndRange.x, d.positionAndRange.y, d.positionAndRange.z))).First();
+            var origin = new Vector3(record.positionAndRange.x, record.positionAndRange.y, record.positionAndRange.z);
+            var beam   = new Vector3(record.directionAndType.x, record.directionAndType.y, record.directionAndType.z).normalized;
+            var up     = Mathf.Abs(beam.y) > 0.9f ? Vector3.forward : Vector3.up;
+            rig.Camera.transform.SetPositionAndRotation(origin + 3f * beam, Quaternion.LookRotation(-beam, up));
+            var frame = CaptureHdr(rig);
+            try
+            {
+                float sum = 0f;
+                peak = 0f;
+                foreach (var p in frame.GetPixels())
+                {
+                    sum += p.r + p.g + p.b;
+                    peak = Mathf.Max(peak, Mathf.Max(p.r, Mathf.Max(p.g, p.b)));
+                }
+                return sum;
+            }
+            finally { Object.DestroyImmediate(frame); }
+        }
+
+        /// <summary>The curve modifier the body renders with: its block's, or its material's.</summary>
+        static float BodyCurveMod(VRSLDMXRealtimeLight light)
+        {
+            var body  = light.fixtureShellRenderers.First(r => r.sharedMaterial != null && !r.sharedMaterial.shader.name.Contains("Lens Flare"));
+            var block = new MaterialPropertyBlock();
+            body.GetPropertyBlock(block);
+            return block.HasFloat("_CurveMod") ? block.GetFloat("_CurveMod") : body.sharedMaterial.GetFloat("_CurveMod");
         }
 
         /// <summary>A shader picks its URP subshader only once the pipeline has rendered, so a
