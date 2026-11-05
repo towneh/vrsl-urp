@@ -25,6 +25,7 @@
         
         
         _CurveMod ("Light Intensity Multiplier", Range (1,50)) = 5.0
+        [HideInInspector] _VRSLCastsLight ("Casts Light", Float) = 0
         
         _Color ("Color", Color) = (1,1,1,1)
         _MainTex ("Albedo (RGB)", 2D) = "white" {}

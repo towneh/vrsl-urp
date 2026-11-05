@@ -447,6 +447,9 @@ namespace VRSL.URP
             _shellProps.SetFloat("_CurveMod",            curveMod);
             _shellProps.SetFloat("_MaxMinPanAngle",      maxMinPan  / 2f);
             _shellProps.SetFloat("_MaxMinTiltAngle",     maxMinTilt / 2f);
+            // Fades a par or blinder body with the light this fixture casts; VRSLDMXStatic's
+            // bodies cast none and leave it at 0.
+            _shellProps.SetFloat("_VRSLCastsLight",      1f);
         }
 
         // Matches RawDMXConversion() / SectorConversion() in VRSLDMXStatic

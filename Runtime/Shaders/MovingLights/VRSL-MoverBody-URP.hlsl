@@ -213,9 +213,6 @@ half VRSLMoverDimmerCurve(half dimmer)
     half curveMod = max(UNITY_ACCESS_INSTANCED_PROP(Props, _CurveMod), 1.0);
     return dimmer * dimmer * (1.0 + (curveMod - 1.0) * dimmer) / curveMod;
 }
-
-// 1 - the DMX manager's lightIntensity, clamped to 0..1; 0 when no manager publishes it.
-float _VRSLU_LightDimming;
 #endif
 
 half3 VRSLMoverLensEmission(VRSLMoverVaryings i)

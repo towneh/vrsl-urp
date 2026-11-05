@@ -190,6 +190,10 @@ UNITY_INSTANCING_BUFFER_START(Props)
     #if defined(VRSL_SURFACE) || (defined(VRSL_DMX) && defined(VRSL_MOVER_FORWARD))
         UNITY_DEFINE_INSTANCED_PROP(half, _CurveMod)
     #endif
+    #ifdef VRSL_SURFACE
+        // 1 on the body of a fixture that casts light (set by VRSLDMXRealtimeLight), 0 otherwise.
+        UNITY_DEFINE_INSTANCED_PROP(half, _VRSLCastsLight)
+    #endif
     UNITY_DEFINE_INSTANCED_PROP(uint, _PanInvert)
     UNITY_DEFINE_INSTANCED_PROP(uint, _TiltInvert)
     UNITY_DEFINE_INSTANCED_PROP(uint, _EnableStrobe)

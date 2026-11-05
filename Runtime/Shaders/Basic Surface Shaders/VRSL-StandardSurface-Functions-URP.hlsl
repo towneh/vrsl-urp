@@ -5,6 +5,16 @@
 
 #include "../Shared/VRSL-DMXFunctions-URP.hlsl"
 
+// On the body of a fixture that casts light, the glow on top of that light's dimmer curve:
+// dimmer² more, and the manager's lightIntensity below 1 in a straight line. At full the body
+// is far past white after tonemapping, so on the cast light's curve alone it still looks lit
+// after the light it casts has dimmed. Bodies with no cast light keep the curve alone.
+float VRSLSurfaceBodyFade(float dimmer)
+{
+    half castsLight = saturate(UNITY_ACCESS_INSTANCED_PROP(Props, _VRSLCastsLight));
+    return lerp(1.0, dimmer * dimmer * (1.0 - _VRSLU_LightDimming), castsLight);
+}
+
 float GetSurfaceStrobe(uint DMXChannel)
 {
     half strobe = DMXStrobe(DMXChannel + 4);
@@ -65,7 +75,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
         e.rgb = lerp(float3(sat,sat,sat), e, _Saturation);
         e = ((e * _FixtureMaxIntensity) * getGlobalIntensity()) * getFinalIntensity();
         e *= _UniversalIntensity;
-        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor();
+        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor() * VRSLSurfaceBodyFade(dmxIntensity);
     }
 #endif
 
@@ -84,7 +94,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
         e.rgb = lerp(float3(sat,sat,sat), e, _Saturation);
         e = ((e * _FixtureMaxIntensity) * getGlobalIntensity()) * getFinalIntensity();
         e *= _UniversalIntensity;
-        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor();
+        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor() * VRSLSurfaceBodyFade(dmxIntensity);
     }
 #endif
 
@@ -104,7 +114,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
         e.rgb = lerp(float3(sat,sat,sat), e, _Saturation);
         e = ((e * _FixtureMaxIntensity) * getGlobalIntensity()) * getFinalIntensity();
         e *= _UniversalIntensity;
-        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor();
+        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor() * VRSLSurfaceBodyFade(dmxIntensity);
     }
 #endif
 
@@ -124,7 +134,7 @@ float4 GetDMX12CHRGB(uint DMXChannel, int dimmerChannel, out float intensity)
         e.rgb = lerp(float3(sat,sat,sat), e, _Saturation);
         e = ((e * _FixtureMaxIntensity) * getGlobalIntensity()) * getFinalIntensity();
         e *= _UniversalIntensity;
-        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor();
+        return lerp(float4(0,0,0,0),e, dmxIntensity) * (lerp(1,_CurveMod, dmxIntensity)) * getEmissionColor() * VRSLSurfaceBodyFade(dmxIntensity);
     }
 #endif
 

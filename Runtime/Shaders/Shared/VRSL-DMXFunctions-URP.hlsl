@@ -9,6 +9,9 @@
 
 #define IF(a, b, c) lerp(b, c, step((float) (a), 0.0))
 
+// 1 - the DMX manager's lightIntensity, clamped to 0..1; 0 when no manager publishes it.
+float _VRSLU_LightDimming;
+
 // The package's fixtures read DMX through VRSLDMX.hlsl like any other shader; these
 // wrappers add the per-fixture nine-universe flag from the Props buffer.
 
