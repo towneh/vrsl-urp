@@ -405,7 +405,18 @@ namespace VRSL.URP.Tests
 
                 // Light: held-on fixtures only, so strobe does not move the reading.
                 var held = Enumerable.Range(0, VRSLDMXRig.FixtureCount).Where(i => !Strobes(i)).ToArray();
+                // Settle waits for the colour; the dimmer eases in on its own, so wait for the
+                // held fixtures' intensity to stop moving as well before taking the reading.
                 var before = rig.ReadLights();
+                for (int f = 0; f < 120; f++)
+                {
+                    yield return rig.Step(1);
+                    var now = rig.ReadLights();
+                    bool still = held.All(i => Mathf.Abs(now[i].colorAndIntensity.w - before[i].colorAndIntensity.w)
+                                               <= 1e-4f * Mathf.Max(1f, now[i].colorAndIntensity.w));
+                    before = now;
+                    if (still) break;
+                }
                 slider.value = 0.5f;
                 panel._SetLightIntensity();
                 yield return rig.Step(3);
