@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **A Basis content police list for the package.** `Runtime/Resources/BasisContentPolice/town.mr.vrsl-urp.json` names the VRSL-URP components a world may carry: both light managers, the realtime and static fixtures, the AudioLink laser and smoothing panel, the control panel, the synthetic DMX source and the Basis video and SEI integrations. A Basis build that reads per-package lists keeps them when a world loads, with no change to its own list.
+
 ## [0.3.2] — 2026-11-05
 
 ### Changed
