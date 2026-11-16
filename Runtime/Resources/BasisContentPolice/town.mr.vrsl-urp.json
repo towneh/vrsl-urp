@@ -1,0 +1,18 @@
+{
+  "World": [
+    "VRSL.URP.VRSL_DMXURPLightManager",
+    "VRSL.URP.VRSLDMXRealtimeLight",
+    "VRSL.URP.VRSLDMXStatic",
+    "VRSL.URP.VRSL_LocalUIControlPanel",
+    "VRSL.URP.VRSL_SyntheticDMXChannelSource",
+    "VRSL.URP.VRSL_AudioLinkURPLightManager",
+    "VRSL.URP.VRSLAudioLinkRealtimeLight",
+    "VRSL.URP.VRSLAudioLinkStatic",
+    "VRSL.URP.VRSLAudioLinkLaser",
+    "VRSL.URP.VRSL_AudioLink_SmoothingPanel",
+    "VRSL.URP.SmoothingPanelOpener",
+    "VRSL.URP.BasisIntegration.BasisVideoRenderTextureOutput",
+    "VRSL.URP.BasisIntegration.BasisVideoToVRSLDMX",
+    "VRSL.URP.BasisIntegration.BasisUserDataToVRSLDMX"
+  ]
+}
