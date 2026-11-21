@@ -876,7 +876,7 @@ The AudioLink side compiles into `Towneh.VRSL.URP.AudioLink` and `Towneh.VRSL.UR
 only when `com.llealloo.audiolink` 3.1.2 or newer is installed (an older AudioLink leaves them
 out, as no AudioLink does), and the package doesn't depend on it. Y1 to Y3 and Y7 are install
 checks in a throwaway project (`-createProject`, the package by `file:` path or from a release
-tag), since a host project usually carries AudioLink; Y4 to Y6 and Y9 to Y12 are in the
+tag), since a host project usually carries AudioLink; Y4 to Y6 and Y9 to Y13 are in the
 AudioLink test assembly. A scene inside a package installed from git is read-only and can't be opened by
 script, so a check that opens the example scenes opens copies of them.
 
@@ -894,6 +894,7 @@ script, so a check that opens the example scenes opens copies of them.
 | Y10 | A | `VRSLAudioLinkFollowTargetTests.Y10`: as Y9, then the spot's prefab overrides | Source 0 is recorded as an override on the constraint, which is what a scene save writes for a prefab instance |
 | Y11 | A | `VRSLAudioLinkFollowTargetTests.Y11`: a spot as a scene saved before the edit-time write loads it (follow target set, constraint still on its PanTiltTarget), sent OnValidate as the editor does when it opens a scene; then the follow target cleared | Source 0 is the follow target and recorded as an override; clearing the follow target leaves it there |
 | Y12 | A | `VRSLAudioLinkFollowTargetTests.Y12`: the follow-target message on the shipped spot, with a follow target, with none, and on a light with a follow target but no tilt transform, then a tilt transform with no Aim Constraint | No message for the first three; for the last two, a message naming the missing Aim Constraint |
+| Y13 | A | `VRSLAudioLinkFollowTargetTests.Y13`: a spot with no follow target given one in the inspector, the queued editor work run, then Undo and Redo | Undo empties the follow target and puts source 0 back on the PanTiltTarget; Redo brings both back to the new target |
 
 ### LTCGI (optional)
 

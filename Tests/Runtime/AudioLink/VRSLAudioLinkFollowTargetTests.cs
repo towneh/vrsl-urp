@@ -7,7 +7,7 @@ using UnityEngine.Animations;
 namespace VRSL.URP.Tests
 {
     /// <summary>
-    /// Rows Y9 to Y12 of TESTING.md: an AudioLink mover's follow target saved into the
+    /// Rows Y9 to Y13 of TESTING.md: an AudioLink mover's follow target saved into the
     /// Aim Constraint on its tilt transform while the world is authored. A Basis world
     /// bundle swaps every Aim Constraint for Basis's own before any script runs, keeping
     /// only the sources saved on it, so the saved source is the one a world gets.
@@ -146,6 +146,42 @@ namespace VRSL.URP.Tests
             StringAssert.Contains("Aim Constraint", Problem(bare) ?? "", "no tilt transform");
             bare.tiltTransform = plain.transform;
             StringAssert.Contains("Aim Constraint", Problem(bare) ?? "", "a tilt transform with no Aim Constraint");
+        }
+
+        /// <summary>Y13. A follow target given in the inspector to a light that had none,
+        /// then undone and redone: undo takes the constraint back to where it was, and
+        /// redo brings the follow target back on it.</summary>
+        [Test]
+        public void Y13_undo_takes_the_constraint_back_with_the_follow_target()
+        {
+            var light = Spot(out var aim, out var mark);
+            var before = aim.GetSource(0).sourceTransform;
+            var so = new SerializedObject(light);
+            so.FindProperty("targetToFollow").objectReferenceValue = null;
+            so.ApplyModifiedPropertiesWithoutUndo();
+            VRSLAudioLinkRealtimeLight.FlushPendingFollow();
+            try
+            {
+                Undo.IncrementCurrentGroup();
+                SetInInspector(light, mark);
+                VRSLAudioLinkRealtimeLight.FlushPendingFollow();
+                Assume.That(aim.GetSource(0).sourceTransform, Is.SameAs(mark), "the edit reached the constraint");
+
+                Undo.PerformUndo();
+                VRSLAudioLinkRealtimeLight.FlushPendingFollow();
+                Assert.IsNull(light.targetToFollow, "undo should empty the follow target again");
+                Assert.AreSame(before, aim.GetSource(0).sourceTransform,
+                               $"after undo source 0 is '{aim.GetSource(0).sourceTransform?.name}', not '{before.name}'");
+
+                Undo.PerformRedo();
+                VRSLAudioLinkRealtimeLight.FlushPendingFollow();
+                Assert.AreSame(mark, light.targetToFollow, "redo should bring the follow target back");
+                Assert.AreSame(mark, aim.GetSource(0).sourceTransform, "redo should bring source 0 back");
+            }
+            finally
+            {
+                Undo.ClearAll();
+            }
         }
     }
 }
