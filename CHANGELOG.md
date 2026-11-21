@@ -6,6 +6,10 @@
 
 - **A Basis content police list for the package.** `Runtime/Resources/BasisContentPolice/town.mr.vrsl-urp.json` names the VRSL-URP components a world may carry: both light managers, the realtime and static fixtures, the AudioLink laser and smoothing panel, the control panel, the synthetic DMX source and the Basis video and SEI integrations. A Basis build that reads per-package lists keeps them when a world loads, with no change to its own list.
 
+### Fixed
+
+- **AudioLink movers keep their Target To Follow in a Basis world.** Basis replaces a world's Aim Constraints with its own when the world loads, before VRSL-URP's scripts run, so a mover given a **Target To Follow** aimed at its own PanTiltTarget instead, usually straight down. The target is now saved into the mover's Aim Constraint in the editor, which Basis carries over. A scene saved with an earlier version is put right when it's opened: open it, then save it or build the world. Changing **Target To Follow** from a script while a Basis world runs still doesn't move the head (moving the target object does). The inspector now says when a mover has a **Target To Follow** but no Aim Constraint to turn it.
+
 ## [0.3.2] — 2026-11-05
 
 ### Changed
