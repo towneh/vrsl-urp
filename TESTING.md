@@ -876,8 +876,8 @@ The AudioLink side compiles into `Towneh.VRSL.URP.AudioLink` and `Towneh.VRSL.UR
 only when `com.llealloo.audiolink` 3.1.2 or newer is installed (an older AudioLink leaves them
 out, as no AudioLink does), and the package doesn't depend on it. Y1 to Y3 and Y7 are install
 checks in a throwaway project (`-createProject`, the package by `file:` path or from a release
-tag), since a host project usually carries AudioLink; Y4 to Y6 are in the AudioLink test
-assembly. A scene inside a package installed from git is read-only and can't be opened by
+tag), since a host project usually carries AudioLink; Y4 to Y6 and Y9 to Y12 are in the
+AudioLink test assembly. A scene inside a package installed from git is read-only and can't be opened by
 script, so a check that opens the example scenes opens copies of them.
 
 | # | Path | Scenario | Expected |
@@ -890,6 +890,10 @@ script, so a check that opens the example scenes opens copies of them.
 | Y6 | A | `VRSLAudioLinkIntegrationTests.Y6`: the control panel beside a switched-off AudioLink manager (light 0.8, beams 0.6, `High`) and an AudioLink discoball at 0.5, sliders at a half, a quarter and a half, then Off and a sample texture | The panel finds them through the light paths the AudioLink assembly registers: light 0.4, beams 0.15, discoball 0.25, quality Off, the manager holding the sample texture. Resolving the managers again keeps the authored values rather than recapturing scaled ones |
 | Y7 | — | The Y1 project with AcChosen's package and an upstream AudioLink mover beside a DMX one; **VRSL → URP → Migrate Scene Fixtures**, then AudioLink added and the tool run again. AcChosen's package depends on AudioLink itself and needs UdonSharp to compile, so the row takes that dependency out of its `package.json` and adds stand-ins for UdonSharp and the VRChat SDK, as L4 does | The DMX fixture migrates; the AudioLink one stays where it is and the summary lists it under "AudioLink fixtures left as they are, because AudioLink isn't installed. Install AudioLink, then run this again". With AudioLink added, both migrate |
 | Y8 | A | **Hand row.** Analyse This Scene over the AudioLink example scene, in a project with AudioLink | Reports the AudioLink path, its fixtures and its cost |
+| Y9 | A | `VRSLAudioLinkFollowTargetTests.Y9`: a spot from the prefab, never started, its follow target set to a new object through `SerializedObject` as the inspector does, then the editor work it queued | The Aim Constraint on its tilt transform has the new object as source 0, weight 1. A Basis world bundle keeps only the saved sources, so this is what a world gets |
+| Y10 | A | `VRSLAudioLinkFollowTargetTests.Y10`: as Y9, then the spot's prefab overrides | Source 0 is recorded as an override on the constraint, which is what a scene save writes for a prefab instance |
+| Y11 | A | `VRSLAudioLinkFollowTargetTests.Y11`: a spot as a scene saved before the edit-time write loads it (follow target set, constraint still on its PanTiltTarget), sent OnValidate as the editor does when it opens a scene; then the follow target cleared | Source 0 is the follow target and recorded as an override; clearing the follow target leaves it there |
+| Y12 | A | `VRSLAudioLinkFollowTargetTests.Y12`: the follow-target message on the shipped spot, with a follow target, with none, and on a light with a follow target but no tilt transform, then a tilt transform with no Aim Constraint | No message for the first three; for the last two, a message naming the missing Aim Constraint |
 
 ### LTCGI (optional)
 
