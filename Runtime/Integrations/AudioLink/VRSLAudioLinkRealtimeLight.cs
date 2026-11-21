@@ -319,33 +319,28 @@ namespace VRSL.URP
         }
 
 #if UNITY_EDITOR
-        static readonly System.Collections.Generic.Dictionary<EntityId, VRSLAudioLinkRealtimeLight> s_followPending = new();
+        static readonly System.Collections.Concurrent.ConcurrentQueue<VRSLAudioLinkRealtimeLight> s_followPending = new();
+
+        [UnityEditor.InitializeOnLoadMethod]
+        static void DrainFollowEachTick() => UnityEditor.EditorApplication.update += FlushPendingFollow;
 
         // Basis swaps every AimConstraint in a world bundle for its own before any script
         // runs, keeping only the sources saved on it, so Start can't rebind it there; the
         // follow target has to be in the saved scene. Unity sends this when the scene opens
-        // and on every inspector edit; the write waits for the next editor tick, since
-        // neither deserialisation nor a half-finished edit is the time to change another
-        // component. Scene objects only: a prefab asset is never rewritten on import.
-        internal void OnValidate()
-        {
-            if (targetToFollow == null || UnityEditor.EditorUtility.IsPersistent(this)) return;
-            var id = GetEntityId();
-            if (!s_followPending.TryAdd(id, this)) return;
-            UnityEditor.EditorApplication.delayCall += () => RunPendingFollow(id);
-        }
+        // and on every inspector edit, sometimes from the loading thread, so it only queues
+        // the light: the write runs on the main thread on the next editor tick.
+        internal void OnValidate() => s_followPending.Enqueue(this);
 
-        static void RunPendingFollow(EntityId id)
-        {
-            if (s_followPending.Remove(id, out var light) && light != null) light.SaveTargetToFollow();
-        }
-
-        /// <summary>Run whatever <see cref="OnValidate"/> queued, as the next editor tick
-        /// would. <c>delayCall</c> never fires in a batch play-mode test. For rows only.</summary>
+        /// <summary>Write the follow target of every light <see cref="OnValidate"/> queued.
+        /// The editor runs it every tick; a batch play-mode test never ticks, so rows call
+        /// it themselves.</summary>
         internal static void FlushPendingFollow()
         {
-            foreach (var id in new System.Collections.Generic.List<EntityId>(s_followPending.Keys))
-                RunPendingFollow(id);
+            while (s_followPending.TryDequeue(out var light))
+            {
+                // Scene objects only: a prefab asset is never rewritten on import.
+                if (light != null && !UnityEditor.EditorUtility.IsPersistent(light)) light.SaveTargetToFollow();
+            }
         }
 
         void SaveTargetToFollow()
@@ -357,10 +352,11 @@ namespace VRSL.URP
                 var current = aim.GetSource(0);
                 if (current.sourceTransform == targetToFollow && current.weight == 1f) return;
             }
+            // Joins the undo step of the inspector edit that queued it.
+            UnityEditor.Undo.RecordObject(aim, "Target To Follow");
             ApplyTargetToFollow();
             // A prefab instance's scene file holds only its overrides.
             UnityEditor.PrefabUtility.RecordPrefabInstancePropertyModifications(aim);
-            UnityEditor.EditorUtility.SetDirty(aim);
         }
 #endif
 
