@@ -187,6 +187,14 @@ namespace VRSL.URP
                 EditorGUILayout.PropertyField(_panTransform);
                 EditorGUILayout.PropertyField(_tiltTransform);
                 EditorGUILayout.PropertyField(_targetToFollow);
+                foreach (var t in targets)
+                {
+                    if (t is VRSLAudioLinkRealtimeLight l && l.FollowProblem is string problem)
+                    {
+                        EditorGUILayout.HelpBox(problem, MessageType.Warning);
+                        break;
+                    }
+                }
 
                 EditorGUILayout.Space();
                 EditorGUILayout.Space();

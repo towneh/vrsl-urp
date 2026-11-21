@@ -239,12 +239,14 @@ namespace VRSL.URP
         [Tooltip("Transform rotated on X for tilt. Its world-space forward is sent to the GPU as the light direction.")]
         public Transform tiltTransform;
 
-        [Tooltip("Optional follow target. When assigned, the AimConstraint on tiltTransform "
-               + "is rebound to this Transform at Start, so the fixture aims at it instead "
-               + "of the prefab's per-instance PanTiltTarget child. Useful when many movers "
-               + "should track a shared target (e.g., a stage mark, a performer rig, or a "
-               + "DoublePanTiltTarget driven by an animation). Leave empty to keep the "
-               + "prefab's default aim source (the per-instance PanTiltTarget).")]
+        [Tooltip("What the head aims at, through the Aim Constraint on Tilt Transform. The "
+               + "shipped movers aim at their own PanTiltTarget child; point several at one "
+               + "object (a stage mark, a performer, a target an animation moves) to have "
+               + "them track it together. Set in the editor, it's saved into the Aim "
+               + "Constraint, which is what a Basis world keeps. Changed from a script while "
+               + "the world runs, it takes effect in Unity's own builds only: in a Basis world "
+               + "the head keeps the target the world was saved with, though moving that "
+               + "target still moves the beam. Empty, the Aim Constraint is left as it is.")]
         public Transform targetToFollow;
 
         [Tooltip("Optional child Transform marking the fixture's lens, used as the cone "
@@ -284,12 +286,13 @@ namespace VRSL.URP
         // When targetToFollow is set, rebind the AimConstraint on tiltTransform so the
         // fixture aims at the supplied Transform rather than the prefab's per-instance
         // PanTiltTarget. No-op when targetToFollow is null — the prefab's existing
-        // AimConstraint source (PanTiltTarget) is kept.
+        // AimConstraint source (PanTiltTarget) is kept. A Basis world bundle has no
+        // AimConstraint by now (Basis swaps in its own on load), so there the saved
+        // source, written by OnValidate, is the one that counts.
         public void ApplyTargetToFollow()
         {
-            if (targetToFollow == null || tiltTransform == null) return;
-            var aim = tiltTransform.GetComponent<AimConstraint>();
-            if (aim == null) return;
+            var aim = FollowConstraint;
+            if (targetToFollow == null || aim == null) return;
             var src = new ConstraintSource
             {
                 sourceTransform = targetToFollow,
@@ -298,6 +301,68 @@ namespace VRSL.URP
             if (aim.sourceCount > 0) aim.SetSource(0, src);
             else                     aim.AddSource(src);
         }
+
+        AimConstraint FollowConstraint =>
+            tiltTransform != null ? tiltTransform.GetComponent<AimConstraint>() : null;
+
+        /// <summary>Why the head can't turn to <see cref="targetToFollow"/>, for the
+        /// inspector; null when it can, or when there's nothing to follow.</summary>
+        internal string FollowProblem
+        {
+            get
+            {
+                if (targetToFollow == null || FollowConstraint != null) return null;
+                return tiltTransform == null
+                    ? "This light can't aim at its Target To Follow: it has no Tilt Transform. Set Tilt Transform to the moving head, which needs an Aim Constraint, or clear Target To Follow."
+                    : "This light can't aim at its Target To Follow: its Tilt Transform has no Aim Constraint to turn it. Add an Aim Constraint to the Tilt Transform, or clear Target To Follow.";
+            }
+        }
+
+#if UNITY_EDITOR
+        static readonly System.Collections.Generic.Dictionary<EntityId, VRSLAudioLinkRealtimeLight> s_followPending = new();
+
+        // Basis swaps every AimConstraint in a world bundle for its own before any script
+        // runs, keeping only the sources saved on it, so Start can't rebind it there; the
+        // follow target has to be in the saved scene. Unity sends this when the scene opens
+        // and on every inspector edit; the write waits for the next editor tick, since
+        // neither deserialisation nor a half-finished edit is the time to change another
+        // component. Scene objects only: a prefab asset is never rewritten on import.
+        internal void OnValidate()
+        {
+            if (targetToFollow == null || UnityEditor.EditorUtility.IsPersistent(this)) return;
+            var id = GetEntityId();
+            if (!s_followPending.TryAdd(id, this)) return;
+            UnityEditor.EditorApplication.delayCall += () => RunPendingFollow(id);
+        }
+
+        static void RunPendingFollow(EntityId id)
+        {
+            if (s_followPending.Remove(id, out var light) && light != null) light.SaveTargetToFollow();
+        }
+
+        /// <summary>Run whatever <see cref="OnValidate"/> queued, as the next editor tick
+        /// would. <c>delayCall</c> never fires in a batch play-mode test. For rows only.</summary>
+        internal static void FlushPendingFollow()
+        {
+            foreach (var id in new System.Collections.Generic.List<EntityId>(s_followPending.Keys))
+                RunPendingFollow(id);
+        }
+
+        void SaveTargetToFollow()
+        {
+            var aim = FollowConstraint;
+            if (targetToFollow == null || aim == null) return;
+            if (aim.sourceCount > 0)
+            {
+                var current = aim.GetSource(0);
+                if (current.sourceTransform == targetToFollow && current.weight == 1f) return;
+            }
+            ApplyTargetToFollow();
+            // A prefab instance's scene file holds only its overrides.
+            UnityEditor.PrefabUtility.RecordPrefabInstancePropertyModifications(aim);
+            UnityEditor.EditorUtility.SetDirty(aim);
+        }
+#endif
 
         // Pushes a MaterialPropertyBlock to the body MeshRenderers so the legacy
         // fixture-mesh shader (which samples AudioLink data via material properties)
